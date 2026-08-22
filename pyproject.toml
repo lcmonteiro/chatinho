@@ -1,0 +1,72 @@
+[project]
+name = "chatinho"
+version = "0.1.0"
+description = "A simple, extensible TUI chat client library built on Textual"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Mcking", email = "mcking@openclaw.ai"}
+]
+keywords = ["chat", "tui", "terminal", "textual", "messaging", "repl"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Chat",
+    "Topic :: Terminals",
+    "Typing :: Typed",
+]
+dependencies = [
+    "textual>=0.45.0",
+    "requests>=2.25.0",
+    "openai>=1.0.0",
+    "sqlalchemy>=2.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/lcmonteiro/chatinho"
+Repository = "https://github.com/lcmonteiro/chatinho"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["chatinho*"]
+
+[tool.setuptools.package-data]
+chatinho = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F"]
+# The codebase aligns field/annotation colons for readability; don't
+# auto-reformat (E203-adjacent whitespace) since `ruff format` would fight it.
+ignore = ["E203", "E221"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["chatinho"]
+ignore_missing_imports = true
