@@ -437,20 +437,24 @@ class _Chat(App):
         self._trigger_hook(HOOK_COMMAND_EXECUTED, command=command_name, result=result)
         return result
 
-    def save_data(self, key: str, data: Any) -> None:
+    def save_data(self, key: str, data: Any) -> bool:
         """Saves data through the backend and triggers the save hook.
 
         Args:
             key: Identifier for the data.
             data: Data to save.
 
+        Returns:
+            bool: True if the backend stored the data, False otherwise.
+
         Raises:
             RuntimeError: If the chat was created without a backend.
         """
         if self.backend is None:
             raise RuntimeError("No backend configured")
-        self.backend.save(key, data)
+        saved = self.backend.save(key, data)
         self._trigger_hook(HOOK_BACKEND_SAVE, key=key, data=data)
+        return saved
 
     def load_data(self, key: str) -> Any:
         """Loads data through the backend and triggers the load hook.
@@ -469,6 +473,22 @@ class _Chat(App):
         data = self.backend.load(key)
         self._trigger_hook(HOOK_BACKEND_LOAD, key=key, data=data)
         return data
+
+    def delete_data(self, key: str) -> bool:
+        """Deletes data through the backend.
+
+        Args:
+            key: Identifier for the data.
+
+        Returns:
+            bool: True if the backend deleted the data, False otherwise.
+
+        Raises:
+            RuntimeError: If the chat was created without a backend.
+        """
+        if self.backend is None:
+            raise RuntimeError("No backend configured")
+        return self.backend.delete(key)
 
     # === Hooks (callbacks — all start with ``on_``) ==============================
 

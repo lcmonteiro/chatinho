@@ -1,7 +1,7 @@
 """OpenAI connector for chatinho."""
 
 import logging
-from typing import Any, Dict, Optional, List
+from typing import Any, Optional
 import openai
 
 from .base import BaseConnector
