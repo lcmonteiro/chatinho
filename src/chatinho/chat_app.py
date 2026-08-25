@@ -4,13 +4,12 @@ The public entry point is :func:`create_chat`, which returns a ready-to-run
 application. The class itself (``_Chat``) is private on purpose: build one
 through the factory rather than instantiating it directly.
 
-Features:
-- Message display with Markdown rendering and syntax highlighting for code blocks.
-- Input field for sending messages and commands (starting with '/'), with an
-  autocomplete popup fed by the registered commands.
-- Ability to tag outgoing messages with an ID and match incoming replies.
-- Simple in-memory message history.
-- A hook system where connectors opt into events via the ``@hook_point`` decorator.
+The application owns the wiring; the parts live next door:
+
+- :mod:`chatinho.chat_message` — the message model and the history store.
+- :mod:`chatinho.chat_hooks`   — the hook constants, decorator and registry.
+- :mod:`chatinho.chat_log`     — the scrollable log widget and its bubbles.
+- :mod:`chatinho.chat_input`   — the input line and its autocomplete popup.
 
 The library is transport-agnostic: call ``receive_message`` from a worker,
 thread, or network callback to inject incoming messages.
@@ -18,141 +17,34 @@ thread, or network callback to inject incoming messages.
 
 import logging
 import threading
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional
 
-from textual import events
 from textual.app import App, ComposeResult
-from textual.binding import Binding
-from textual.containers import Container, Horizontal, ScrollableContainer, Vertical
-from textual.widget import Widget
-from textual.widgets import Input, Markdown, OptionList, Static
-from textual.widgets.option_list import Option
+from textual.containers import Container, Vertical
+from textual.widgets import Input
 
 from .backends import BaseBackend
+from .chat_hooks import (
+    HOOK_BACKEND_LOAD,
+    HOOK_BACKEND_SAVE,
+    HOOK_COMMAND_EXECUTED,
+    HOOK_CONNECTOR_ADDED,
+    HOOK_MESSAGE_RECEIVED,
+    HOOK_MESSAGE_SENT,
+    HookRegistry,
+)
+from .chat_input import COMMAND_PREFIX, SUGGESTIONS_ID, CommandInput, CommandSuggestions
+from .chat_log import ChatLog
+from .chat_message import ChatMessage, MessageStore
 from .chat_style import ChatStyle
 from .commands import BaseCommand
 from .connectors import BaseConnector
 
 logger = logging.getLogger(__name__)
 
-COMMAND_PREFIX : str = "/"
+CHAT_LOG_ID : str = "chat-log"
+INPUT_ID    : str = "input-line"
 
-
-# === Hook system ================================================================
-
-HOOK_MESSAGE_SENT     : str = "message_sent"
-HOOK_MESSAGE_RECEIVED : str = "message_received"
-HOOK_COMMAND_EXECUTED : str = "command_executed"
-HOOK_CONNECTOR_ADDED  : str = "connector_added"
-HOOK_BACKEND_SAVE     : str = "backend_save"
-HOOK_BACKEND_LOAD     : str = "backend_load"
-
-# Hook name -> the connector method called when the hook fires.
-HOOK_METHODS : Dict[str, str] = {
-    HOOK_MESSAGE_SENT     : "on_message_sent",
-    HOOK_MESSAGE_RECEIVED : "on_message_received",
-    HOOK_COMMAND_EXECUTED : "on_command_executed",
-    HOOK_CONNECTOR_ADDED  : "on_connector_added",
-    HOOK_BACKEND_SAVE     : "on_backend_save",
-    HOOK_BACKEND_LOAD     : "on_backend_load",
-}
-
-ALL_HOOKS = frozenset(HOOK_METHODS)
-
-
-def hook_point(*event_names: str) -> Callable[[type], type]:
-    """Declare which hook points a connector class handles.
-
-    Only connectors decorated with the hook they care about are called; the
-    matching ``on_*`` method receives the payload documented for that hook.
-
-    Usage:
-        @hook_point(HOOK_MESSAGE_SENT, HOOK_MESSAGE_RECEIVED)
-        class MyConnector(BaseConnector):
-            def on_message_sent(self, msg): ...
-            def on_message_received(self, msg): ...
-
-    Args:
-        *event_names: Hook constants the decorated class handles.
-
-    Returns:
-        Callable: The class decorator.
-    """
-    def decorator(cls: type) -> type:
-        points = set(getattr(cls, "_hook_points", ()))
-        points.update(event_names)
-        cls._hook_points = points  # type: ignore[attr-defined]
-        return cls
-    return decorator
-
-
-# === Widgets ====================================================================
-
-class TouchScrollableContainer(ScrollableContainer):
-    """Scrollable container that supports mouse/touch drag scrolling."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._drag_start_y: int = 0
-        self._scroll_start_y: int = 0
-
-    def on_mouse_down(self, event: events.MouseDown) -> None:
-        """Record the start position when drag begins."""
-        self._drag_start_y = event.y
-        self._scroll_start_y = self.scroll_offset.y
-        event.stop()
-
-    def on_mouse_move(self, event: events.MouseMove) -> None:
-        """Handle drag to scroll vertically."""
-        if not event.button:
-            return
-        delta_y = event.y - self._drag_start_y
-        target_y = self._scroll_start_y - delta_y
-        max_y = self.max_scroll_y
-        if max_y > 0:
-            target_y = max(0, min(target_y, max_y))
-            self.scroll_to(y=target_y, animate=False)
-        event.stop()
-
-    def on_mouse_up(self, event: events.MouseUp) -> None:
-        """Handle drag end."""
-        event.stop()
-
-
-class _MessageContainer(Horizontal):
-    """Clickable message container — selects the msg as a reply target."""
-
-    def __init__(
-        self,
-        *children: Widget,
-        msg_id: str,
-        on_select: Callable[[str], None],
-        **kwargs,
-    ) -> None:
-        super().__init__(*children, **kwargs)
-        self.msg_id = msg_id
-        self._on_select = on_select
-
-    def on_click(self, event: events.Click) -> None:
-        self._on_select(self.msg_id)
-        event.stop()
-
-
-@dataclass
-class ChatMessage:
-    """Represents a chat message."""
-
-    id          : str
-    text        : str
-    timestamp   : datetime = field(default_factory=datetime.now)
-    is_command  : bool = False
-    reply_to    : Optional[str] = None
-    is_sent_by_me : bool = True
-
-
-# === Public factory =============================================================
 
 def create_chat(
     connectors      : Optional[List[BaseConnector]] = None,
@@ -228,25 +120,11 @@ class _Chat(App):
         self.title      = title
         self.welcome_message = welcome_message
 
-        # Hook registry: maps hook name to the connectors that declared it
-        self._hook_registry : Dict[str, List[BaseConnector]] = {hook: [] for hook in ALL_HOOKS}
+        self._store : MessageStore = MessageStore()
+        self._hooks : HookRegistry = HookRegistry()
 
-        # Message state
-        self.messages  : List[ChatMessage] = []
-        self._next_id  : int = 1
-        self._id_lock  : threading.Lock = threading.Lock()
-        # Mapping from message id to list of reply ids (for threading)
-        self._replies  : Dict[str, List[str]] = {}
-        self._replies_lock : threading.Lock = threading.Lock()
-        # Message selected as reply target (via click)
-        self._reply_target : Optional[str] = None
-        self._msg_widgets  : Dict[str, Widget] = {}
-        self._msg_index    : Dict[str, ChatMessage] = {}
         self._input_placeholder = "Type a message or /command"
-        # Max number of messages rendered in the terminal (history stays complete in ``messages``)
         self.max_displayed : int = max_displayed
-        # IDs of the messages currently rendered, in order
-        self._rendered_msg_ids : List[str] = []
         # Thread id of the app's main loop (set in on_mount)
         self._app_thread_id : Optional[int] = None
 
@@ -263,10 +141,15 @@ class _Chat(App):
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         yield Container(
-            TouchScrollableContainer(id="chat-log"),
+            ChatLog(
+                self._store,
+                max_displayed=self.max_displayed,
+                on_reply_target_change=self._on_reply_target_change,
+                id=CHAT_LOG_ID,
+            ),
             Vertical(
-                OptionList(id="command-suggestions"),
-                _CommandInput(placeholder=self._input_placeholder, id="input-line"),
+                CommandSuggestions(self.commands, id=SUGGESTIONS_ID),
+                CommandInput(placeholder=self._input_placeholder, id=INPUT_ID),
                 id="input-area",
             ),
         )
@@ -274,14 +157,18 @@ class _Chat(App):
     def on_mount(self) -> None:
         """Focus the input and show the welcome message when the app starts."""
         self._app_thread_id = threading.get_ident()
-        self.query_one("#input-line", Input).focus()
+        self.query_one(f"#{INPUT_ID}", Input).focus()
+        if self._store.messages:
+            # Messages added before the app was mounted (see _repaint)
+            self._chat_log.sync()
+            self._chat_log.scroll_to_bottom()
         if self.welcome_message:
             self.receive_message(self.welcome_message)
 
     def on_input_submitted(self, message: Input.Submitted) -> None:
         """Handle user pressing Enter in the input field."""
         del message
-        inp = self.query_one("#input-line", Input)
+        inp = self.query_one(f"#{INPUT_ID}", Input)
         text = inp.value.strip()
         if not text:
             return
@@ -297,11 +184,16 @@ class _Chat(App):
 
     def on_input_changed(self, message: Input.Changed) -> None:
         """Update the command-suggestion popup as the user types."""
-        if message.input.id != "input-line":
+        if message.input.id != INPUT_ID:
             return
-        self._update_command_suggestions(message.value)
+        self.query_one(f"#{SUGGESTIONS_ID}", CommandSuggestions).update_for(message.value)
 
     # === Public API =================================================================
+
+    @property
+    def messages(self) -> List[ChatMessage]:
+        """The full message history, oldest first."""
+        return self._store.messages
 
     def send_message(self, text: str, *, reply_to: Optional[str] = None) -> str:
         """Sends a normal message and returns its id.
@@ -310,41 +202,34 @@ class _Chat(App):
         text : Message content.
         reply_to : Id of the message this one replies to (optional).
         """
-        msg = ChatMessage(
-            id=self._new_id(),
+        msg = self._store.add(ChatMessage(
+            id=self._store.new_id(),
             text=text,
             is_command=False,
             is_sent_by_me=True,
             reply_to=reply_to,
-        )
-        self._add_message(msg)
-        if reply_to is not None:
-            self._record_reply(reply_to, msg.id)
+        ))
+        self._repaint()
         self.on_message_sent(msg)
-        self._trigger_hook(HOOK_MESSAGE_SENT, msg=msg)
+        self._hooks.trigger(HOOK_MESSAGE_SENT, msg=msg)
         return msg.id
 
     def send_command(self, command: str) -> str:
         """Sends a command (without the '/' prefix) and returns its id."""
         logger.info("Command executed: %s", command)
-        msg = ChatMessage(
-            id=self._new_id(),
+        msg = self._store.add(ChatMessage(
+            id=self._store.new_id(),
             text=command,
             is_command=True,
             is_sent_by_me=True,
-        )
-        self._add_message(msg)
+        ))
+        self._repaint()
         self.on_command(command)
         self.on_message_sent(msg)
-        self._trigger_hook(HOOK_MESSAGE_SENT, msg=msg)
+        self._hooks.trigger(HOOK_MESSAGE_SENT, msg=msg)
         return msg.id
 
-    def receive_message(
-        self,
-        text: str,
-        *,
-        reply_to: Optional[str] = None,
-    ) -> str:
+    def receive_message(self, text: str, *, reply_to: Optional[str] = None) -> str:
         """Receives a message from outside and returns its id.
 
         Safe to call from any thread: if called off the app's main
@@ -354,29 +239,33 @@ class _Chat(App):
         text : Message content.
         reply_to : Id of a sent message this one replies to (optional).
         """
-        msg = ChatMessage(
-            id=self._new_id(),
+        msg = self._store.add(ChatMessage(
+            id=self._store.new_id(),
             text=text,
             is_command=False,
             is_sent_by_me=False,
             reply_to=reply_to,
-        )
-        if self._app_thread_id is None or threading.get_ident() == self._app_thread_id:
-            # App not mounted yet, or already on the app thread: direct call.
-            self._add_message(msg)
-        else:
-            # Off the app thread: marshal the UI update onto the main loop.
-            self.call_from_thread(self._add_message, msg)
-        if reply_to is not None:
-            self._record_reply(reply_to, msg.id)
+        ))
+        self._repaint()
         self.on_message_received(msg)
-        self._trigger_hook(HOOK_MESSAGE_RECEIVED, msg=msg)
+        self._hooks.trigger(HOOK_MESSAGE_RECEIVED, msg=msg)
         return msg.id
 
     def get_replies(self, msg_id: str) -> List[str]:
         """Returns the ids of the messages that reply to *msg_id*."""
-        with self._replies_lock:
-            return list(self._replies.get(msg_id, []))
+        return self._store.replies(msg_id)
+
+    def send_pending_reply(self, text: str) -> Optional[str]:
+        """Sends *text* as a reply to the selected message (if any).
+
+        Clears the selection. Returns the id of the sent message, or None
+        if there is no selected target.
+        """
+        target = self._reply_target
+        if target is None:
+            return None
+        self._clear_reply_target()
+        return self.send_message(text, reply_to=target)
 
     def add_connector(self, connector: BaseConnector) -> None:
         """Registers *connector*, initializes it and registers its hooks.
@@ -384,14 +273,17 @@ class _Chat(App):
         Args:
             connector: The connector to add.
         """
+        previous = self.connectors.get(connector.name)
+        if previous is not None:
+            # Drop the replaced connector's hooks, otherwise it keeps being called
+            # (and re-adding the same object would register it twice).
+            logger.info("Replacing connector %r", connector.name)
+            self._hooks.unregister(previous)
+
         self.connectors[connector.name] = connector
-        for hook in getattr(connector, "_hook_points", ()):
-            if hook in self._hook_registry:
-                self._hook_registry[hook].append(connector)
-            else:
-                logger.warning("Connector %r declares unknown hook: %s", connector.name, hook)
+        self._hooks.register(connector)
         connector.initialize()
-        self._trigger_hook(HOOK_CONNECTOR_ADDED, connector=connector)
+        self._hooks.trigger(HOOK_CONNECTOR_ADDED, connector=connector)
 
     def send_message_via_connector(self, connector_name: str, message: str, **kwargs) -> Any:
         """Sends a message through a specific connector.
@@ -432,9 +324,11 @@ class _Chat(App):
             result = self.commands[command_name].execute(*args, **kwargs)
         except Exception as exc:
             logger.error("Error executing command '%s': %s", command_name, exc)
-            self._trigger_hook(HOOK_COMMAND_EXECUTED, command=command_name, error=exc)
+            # Both paths carry the same keys, so a handler declaring
+            # (command, result, error) is called on failure too.
+            self._hooks.trigger(HOOK_COMMAND_EXECUTED, command=command_name, result=None, error=exc)
             raise
-        self._trigger_hook(HOOK_COMMAND_EXECUTED, command=command_name, result=result)
+        self._hooks.trigger(HOOK_COMMAND_EXECUTED, command=command_name, result=result, error=None)
         return result
 
     def save_data(self, key: str, data: Any) -> bool:
@@ -453,7 +347,7 @@ class _Chat(App):
         if self.backend is None:
             raise RuntimeError("No backend configured")
         saved = self.backend.save(key, data)
-        self._trigger_hook(HOOK_BACKEND_SAVE, key=key, data=data)
+        self._hooks.trigger(HOOK_BACKEND_SAVE, key=key, data=data)
         return saved
 
     def load_data(self, key: str) -> Any:
@@ -471,7 +365,7 @@ class _Chat(App):
         if self.backend is None:
             raise RuntimeError("No backend configured")
         data = self.backend.load(key)
-        self._trigger_hook(HOOK_BACKEND_LOAD, key=key, data=data)
+        self._hooks.trigger(HOOK_BACKEND_LOAD, key=key, data=data)
         return data
 
     def delete_data(self, key: str) -> bool:
@@ -489,6 +383,10 @@ class _Chat(App):
         if self.backend is None:
             raise RuntimeError("No backend configured")
         return self.backend.delete(key)
+
+    def has_command_suggestions(self) -> bool:
+        """Whether the command-suggestion popup currently has entries."""
+        return self.query_one(f"#{SUGGESTIONS_ID}", CommandSuggestions).has_suggestions
 
     # === Hooks (callbacks — all start with ``on_``) ==============================
 
@@ -523,269 +421,48 @@ class _Chat(App):
 
     # === Internals ==================================================================
 
-    def _trigger_hook(self, hook_name: str, **kwargs) -> None:
-        """Calls every connector that declared *hook_name* via ``@hook_point``.
+    @property
+    def _chat_log(self) -> ChatLog:
+        """The log widget that renders the store."""
+        return self.query_one(f"#{CHAT_LOG_ID}", ChatLog)
 
-        Args:
-            hook_name: The hook constant to trigger.
-            **kwargs: Payload passed to the connector's hook method.
+    def _repaint(self) -> None:
+        """Renders the store's window, marshalling onto the app thread if needed.
+
+        Before ``on_mount`` there is no widget tree yet: the messages stay in
+        the store and are painted when the app mounts.
         """
-        method_name = HOOK_METHODS.get(hook_name)
-        if method_name is None:
-            logger.warning("Unknown hook name: %s", hook_name)
+        if self._app_thread_id is None:
             return
+        if threading.get_ident() == self._app_thread_id:
+            self._chat_log.sync()
+        else:
+            # Off the app thread: marshal the UI update onto the main loop.
+            self.call_from_thread(self._chat_log.sync)
 
-        for connector in self._hook_registry.get(hook_name, []):
-            method = getattr(connector, method_name, None)
-            if method is None:
-                logger.debug("Connector %r does not implement %s", connector.name, method_name)
-                continue
-            try:
-                method(**kwargs)
-            except Exception as exc:
-                logger.error(
-                    "Error in hook '%s' for connector %r: %s", hook_name, connector.name, exc,
-                    exc_info=True,
-                )
+    def _on_reply_target_change(self, msg_id: Optional[str]) -> None:
+        """Keeps the input placeholder in step with the log's reply target."""
+        inp = self.query_one(f"#{INPUT_ID}", Input)
+        inp.placeholder = self._input_placeholder if msg_id is None else f"Reply to {msg_id}…"
 
-    def _record_reply(self, reply_to: str, msg_id: str) -> None:
-        """Thread-safely records that *msg_id* replies to *reply_to*."""
-        with self._replies_lock:
-            self._replies.setdefault(reply_to, []).append(msg_id)
+    # Thin delegates: the state lives in the store and the log widget.
 
     def _new_id(self) -> str:
-        with self._id_lock:
-            msg_id = f"msg-{self._next_id}"
-            self._next_id += 1
-        return msg_id
-
-    def _add_message(self, msg: ChatMessage) -> str:
-        """Adds a message to the history and re-renders the log."""
-        chat_log = self.query_one("#chat-log", ScrollableContainer)
-        # Only auto-scrolls if the user is already at the bottom (otherwise they lose their reading position)
-        was_at_bottom = chat_log.scroll_offset.y >= (chat_log.max_scroll_y - 1)
-        self.messages.append(msg)
-        self._msg_index[msg.id] = msg
-        self._refresh_chat_log()
-        if was_at_bottom:
-            self._scroll_to_bottom()
-        return msg.id
-
-    def _refresh_chat_log(self) -> None:
-        """Renders only the last ``max_displayed`` messages (sliding window).
-
-        Mounts the new ones and unmounts the old ones that left the window,
-        to limit the number of widgets in the terminal.
-        """
-        chat_log = self.query_one("#chat-log", ScrollableContainer)
-
-        # Desired window: the last max_displayed messages
-        total = len(self.messages)
-        start = max(0, total - self.max_displayed)
-        desired_ids = [m.id for m in self.messages[start:]]
-
-        current = set(self._rendered_msg_ids)
-        desired = set(desired_ids)
-
-        # Unmount messages that left the window
-        for msg_id in self._rendered_msg_ids:
-            if msg_id not in desired:
-                widget = self._msg_widgets.pop(msg_id, None)
-                if widget is not None:
-                    widget.remove()
-
-        # Mount the new ones, in the correct order
-        for msg_id in desired_ids:
-            if msg_id not in current:
-                msg = self._find_message(msg_id)
-                if msg is not None:
-                    chat_log.mount(self._render_message(msg))
-
-        self._rendered_msg_ids = desired_ids
-
-    def _render_message(self, msg: ChatMessage) -> Widget:
-        """Render a message as a clickable container with header and body."""
-        sender = "You" if msg.is_sent_by_me else "Other"
-        time_str = msg.timestamp.strftime("%H:%M")
-        prefix = f"[{time_str}] {sender} · {msg.id}"
-        if msg.reply_to is not None:
-            prefix += " ↳ replying"
-
-        header = Static(prefix, classes="message-header")
-        parts: List[Widget] = [header]
-
-        # Quote of the original message when this is a reply
-        if msg.reply_to is not None:
-            original = self._find_message(msg.reply_to)
-            if original is not None:
-                preview = " ".join(original.text.split())[:60]
-                parts.append(
-                    Static(f"↳ {original.id}: {preview}…", classes="message-quote")
-                )
-
-        parts.append(Markdown(msg.text, classes="message-body"))
-
-        bubble = Vertical(*parts, classes="message-bubble")
-
-        # Clickable container — aligns left/right and selects the reply target
-        container = _MessageContainer(
-            bubble,
-            msg_id=msg.id,
-            on_select=self._on_message_clicked,
-            classes="message-container",
-        )
-        if msg.is_sent_by_me:
-            container.add_class("sent")
-        else:
-            container.add_class("received")
-
-        self._msg_widgets[msg.id] = container
-        return container
-
-    # === Reply target (click) ======================================================
-
-    def _on_message_clicked(self, msg_id: str) -> None:
-        """Selects/deselects a message as the reply target."""
-        if self._reply_target == msg_id:
-            self._clear_reply_target()
-        else:
-            self._set_reply_target(msg_id)
-
-    def _set_reply_target(self, msg_id: str) -> None:
-        """Marks *msg_id* as the reply target and updates the input."""
-        self._reply_target = msg_id
-        self._refresh_reply_target_ui()
-        inp = self.query_one("#input-line", Input)
-        inp.placeholder = f"Reply to {msg_id}…"
-
-    def _clear_reply_target(self) -> None:
-        """Clears the reply target and restores the input."""
-        self._reply_target = None
-        self._refresh_reply_target_ui()
-        inp = self.query_one("#input-line", Input)
-        inp.placeholder = self._input_placeholder
-
-    def _refresh_reply_target_ui(self) -> None:
-        """Updates the visual highlight of all messages."""
-        for msg_id, widget in self._msg_widgets.items():
-            widget.set_class(msg_id == self._reply_target, "reply-target")
-
-    def send_pending_reply(self, text: str) -> Optional[str]:
-        """Sends *text* as a reply to the selected message (if any).
-
-        Clears the selection. Returns the id of the sent message, or None
-        if there is no selected target.
-        """
-        if self._reply_target is None:
-            return None
-        target = self._reply_target
-        self._clear_reply_target()
-        return self.send_message(text, reply_to=target)
-
-    # === Command suggestions (autocomplete) ========================================
-
-    def has_command_suggestions(self) -> bool:
-        """Whether the command-suggestion popup currently has entries."""
-        return self.query_one("#command-suggestions", OptionList).option_count > 0
-
-    def _suggestion_label(self, name: str) -> str:
-        """Returns the popup label for the command registered as *name*."""
-        description = self.commands[name].description
-        if description:
-            return f"{COMMAND_PREFIX}{name}  —  {description}"
-        return f"{COMMAND_PREFIX}{name}"
-
-    def _update_command_suggestions(self, text: str) -> None:
-        """Shows commands matching the "/token" currently being typed."""
-        matches: List[str] = []
-        if text.startswith(COMMAND_PREFIX) and " " not in text:
-            token = text[len(COMMAND_PREFIX):]
-            matches = sorted(name for name in self.commands if name.startswith(token))
-
-        suggestions = self.query_one("#command-suggestions", OptionList)
-        if not matches:
-            self._hide_command_suggestions()
-            return
-
-        suggestions.set_options(
-            Option(self._suggestion_label(name), id=name) for name in matches
-        )
-        suggestions.highlighted = 0
-        suggestions.add_class("-visible")
-
-    def _hide_command_suggestions(self) -> None:
-        """Hides and clears the command-suggestion popup."""
-        suggestions = self.query_one("#command-suggestions", OptionList)
-        suggestions.remove_class("-visible")
-        suggestions.clear_options()
-
-    def _move_command_suggestion(self, delta: int) -> None:
-        """Moves the suggestion highlight up (delta<0) or down (delta>0)."""
-        suggestions = self.query_one("#command-suggestions", OptionList)
-        if delta > 0:
-            suggestions.action_cursor_down()
-        else:
-            suggestions.action_cursor_up()
-
-    def _accept_command_suggestion(self) -> bool:
-        """Completes the input with the highlighted suggestion, if any.
-
-        Returns True if a suggestion was accepted.
-        """
-        suggestions = self.query_one("#command-suggestions", OptionList)
-        option = suggestions.highlighted_option
-        if option is None or option.id is None:
-            return False
-        inp = self.query_one("#input-line", Input)
-        inp.value = f"{COMMAND_PREFIX}{option.id} "
-        inp.action_end()
-        self._hide_command_suggestions()
-        return True
+        return self._store.new_id()
 
     def _find_message(self, msg_id: str) -> Optional[ChatMessage]:
-        """Returns the message with the given id, or None."""
-        return self._msg_index.get(msg_id)
+        return self._store.find(msg_id)
 
-    def _scroll_to_bottom(self) -> None:
-        """Scrolls the chat log to the bottom."""
-        chat_log = self.query_one("#chat-log", ScrollableContainer)
-        chat_log.scroll_end(animate=False)
+    @property
+    def _reply_target(self) -> Optional[str]:
+        return self._chat_log.reply_target
 
+    @property
+    def _rendered_msg_ids(self) -> List[str]:
+        return self._chat_log._rendered_msg_ids
 
-class _CommandInput(Input):
-    """Input that drives the command-suggestion popup owned by :class:`_Chat`.
+    def _set_reply_target(self, msg_id: str) -> None:
+        self._chat_log.set_reply_target(msg_id)
 
-    Tab/Down/Up/Escape are only claimed while a suggestion popup is open
-    (see ``check_action``) — otherwise they fall through to Textual's
-    normal bindings (e.g. Tab still moves focus as usual).
-    """
-
-    BINDINGS = [
-        Binding("tab", "accept_suggestion", show=False),
-        Binding("down", "next_suggestion", show=False),
-        Binding("up", "prev_suggestion", show=False),
-        Binding("escape", "dismiss_suggestions", show=False),
-    ]
-
-    def check_action(self, action: str, parameters: Tuple[object, ...]) -> Optional[bool]:
-        if action in ("accept_suggestion", "next_suggestion", "prev_suggestion", "dismiss_suggestions"):
-            return cast(_Chat, self.app).has_command_suggestions()
-        return True
-
-    def action_accept_suggestion(self) -> None:
-        cast(_Chat, self.app)._accept_command_suggestion()
-
-    def action_next_suggestion(self) -> None:
-        cast(_Chat, self.app)._move_command_suggestion(1)
-
-    def action_prev_suggestion(self) -> None:
-        cast(_Chat, self.app)._move_command_suggestion(-1)
-
-    def action_dismiss_suggestions(self) -> None:
-        cast(_Chat, self.app)._hide_command_suggestions()
-
-    async def action_submit(self) -> None:
-        app = cast(_Chat, self.app)
-        if app.has_command_suggestions() and app._accept_command_suggestion():
-            return
-        await super().action_submit()
+    def _clear_reply_target(self) -> None:
+        self._chat_log.clear_reply_target()

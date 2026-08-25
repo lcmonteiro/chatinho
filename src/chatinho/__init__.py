@@ -29,7 +29,17 @@ Example:
 The application class itself is private: build one with ``create_chat``.
 """
 
-from .chat_app import create_chat, ChatMessage
+from .chat_app import create_chat
+from .chat_message import ChatMessage
+from .chat_hooks import (
+    hook_point,
+    HOOK_MESSAGE_SENT,
+    HOOK_MESSAGE_RECEIVED,
+    HOOK_COMMAND_EXECUTED,
+    HOOK_CONNECTOR_ADDED,
+    HOOK_BACKEND_SAVE,
+    HOOK_BACKEND_LOAD,
+)
 from .chat_style import ChatStyle
 from .connectors import A2AConnector, OpenAIConnector, BaseConnector
 from .backends import DatabaseBackend, BaseBackend
@@ -39,6 +49,14 @@ __all__ = [
     "create_chat",
     "ChatMessage",
     "ChatStyle",
+    # Connector hook system
+    "hook_point",
+    "HOOK_MESSAGE_SENT",
+    "HOOK_MESSAGE_RECEIVED",
+    "HOOK_COMMAND_EXECUTED",
+    "HOOK_CONNECTOR_ADDED",
+    "HOOK_BACKEND_SAVE",
+    "HOOK_BACKEND_LOAD",
     # Connectors
     "BaseConnector",
     "A2AConnector",
