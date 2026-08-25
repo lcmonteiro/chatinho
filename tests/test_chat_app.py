@@ -208,3 +208,13 @@ async def test_no_welcome_message_by_default():
     app = create_chat()
     async with app.run_test():
         assert app.messages == []
+
+
+@pytest.mark.asyncio
+async def test_messages_added_before_mount_are_kept_and_rendered():
+    app = create_chat()
+    assert app.receive_message("early") == "msg-1"
+    assert [m.text for m in app.messages] == ["early"]
+    async with app.run_test():
+        assert app._rendered_msg_ids == ["msg-1"]
+        assert app._find_message("msg-1") is not None

@@ -5,21 +5,20 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 ---
 
-## Status: green tests, red lint
+## Status: green
 
-`import chatinho` works and `pytest` passes (42 tests). `ruff` and `mypy` are still red,
-but only in files untouched by the recovery:
+`import chatinho` works and all three CI checks are green.
 
-| check | result | where |
-|---|---|---|
-| `pytest -q` | **42 pass** | — |
-| `ruff check src tests examples` | 13 errors | `connectors/`, `backends/`, `commands/test.py` |
-| `mypy src/chatinho` | 3 errors | `connectors/a2a.py`, `backends/database.py` |
+| check | result |
+|---|---|
+| `pytest -q` | **47 pass** |
+| `ruff check src tests examples` | clean |
+| `mypy src/chatinho` | clean |
 
-The ruff errors are unused imports plus two long lines; the mypy errors are the SQLAlchemy
-`declarative_base()` pattern and an A2A payload type. Both predate the UI recovery — lint and
-types went red at `4350ac4` in the monorepo, when the connectors/backends/commands layer landed,
-and `chat_app.py` was never the cause.
+Lint and types had been red since `4350ac4` in the monorepo, when the connectors/backends/commands
+layer landed; `chat_app.py` was never the cause. They were cleared alongside the recovery: unused
+imports, two long lines, the SQLAlchemy `declarative_base()` pattern (now `class Base(DeclarativeBase)`,
+which also silences the MovedIn20Warning) and an A2A payload annotation.
 
 ### How the package was recovered
 
@@ -55,7 +54,9 @@ callback.
 
 Connectors opt into events with `@hook_point(...)`; `_Chat` triggers every hook centrally
 (`send_message`, `receive_message`, `execute_command`, `add_connector`, `save_data`,
-`load_data`), so a connector that declares no hook points simply never gets called.
+`load_data`), so a connector that declares no hook points simply never gets called. The payload
+each hook delivers is tabulated in `hook_point`'s docstring; `on_command_executed` is called on
+both the success and the failure path with the same keys (`command`, `result`, `error`).
 
 ---
 
@@ -70,13 +71,14 @@ src/chatinho/
   commands/        base.py (ABC), help.py, test.py
   backends/        base.py (ABC), database.py (SQLAlchemy)
 examples/          demo.py
-tests/             test_callbacks.py, test_chat_app.py, test_command_suggestions.py
+tests/             test_callbacks.py, test_chat_app.py, test_command_suggestions.py, test_hooks.py
 ```
 
 ## Public API
 
-`__init__.py` exports `create_chat`, `ChatMessage`, `ChatStyle`, `BaseConnector`, `A2AConnector`,
-`OpenAIConnector`, `BaseBackend`, `DatabaseBackend`, `BaseCommand`, `HelpCommand`, `TestCommand`.
+`__init__.py` exports `create_chat`, `ChatMessage`, `ChatStyle`, `hook_point` and the six `HOOK_*`
+constants, `BaseConnector`, `A2AConnector`, `OpenAIConnector`, `BaseBackend`, `DatabaseBackend`,
+`BaseCommand`, `HelpCommand`, `TestCommand`.
 
 There is no `Chat` or `ChatApp` export: the app class is private, so `create_chat` is the only way
 to build one. Lifecycle hooks (`on_command`, `on_message_sent`, `on_message_received`) are

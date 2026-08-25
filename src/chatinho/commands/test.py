@@ -47,7 +47,10 @@ class TestCommand(BaseCommand):
                 results.append(f"Backend load: {'✓' if load_result else '✗'}")
                 
                 # Test delete
-                delete_result = chat_instance.delete_data(test_key)
+                if hasattr(chat_instance, 'delete_data'):
+                    delete_result = chat_instance.delete_data(test_key)
+                else:
+                    delete_result = False
                 results.append(f"Backend delete: {'✓' if delete_result else '✗'}")
                 
             except Exception as e:

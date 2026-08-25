@@ -66,13 +66,28 @@ def hook_point(*event_names: str) -> Callable[[type], type]:
     """Declare which hook points a connector class handles.
 
     Only connectors decorated with the hook they care about are called; the
-    matching ``on_*`` method receives the payload documented for that hook.
+    matching ``on_*`` method receives that hook's payload as keyword arguments:
+
+    ==========================  ======================  ==========================
+    hook                        method                  payload
+    ==========================  ======================  ==========================
+    HOOK_MESSAGE_SENT           on_message_sent         msg
+    HOOK_MESSAGE_RECEIVED       on_message_received     msg
+    HOOK_COMMAND_EXECUTED       on_command_executed     command, result, error
+    HOOK_CONNECTOR_ADDED        on_connector_added      connector
+    HOOK_BACKEND_SAVE           on_backend_save         key, data
+    HOOK_BACKEND_LOAD           on_backend_load         key, data
+    ==========================  ======================  ==========================
+
+    ``on_command_executed`` is called on both paths: on failure ``result`` is
+    None and ``error`` carries the exception, on success ``error`` is None.
+    Accept ``**kwargs`` so new payload keys do not break existing connectors.
 
     Usage:
         @hook_point(HOOK_MESSAGE_SENT, HOOK_MESSAGE_RECEIVED)
         class MyConnector(BaseConnector):
-            def on_message_sent(self, msg): ...
-            def on_message_received(self, msg): ...
+            def on_message_sent(self, msg, **kwargs): ...
+            def on_message_received(self, msg, **kwargs): ...
 
     Args:
         *event_names: Hook constants the decorated class handles.
@@ -275,6 +290,10 @@ class _Chat(App):
         """Focus the input and show the welcome message when the app starts."""
         self._app_thread_id = threading.get_ident()
         self.query_one("#input-line", Input).focus()
+        if self.messages:
+            # Messages added before the app was mounted (see _add_message)
+            self._refresh_chat_log()
+            self._scroll_to_bottom()
         if self.welcome_message:
             self.receive_message(self.welcome_message)
 
@@ -362,7 +381,7 @@ class _Chat(App):
             reply_to=reply_to,
         )
         if self._app_thread_id is None or threading.get_ident() == self._app_thread_id:
-            # App not mounted yet, or already on the app thread: direct call.
+            # App not mounted yet (history only), or already on the app thread.
             self._add_message(msg)
         else:
             # Off the app thread: marshal the UI update onto the main loop.
@@ -384,6 +403,14 @@ class _Chat(App):
         Args:
             connector: The connector to add.
         """
+        previous = self.connectors.get(connector.name)
+        if previous is not None:
+            # Drop the replaced connector's hooks, otherwise it keeps being called
+            # (and re-adding the same object would register it twice).
+            logger.info("Replacing connector %r", connector.name)
+            for registered in self._hook_registry.values():
+                registered[:] = [c for c in registered if c is not previous]
+
         self.connectors[connector.name] = connector
         for hook in getattr(connector, "_hook_points", ()):
             if hook in self._hook_registry:
@@ -432,9 +459,11 @@ class _Chat(App):
             result = self.commands[command_name].execute(*args, **kwargs)
         except Exception as exc:
             logger.error("Error executing command '%s': %s", command_name, exc)
-            self._trigger_hook(HOOK_COMMAND_EXECUTED, command=command_name, error=exc)
+            # Both paths carry the same keys, so a handler declaring
+            # (command, result, error) is called on failure too.
+            self._trigger_hook(HOOK_COMMAND_EXECUTED, command=command_name, result=None, error=exc)
             raise
-        self._trigger_hook(HOOK_COMMAND_EXECUTED, command=command_name, result=result)
+        self._trigger_hook(HOOK_COMMAND_EXECUTED, command=command_name, result=result, error=None)
         return result
 
     def save_data(self, key: str, data: Any) -> bool:
@@ -561,11 +590,15 @@ class _Chat(App):
 
     def _add_message(self, msg: ChatMessage) -> str:
         """Adds a message to the history and re-renders the log."""
+        self.messages.append(msg)
+        self._msg_index[msg.id] = msg
+        if self._app_thread_id is None:
+            # Before on_mount there is no widget tree to render into; the
+            # message is kept in history and painted by on_mount.
+            return msg.id
         chat_log = self.query_one("#chat-log", ScrollableContainer)
         # Only auto-scrolls if the user is already at the bottom (otherwise they lose their reading position)
         was_at_bottom = chat_log.scroll_offset.y >= (chat_log.max_scroll_y - 1)
-        self.messages.append(msg)
-        self._msg_index[msg.id] = msg
         self._refresh_chat_log()
         if was_at_bottom:
             self._scroll_to_bottom()
