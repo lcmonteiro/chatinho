@@ -1,6 +1,6 @@
 """Tests for the command-suggestion (autocomplete) popup.
 
-Commands are registered via ``ChatApp(commands={...})``; the popup shows
+Commands are registered via ``create_chat(commands={...})``; the popup shows
 matches for the "/token" currently being typed, and Tab/Down/Up/Escape
 drive it without stealing focus from the input.
 """
@@ -8,18 +8,26 @@ drive it without stealing focus from the input.
 import pytest
 from textual.widgets import Input, OptionList
 
-from chatinho import ChatApp
+from chatinho import BaseCommand, create_chat
+
+
+class _StubCommand(BaseCommand):
+    """Command that only exists to be listed by the suggestion popup."""
+
+    def execute(self, *args, **kwargs) -> None:
+        return None
+
 
 COMMANDS = {
-    "help": "Show help",
-    "history": "Show history",
-    "hello": "",
+    "help"    : _StubCommand("help", "Show help"),
+    "history" : _StubCommand("history", "Show history"),
+    "hello"   : _StubCommand("hello", ""),
 }
 
 
 @pytest.mark.asyncio
 async def test_no_suggestions_without_registered_commands():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test() as pilot:
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/")
@@ -29,7 +37,7 @@ async def test_no_suggestions_without_registered_commands():
 
 @pytest.mark.asyncio
 async def test_slash_alone_lists_all_commands():
-    app = ChatApp(commands=COMMANDS)
+    app = create_chat(commands=COMMANDS)
     async with app.run_test() as pilot:
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/")
@@ -39,7 +47,7 @@ async def test_slash_alone_lists_all_commands():
 
 @pytest.mark.asyncio
 async def test_typing_filters_suggestions_by_prefix():
-    app = ChatApp(commands=COMMANDS)
+    app = create_chat(commands=COMMANDS)
     async with app.run_test() as pilot:
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/", "h", "e")
@@ -48,7 +56,7 @@ async def test_typing_filters_suggestions_by_prefix():
 
 @pytest.mark.asyncio
 async def test_no_match_hides_suggestions():
-    app = ChatApp(commands=COMMANDS)
+    app = create_chat(commands=COMMANDS)
     async with app.run_test() as pilot:
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/", "z")
@@ -59,7 +67,7 @@ async def test_no_match_hides_suggestions():
 @pytest.mark.asyncio
 async def test_space_after_token_hides_suggestions():
     """Once a full command is followed by a space, it's no longer being typed."""
-    app = ChatApp(commands=COMMANDS)
+    app = create_chat(commands=COMMANDS)
     async with app.run_test() as pilot:
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/", "h", "e", "l", "p", "space")
@@ -68,7 +76,7 @@ async def test_space_after_token_hides_suggestions():
 
 @pytest.mark.asyncio
 async def test_tab_completes_highlighted_suggestion():
-    app = ChatApp(commands=COMMANDS)
+    app = create_chat(commands=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         suggestions = app.query_one("#command-suggestions", OptionList)
@@ -81,7 +89,7 @@ async def test_tab_completes_highlighted_suggestion():
 
 @pytest.mark.asyncio
 async def test_down_moves_highlight_then_tab_completes_it():
-    app = ChatApp(commands=COMMANDS)
+    app = create_chat(commands=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         suggestions = app.query_one("#command-suggestions", OptionList)
@@ -96,7 +104,7 @@ async def test_down_moves_highlight_then_tab_completes_it():
 
 @pytest.mark.asyncio
 async def test_enter_accepts_suggestion_instead_of_submitting():
-    app = ChatApp(commands=COMMANDS)
+    app = create_chat(commands=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         await pilot.press("/", "h", "e")
@@ -107,7 +115,7 @@ async def test_enter_accepts_suggestion_instead_of_submitting():
 
 @pytest.mark.asyncio
 async def test_escape_hides_suggestions_without_changing_input():
-    app = ChatApp(commands=COMMANDS)
+    app = create_chat(commands=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         suggestions = app.query_one("#command-suggestions", OptionList)
@@ -120,7 +128,7 @@ async def test_escape_hides_suggestions_without_changing_input():
 @pytest.mark.asyncio
 async def test_tab_falls_through_to_focus_next_without_suggestions():
     """Tab must keep its normal Textual behavior when no popup is open."""
-    app = ChatApp(commands=COMMANDS)
+    app = create_chat(commands=COMMANDS)
     async with app.run_test() as pilot:
         focused_before = app.focused
         await pilot.press("x")  # not a command prefix — no popup
@@ -132,7 +140,7 @@ async def test_tab_falls_through_to_focus_next_without_suggestions():
 async def test_unregistered_command_still_dispatches():
     """Autocomplete is advisory only — unlisted commands still work."""
     commands_seen = []
-    app = ChatApp(command_handler=commands_seen.append, commands=COMMANDS)
+    app = create_chat(command_handler=commands_seen.append, commands=COMMANDS)
     async with app.run_test():
         app.send_command("stats")
     assert commands_seen == ["stats"]

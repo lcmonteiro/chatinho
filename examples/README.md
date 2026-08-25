@@ -16,8 +16,12 @@ python examples/demo.py        # or directly
 
 | File | What it shows |
 |---|---|
-| `demo.py` | Full-featured demo: Markdown rendering, code blocks with syntax highlighting, `/help` and `/code` commands, `/reply <id> <text>`, click-to-reply and a simulated bot that answers to sent messages |
+| `demo.py` | Full-featured demo built on `create_chat`: Markdown rendering, code blocks with syntax highlighting, a custom `BaseCommand` (`/code`) next to the library's `/help`, command autocomplete, click-to-reply, and an echo `BaseConnector` that answers every sent message |
+
+The demo runs without credentials or a backend. The shipped `A2AConnector` and
+`OpenAIConnector` both reach the network in `initialize()`, so an example using
+them needs real endpoints and keys.
 
 Want to add your own? Drop a new file here — e.g. a themed variant
-(`ChatStyle(accent=...)`) or a WebSocket-connected chat — and list it
+(`create_chat(style=ChatStyle(...))`) or a WebSocket-connected chat — and list it
 in the table above.

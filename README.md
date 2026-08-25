@@ -16,7 +16,7 @@ A simple, extensible TUI chat client library built on Textual.
 - **In-Memory History**: Full message history retained; sliding window limits rendered messages for performance.
 - **Transport Agnostic**: Library does not dictate how messages are sent/received—use `send_message`, `send_command`, and `receive_message` to hook into any backend (WebSocket, HTTP, custom protocols, etc.).
 - **Customizable UI**: Clean, readable theme with clear visual distinction between sent and received messages.
-- **Extensible Design**: Override lifecycle hooks (`on_command`, `on_message_sent`, `on_message_received`) to inject custom logic.
+- **Extensible Design**: Assign lifecycle hooks (`on_command`, `on_message_sent`, `on_message_received`) on the chat returned by `create_chat` to inject custom logic.
 
 ## Installation
 
@@ -26,16 +26,19 @@ pip install chatinho
 
 ## Usage
 
-### Basic Usage (Backward Compatible)
+### Basic Usage
 
 ```python
-from chatinho import ChatApp
+from chatinho import create_chat
 
-app = ChatApp()
-app.run()
+chat = create_chat()
+chat.run()
 ```
 
-### New Extensible Architecture
+`create_chat` is the only entry point: the application class itself is private,
+and connectors, commands and a backend are all optional.
+
+### Full Architecture
 
 ```python
 from chatinho import create_chat
@@ -67,7 +70,7 @@ chat.run()
 
 ## Architecture
 
-The new chatinho architecture consists of:
+The chatinho architecture consists of:
 
 ### Connectors
 - `A2AConnector`: For communicating with Agent-to-Agent (A2A) protocol endpoints

@@ -1,6 +1,6 @@
 """Tests for chatinho.
 
-The Textual app is mounted via ``App.run_test()`` so widgets (input,
+The app is built with ``create_chat`` and mounted via ``App.run_test()`` so widgets (input,
 chat log) are available to the code under test.
 """
 
@@ -10,12 +10,12 @@ import threading
 import pytest
 from textual.widgets import Input
 
-from chatinho import ChatApp
+from chatinho import BaseCommand, HelpCommand, create_chat
 
 
 @pytest.mark.asyncio
 async def test_new_id_increments():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         assert app._new_id() == "msg-1"
         assert app._new_id() == "msg-2"
@@ -23,7 +23,7 @@ async def test_new_id_increments():
 
 @pytest.mark.asyncio
 async def test_send_message_returns_id_and_stores():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         mid = app.send_message("hello")
         assert mid == "msg-1"
@@ -36,7 +36,7 @@ async def test_send_message_returns_id_and_stores():
 
 @pytest.mark.asyncio
 async def test_send_command_sets_flag_and_calls_hook():
-    app = ChatApp()
+    app = create_chat()
     received = []
     app.on_command = lambda command: received.append(command)  # type: ignore[method-assign]
     async with app.run_test():
@@ -48,7 +48,7 @@ async def test_send_command_sets_flag_and_calls_hook():
 
 @pytest.mark.asyncio
 async def test_receive_message_is_not_sent_by_me():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         mid = app.receive_message("incoming")
         assert mid == "msg-1"
@@ -57,7 +57,7 @@ async def test_receive_message_is_not_sent_by_me():
 
 @pytest.mark.asyncio
 async def test_reply_threading():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         original = app.send_message("original")
         reply = app.receive_message("reply text", reply_to=original)
@@ -67,7 +67,7 @@ async def test_reply_threading():
 
 @pytest.mark.asyncio
 async def test_get_replies_empty_for_unknown():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         assert app.get_replies("msg-999") == []
 
@@ -75,7 +75,7 @@ async def test_get_replies_empty_for_unknown():
 @pytest.mark.asyncio
 async def test_receive_message_from_other_thread():
     """receive_message is safe to call from a worker thread."""
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         assert app._app_thread_id == threading.get_ident()
         results = {}
@@ -100,7 +100,7 @@ async def test_receive_message_from_other_thread():
 
 @pytest.mark.asyncio
 async def test_find_message():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         mid = app.send_message("find me")
         found = app._find_message(mid)
@@ -110,7 +110,7 @@ async def test_find_message():
 
 @pytest.mark.asyncio
 async def test_send_pending_reply_without_target_returns_none():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         assert app.send_pending_reply("text") is None
         assert len(app.messages) == 0
@@ -118,7 +118,7 @@ async def test_send_pending_reply_without_target_returns_none():
 
 @pytest.mark.asyncio
 async def test_send_pending_reply_after_click_target():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         original = app.receive_message("target")
         app._set_reply_target(original)
@@ -130,7 +130,7 @@ async def test_send_pending_reply_after_click_target():
 
 @pytest.mark.asyncio
 async def test_clear_reply_target_restores_placeholder():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         original = app.receive_message("target")
         app._set_reply_target(original)
@@ -142,7 +142,7 @@ async def test_clear_reply_target_restores_placeholder():
 
 @pytest.mark.asyncio
 async def test_input_focused_on_mount():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test():
         inp = app.query_one("#input-line", Input)
         assert inp.has_focus
@@ -150,7 +150,7 @@ async def test_input_focused_on_mount():
 
 @pytest.mark.asyncio
 async def test_submit_text_sends_message():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         inp.value = "hello world"
@@ -161,10 +161,50 @@ async def test_submit_text_sends_message():
 
 @pytest.mark.asyncio
 async def test_submit_command_sends_command():
-    app = ChatApp()
+    app = create_chat()
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         inp.value = "/help"
         await pilot.press("enter")
         assert len(app.messages) == 1
         assert app.messages[0].is_command is True
+
+
+@pytest.mark.asyncio
+async def test_registered_command_is_executed_and_result_displayed():
+    app = create_chat(commands={"help": HelpCommand()})
+    async with app.run_test():
+        app.send_command("help")
+        assert len(app.messages) == 2
+        assert app.messages[0].is_command is True
+        result = app.messages[1]
+        assert result.is_sent_by_me is False
+        assert "/help" in result.text
+
+
+@pytest.mark.asyncio
+async def test_failing_command_is_reported_instead_of_raising():
+    class Boom(BaseCommand):
+        def execute(self, *args, **kwargs):
+            raise RuntimeError("kaboom")
+
+    app = create_chat(commands={"boom": Boom("boom", "always fails")})
+    async with app.run_test():
+        app.send_command("boom")
+        assert len(app.messages) == 2
+        assert "kaboom" in app.messages[1].text
+
+
+@pytest.mark.asyncio
+async def test_welcome_message_is_shown_on_mount():
+    app = create_chat(welcome_message="ola")
+    async with app.run_test():
+        assert [m.text for m in app.messages] == ["ola"]
+        assert app.messages[0].is_sent_by_me is False
+
+
+@pytest.mark.asyncio
+async def test_no_welcome_message_by_default():
+    app = create_chat()
+    async with app.run_test():
+        assert app.messages == []

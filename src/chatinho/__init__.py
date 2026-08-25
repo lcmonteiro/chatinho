@@ -1,4 +1,4 @@
-"""Chatinho: a extensible chat client library.
+"""Chatinho: an extensible chat client library.
 
 Example:
     >>> from chatinho import create_chat
@@ -25,19 +25,23 @@ Example:
     ...     backend=DatabaseBackend("sqlite:///my_database.db")
     ... )
     >>> chat.run()
+
+The application class itself is private: build one with ``create_chat``.
 """
 
-from .chat import create_chat, Chat
+from .chat_app import create_chat, ChatMessage
+from .chat_style import ChatStyle
 from .connectors import A2AConnector, OpenAIConnector, BaseConnector
 from .backends import DatabaseBackend, BaseBackend
 from .commands import HelpCommand, TestCommand, BaseCommand
 
 __all__ = [
     "create_chat",
-    "Chat",
+    "ChatMessage",
+    "ChatStyle",
     # Connectors
     "BaseConnector",
-    "A2AConnector", 
+    "A2AConnector",
     "OpenAIConnector",
     # Backends
     "BaseBackend",
@@ -47,9 +51,3 @@ __all__ = [
     "HelpCommand",
     "TestCommand",
 ]
-
-# Keep backward compatibility
-from .chat_app import ChatApp, ChatMessage
-from .chat_style import ChatStyle
-
-__all__.extend(["ChatApp", "ChatMessage", "ChatStyle"])
