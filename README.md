@@ -86,8 +86,7 @@ The new chatinho architecture consists of:
 ## Examples
 
 See the `examples/` directory:
-- `demo.py`: Original demo showing basic functionality
-- `new_usage.py`: Example of the new extensible architecture
+- `demo.py`: Full demo showing Markdown rendering, code blocks, commands and replies
 
 ## Running Tests
 
