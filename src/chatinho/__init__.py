@@ -29,10 +29,10 @@ Example:
 The application class itself is private: build one with ``create_chat``.
 """
 
-from .chat_app import (
-    create_chat,
+from .chat_app import create_chat
+from .chat_message import ChatMessage
+from .chat_hooks import (
     hook_point,
-    ChatMessage,
     HOOK_MESSAGE_SENT,
     HOOK_MESSAGE_RECEIVED,
     HOOK_COMMAND_EXECUTED,

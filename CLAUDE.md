@@ -11,7 +11,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **47 pass** |
+| `pytest -q` | **63 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -65,14 +65,30 @@ both the success and the failure path with the same keys (`command`, `result`, `
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat + the private _Chat app (UI, hooks, orchestration)
+  chat_app.py      create_chat + the private _Chat app — wiring and orchestration
+  chat_message.py  ChatMessage + MessageStore (history, ids, threading) — no Textual
+  chat_hooks.py    HOOK_* constants, hook_point, HookRegistry — no Textual
+  chat_log.py      ChatLog widget: renders the store, owns the reply target
+  chat_input.py    CommandInput + CommandSuggestions (autocomplete popup)
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      base.py (ABC), a2a.py, openai.py
   commands/        base.py (ABC), help.py, test.py
   backends/        base.py (ABC), database.py (SQLAlchemy)
 examples/          demo.py
-tests/             test_callbacks.py, test_chat_app.py, test_command_suggestions.py, test_hooks.py
+tests/             test_chat_app.py, test_callbacks.py, test_command_suggestions.py,
+                   test_hooks.py (mounted) + test_message_store.py, test_hook_registry.py (sync)
 ```
+
+`chat_app.py` was 825 lines holding seven concerns; it is 468 now. The split follows one rule:
+**anything that does not need Textual moves out**, because that is what makes it testable without
+a terminal. `MessageStore` and `HookRegistry` are plain objects — the 16 tests covering them run in
+1.5s without mounting an app, against 7.4s for the 47 that do.
+
+`ChatLog` and `CommandSuggestions` are widgets that own their own children, so `_msg_widgets`,
+`_rendered_msg_ids` and the popup's options left the `App`. `CommandInput` talks to its sibling
+popup, which removed the six `cast(_Chat, self.app)` upward reaches. `_Chat` keeps thin delegates
+(`_new_id`, `_find_message`, `_reply_target`, …) so the existing tests kept passing unchanged
+through the refactor.
 
 ## Public API
 
