@@ -1,8 +1,7 @@
 """A2A (Agent-to-Agent) connector for chatinho."""
 
-import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 import requests
 
 from .base import BaseConnector
@@ -43,7 +42,9 @@ class A2AConnector(BaseConnector):
                 agent_card = response.json()
                 logger.debug(f"Agent card received: {agent_card.get('name', 'Unknown')}")
             else:
-                logger.warning(f"A2A connector '{self.name}' received status {response.status_code} from {self.url}")
+                logger.warning(
+                    f"A2A connector '{self.name}' received status {response.status_code} from {self.url}"
+                )
         except requests.exceptions.RequestException as e:
             logger.warning(f"Could not connect to A2A endpoint during initialization: {e}")
             # Don't fail initialization - allow for lazy connection
@@ -64,7 +65,7 @@ class A2AConnector(BaseConnector):
         logger.debug(f"Sending message via A2A connector '{self.name}': {message[:100]}...")
         
         # Prepare A2A SendMessageRequest
-        request_data = {
+        request_data: Dict[str, Any] = {
             "message": {
                 "parts": [
                     {

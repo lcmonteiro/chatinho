@@ -1,10 +1,9 @@
 """Database backend for chatinho using SQLAlchemy."""
 
 import logging
-from typing import Any, Optional, Union
+from typing import Any
 from sqlalchemy import create_engine, Column, String, Text, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.sql import func
 
 from .base import BaseBackend
@@ -12,7 +11,8 @@ from .base import BaseBackend
 logger = logging.getLogger(__name__)
 
 # SQLAlchemy setup
-Base = declarative_base()
+class Base(DeclarativeBase):
+    """Declarative base for the backend's models."""
 
 
 class ChatData(Base):

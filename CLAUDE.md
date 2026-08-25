@@ -5,93 +5,57 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 ---
 
-## ⚠️ Status: the package does not import
+## Status: green tests, red lint
 
-Do not assume anything here works. `import chatinho` raises `ImportError` on `main`:
+`import chatinho` works and `pytest` passes (42 tests). `ruff` and `mypy` are still red,
+but only in files untouched by the recovery:
 
-```
-src/chatinho/__init__.py:52: from .chat_app import ChatApp, ChatMessage
-ImportError: cannot import name 'ChatApp' from 'chatinho.chat_app'
-```
-
-Commit `dbcd6bc` ("unify Chat logic and UI into single Chat class") is `47 insertions,
-462 deletions` in one file. It deleted `class ChatApp(App)` and all ~32 of its methods —
-`compose`, `on_mount`, `send_message`, `receive_message`, `send_command`, `get_replies`,
-`send_pending_reply`, the whole command-suggestion system, `_CommandInput` — and never
-re-added them to the new `Chat`.
-
-Three separate failures follow from that:
-
-| what | where | effect |
+| check | result | where |
 |---|---|---|
-| `ChatApp` no longer exists | `src/chatinho/__init__.py:52` | `import chatinho` raises; all 3 test modules fail to collect |
-| `self.add_connector()` called but undefined | `src/chatinho/chat_app.py:351` | `AttributeError` on every `Chat(...)` construction |
-| no `compose()` on `Chat` | `src/chatinho/chat_app.py:300` | `run()` renders a blank screen |
+| `pytest -q` | **42 pass** | — |
+| `ruff check src tests examples` | 13 errors | `connectors/`, `backends/`, `commands/test.py` |
+| `mypy src/chatinho` | 3 errors | `connectors/a2a.py`, `backends/database.py` |
 
-`Chat(App)` currently has only: `__init__`, `_trigger_hook`, `send_message_via_connector`,
-`execute_command`, `save_data`, `load_data`. `ChatMessage` (`chat_app.py:500`),
-`TouchScrollableContainer` and `ChatStyle` are unreachable.
+The ruff errors are unused imports plus two long lines; the mypy errors are the SQLAlchemy
+`declarative_base()` pattern and an A2A payload type. Both predate the UI recovery — lint and
+types went red at `4350ac4` in the monorepo, when the connectors/backends/commands layer landed,
+and `chat_app.py` was never the cause.
 
-### Where it broke
+### How the package was recovered
 
-Measured by checking out each commit and running the suite against it:
+The UI half of the old `ChatApp` — `compose`, `on_mount`, `send_message`, `receive_message`,
+`send_command`, `get_replies`, `send_pending_reply`, the command-suggestion system and
+`_CommandInput` — was deleted by `dbcd6bc` in the monorepo and never re-added. It was recovered
+from `lcmonteiro/mcking-codespace` at `7c61e3b` (the last fully green commit) and folded into the
+single `_Chat` class, together with the hook/connector orchestration from `dbcd6bc`.
 
-| commit | | tests | ruff | mypy |
-|---|---|---|---|---|
-| `7c61e3b` | add command autocomplete | **38 pass** | **clean** | **clean** |
-| `4350ac4` | feat: extensible architecture | 27 pass | 82 err | 4 err |
-| `28b0a42` | merge origin/master | 38 pass | 18 err | 3 err |
-| `3b7b552` | setup.sh uv sync | 38 pass | 18 err | 3 err |
-| `015445d` | merge chat_app.py and chat.py | **38 fail** | 30 err | 11 err |
-| `dbcd6bc` | unify Chat logic and UI | **won't import** | 33 err | 5 err |
-
-Two distinct regressions, not one:
-
-- **Lint and types went red at `4350ac4`**, when the connectors/backends/commands layer landed.
-  CI has been failing since then, long before the refactor.
-- **Tests died at `015445d`**, one commit *before* the one that gets blamed.
-
-`7c61e3b` is the last fully green commit.
-
-### Recovery path
-
-Reset `chat_app.py` to `7c61e3b`, then reintegrate the connector layer deliberately — see the
-duplicate-hierarchy section below for what "deliberately" has to mean. Keeping the 38 tests
-green throughout is the point; the last two commits reattached the layer blind.
-
-**Reverting `chat_app.py` alone is not sufficient** — verified. It restores the import, but all
-38 tests still fail, because `015445d` had already changed the constructor contract underneath
-(`ChatApp.__init__() missing 1 required positional argument: 'chat'`).
-
-Delete this whole section once the package is green again.
+The three test modules and `chat_style.py` in this repo are byte-identical to `7c61e3b`'s, which
+is why the recovered UI satisfies them unchanged.
 
 ---
 
-## The duplicate-hierarchy trap
+## One hierarchy, one entry point
 
-**The single most misleading thing about this codebase.** `chat_app.py` imports *nothing* from
-its sibling packages — only `logging`, `threading`, `time`, `sqlite3`, `dataclasses`, `datetime`,
-`typing`, and `textual`. It declares its own copies of the base classes:
+`chat_app.py` used to declare its own `BaseConnector`, `BaseCommand`, `BaseBackend`,
+`DatabaseBackend` and `Chat`, parallel to and unrelated to the ones in `connectors/`,
+`commands/`, `backends/` and `chat.py`. That trap is gone:
 
-| name | `chat_app.py` defines | the real package defines |
-|---|---|---|
-| `BaseConnector` | `:69` | `connectors/base.py:10` (an `ABC`) |
-| `BaseCommand` | `:112` | `commands/base.py:10` (an `ABC`) |
-| `BaseBackend` | `:118` | `backends/base.py:10` (an `ABC`) |
-| `DatabaseBackend` | `:193` (sqlite3) | `backends/database.py:30` (SQLAlchemy) |
-| `Chat` | `:300` (Textual `App`) | `chat.py:40` (non-UI stub) |
+- `chat_app.py` imports `BaseConnector`, `BaseCommand`, `BaseBackend` and `ChatStyle` from the
+  sibling packages; it no longer defines any of them.
+- The duplicate sqlite `DatabaseBackend`, the `Mock*` demo components and the module's
+  `__main__` block are deleted. `backends/database.py` (SQLAlchemy) is the only backend.
+- `chat.py` — the non-UI `Chat` stub whose `run()` was a print plus `time.sleep(1)` — is deleted,
+  along with its copy of `create_chat`.
 
-These are two parallel, same-named, completely unrelated hierarchies. A
-`chatinho.connectors.A2AConnector` — which subclasses `connectors/base.BaseConnector` — is **not**
-the `BaseConnector` that `Chat`'s annotations refer to. Reading either half in isolation will
-give you the wrong model of the package.
+`create_chat()` in `chat_app.py` is the single public entry point and returns `_Chat`, a private
+Textual `App`. `connectors`, `commands` and `backend` are all optional. Commands typed as
+`/name` are looked up in `commands`, executed with `chat_instance=self`, and their result is
+displayed as an incoming message; unregistered commands fall through to the `command_handler`
+callback.
 
-`chat.py:40`'s `Chat` is a stub whose `run()` is a `print` plus a `time.sleep(1)` loop, and
-`create_chat` (`chat.py:69`) resolves to *that* one — not the Textual app — which contradicts
-the usage example in `README.md`.
-
-Any real fix collapses this: make `chat_app.py` import the base classes from the packages
-instead of redefining them, and delete the duplicate `DatabaseBackend` and the `chat.py` stub.
+Connectors opt into events with `@hook_point(...)`; `_Chat` triggers every hook centrally
+(`send_message`, `receive_message`, `execute_command`, `add_connector`, `save_data`,
+`load_data`), so a connector that declares no hook points simply never gets called.
 
 ---
 
@@ -99,23 +63,24 @@ instead of redefining them, and delete the duplicate `DatabaseBackend` and the `
 
 ```
 src/chatinho/
-  __init__.py      public API; the back-compat block at :52 is what currently raises
-  chat_app.py      Textual UI + the duplicate class hierarchy (see above)
-  chat.py          non-UI Chat stub + create_chat
+  __init__.py      public API
+  chat_app.py      create_chat + the private _Chat app (UI, hooks, orchestration)
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      base.py (ABC), a2a.py, openai.py
   commands/        base.py (ABC), help.py, test.py
   backends/        base.py (ABC), database.py (SQLAlchemy)
-examples/          demo.py, new_usage.py, test_local.py
+examples/          demo.py
 tests/             test_callbacks.py, test_chat_app.py, test_command_suggestions.py
 ```
 
 ## Public API
 
-`__init__.py` exports `create_chat`, `Chat`, `BaseConnector`, `A2AConnector`, `OpenAIConnector`,
-`BaseBackend`, `DatabaseBackend`, `BaseCommand`, `HelpCommand`, `TestCommand` — then a
-"keep backward compatibility" block adding `ChatApp`, `ChatMessage`, `ChatStyle`. That second
-block is the one that raises today.
+`__init__.py` exports `create_chat`, `ChatMessage`, `ChatStyle`, `BaseConnector`, `A2AConnector`,
+`OpenAIConnector`, `BaseBackend`, `DatabaseBackend`, `BaseCommand`, `HelpCommand`, `TestCommand`.
+
+There is no `Chat` or `ChatApp` export: the app class is private, so `create_chat` is the only way
+to build one. Lifecycle hooks (`on_command`, `on_message_sent`, `on_message_received`) are
+customised by assigning them on the returned instance, not by subclassing.
 
 ---
 

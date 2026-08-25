@@ -34,7 +34,6 @@ class TestCommand(BaseCommand):
         # Test backend if available
         if chat_instance and hasattr(chat_instance, 'backend'):
             try:
-                start_time = time.time()
                 test_key = f"test_{int(time.time())}"
                 test_data = {"message": "Hello from chatinho!", "timestamp": time.time()}
                 
@@ -48,7 +47,7 @@ class TestCommand(BaseCommand):
                 results.append(f"Backend load: {'✓' if load_result else '✗'}")
                 
                 # Test delete
-                delete_result = chat_instance.delete_data(test_key) if hasattr(chat_instance, 'delete_data') else False
+                delete_result = chat_instance.delete_data(test_key)
                 results.append(f"Backend delete: {'✓' if delete_result else '✗'}")
                 
             except Exception as e:
