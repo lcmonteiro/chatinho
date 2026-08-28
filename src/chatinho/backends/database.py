@@ -16,11 +16,14 @@ class Base(DeclarativeBase):
 
 
 class ChatData(Base):
-    """Model for storing chat data."""
+    """Model for storing chat data, keyed by the caller's identifier.
+
+    ``key`` is the primary key: it is what every query filters on, and it is
+    supplied by the caller, so a separate surrogate ``id`` had nothing to hold.
+    """
     __tablename__ = 'chat_data'
-    
-    id = Column(String, primary_key=True)
-    key = Column(String, unique=True, nullable=False, index=True)
+
+    key = Column(String, primary_key=True)
     value = Column(Text, nullable=False)
     data_type = Column(String, default='json')
     created_at = Column(DateTime(timezone=True), server_default=func.now())
