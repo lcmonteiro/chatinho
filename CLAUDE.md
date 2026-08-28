@@ -75,7 +75,7 @@ src/chatinho/
   connectors/      base.py (ABC), a2a.py, openai.py
   commands/        base.py (ABC), help.py, test.py
   backends/        base.py (ABC), database.py (SQLAlchemy)
-examples/          demo.py
+examples/          demo.py, headless.py
 tests/             test_chat_app.py, test_callbacks.py, test_command_suggestions.py,
                    test_hooks.py (mounted) + test_chat_session.py, test_message_store.py,
                    test_hook_registry.py, test_architecture.py (sync)
