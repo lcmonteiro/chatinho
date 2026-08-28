@@ -27,9 +27,12 @@ Example:
     >>> chat.run()
 
 The application class itself is private: build one with ``create_chat``.
+For a chat without a terminal — a script, a bot, a test — use ``ChatSession``
+directly; it holds the same use cases and imports no UI framework.
 """
 
 from .chat_app import create_chat
+from .chat_session import ChatSession
 from .chat_message import ChatMessage
 from .chat_hooks import (
     hook_point,
@@ -47,6 +50,7 @@ from .commands import HelpCommand, TestCommand, BaseCommand
 
 __all__ = [
     "create_chat",
+    "ChatSession",
     "ChatMessage",
     "ChatStyle",
     # Connector hook system
