@@ -11,7 +11,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **63 pass** |
+| `pytest -q` | **91 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -65,7 +65,8 @@ both the success and the failure path with the same keys (`command`, `result`, `
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat + the private _Chat app — wiring and orchestration
+  chat_app.py      create_chat + the private _Chat app — Textual presentation only
+  chat_session.py  ChatSession: every use case, no UI framework
   chat_message.py  ChatMessage + MessageStore (history, ids, threading) — no Textual
   chat_hooks.py    HOOK_* constants, hook_point, HookRegistry — no Textual
   chat_log.py      ChatLog widget: renders the store, owns the reply target
@@ -74,15 +75,27 @@ src/chatinho/
   connectors/      base.py (ABC), a2a.py, openai.py
   commands/        base.py (ABC), help.py, test.py
   backends/        base.py (ABC), database.py (SQLAlchemy)
-examples/          demo.py
+examples/          demo.py, headless.py
 tests/             test_chat_app.py, test_callbacks.py, test_command_suggestions.py,
-                   test_hooks.py (mounted) + test_message_store.py, test_hook_registry.py (sync)
+                   test_hooks.py (mounted) + test_chat_session.py, test_message_store.py,
+                   test_hook_registry.py, test_architecture.py (sync)
 ```
 
-`chat_app.py` was 825 lines holding seven concerns; it is 468 now. The split follows one rule:
+`chat_app.py` was 825 lines holding seven concerns; it is 342 now. The split follows one rule:
 **anything that does not need Textual moves out**, because that is what makes it testable without
-a terminal. `MessageStore` and `HookRegistry` are plain objects — the 16 tests covering them run in
-1.5s without mounting an app, against 7.4s for the 47 that do.
+a terminal. 44 of the 91 tests now run in 1.3s without mounting an app, against 6.3s for the 47
+that do.
+
+`ChatSession` holds every use case — send/receive, command dispatch, connectors, persistence — and
+imports no UI framework. `_Chat` is its Textual presentation: it owns the widget tree, the reply
+target (a click is a UI concept), thread marshalling and the welcome message, and attaches to the
+session through observer slots (`on_message_added`, `on_message_sent`, …). The session never
+reaches back. `create_chat()` still returns the app; `ChatSession(...)` is the headless door, and
+commands now receive the **session** as `chat_instance`, not a Textual `App`.
+
+`tests/test_architecture.py` enforces this: it parses the core modules and fails if `textual`,
+`openai`, `sqlalchemy` or `requests` appears in their imports, or if the session ever imports its
+presentation. A boundary nothing checks is a boundary that rots.
 
 `ChatLog` and `CommandSuggestions` are widgets that own their own children, so `_msg_widgets`,
 `_rendered_msg_ids` and the popup's options left the `App`. `CommandInput` talks to its sibling

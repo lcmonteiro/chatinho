@@ -35,8 +35,19 @@ chat = create_chat()
 chat.run()
 ```
 
-`create_chat` is the only entry point: the application class itself is private,
-and connectors, commands and a backend are all optional.
+`create_chat` is the only entry point for the terminal app: the application class
+itself is private, and connectors, commands and a backend are all optional.
+
+For a chat without a terminal — a script, a bot, a test — use `ChatSession`, which
+holds the same use cases and imports no UI framework:
+
+```python
+from chatinho import ChatSession, HelpCommand
+
+session = ChatSession(commands={"help": HelpCommand()})
+session.on_message_added = lambda msg: print(msg.text)
+session.send_command("help")
+```
 
 ### Full Architecture
 
