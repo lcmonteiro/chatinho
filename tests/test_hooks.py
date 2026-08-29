@@ -27,7 +27,7 @@ class _Connector(BaseConnector):
     def initialize(self) -> None:
         pass
 
-    def send(self, message: str, **kwargs) -> None:
+    def ask(self, message: str, **kwargs) -> None:
         return None
 
     def on_message_sent(self, msg, **kwargs) -> None:

@@ -49,8 +49,8 @@ class A2AConnector(BaseConnector):
             logger.warning(f"Could not connect to A2A endpoint during initialization: {e}")
             # Don't fail initialization - allow for lazy connection
     
-    def send(self, message: str, **kwargs) -> Any:
-        """Send a message via A2A protocol.
+    def ask(self, message: str, **kwargs) -> Any:
+        """Ask the A2A agent and return its answer.
         
         Args:
             message: The message to send

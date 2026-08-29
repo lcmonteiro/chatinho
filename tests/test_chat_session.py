@@ -45,7 +45,7 @@ class _Recorder(BaseConnector):
     def initialize(self) -> None:
         pass
 
-    def send(self, message: str, **kwargs) -> str:
+    def ask(self, message: str, **kwargs) -> str:
         return "sent: %s" % message
 
     def on_message_sent(self, msg, **kwargs) -> None:
@@ -166,12 +166,12 @@ def test_connectors_and_hooks_work_headless():
     session = ChatSession(connectors=[connector])
     session.send_message("ola")
     assert connector.sent == ["ola"]
-    assert session.send_via_connector("rec", "ping") == "sent: ping"
+    assert session.ask_connector("rec", "ping") == "sent: ping"
 
 
-def test_send_via_unknown_connector_raises():
+def test_asking_an_unknown_connector_raises():
     with pytest.raises(ValueError):
-        ChatSession().send_via_connector("nope", "ping")
+        ChatSession().ask_connector("nope", "ping")
 
 
 # === Persistence ================================================================

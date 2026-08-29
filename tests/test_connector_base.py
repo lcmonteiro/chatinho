@@ -8,31 +8,31 @@ stubs — had to write a stub returning None. It is a concrete default now.
 from chatinho import A2AConnector, BaseConnector, OpenAIConnector
 
 
-class SendOnlyConnector(BaseConnector):
-    """A connector that only sends. It must not have to implement receive()."""
+class MinimalConnector(BaseConnector):
+    """Implements only the abstract methods. It must not have to add receive()."""
 
-    def __init__(self, name: str = "send-only") -> None:
+    def __init__(self, name: str = "minimal") -> None:
         super().__init__(name)
 
     def initialize(self) -> None:
         pass
 
-    def send(self, message: str, **kwargs) -> str:
-        return "sent: %s" % message
+    def ask(self, message: str, **kwargs) -> str:
+        return "answer: %s" % message
 
 
 def test_a_connector_need_not_implement_receive():
     """Instantiating this fails with TypeError if receive() goes abstract again."""
-    connector = SendOnlyConnector()
-    assert connector.send("ping") == "sent: ping"
+    connector = MinimalConnector()
+    assert connector.ask("ping") == "answer: ping"
 
 
 def test_the_default_receive_returns_none():
-    assert SendOnlyConnector().receive() is None
+    assert MinimalConnector().receive() is None
 
 
 def test_the_default_receive_accepts_connector_specific_kwargs():
-    assert SendOnlyConnector().receive(timeout=5, since="msg-1") is None
+    assert MinimalConnector().receive(timeout=5, since="msg-1") is None
 
 
 def test_the_shipped_connectors_inherit_the_default():
@@ -42,8 +42,8 @@ def test_the_shipped_connectors_inherit_the_default():
         assert connector.receive is BaseConnector.receive
 
 
-def test_initialize_and_send_are_still_required():
+def test_initialize_and_ask_are_still_required():
     """The two methods the library does call stay abstract."""
     assert getattr(BaseConnector.initialize, "__isabstractmethod__", False) is True
-    assert getattr(BaseConnector.send, "__isabstractmethod__", False) is True
+    assert getattr(BaseConnector.ask, "__isabstractmethod__", False) is True
     assert getattr(BaseConnector.receive, "__isabstractmethod__", False) is False

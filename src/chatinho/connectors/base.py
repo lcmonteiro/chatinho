@@ -21,13 +21,18 @@ class BaseConnector(ABC):
         pass
     
     @abstractmethod
-    def send(self, message: str, **kwargs) -> Any:
-        """Send a message through this connector.
-        
+    def ask(self, message: str, **kwargs) -> Any:
+        """Send a message to the external service and return its answer.
+
+        Named ``ask`` rather than ``send`` because it is a request/response
+        exchange, not a one-way write: every implementation returns what came
+        back, and callers feed that straight into the chat as an incoming
+        message. A one-way transport would be a different interface.
+
         Args:
             message: The message to send
             **kwargs: Additional connector-specific parameters
-            
+
         Returns:
             Any: Response from the external service
         """

@@ -27,7 +27,7 @@ class EchoConnector(BaseConnector):
     def initialize(self) -> None:
         """Nothing to set up: the echo is local."""
 
-    def send(self, message: str, **kwargs) -> str:
+    def ask(self, message: str, **kwargs) -> str:
         """Returns the echoed answer instead of hitting the network."""
         return f"Received: {message}"
 
@@ -84,7 +84,7 @@ def main() -> None:
         """Sends each message through the connector and shows the answer."""
         if msg.is_command:
             return
-        session.receive_message(session.send_via_connector("echo", msg.text), reply_to=msg.id)
+        session.receive_message(session.ask_connector("echo", msg.text), reply_to=msg.id)
 
     session.on_message_sent = echo_reply
 

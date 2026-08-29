@@ -273,9 +273,9 @@ class _Chat(App):
         """Registers *connector*, initializes it and registers its hooks."""
         self.session.add_connector(connector)
 
-    def send_message_via_connector(self, connector_name: str, message: str, **kwargs) -> Any:
-        """Sends a message through a specific connector."""
-        return self.session.send_via_connector(connector_name, message, **kwargs)
+    def ask_connector(self, connector_name: str, message: str, **kwargs) -> Any:
+        """Asks a specific connector and returns its answer."""
+        return self.session.ask_connector(connector_name, message, **kwargs)
 
     def execute_command(self, command_name: str, *args, **kwargs) -> Any:
         """Executes a registered command and triggers the command hook."""

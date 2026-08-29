@@ -252,23 +252,23 @@ class ChatSession:
         connector.initialize()
         self._hooks.trigger(HOOK_CONNECTOR_ADDED, connector=connector)
 
-    def send_via_connector(self, connector_name: str, message: str, **kwargs) -> Any:
-        """Sends a message through a specific connector.
+    def ask_connector(self, connector_name: str, message: str, **kwargs) -> Any:
+        """Asks a specific connector and returns its answer.
 
         Args:
             connector_name: Name of a registered connector.
             message: The message to send.
-            **kwargs: Forwarded to the connector's ``send``.
+            **kwargs: Forwarded to the connector's ``ask``.
 
         Returns:
-            Any: Whatever the connector's ``send`` returns.
+            Any: The connector's answer.
 
         Raises:
             ValueError: If no connector is registered under that name.
         """
         if connector_name not in self.connectors:
             raise ValueError("Connector '%s' not found" % connector_name)
-        return self.connectors[connector_name].send(message, **kwargs)
+        return self.connectors[connector_name].ask(message, **kwargs)
 
     # === Persistence ================================================================
 

@@ -22,7 +22,7 @@ class EchoConnector(BaseConnector):
     def initialize(self) -> None:
         """Nothing to set up: the echo is local."""
 
-    def send(self, message: str, **kwargs) -> str:
+    def ask(self, message: str, **kwargs) -> str:
         """Returns the echoed answer instead of hitting the network."""
         return f"Received: _{message}_"
 
@@ -77,7 +77,7 @@ def main() -> None:
         """
         if msg.is_command:
             return
-        answer = chat.send_message_via_connector("echo", msg.text)
+        answer = chat.ask_connector("echo", msg.text)
         chat.set_timer(0.6, lambda: chat.receive_message(answer, reply_to=msg.id))
 
     chat.on_message_sent = echo_reply  # type: ignore[method-assign]

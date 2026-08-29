@@ -42,8 +42,8 @@ class OpenAIConnector(BaseConnector):
             logger.error(f"Failed to initialize OpenAI connector '{self.name}': {e}")
             raise
     
-    def send(self, message: str, **kwargs) -> Any:
-        """Send a message to OpenAPI API.
+    def ask(self, message: str, **kwargs) -> Any:
+        """Ask the OpenAI model and return its reply.
         
         Args:
             message: The message to send
