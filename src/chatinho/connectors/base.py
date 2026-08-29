@@ -33,14 +33,19 @@ class BaseConnector(ABC):
         """
         pass
     
-    @abstractmethod
     def receive(self, **kwargs) -> Any:
-        """Receive a message from this connector.
-        
+        """Poll this connector for an incoming message.
+
+        Not abstract: nothing in the library calls it, and every connector
+        written so far is request/response, so requiring an implementation only
+        forced each of them to write a stub returning None. Override it in a
+        connector that genuinely polls — a webhook queue, a socket — and drive
+        it from your own loop.
+
         Args:
             **kwargs: Additional connector-specific parameters
-            
+
         Returns:
-            Any: Received message or data
+            Any: Received message or data; None when there is nothing to poll.
         """
-        pass
+        return None

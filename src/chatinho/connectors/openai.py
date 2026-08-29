@@ -98,15 +98,3 @@ class OpenAIConnector(BaseConnector):
         except Exception as e:
             logger.error(f"Failed to send message via OpenAI connector '{self.name}': {e}")
             raise
-    
-    def receive(self, **kwargs) -> Any:
-        """Receive messages (OpenAI is primarily request/response).
-        
-        Args:
-            **kwargs: Additional parameters
-            
-        Returns:
-            Any: Not applicable for standard OpenAI API
-        """
-        logger.debug("OpenAI receive method called - OpenAI is request/response")
-        return None

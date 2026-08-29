@@ -13,7 +13,7 @@ Feed it a script:  printf '/help\\nola\\n' | python examples/headless.py
 """
 
 import sys
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator
 
 from chatinho import BaseCommand, BaseConnector, ChatMessage, ChatSession, HelpCommand
 
@@ -30,10 +30,6 @@ class EchoConnector(BaseConnector):
     def send(self, message: str, **kwargs) -> str:
         """Returns the echoed answer instead of hitting the network."""
         return f"Received: {message}"
-
-    def receive(self, **kwargs) -> Optional[str]:
-        """The echo is synchronous, so there is nothing to poll for."""
-        return None
 
 
 class UpperCommand(BaseCommand):

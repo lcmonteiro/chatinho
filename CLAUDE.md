@@ -11,7 +11,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **109 pass** |
+| `pytest -q` | **117 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -78,7 +78,8 @@ src/chatinho/
 examples/          demo.py, headless.py
 tests/             test_chat_app.py, test_callbacks.py, test_command_suggestions.py,
                    test_hooks.py (mounted) + test_chat_session.py, test_message_store.py,
-                   test_hook_registry.py, test_architecture.py, test_database_backend.py (sync)
+                   test_hook_registry.py, test_architecture.py, test_database_backend.py,
+                   test_connector_base.py (sync)
 ```
 
 `chat_app.py` was 825 lines holding seven concerns; it is 342 now. The split follows one rule:

@@ -30,9 +30,6 @@ class _Connector(BaseConnector):
     def send(self, message: str, **kwargs) -> None:
         return None
 
-    def receive(self, **kwargs) -> None:
-        return None
-
     def on_message_sent(self, msg, **kwargs) -> None:
         self.sent.append(msg)
 

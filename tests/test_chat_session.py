@@ -48,9 +48,6 @@ class _Recorder(BaseConnector):
     def send(self, message: str, **kwargs) -> str:
         return "sent: %s" % message
 
-    def receive(self, **kwargs) -> None:
-        return None
-
     def on_message_sent(self, msg, **kwargs) -> None:
         self.sent.append(msg.text)
 
@@ -199,3 +196,11 @@ def test_persistence_without_a_backend_raises():
     ):
         with pytest.raises(RuntimeError):
             call()
+
+
+def test_messages_returns_a_copy():
+    """The guarantee holds through the session, not just the store."""
+    session = ChatSession()
+    session.send_message("guardada")
+    session.messages.clear()
+    assert [m.text for m in session.messages] == ["guardada"]

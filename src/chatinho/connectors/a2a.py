@@ -100,19 +100,3 @@ class A2AConnector(BaseConnector):
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to send message via A2A connector '{self.name}': {e}")
             raise
-    
-    def receive(self, **kwargs) -> Any:
-        """Receive messages (not typically used in A2A as it's request/response).
-        
-        For A2A, receiving is usually done through the send method's response
-        or through webhook/push notification endpoints.
-        
-        Args:
-            **kwargs: Additional parameters
-            
-        Returns:
-            Any: Received data or None
-        """
-        logger.debug("A2A receive method called - A2A is primarily request/response")
-        # This would be implemented for webhook/push notification scenarios
-        return None

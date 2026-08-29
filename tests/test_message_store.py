@@ -91,3 +91,19 @@ def test_window_does_not_drop_history():
     store.window(2)
     assert len(store.messages) == 5
     assert store.find("msg-1") is not None
+
+
+def test_messages_returns_a_copy():
+    """Same guarantee as replies(): callers cannot edit the history by accident."""
+    store = MessageStore()
+    store.add(message("msg-1", "guardada"))
+    store.messages.clear()
+    store.messages.append(message("msg-2", "intrusa"))
+    assert [m.text for m in store.messages] == ["guardada"]
+
+
+def test_the_copy_shares_the_messages_themselves():
+    """Only the list is copied — the ChatMessage objects are the same ones."""
+    store = MessageStore()
+    stored = store.add(message("msg-1"))
+    assert store.messages[0] is stored

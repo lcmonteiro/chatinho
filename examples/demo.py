@@ -8,7 +8,7 @@ replies by sending the message back through the connector.
 Run with:  bash run.sh
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from chatinho import BaseCommand, BaseConnector, ChatMessage, HelpCommand, create_chat
 
@@ -25,10 +25,6 @@ class EchoConnector(BaseConnector):
     def send(self, message: str, **kwargs) -> str:
         """Returns the echoed answer instead of hitting the network."""
         return f"Received: _{message}_"
-
-    def receive(self, **kwargs) -> Optional[str]:
-        """The echo is synchronous, so there is nothing to poll for."""
-        return None
 
 
 class CodeCommand(BaseCommand):
