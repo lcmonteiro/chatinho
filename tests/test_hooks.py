@@ -36,7 +36,9 @@ class _Connector:
         self.executed.append((command, result, error))
 
 
-@require(HookAsk, HookMessageSent, HookCommandExecuted)
+@require(HookAsk)
+@require(HookMessageSent)
+@require(HookCommandExecuted)
 class RecordingConnector(_Connector):
     """Connector that declares the hooks it records."""
 

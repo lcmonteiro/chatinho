@@ -37,7 +37,8 @@ class _Spy(BaseCommand):
 
 
 @connector("rec")
-@require(HookAsk, HookMessageSent)
+@require(HookAsk)
+@require(HookMessageSent)
 class _Recorder:
     def __init__(self) -> None:
         self.sent: list = []

@@ -6,10 +6,17 @@ declared — so a missing or misspelled method is an import error, not a silent
 no-op at runtime.
 
     @connector("weather")
-    @require(HookAsk, HookMessageSent)
+    @require(HookAsk)
+    @require(HookMessageSent)
     class WeatherConnector:
         def ask(self, message, **kwargs): ...
         def on_message_sent(self, msg, **kwargs): ...
+
+One hook per ``require``, stacked. Each declaration is its own line, so it has
+somewhere to carry options that belong to that hook alone:
+
+    @require(HookAsk, timeout=30)
+    @require(HookAnswer, correlation="taskId")
 
 Nothing here is inherited: no base class, no ``isinstance``. Direction and
 event participation are declared the same way, because they are the same
@@ -113,44 +120,76 @@ def connector(name: str) -> Callable[[type], type]:
     return decorator
 
 
-def require(*hooks: Hook) -> Callable[[type], type]:
-    """Declares the hooks a connector implements, and checks that it does.
+def require(hook: Hook, *extra: Any, **options: Any) -> Callable[[type], type]:
+    """Declares one hook a connector implements, and checks that it does.
 
-    Validation is presence and callability of each hook's method — the error
+    Validation is presence and callability of the hook's method — the error
     this actually catches is a method left out or misspelled. It runs when the
     class is defined, so the failure lands at import rather than as a hook that
     silently never fires.
 
+    One hook per call, stacked for more. Each declaration then owns its line
+    and can carry options that belong to that hook alone::
+
+        @require(HookAsk, timeout=30)
+        @require(HookAnswer)
+        class MyConnector: ...
+
+    Declaring the same hook twice merges the options, later call winning per
+    key — decorators apply bottom-up, so the one written highest wins.
+
     Args:
-        *hooks: The capabilities the decorated class provides.
+        hook: The capability the decorated class provides.
+        *extra: Nothing; present only to reject ``require(HookA, HookB)`` with
+            an error that says what to do instead.
+        **options: Configuration for this hook, readable with :func:`options_of`.
 
     Returns:
         Callable: The class decorator.
 
     Raises:
-        TypeError: If the class does not implement a declared hook's method.
+        TypeError: If more than one hook is passed, if *hook* is not a Hook, or
+            if the class does not implement the hook's method.
     """
+    if extra:
+        raise TypeError(
+            "require() takes one hook; stack decorators to declare more, "
+            "e.g. @require(%s) above @require(%s)" % (hook, extra[0])
+        )
+    if not isinstance(hook, Hook):
+        raise TypeError("require() takes a Hook, got %r" % (hook,))
+
     def decorator(cls: type) -> type:
-        missing = [hook for hook in hooks if not callable(getattr(cls, hook.method, None))]
-        if missing:
+        if not callable(getattr(cls, hook.method, None)):
             raise TypeError(
-                "%s declares %s but does not implement %s"
-                % (
-                    cls.__name__,
-                    ", ".join(hook.name for hook in missing),
-                    ", ".join("%s()" % hook.method for hook in missing),
-                )
+                "%s declares %s but does not implement %s()"
+                % (cls.__name__, hook.name, hook.method)
             )
-        declared = set(getattr(cls, "_hooks", frozenset()))
-        declared.update(hooks)
-        cls._hooks = frozenset(declared)  # type: ignore[attr-defined]
+        declared: Dict[Hook, Dict[str, Any]] = {
+            key: dict(value) for key, value in getattr(cls, "_hooks", {}).items()
+        }
+        declared.setdefault(hook, {}).update(options)
+        cls._hooks = declared  # type: ignore[attr-defined]
         return cls
     return decorator
 
 
 def hooks_of(obj: Any) -> FrozenSet[Hook]:
     """Returns the hooks *obj*'s class declared, empty when it declared none."""
-    return frozenset(getattr(obj, "_hooks", frozenset()))
+    return frozenset(getattr(obj, "_hooks", {}))
+
+
+def options_of(obj: Any, hook: Hook) -> Dict[str, Any]:
+    """Returns the options *obj* declared for *hook*, empty when it gave none.
+
+    Args:
+        obj: The connector.
+        hook: The capability whose options to read.
+
+    Returns:
+        Dict[str, Any]: A copy, so a caller cannot edit the declaration.
+    """
+    return dict(getattr(obj, "_hooks", {}).get(hook, {}))
 
 
 def declares(obj: Any, hook: Hook) -> bool:

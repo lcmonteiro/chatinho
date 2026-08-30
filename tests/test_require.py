@@ -18,7 +18,7 @@ from chatinho import (
     connector,
     require,
 )
-from chatinho.chat_hooks import declares, hooks_of, name_of
+from chatinho.chat_hooks import declares, hooks_of, name_of, options_of
 
 
 # === @require validates ==========================================================
@@ -68,6 +68,91 @@ def test_stacked_requires_accumulate():
             pass
 
     assert hooks_of(Both()) == frozenset({HookAsk, HookMessageSent})
+
+
+# === One hook per require, with its own options ==================================
+
+
+def test_require_takes_one_hook_and_says_what_to_do_instead():
+    with pytest.raises(TypeError, match="stack decorators"):
+        @require(HookAsk, HookMessageSent)
+        class TwoAtOnce:
+            def ask(self, message, **kwargs):
+                return "ok"
+
+            def on_message_sent(self, msg, **kwargs):
+                pass
+
+
+def test_require_rejects_something_that_is_not_a_hook():
+    with pytest.raises(TypeError, match="takes a Hook"):
+        @require("ask")
+        class NotAHook:
+            def ask(self, message, **kwargs):
+                return "ok"
+
+
+def test_each_hook_carries_its_own_options():
+    @require(HookAsk, timeout=30)
+    @require(HookAnswer, correlation="taskId")
+    class Configured:
+        def ask(self, message, **kwargs):
+            return "ok"
+
+        def answer(self, correlation_id, text):
+            pass
+
+    configured = Configured()
+    assert options_of(configured, HookAsk) == {"timeout": 30}
+    assert options_of(configured, HookAnswer) == {"correlation": "taskId"}
+
+
+def test_a_hook_declared_without_options_has_none():
+    @require(HookAsk)
+    class Plain:
+        def ask(self, message, **kwargs):
+            return "ok"
+
+    assert options_of(Plain(), HookAsk) == {}
+    assert options_of(Plain(), HookMessageSent) == {}
+
+
+def test_options_are_returned_as_a_copy():
+    @require(HookAsk, timeout=30)
+    class Configured:
+        def ask(self, message, **kwargs):
+            return "ok"
+
+    configured = Configured()
+    options_of(configured, HookAsk)["timeout"] = 999
+    assert options_of(configured, HookAsk) == {"timeout": 30}
+
+
+def test_declaring_the_same_hook_twice_merges_options():
+    """Decorators apply bottom-up, so the highest one wins per key."""
+    @require(HookAsk, timeout=99)
+    @require(HookAsk, timeout=30, retries=2)
+    class Twice:
+        def ask(self, message, **kwargs):
+            return "ok"
+
+    assert options_of(Twice(), HookAsk) == {"timeout": 99, "retries": 2}
+
+
+def test_options_do_not_leak_between_classes():
+    @require(HookAsk, timeout=30)
+    class First:
+        def ask(self, message, **kwargs):
+            return "ok"
+
+    @require(HookAsk)
+    class Second(First):
+        pass
+
+    assert options_of(First(), HookAsk) == {"timeout": 30}
+    assert options_of(Second(), HookAsk) == {"timeout": 30}
+    Second._hooks[HookAsk]["timeout"] = 1
+    assert options_of(First(), HookAsk) == {"timeout": 30}
 
 
 def test_declaring_nothing_is_allowed_and_means_nothing_fires():

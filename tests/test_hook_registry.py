@@ -23,7 +23,8 @@ class _Connector:
         self.seen.append(msg)
 
 
-@require(HookAsk, HookMessageSent)
+@require(HookAsk)
+@require(HookMessageSent)
 class Declared(_Connector):
     """Declares the hook it implements."""
 

@@ -42,7 +42,8 @@ PORT = 8765
 
 
 @connector("agent")
-@require(HookAsk, HookAnswer)
+@require(HookAsk)
+@require(HookAnswer)
 class AgentConnector:
     """A two-way link: the user can ask the agent, and the agent can ask back.
 

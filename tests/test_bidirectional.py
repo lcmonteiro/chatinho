@@ -14,7 +14,8 @@ from chatinho.chat_hooks import declares
 
 
 @connector("agent")
-@require(HookAsk, HookAnswer)
+@require(HookAsk)
+@require(HookAnswer)
 class Agent:
     """A two-way link that records both directions."""
 

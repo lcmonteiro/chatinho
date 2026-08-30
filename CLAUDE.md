@@ -11,7 +11,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **143 pass** |
+| `pytest -q` | **150 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -59,11 +59,17 @@ no base class and no `isinstance` anywhere — and it says what it can do by dec
 
 ```python
 @connector("agent")
-@require(HookAsk, HookAnswer)
+@require(HookAsk)
+@require(HookAnswer)
 class AgentConnector:
     def ask(self, message, **kwargs): ...          # the user asks, it answers
     def answer(self, correlation_id, text): ...    # the agent asked, the user answers
 ```
+
+One hook per `require`, stacked. Each declaration owns its line, so it has somewhere to carry
+options that belong to that hook alone — `@require(HookAsk, timeout=30)` — read back with
+`options_of(connector, HookAsk)`. Passing two hooks to one `require` is an error that says to
+stack instead.
 
 `require` validates presence and callability **at class-definition time**, so a method left out
 or misspelled is an import error rather than a hook that silently never fires. `@connector(name)`
