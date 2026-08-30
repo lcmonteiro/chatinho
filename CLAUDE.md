@@ -11,7 +11,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **117 pass** |
+| `pytest -q` | **135 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -52,6 +52,27 @@ Textual `App`. `connectors`, `commands` and `backend` are all optional. Commands
 displayed as an incoming message; unregistered commands fall through to the `command_handler`
 callback.
 
+## Connectors go both ways
+
+A connector is the link between the user and an agent or API, and its direction is declared by
+type rather than by a flag:
+
+- `BaseConnector` is the outbound half — `ask(message)` sends and returns the far side's answer.
+  It is named `ask`, not `send`, because it is an exchange: every implementation returns the reply
+  and callers feed it straight into the chat.
+- `BidirectionalConnector` adds the inbound half for a far side that can start the conversation.
+  The connector brings its own listener (a server, a poll loop) and calls `ask_user(text,
+  correlation_id)`; the user's reply comes back through `answer(correlation_id, text)`.
+
+The connector never imports `ChatSession`: `add_connector` hands it an `Inbox` callable, so the
+dependency points inwards. A question that arrives carries `origin` and `correlation_id` on its
+`ChatMessage`, and `ChatSession._route_reply` uses them to send a reply back out — which means the
+existing click-to-reply in the TUI answers an agent with no UI change at all.
+
+`shutdown()` is the pair of `initialize()`, called for every connector by `ChatSession.close()`
+and by the app's `on_unmount`. A connector holding a server thread would otherwise outlive the
+chat. `BaseBackend` still has no equivalent — `DatabaseBackend` leaks its engine.
+
 Connectors opt into events with `@hook_point(...)`; `_Chat` triggers every hook centrally
 (`send_message`, `receive_message`, `execute_command`, `add_connector`, `save_data`,
 `load_data`), so a connector that declares no hook points simply never gets called. The payload
@@ -75,7 +96,7 @@ src/chatinho/
   connectors/      base.py (ABC), a2a.py, openai.py
   commands/        base.py (ABC), help.py, test.py
   backends/        base.py (ABC), database.py (SQLAlchemy)
-examples/          demo.py, headless.py
+examples/          demo.py, headless.py, agent_inbox.py
 tests/             test_chat_app.py, test_callbacks.py, test_command_suggestions.py,
                    test_hooks.py (mounted) + test_chat_session.py, test_message_store.py,
                    test_hook_registry.py, test_architecture.py, test_database_backend.py,

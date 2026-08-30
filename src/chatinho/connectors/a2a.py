@@ -82,7 +82,12 @@ class A2AConnector(BaseConnector):
             request_data["message"]["contextId"] = kwargs["context_id"]
         
         if "task_id" in kwargs:
-            request_data["taskId"] = kwargs["task_id"]
+            # Beside contextId, inside the message: both are fields of the A2A
+            # Message object, not of the request envelope. At the top level a
+            # spec-conformant agent never sees it and treats every turn as a
+            # new task — which breaks the correlation the inbound direction
+            # depends on.
+            request_data["message"]["taskId"] = kwargs["task_id"]
         
         try:
             # Send to A2A agent's message endpoint

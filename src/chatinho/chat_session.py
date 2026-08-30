@@ -24,7 +24,7 @@ from .chat_hooks import (
 )
 from .chat_message import ChatMessage, MessageStore
 from .commands import BaseCommand
-from .connectors import BaseConnector
+from .connectors import BaseConnector, BidirectionalConnector, Inbox
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +125,7 @@ class ChatSession:
             reply_to=reply_to,
         ))
         self._notify(self.on_message_added, msg)
+        self._route_reply(msg)
         self._notify(self.on_message_sent, msg)
         self._hooks.trigger(HOOK_MESSAGE_SENT, msg=msg)
         return msg.id
@@ -157,12 +158,22 @@ class ChatSession:
         self._hooks.trigger(HOOK_MESSAGE_SENT, msg=msg)
         return msg.id
 
-    def receive_message(self, text: str, *, reply_to: Optional[str] = None) -> str:
+    def receive_message(
+        self,
+        text: str,
+        *,
+        reply_to       : Optional[str] = None,
+        origin         : Optional[str] = None,
+        correlation_id : Optional[str] = None,
+    ) -> str:
         """Receives a message from outside and returns its id.
 
         Args:
             text: Message content.
             reply_to: Id of a sent message this one replies to (optional).
+            origin: Name of the connector it arrived through, when it did.
+            correlation_id: The far side's id for the exchange; replying to
+                this message sends the reply back through *origin*.
 
         Returns:
             str: The new message's id.
@@ -173,11 +184,87 @@ class ChatSession:
             is_command=False,
             is_sent_by_me=False,
             reply_to=reply_to,
+            origin=origin,
+            correlation_id=correlation_id,
         ))
         self._notify(self.on_message_added, msg)
         self._notify(self.on_message_received, msg)
         self._hooks.trigger(HOOK_MESSAGE_RECEIVED, msg=msg)
         return msg.id
+
+    def deliver(
+        self,
+        connector_name : str,
+        text           : str,
+        correlation_id : Optional[str] = None,
+    ) -> str:
+        """Puts a question that arrived through a connector in front of the user.
+
+        This is the inbound half: the far side started the exchange. Replying
+        to the resulting message routes the answer back through *connector_name*
+        (see :meth:`_route_reply`).
+
+        Usually reached through
+        :meth:`~chatinho.connectors.base.BidirectionalConnector.ask_user`
+        rather than called directly.
+
+        Args:
+            connector_name: Name of the connector the message arrived through.
+            text: The message, as the user should see it.
+            correlation_id: The far side's id for this exchange.
+
+        Returns:
+            str: The new message's id.
+
+        Raises:
+            ValueError: If no connector is registered under that name.
+        """
+        if connector_name not in self.connectors:
+            raise ValueError("Connector '%s' not found" % connector_name)
+        return self.receive_message(text, origin=connector_name, correlation_id=correlation_id)
+
+    def _inbox_for(self, connector_name: str) -> Inbox:
+        """Builds the callable handed to a bidirectional connector."""
+        def inbox(text: str, correlation_id: Optional[str] = None) -> str:
+            return self.deliver(connector_name, text, correlation_id)
+        return inbox
+
+    def _route_reply(self, msg: ChatMessage) -> None:
+        """Sends *msg* back through the connector it is answering, if any.
+
+        A reply to a message that arrived through a connector is an answer owed
+        to whoever asked. A connector failing here must not lose the message —
+        it is already in the history — so the error is logged, not raised.
+        """
+        if msg.reply_to is None:
+            return
+        target = self._store.find(msg.reply_to)
+        if target is None or target.origin is None:
+            return
+
+        connector = self.connectors.get(target.origin)
+        if not isinstance(connector, BidirectionalConnector):
+            logger.warning(
+                "Cannot answer %s: connector %r is gone or is not bidirectional",
+                target.id, target.origin,
+            )
+            return
+        try:
+            connector.answer(target.correlation_id, msg.text)
+        except Exception as exc:
+            logger.error("Connector %r failed to deliver the answer: %s", target.origin, exc)
+
+    def close(self) -> None:
+        """Shuts every connector down.
+
+        A connector that owns a server or a thread needs to be told to stop;
+        one that failed must not stop the others from being closed.
+        """
+        for connector in self.connectors.values():
+            try:
+                connector.shutdown()
+            except Exception as exc:
+                logger.error("Connector %r failed to shut down: %s", connector.name, exc)
 
     # === Commands ===================================================================
 
@@ -249,6 +336,9 @@ class ChatSession:
 
         self.connectors[connector.name] = connector
         self._hooks.register(connector)
+        if isinstance(connector, BidirectionalConnector):
+            # The connector gets a way in without ever importing the session.
+            connector.attach(self._inbox_for(connector.name))
         connector.initialize()
         self._hooks.trigger(HOOK_CONNECTOR_ADDED, connector=connector)
 

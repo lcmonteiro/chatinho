@@ -44,7 +44,7 @@ from .chat_hooks import (
     HOOK_BACKEND_LOAD,
 )
 from .chat_style import ChatStyle
-from .connectors import A2AConnector, OpenAIConnector, BaseConnector
+from .connectors import A2AConnector, OpenAIConnector, BaseConnector, BidirectionalConnector
 from .backends import DatabaseBackend, BaseBackend
 from .commands import HelpCommand, TestCommand, BaseCommand
 
@@ -63,6 +63,7 @@ __all__ = [
     "HOOK_BACKEND_LOAD",
     # Connectors
     "BaseConnector",
+    "BidirectionalConnector",
     "A2AConnector",
     "OpenAIConnector",
     # Backends

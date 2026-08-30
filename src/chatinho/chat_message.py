@@ -20,6 +20,11 @@ class ChatMessage:
     is_command  : bool = False
     reply_to    : Optional[str] = None
     is_sent_by_me : bool = True
+    # Set when the message came in through a connector rather than from the
+    # chat itself; ``correlation_id`` is the far side's own id for the
+    # exchange, and is what routes the user's reply back.
+    origin         : Optional[str] = None
+    correlation_id : Optional[str] = None
 
 
 class MessageStore:
