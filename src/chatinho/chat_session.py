@@ -14,17 +14,21 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .backends import BaseBackend
 from .chat_hooks import (
-    HOOK_BACKEND_LOAD,
-    HOOK_BACKEND_SAVE,
-    HOOK_COMMAND_EXECUTED,
-    HOOK_CONNECTOR_ADDED,
-    HOOK_MESSAGE_RECEIVED,
-    HOOK_MESSAGE_SENT,
+    HookAnswer,
+    HookBackendLoad,
+    HookBackendSave,
+    HookCommandExecuted,
+    HookConnectorAdded,
+    HookMessageReceived,
+    HookMessageSent,
     HookRegistry,
+    declares,
+    hooks_of,
+    name_of,
 )
+from .chat_hooks import Inbox
 from .chat_message import ChatMessage, MessageStore
 from .commands import BaseCommand
-from .connectors import BaseConnector
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +50,12 @@ class ChatSession:
 
     def __init__(
         self,
-        connectors      : Optional[List[BaseConnector]] = None,
+        connectors      : Optional[List[Any]] = None,
         commands        : Optional[Dict[str, BaseCommand]] = None,
         backend         : Optional[BaseBackend] = None,
         command_handler : Optional[Callable[[str], None]] = None,
     ) -> None:
-        self.connectors : Dict[str, BaseConnector] = {}
+        self.connectors : Dict[str, Any] = {}
         self.commands   : Dict[str, BaseCommand] = dict(commands) if commands else {}
         self.backend    : Optional[BaseBackend] = backend
         self.command_handler : Optional[Callable[[str], None]] = command_handler
@@ -125,8 +129,9 @@ class ChatSession:
             reply_to=reply_to,
         ))
         self._notify(self.on_message_added, msg)
+        self._route_reply(msg)
         self._notify(self.on_message_sent, msg)
-        self._hooks.trigger(HOOK_MESSAGE_SENT, msg=msg)
+        self._hooks.trigger(HookMessageSent, msg=msg)
         return msg.id
 
     def send_command(self, command: str) -> str:
@@ -154,15 +159,25 @@ class ChatSession:
         else:
             self.dispatch_command(command)
         self._notify(self.on_message_sent, msg)
-        self._hooks.trigger(HOOK_MESSAGE_SENT, msg=msg)
+        self._hooks.trigger(HookMessageSent, msg=msg)
         return msg.id
 
-    def receive_message(self, text: str, *, reply_to: Optional[str] = None) -> str:
+    def receive_message(
+        self,
+        text: str,
+        *,
+        reply_to       : Optional[str] = None,
+        origin         : Optional[str] = None,
+        correlation_id : Optional[str] = None,
+    ) -> str:
         """Receives a message from outside and returns its id.
 
         Args:
             text: Message content.
             reply_to: Id of a sent message this one replies to (optional).
+            origin: Name of the connector it arrived through, when it did.
+            correlation_id: The far side's id for the exchange; replying to
+                this message sends the reply back through *origin*.
 
         Returns:
             str: The new message's id.
@@ -173,11 +188,89 @@ class ChatSession:
             is_command=False,
             is_sent_by_me=False,
             reply_to=reply_to,
+            origin=origin,
+            correlation_id=correlation_id,
         ))
         self._notify(self.on_message_added, msg)
         self._notify(self.on_message_received, msg)
-        self._hooks.trigger(HOOK_MESSAGE_RECEIVED, msg=msg)
+        self._hooks.trigger(HookMessageReceived, msg=msg)
         return msg.id
+
+    def deliver(
+        self,
+        connector_name : str,
+        text           : str,
+        correlation_id : Optional[str] = None,
+    ) -> str:
+        """Puts a question that arrived through a connector in front of the user.
+
+        This is the inbound half: the far side started the exchange. Replying
+        to the resulting message routes the answer back through *connector_name*
+        (see :meth:`_route_reply`).
+
+        Usually reached through the ``inbox`` granted to a connector that
+        declares ``HookAnswer``, rather than called directly.
+
+        Args:
+            connector_name: Name of the connector the message arrived through.
+            text: The message, as the user should see it.
+            correlation_id: The far side's id for this exchange.
+
+        Returns:
+            str: The new message's id.
+
+        Raises:
+            ValueError: If no connector is registered under that name.
+        """
+        if connector_name not in self.connectors:
+            raise ValueError("Connector '%s' not found" % connector_name)
+        return self.receive_message(text, origin=connector_name, correlation_id=correlation_id)
+
+    def _inbox_for(self, connector_name: str) -> Inbox:
+        """Builds the callable handed to a bidirectional connector."""
+        def inbox(text: str, correlation_id: Optional[str] = None) -> str:
+            return self.deliver(connector_name, text, correlation_id)
+        return inbox
+
+    def _route_reply(self, msg: ChatMessage) -> None:
+        """Sends *msg* back through the connector it is answering, if any.
+
+        A reply to a message that arrived through a connector is an answer owed
+        to whoever asked. A connector failing here must not lose the message —
+        it is already in the history — so the error is logged, not raised.
+        """
+        if msg.reply_to is None:
+            return
+        target = self._store.find(msg.reply_to)
+        if target is None or target.origin is None:
+            return
+
+        connector = self.connectors.get(target.origin)
+        if connector is None or not declares(connector, HookAnswer):
+            logger.warning(
+                "Cannot answer %s: connector %r is gone or does not declare %s",
+                target.id, target.origin, HookAnswer,
+            )
+            return
+        try:
+            connector.answer(target.correlation_id, msg.text)
+        except Exception as exc:
+            logger.error("Connector %r failed to deliver the answer: %s", target.origin, exc)
+
+    def close(self) -> None:
+        """Shuts every connector down.
+
+        A connector that owns a server or a thread needs to be told to stop;
+        one that failed must not stop the others from being closed.
+        """
+        for connector in self.connectors.values():
+            shutdown = getattr(connector, "shutdown", None)
+            if not callable(shutdown):
+                continue
+            try:
+                shutdown()
+            except Exception as exc:
+                logger.error("Connector %r failed to shut down: %s", name_of(connector), exc)
 
     # === Commands ===================================================================
 
@@ -227,48 +320,68 @@ class ChatSession:
             logger.error("Error executing command '%s': %s", command_name, exc)
             # Both paths carry the same keys, so a handler declaring
             # (command, result, error) is called on failure too.
-            self._hooks.trigger(HOOK_COMMAND_EXECUTED, command=command_name, result=None, error=exc)
+            self._hooks.trigger(HookCommandExecuted, command=command_name, result=None, error=exc)
             raise
-        self._hooks.trigger(HOOK_COMMAND_EXECUTED, command=command_name, result=result, error=None)
+        self._hooks.trigger(HookCommandExecuted, command=command_name, result=result, error=None)
         return result
 
     # === Connectors =================================================================
 
-    def add_connector(self, connector: BaseConnector) -> None:
+    def add_connector(self, connector: Any) -> None:
         """Registers *connector*, initializes it and registers its hooks.
 
         Args:
             connector: The connector to add.
         """
-        previous = self.connectors.get(connector.name)
+        name = name_of(connector)
+        previous = self.connectors.get(name)
         if previous is not None:
             # Drop the replaced connector's hooks, otherwise it keeps being called
             # (and re-adding the same object would register it twice).
-            logger.info("Replacing connector %r", connector.name)
+            logger.info("Replacing connector %r", name)
             self._hooks.unregister(previous)
 
-        self.connectors[connector.name] = connector
+        self.connectors[name] = connector
         self._hooks.register(connector)
-        connector.initialize()
-        self._hooks.trigger(HOOK_CONNECTOR_ADDED, connector=connector)
+        self._grant(connector, name)
+        # Lifecycle is optional: a connector holding nothing needs neither.
+        if callable(getattr(connector, "initialize", None)):
+            connector.initialize()
+        self._hooks.trigger(HookConnectorAdded, connector=connector)
 
-    def send_via_connector(self, connector_name: str, message: str, **kwargs) -> Any:
-        """Sends a message through a specific connector.
+    def _grant(self, connector: Any, name: str) -> None:
+        """Sets the attributes the connector's declared hooks ask for.
+
+        ``HookAnswer`` grants ``inbox``: the connector gets a way into the chat
+        without ever importing the session, so the dependency keeps pointing
+        inwards.
+        """
+        grants = {"inbox": lambda: self._inbox_for(name)}
+        for hook in hooks_of(connector):
+            for granted in hook.grants:
+                build = grants.get(granted)
+                if build is None:
+                    logger.warning("Hook %s asks for unknown grant %r", hook, granted)
+                    continue
+                setattr(connector, granted, build())
+
+    def ask_connector(self, connector_name: str, message: str, **kwargs) -> Any:
+        """Asks a specific connector and returns its answer.
 
         Args:
             connector_name: Name of a registered connector.
             message: The message to send.
-            **kwargs: Forwarded to the connector's ``send``.
+            **kwargs: Forwarded to the connector's ``ask``.
 
         Returns:
-            Any: Whatever the connector's ``send`` returns.
+            Any: The connector's answer.
 
         Raises:
             ValueError: If no connector is registered under that name.
         """
         if connector_name not in self.connectors:
             raise ValueError("Connector '%s' not found" % connector_name)
-        return self.connectors[connector_name].send(message, **kwargs)
+        return self.connectors[connector_name].ask(message, **kwargs)
 
     # === Persistence ================================================================
 
@@ -288,7 +401,7 @@ class ChatSession:
         if self.backend is None:
             raise RuntimeError("No backend configured")
         saved = self.backend.save(key, data)
-        self._hooks.trigger(HOOK_BACKEND_SAVE, key=key, data=data)
+        self._hooks.trigger(HookBackendSave, key=key, data=data)
         return saved
 
     def load_data(self, key: str) -> Any:
@@ -306,7 +419,7 @@ class ChatSession:
         if self.backend is None:
             raise RuntimeError("No backend configured")
         data = self.backend.load(key)
-        self._hooks.trigger(HOOK_BACKEND_LOAD, key=key, data=data)
+        self._hooks.trigger(HookBackendLoad, key=key, data=data)
         return data
 
     def delete_data(self, key: str) -> bool:

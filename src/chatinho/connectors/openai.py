@@ -4,12 +4,14 @@ import logging
 from typing import Any, Optional
 import openai
 
-from .base import BaseConnector
+from ..chat_hooks import HookAsk, connector, require
 
 logger = logging.getLogger(__name__)
 
 
-class OpenAIConnector(BaseConnector):
+@connector("openai")
+@require(HookAsk)
+class OpenAIConnector:
     """Connector for communicating with OpenAI API."""
     
     def __init__(
@@ -21,8 +23,8 @@ class OpenAIConnector(BaseConnector):
         max_tokens: Optional[int] = None,
         **kwargs
     ):
-        super().__init__(name, api_key=api_key, model=model, temperature=temperature, 
-                        max_tokens=max_tokens, **kwargs)
+        self.name = name
+        self.config = kwargs
         self.api_key = api_key
         self.model = model
         self.temperature = temperature
@@ -42,8 +44,8 @@ class OpenAIConnector(BaseConnector):
             logger.error(f"Failed to initialize OpenAI connector '{self.name}': {e}")
             raise
     
-    def send(self, message: str, **kwargs) -> Any:
-        """Send a message to OpenAPI API.
+    def ask(self, message: str, **kwargs) -> Any:
+        """Ask the OpenAI model and return its reply.
         
         Args:
             message: The message to send
@@ -98,15 +100,3 @@ class OpenAIConnector(BaseConnector):
         except Exception as e:
             logger.error(f"Failed to send message via OpenAI connector '{self.name}': {e}")
             raise
-    
-    def receive(self, **kwargs) -> Any:
-        """Receive messages (OpenAI is primarily request/response).
-        
-        Args:
-            **kwargs: Additional parameters
-            
-        Returns:
-            Any: Not applicable for standard OpenAI API
-        """
-        logger.debug("OpenAI receive method called - OpenAI is request/response")
-        return None

@@ -4,12 +4,14 @@ import logging
 from typing import Any, Dict
 import requests
 
-from .base import BaseConnector
+from ..chat_hooks import HookAsk, connector, require
 
 logger = logging.getLogger(__name__)
 
 
-class A2AConnector(BaseConnector):
+@connector("a2a")
+@require(HookAsk)
+class A2AConnector:
     """Connector for communicating with A2A (Agent-to-Agent) protocol endpoints."""
     
     def __init__(
@@ -20,7 +22,8 @@ class A2AConnector(BaseConnector):
         timeout: int = 30,
         **kwargs
     ):
-        super().__init__(name, url=url, api_key=api_key, timeout=timeout, **kwargs)
+        self.name = name
+        self.config = kwargs
         self.url = url.rstrip('/')
         self.api_key = api_key
         self.timeout = timeout
@@ -49,8 +52,8 @@ class A2AConnector(BaseConnector):
             logger.warning(f"Could not connect to A2A endpoint during initialization: {e}")
             # Don't fail initialization - allow for lazy connection
     
-    def send(self, message: str, **kwargs) -> Any:
-        """Send a message via A2A protocol.
+    def ask(self, message: str, **kwargs) -> Any:
+        """Ask the A2A agent and return its answer.
         
         Args:
             message: The message to send
@@ -82,7 +85,12 @@ class A2AConnector(BaseConnector):
             request_data["message"]["contextId"] = kwargs["context_id"]
         
         if "task_id" in kwargs:
-            request_data["taskId"] = kwargs["task_id"]
+            # Beside contextId, inside the message: both are fields of the A2A
+            # Message object, not of the request envelope. At the top level a
+            # spec-conformant agent never sees it and treats every turn as a
+            # new task — which breaks the correlation the inbound direction
+            # depends on.
+            request_data["message"]["taskId"] = kwargs["task_id"]
         
         try:
             # Send to A2A agent's message endpoint
@@ -100,19 +108,3 @@ class A2AConnector(BaseConnector):
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to send message via A2A connector '{self.name}': {e}")
             raise
-    
-    def receive(self, **kwargs) -> Any:
-        """Receive messages (not typically used in A2A as it's request/response).
-        
-        For A2A, receiving is usually done through the send method's response
-        or through webhook/push notification endpoints.
-        
-        Args:
-            **kwargs: Additional parameters
-            
-        Returns:
-            Any: Received data or None
-        """
-        logger.debug("A2A receive method called - A2A is primarily request/response")
-        # This would be implemented for webhook/push notification scenarios
-        return None

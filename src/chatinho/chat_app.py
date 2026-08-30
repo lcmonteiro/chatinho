@@ -37,7 +37,6 @@ from .chat_message import ChatMessage
 from .chat_session import ChatSession
 from .chat_style import ChatStyle
 from .commands import BaseCommand
-from .connectors import BaseConnector
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ INPUT_ID    : str = "input-line"
 
 
 def create_chat(
-    connectors      : Optional[List[BaseConnector]] = None,
+    connectors      : Optional[List[Any]] = None,
     commands        : Optional[Dict[str, BaseCommand]] = None,
     backend         : Optional[BaseBackend] = None,
     title           : str = "Chatinho",
@@ -157,6 +156,14 @@ class _Chat(App):
         if self.welcome_message:
             self.receive_message(self.welcome_message)
 
+    def on_unmount(self) -> None:
+        """Shuts the session's connectors down when the app closes.
+
+        A connector that owns a server or a thread would otherwise outlive the
+        terminal it was serving.
+        """
+        self.session.close()
+
     def on_input_submitted(self, message: Input.Submitted) -> None:
         """Handle user pressing Enter in the input field."""
         del message
@@ -225,7 +232,7 @@ class _Chat(App):
     # === Session delegates ==========================================================
 
     @property
-    def connectors(self) -> Dict[str, BaseConnector]:
+    def connectors(self) -> Dict[str, Any]:
         """The session's registered connectors, keyed by name."""
         return self.session.connectors
 
@@ -257,25 +264,38 @@ class _Chat(App):
         """Sends a command (without the '/' prefix) and returns its id."""
         return self.session.send_command(command)
 
-    def receive_message(self, text: str, *, reply_to: Optional[str] = None) -> str:
+    def receive_message(
+        self,
+        text: str,
+        *,
+        reply_to       : Optional[str] = None,
+        origin         : Optional[str] = None,
+        correlation_id : Optional[str] = None,
+    ) -> str:
         """Receives a message from outside and returns its id.
 
         Safe to call from any thread: if called off the app's main thread the
         repaint is marshalled via ``call_from_thread`` (see :meth:`_repaint`).
         """
-        return self.session.receive_message(text, reply_to=reply_to)
+        return self.session.receive_message(
+            text, reply_to=reply_to, origin=origin, correlation_id=correlation_id,
+        )
+
+    def deliver(self, connector_name: str, text: str, correlation_id: Optional[str] = None) -> str:
+        """Puts a question that arrived through a connector in front of the user."""
+        return self.session.deliver(connector_name, text, correlation_id)
 
     def get_replies(self, msg_id: str) -> List[str]:
         """Returns the ids of the messages that reply to *msg_id*."""
         return self.session.get_replies(msg_id)
 
-    def add_connector(self, connector: BaseConnector) -> None:
+    def add_connector(self, connector: Any) -> None:
         """Registers *connector*, initializes it and registers its hooks."""
         self.session.add_connector(connector)
 
-    def send_message_via_connector(self, connector_name: str, message: str, **kwargs) -> Any:
-        """Sends a message through a specific connector."""
-        return self.session.send_via_connector(connector_name, message, **kwargs)
+    def ask_connector(self, connector_name: str, message: str, **kwargs) -> Any:
+        """Asks a specific connector and returns its answer."""
+        return self.session.ask_connector(connector_name, message, **kwargs)
 
     def execute_command(self, command_name: str, *args, **kwargs) -> Any:
         """Executes a registered command and triggers the command hook."""

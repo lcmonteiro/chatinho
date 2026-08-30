@@ -13,27 +13,27 @@ Feed it a script:  printf '/help\\nola\\n' | python examples/headless.py
 """
 
 import sys
-from typing import Any, Iterator, Optional
+from typing import Any, Iterator
 
-from chatinho import BaseCommand, BaseConnector, ChatMessage, ChatSession, HelpCommand
+from chatinho import (
+    BaseCommand,
+    ChatMessage,
+    ChatSession,
+    HelpCommand,
+    HookAsk,
+    connector,
+    require,
+)
 
 
-class EchoConnector(BaseConnector):
+@connector("echo")
+@require(HookAsk)
+class EchoConnector:
     """Stands in for a real transport: echoes whatever it is given."""
 
-    def __init__(self) -> None:
-        super().__init__(name="echo")
-
-    def initialize(self) -> None:
-        """Nothing to set up: the echo is local."""
-
-    def send(self, message: str, **kwargs) -> str:
+    def ask(self, message: str, **kwargs) -> str:
         """Returns the echoed answer instead of hitting the network."""
         return f"Received: {message}"
-
-    def receive(self, **kwargs) -> Optional[str]:
-        """The echo is synchronous, so there is nothing to poll for."""
-        return None
 
 
 class UpperCommand(BaseCommand):
@@ -88,7 +88,7 @@ def main() -> None:
         """Sends each message through the connector and shows the answer."""
         if msg.is_command:
             return
-        session.receive_message(session.send_via_connector("echo", msg.text), reply_to=msg.id)
+        session.receive_message(session.ask_connector("echo", msg.text), reply_to=msg.id)
 
     session.on_message_sent = echo_reply
 

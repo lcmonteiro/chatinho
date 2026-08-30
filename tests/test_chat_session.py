@@ -6,7 +6,7 @@ and exercises it synchronously. No ``run_test()``, no event loop, no Textual.
 
 import pytest
 
-from chatinho import BaseCommand, BaseConnector, HOOK_MESSAGE_SENT, hook_point
+from chatinho import BaseCommand, HookAsk, HookMessageSent, connector, require
 from chatinho.chat_session import ChatSession
 
 
@@ -36,20 +36,15 @@ class _Spy(BaseCommand):
         return "ok"
 
 
-@hook_point(HOOK_MESSAGE_SENT)
-class _Recorder(BaseConnector):
-    def __init__(self, name: str = "rec") -> None:
-        super().__init__(name)
+@connector("rec")
+@require(HookAsk)
+@require(HookMessageSent)
+class _Recorder:
+    def __init__(self) -> None:
         self.sent: list = []
 
-    def initialize(self) -> None:
-        pass
-
-    def send(self, message: str, **kwargs) -> str:
+    def ask(self, message: str, **kwargs) -> str:
         return "sent: %s" % message
-
-    def receive(self, **kwargs) -> None:
-        return None
 
     def on_message_sent(self, msg, **kwargs) -> None:
         self.sent.append(msg.text)
@@ -169,12 +164,12 @@ def test_connectors_and_hooks_work_headless():
     session = ChatSession(connectors=[connector])
     session.send_message("ola")
     assert connector.sent == ["ola"]
-    assert session.send_via_connector("rec", "ping") == "sent: ping"
+    assert session.ask_connector("rec", "ping") == "sent: ping"
 
 
-def test_send_via_unknown_connector_raises():
+def test_asking_an_unknown_connector_raises():
     with pytest.raises(ValueError):
-        ChatSession().send_via_connector("nope", "ping")
+        ChatSession().ask_connector("nope", "ping")
 
 
 # === Persistence ================================================================
@@ -199,3 +194,11 @@ def test_persistence_without_a_backend_raises():
     ):
         with pytest.raises(RuntimeError):
             call()
+
+
+def test_messages_returns_a_copy():
+    """The guarantee holds through the session, not just the store."""
+    session = ChatSession()
+    session.send_message("guardada")
+    session.messages.clear()
+    assert [m.text for m in session.messages] == ["guardada"]

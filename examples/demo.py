@@ -8,27 +8,27 @@ replies by sending the message back through the connector.
 Run with:  bash run.sh
 """
 
-from typing import Any, Optional
+from typing import Any
 
-from chatinho import BaseCommand, BaseConnector, ChatMessage, HelpCommand, create_chat
+from chatinho import (
+    BaseCommand,
+    ChatMessage,
+    HelpCommand,
+    HookAsk,
+    connector,
+    create_chat,
+    require,
+)
 
 
-class EchoConnector(BaseConnector):
+@connector("echo")
+@require(HookAsk)
+class EchoConnector:
     """Connector that echoes what it is given — stands in for a real transport."""
 
-    def __init__(self) -> None:
-        super().__init__(name="echo")
-
-    def initialize(self) -> None:
-        """Nothing to set up: the echo is local."""
-
-    def send(self, message: str, **kwargs) -> str:
+    def ask(self, message: str, **kwargs) -> str:
         """Returns the echoed answer instead of hitting the network."""
         return f"Received: _{message}_"
-
-    def receive(self, **kwargs) -> Optional[str]:
-        """The echo is synchronous, so there is nothing to poll for."""
-        return None
 
 
 class CodeCommand(BaseCommand):
@@ -81,7 +81,7 @@ def main() -> None:
         """
         if msg.is_command:
             return
-        answer = chat.send_message_via_connector("echo", msg.text)
+        answer = chat.ask_connector("echo", msg.text)
         chat.set_timer(0.6, lambda: chat.receive_message(answer, reply_to=msg.id))
 
     chat.on_message_sent = echo_reply  # type: ignore[method-assign]
