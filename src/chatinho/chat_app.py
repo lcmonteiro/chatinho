@@ -37,7 +37,6 @@ from .chat_message import ChatMessage
 from .chat_session import ChatSession
 from .chat_style import ChatStyle
 from .commands import BaseCommand
-from .connectors import BaseConnector
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ INPUT_ID    : str = "input-line"
 
 
 def create_chat(
-    connectors      : Optional[List[BaseConnector]] = None,
+    connectors      : Optional[List[Any]] = None,
     commands        : Optional[Dict[str, BaseCommand]] = None,
     backend         : Optional[BaseBackend] = None,
     title           : str = "Chatinho",
@@ -233,7 +232,7 @@ class _Chat(App):
     # === Session delegates ==========================================================
 
     @property
-    def connectors(self) -> Dict[str, BaseConnector]:
+    def connectors(self) -> Dict[str, Any]:
         """The session's registered connectors, keyed by name."""
         return self.session.connectors
 
@@ -290,7 +289,7 @@ class _Chat(App):
         """Returns the ids of the messages that reply to *msg_id*."""
         return self.session.get_replies(msg_id)
 
-    def add_connector(self, connector: BaseConnector) -> None:
+    def add_connector(self, connector: Any) -> None:
         """Registers *connector*, initializes it and registers its hooks."""
         self.session.add_connector(connector)
 

@@ -1,21 +1,26 @@
 """Tests for the inbound direction: the agent asks, the user answers.
 
 A connector is a link between the user and an agent. The outbound half — the
-user asks, the far side answers — is ``ask``. This covers the other half: the
-far side starts the exchange through ``ask_user``, and the user's reply is
+user asks, the far side answers — is ``ask``, declared with ``HookAsk``. This
+covers the other half: declaring ``HookAnswer`` grants the connector an
+``inbox``; the far side starts the exchange through it, and the user's reply is
 routed back through ``answer``, correlated by the far side's own id.
 """
 
 import pytest
 
-from chatinho import BaseConnector, BidirectionalConnector, ChatSession
+from chatinho import ChatSession, HookAnswer, HookAsk, connector, require
+from chatinho.chat_hooks import declares
 
 
-class Agent(BidirectionalConnector):
+@connector("agent")
+@require(HookAsk, HookAnswer)
+class Agent:
     """A two-way link that records both directions."""
 
-    def __init__(self, name: str = "agent") -> None:
-        super().__init__(name)
+    def __init__(self, name: str = None) -> None:
+        if name is not None:
+            self.name = name
         self.asked: list = []      # what we sent out
         self.answered: list = []   # what the user replied, with its correlation
         self.started = False
@@ -35,14 +40,10 @@ class Agent(BidirectionalConnector):
         self.answered.append((correlation_id, text))
 
 
-class OutboundOnly(BaseConnector):
+@connector("one-way")
+@require(HookAsk)
+class OutboundOnly:
     """A one-way link: the user asks, nothing ever arrives unprompted."""
-
-    def __init__(self, name: str = "one-way") -> None:
-        super().__init__(name)
-
-    def initialize(self) -> None:
-        pass
 
     def ask(self, message: str, **kwargs) -> str:
         return "answer"
@@ -51,26 +52,28 @@ class OutboundOnly(BaseConnector):
 # === Direction is declared by type ==============================================
 
 
-def test_a_one_way_connector_implements_only_the_outbound_half():
-    """ISP: it is never asked for attach() or answer()."""
-    connector = OutboundOnly()
-    assert not isinstance(connector, BidirectionalConnector)
-    assert not hasattr(connector, "answer")
+def test_a_one_way_connector_declares_only_the_outbound_half():
+    """ISP: it never implements answer(), and nothing asks it to."""
+    one_way = OutboundOnly()
+    assert declares(one_way, HookAsk)
+    assert not declares(one_way, HookAnswer)
+    assert not hasattr(one_way, "answer")
 
 
-def test_the_session_only_attaches_bidirectional_connectors():
+def test_only_a_connector_declaring_hookanswer_is_granted_an_inbox():
     one_way, two_way = OutboundOnly(), Agent()
     ChatSession(connectors=[one_way, two_way])
-    assert two_way._inbox is not None
+    assert callable(two_way.inbox)
+    assert not hasattr(one_way, "inbox")
 
 
 # === The agent asks =============================================================
 
 
-def test_ask_user_puts_the_question_in_the_history():
+def test_the_inbox_puts_the_question_in_the_history():
     agent = Agent()
     session = ChatSession(connectors=[agent])
-    agent.ask_user("Deploy to production?", correlation_id="task-1")
+    agent.inbox("Deploy to production?", correlation_id="task-1")
 
     assert len(session.messages) == 1
     question = session.messages[0]
@@ -80,9 +83,9 @@ def test_ask_user_puts_the_question_in_the_history():
     assert question.correlation_id == "task-1"
 
 
-def test_ask_user_before_registration_is_refused():
-    with pytest.raises(RuntimeError, match="not attached"):
-        Agent().ask_user("ninguem me ouve")
+def test_a_connector_that_was_never_registered_has_no_inbox():
+    """The grant happens at registration; before it there is nothing to call."""
+    assert not hasattr(Agent(), "inbox")
 
 
 def test_deliver_rejects_an_unknown_connector():
@@ -96,7 +99,7 @@ def test_deliver_rejects_an_unknown_connector():
 def test_replying_to_the_question_routes_the_answer_back():
     agent = Agent()
     session = ChatSession(connectors=[agent])
-    question = agent.ask_user("Deploy to production?", correlation_id="task-1")
+    question = agent.inbox("Deploy to production?", correlation_id="task-1")
 
     session.send_message("yes, go ahead", reply_to=question)
 
@@ -106,7 +109,7 @@ def test_replying_to_the_question_routes_the_answer_back():
 def test_an_unrelated_message_is_not_routed_anywhere():
     agent = Agent()
     session = ChatSession(connectors=[agent])
-    agent.ask_user("uma pergunta", correlation_id="task-1")
+    agent.inbox("uma pergunta", correlation_id="task-1")
     session.send_message("a falar sozinho")
     assert agent.answered == []
 
@@ -123,8 +126,8 @@ def test_replying_to_a_local_message_is_not_routed():
 def test_each_answer_carries_its_own_correlation():
     agent = Agent()
     session = ChatSession(connectors=[agent])
-    first = agent.ask_user("primeira?", correlation_id="task-1")
-    second = agent.ask_user("segunda?", correlation_id="task-2")
+    first = agent.inbox("primeira?", correlation_id="task-1")
+    second = agent.inbox("segunda?", correlation_id="task-2")
 
     session.send_message("resposta a segunda", reply_to=second)
     session.send_message("resposta a primeira", reply_to=first)
@@ -142,7 +145,7 @@ def test_a_connector_that_fails_to_answer_does_not_lose_the_message():
 
     agent = Broken()
     session = ChatSession(connectors=[agent])
-    question = agent.ask_user("pergunta", correlation_id="task-1")
+    question = agent.inbox("pergunta", correlation_id="task-1")
     session.send_message("resposta", reply_to=question)
 
     assert [m.text for m in session.messages] == ["pergunta", "resposta"]
@@ -152,7 +155,7 @@ def test_both_directions_coexist_on_one_connector():
     agent = Agent()
     session = ChatSession(connectors=[agent])
     assert session.ask_connector("agent", "ola") == "agent says: ola"
-    question = agent.ask_user("e tu?", correlation_id="task-1")
+    question = agent.inbox("e tu?", correlation_id="task-1")
     session.send_message("eu bem", reply_to=question)
     assert agent.asked == ["ola"]
     assert agent.answered == [("task-1", "eu bem")]

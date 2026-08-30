@@ -4,12 +4,14 @@ import logging
 from typing import Any, Optional
 import openai
 
-from .base import BaseConnector
+from ..chat_hooks import HookAsk, connector, require
 
 logger = logging.getLogger(__name__)
 
 
-class OpenAIConnector(BaseConnector):
+@connector("openai")
+@require(HookAsk)
+class OpenAIConnector:
     """Connector for communicating with OpenAI API."""
     
     def __init__(
@@ -21,8 +23,8 @@ class OpenAIConnector(BaseConnector):
         max_tokens: Optional[int] = None,
         **kwargs
     ):
-        super().__init__(name, api_key=api_key, model=model, temperature=temperature, 
-                        max_tokens=max_tokens, **kwargs)
+        self.name = name
+        self.config = kwargs
         self.api_key = api_key
         self.model = model
         self.temperature = temperature

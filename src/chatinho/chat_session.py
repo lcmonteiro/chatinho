@@ -14,17 +14,21 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .backends import BaseBackend
 from .chat_hooks import (
-    HOOK_BACKEND_LOAD,
-    HOOK_BACKEND_SAVE,
-    HOOK_COMMAND_EXECUTED,
-    HOOK_CONNECTOR_ADDED,
-    HOOK_MESSAGE_RECEIVED,
-    HOOK_MESSAGE_SENT,
+    HookAnswer,
+    HookBackendLoad,
+    HookBackendSave,
+    HookCommandExecuted,
+    HookConnectorAdded,
+    HookMessageReceived,
+    HookMessageSent,
     HookRegistry,
+    declares,
+    hooks_of,
+    name_of,
 )
+from .chat_hooks import Inbox
 from .chat_message import ChatMessage, MessageStore
 from .commands import BaseCommand
-from .connectors import BaseConnector, BidirectionalConnector, Inbox
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +50,12 @@ class ChatSession:
 
     def __init__(
         self,
-        connectors      : Optional[List[BaseConnector]] = None,
+        connectors      : Optional[List[Any]] = None,
         commands        : Optional[Dict[str, BaseCommand]] = None,
         backend         : Optional[BaseBackend] = None,
         command_handler : Optional[Callable[[str], None]] = None,
     ) -> None:
-        self.connectors : Dict[str, BaseConnector] = {}
+        self.connectors : Dict[str, Any] = {}
         self.commands   : Dict[str, BaseCommand] = dict(commands) if commands else {}
         self.backend    : Optional[BaseBackend] = backend
         self.command_handler : Optional[Callable[[str], None]] = command_handler
@@ -127,7 +131,7 @@ class ChatSession:
         self._notify(self.on_message_added, msg)
         self._route_reply(msg)
         self._notify(self.on_message_sent, msg)
-        self._hooks.trigger(HOOK_MESSAGE_SENT, msg=msg)
+        self._hooks.trigger(HookMessageSent, msg=msg)
         return msg.id
 
     def send_command(self, command: str) -> str:
@@ -155,7 +159,7 @@ class ChatSession:
         else:
             self.dispatch_command(command)
         self._notify(self.on_message_sent, msg)
-        self._hooks.trigger(HOOK_MESSAGE_SENT, msg=msg)
+        self._hooks.trigger(HookMessageSent, msg=msg)
         return msg.id
 
     def receive_message(
@@ -189,7 +193,7 @@ class ChatSession:
         ))
         self._notify(self.on_message_added, msg)
         self._notify(self.on_message_received, msg)
-        self._hooks.trigger(HOOK_MESSAGE_RECEIVED, msg=msg)
+        self._hooks.trigger(HookMessageReceived, msg=msg)
         return msg.id
 
     def deliver(
@@ -204,9 +208,8 @@ class ChatSession:
         to the resulting message routes the answer back through *connector_name*
         (see :meth:`_route_reply`).
 
-        Usually reached through
-        :meth:`~chatinho.connectors.base.BidirectionalConnector.ask_user`
-        rather than called directly.
+        Usually reached through the ``inbox`` granted to a connector that
+        declares ``HookAnswer``, rather than called directly.
 
         Args:
             connector_name: Name of the connector the message arrived through.
@@ -243,10 +246,10 @@ class ChatSession:
             return
 
         connector = self.connectors.get(target.origin)
-        if not isinstance(connector, BidirectionalConnector):
+        if connector is None or not declares(connector, HookAnswer):
             logger.warning(
-                "Cannot answer %s: connector %r is gone or is not bidirectional",
-                target.id, target.origin,
+                "Cannot answer %s: connector %r is gone or does not declare %s",
+                target.id, target.origin, HookAnswer,
             )
             return
         try:
@@ -261,10 +264,13 @@ class ChatSession:
         one that failed must not stop the others from being closed.
         """
         for connector in self.connectors.values():
+            shutdown = getattr(connector, "shutdown", None)
+            if not callable(shutdown):
+                continue
             try:
-                connector.shutdown()
+                shutdown()
             except Exception as exc:
-                logger.error("Connector %r failed to shut down: %s", connector.name, exc)
+                logger.error("Connector %r failed to shut down: %s", name_of(connector), exc)
 
     # === Commands ===================================================================
 
@@ -314,33 +320,50 @@ class ChatSession:
             logger.error("Error executing command '%s': %s", command_name, exc)
             # Both paths carry the same keys, so a handler declaring
             # (command, result, error) is called on failure too.
-            self._hooks.trigger(HOOK_COMMAND_EXECUTED, command=command_name, result=None, error=exc)
+            self._hooks.trigger(HookCommandExecuted, command=command_name, result=None, error=exc)
             raise
-        self._hooks.trigger(HOOK_COMMAND_EXECUTED, command=command_name, result=result, error=None)
+        self._hooks.trigger(HookCommandExecuted, command=command_name, result=result, error=None)
         return result
 
     # === Connectors =================================================================
 
-    def add_connector(self, connector: BaseConnector) -> None:
+    def add_connector(self, connector: Any) -> None:
         """Registers *connector*, initializes it and registers its hooks.
 
         Args:
             connector: The connector to add.
         """
-        previous = self.connectors.get(connector.name)
+        name = name_of(connector)
+        previous = self.connectors.get(name)
         if previous is not None:
             # Drop the replaced connector's hooks, otherwise it keeps being called
             # (and re-adding the same object would register it twice).
-            logger.info("Replacing connector %r", connector.name)
+            logger.info("Replacing connector %r", name)
             self._hooks.unregister(previous)
 
-        self.connectors[connector.name] = connector
+        self.connectors[name] = connector
         self._hooks.register(connector)
-        if isinstance(connector, BidirectionalConnector):
-            # The connector gets a way in without ever importing the session.
-            connector.attach(self._inbox_for(connector.name))
-        connector.initialize()
-        self._hooks.trigger(HOOK_CONNECTOR_ADDED, connector=connector)
+        self._grant(connector, name)
+        # Lifecycle is optional: a connector holding nothing needs neither.
+        if callable(getattr(connector, "initialize", None)):
+            connector.initialize()
+        self._hooks.trigger(HookConnectorAdded, connector=connector)
+
+    def _grant(self, connector: Any, name: str) -> None:
+        """Sets the attributes the connector's declared hooks ask for.
+
+        ``HookAnswer`` grants ``inbox``: the connector gets a way into the chat
+        without ever importing the session, so the dependency keeps pointing
+        inwards.
+        """
+        grants = {"inbox": lambda: self._inbox_for(name)}
+        for hook in hooks_of(connector):
+            for granted in hook.grants:
+                build = grants.get(granted)
+                if build is None:
+                    logger.warning("Hook %s asks for unknown grant %r", hook, granted)
+                    continue
+                setattr(connector, granted, build())
 
     def ask_connector(self, connector_name: str, message: str, **kwargs) -> Any:
         """Asks a specific connector and returns its answer.
@@ -378,7 +401,7 @@ class ChatSession:
         if self.backend is None:
             raise RuntimeError("No backend configured")
         saved = self.backend.save(key, data)
-        self._hooks.trigger(HOOK_BACKEND_SAVE, key=key, data=data)
+        self._hooks.trigger(HookBackendSave, key=key, data=data)
         return saved
 
     def load_data(self, key: str) -> Any:
@@ -396,7 +419,7 @@ class ChatSession:
         if self.backend is None:
             raise RuntimeError("No backend configured")
         data = self.backend.load(key)
-        self._hooks.trigger(HOOK_BACKEND_LOAD, key=key, data=data)
+        self._hooks.trigger(HookBackendLoad, key=key, data=data)
         return data
 
     def delete_data(self, key: str) -> bool:

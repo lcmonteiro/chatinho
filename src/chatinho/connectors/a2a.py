@@ -4,12 +4,14 @@ import logging
 from typing import Any, Dict
 import requests
 
-from .base import BaseConnector
+from ..chat_hooks import HookAsk, connector, require
 
 logger = logging.getLogger(__name__)
 
 
-class A2AConnector(BaseConnector):
+@connector("a2a")
+@require(HookAsk)
+class A2AConnector:
     """Connector for communicating with A2A (Agent-to-Agent) protocol endpoints."""
     
     def __init__(
@@ -20,7 +22,8 @@ class A2AConnector(BaseConnector):
         timeout: int = 30,
         **kwargs
     ):
-        super().__init__(name, url=url, api_key=api_key, timeout=timeout, **kwargs)
+        self.name = name
+        self.config = kwargs
         self.url = url.rstrip('/')
         self.api_key = api_key
         self.timeout = timeout

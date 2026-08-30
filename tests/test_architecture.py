@@ -18,7 +18,6 @@ CORE_MODULES = [
     "chat_message.py",
     "chat_hooks.py",
     "commands/base.py",
-    "connectors/base.py",
     "backends/base.py",
 ]
 

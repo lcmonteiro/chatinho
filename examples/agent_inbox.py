@@ -6,9 +6,10 @@ the question lands in the chat, and the user's reply is routed back to the
 agent that asked, correlated by the agent's own task id.
 
 The connector brings its own listener: a small HTTP server on a background
-thread, using nothing but the standard library. That is the point of
-``BidirectionalConnector`` — the transport machinery belongs to the connector,
-not to the library and not to you.
+thread, using nothing but the standard library. Declaring ``HookAnswer`` is
+what says "the far side can start a conversation": ``require`` checks the class
+implements ``answer``, and the session grants it an ``inbox`` to call. The
+transport machinery belongs to the connector, not to the library and not to you.
 
 Run it:
 
@@ -27,21 +28,30 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Optional
 
-from chatinho import BidirectionalConnector, ChatMessage, ChatSession
+from chatinho import (
+    ChatMessage,
+    ChatSession,
+    HookAnswer,
+    HookAsk,
+    connector,
+    require,
+)
 
 HOST = "127.0.0.1"
 PORT = 8765
 
 
-class AgentConnector(BidirectionalConnector):
+@connector("agent")
+@require(HookAsk, HookAnswer)
+class AgentConnector:
     """A two-way link: the user can ask the agent, and the agent can ask back.
 
     Inbound arrives as ``POST /ask`` with ``{"task": ..., "text": ...}``; the
-    handler calls :meth:`ask_user`, which is safe from this server thread.
+    handler calls ``self.inbox``, which the session granted because this class
+    declares ``HookAnswer``. Safe to call from this server thread.
     """
 
-    def __init__(self, name: str = "agent", host: str = HOST, port: int = PORT) -> None:
-        super().__init__(name, host=host, port=port)
+    def __init__(self, host: str = HOST, port: int = PORT) -> None:
         self.host = host
         self.port = port
         self._server: Optional[ThreadingHTTPServer] = None
@@ -57,7 +67,7 @@ class AgentConnector(BidirectionalConnector):
             def do_POST(self) -> None:  # noqa: N802 — http.server's spelling
                 length = int(self.headers.get("Content-Length", 0))
                 payload = json.loads(self.rfile.read(length) or b"{}")
-                connector.ask_user(payload.get("text", ""), payload.get("task"))
+                connector.inbox(payload.get("text", ""), payload.get("task"))
                 self.send_response(202)
                 self.end_headers()
 

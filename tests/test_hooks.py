@@ -1,6 +1,6 @@
 """Tests for the connector hook system.
 
-Connectors opt into events with ``@hook_point(...)``; the chat triggers every
+Connectors opt into events with ``@require(...)``; the chat triggers every
 hook centrally, so a connector that declares no hook points is never called.
 """
 
@@ -8,24 +8,21 @@ import pytest
 
 from chatinho import (
     BaseCommand,
-    BaseConnector,
-    HOOK_COMMAND_EXECUTED,
-    HOOK_MESSAGE_SENT,
+    HookAsk,
+    HookCommandExecuted,
+    HookMessageSent,
     create_chat,
-    hook_point,
+    require,
 )
 
 
-class _Connector(BaseConnector):
-    """Connector with the abstract transport methods stubbed out."""
+class _Connector:
+    """The methods, without any declaration."""
 
     def __init__(self, name: str = "rec") -> None:
-        super().__init__(name)
+        self.name = name
         self.sent: list = []
         self.executed: list = []
-
-    def initialize(self) -> None:
-        pass
 
     def ask(self, message: str, **kwargs) -> None:
         return None
@@ -39,13 +36,13 @@ class _Connector(BaseConnector):
         self.executed.append((command, result, error))
 
 
-@hook_point(HOOK_MESSAGE_SENT, HOOK_COMMAND_EXECUTED)
+@require(HookAsk, HookMessageSent, HookCommandExecuted)
 class RecordingConnector(_Connector):
     """Connector that declares the hooks it records."""
 
 
 class SilentConnector(_Connector):
-    """Same methods, but declares no hook points at all."""
+    """Same methods, but declares nothing at all."""
 
 
 class _Echo(BaseCommand):
@@ -60,32 +57,32 @@ class _Boom(BaseCommand):
 
 @pytest.mark.asyncio
 async def test_declared_hook_is_called():
-    connector = RecordingConnector()
-    app = create_chat(connectors=[connector])
+    link = RecordingConnector()
+    app = create_chat(connectors=[link])
     async with app.run_test():
         app.send_message("ola")
-    assert [m.text for m in connector.sent] == ["ola"]
+    assert [m.text for m in link.sent] == ["ola"]
 
 
 @pytest.mark.asyncio
-async def test_connector_without_hook_points_is_never_called():
-    connector = SilentConnector()
-    app = create_chat(connectors=[connector])
+async def test_a_connector_that_declares_nothing_is_never_called():
+    link = SilentConnector()
+    app = create_chat(connectors=[link])
     async with app.run_test():
         app.send_message("ola")
-    assert connector.sent == []
+    assert link.sent == []
 
 
 @pytest.mark.asyncio
 async def test_command_hook_carries_same_keys_on_success_and_failure():
-    connector = RecordingConnector()
-    app = create_chat(connectors=[connector], commands={"echo": _Echo("echo"), "boom": _Boom("boom")})
+    link = RecordingConnector()
+    app = create_chat(connectors=[link], commands={"echo": _Echo("echo"), "boom": _Boom("boom")})
     async with app.run_test():
         app.send_command("echo")
         app.send_command("boom")
-    assert len(connector.executed) == 2
-    assert connector.executed[0] == ("echo", "ok", None)
-    command, result, error = connector.executed[1]
+    assert len(link.executed) == 2
+    assert link.executed[0] == ("echo", "ok", None)
+    command, result, error = link.executed[1]
     assert (command, result) == ("boom", None)
     assert isinstance(error, RuntimeError)
 

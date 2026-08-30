@@ -35,16 +35,20 @@ from .chat_app import create_chat
 from .chat_session import ChatSession
 from .chat_message import ChatMessage
 from .chat_hooks import (
-    hook_point,
-    HOOK_MESSAGE_SENT,
-    HOOK_MESSAGE_RECEIVED,
-    HOOK_COMMAND_EXECUTED,
-    HOOK_CONNECTOR_ADDED,
-    HOOK_BACKEND_SAVE,
-    HOOK_BACKEND_LOAD,
+    connector,
+    require,
+    Hook,
+    HookAsk,
+    HookAnswer,
+    HookMessageSent,
+    HookMessageReceived,
+    HookCommandExecuted,
+    HookConnectorAdded,
+    HookBackendSave,
+    HookBackendLoad,
 )
 from .chat_style import ChatStyle
-from .connectors import A2AConnector, OpenAIConnector, BaseConnector, BidirectionalConnector
+from .connectors import A2AConnector, OpenAIConnector
 from .backends import DatabaseBackend, BaseBackend
 from .commands import HelpCommand, TestCommand, BaseCommand
 
@@ -53,17 +57,19 @@ __all__ = [
     "ChatSession",
     "ChatMessage",
     "ChatStyle",
-    # Connector hook system
-    "hook_point",
-    "HOOK_MESSAGE_SENT",
-    "HOOK_MESSAGE_RECEIVED",
-    "HOOK_COMMAND_EXECUTED",
-    "HOOK_CONNECTOR_ADDED",
-    "HOOK_BACKEND_SAVE",
-    "HOOK_BACKEND_LOAD",
+    # Connector capabilities
+    "connector",
+    "require",
+    "Hook",
+    "HookAsk",
+    "HookAnswer",
+    "HookMessageSent",
+    "HookMessageReceived",
+    "HookCommandExecuted",
+    "HookConnectorAdded",
+    "HookBackendSave",
+    "HookBackendLoad",
     # Connectors
-    "BaseConnector",
-    "BidirectionalConnector",
     "A2AConnector",
     "OpenAIConnector",
     # Backends

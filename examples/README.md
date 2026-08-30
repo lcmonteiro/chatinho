@@ -19,8 +19,8 @@ printf '/help\nola\n' | python examples/headless.py   # or scripted
 
 | File | What it shows |
 |---|---|
-| `demo.py` | Full-featured TUI built on `create_chat`: Markdown rendering, code blocks with syntax highlighting, a custom `BaseCommand` (`/code`) next to the library's `/help`, command autocomplete, click-to-reply, and an echo `BaseConnector` that answers every sent message |
-| `agent_inbox.py` | The inbound direction: a `BidirectionalConnector` running its own `http.server` on a background thread. An agent POSTs a question to `/ask`, it lands in the chat tagged with its origin and task id, and your reply is routed back to the task that asked. Shows why connectors own their listener — and why they need `shutdown()` |
+| `demo.py` | Full-featured TUI built on `create_chat`: Markdown rendering, code blocks with syntax highlighting, a custom `BaseCommand` (`/code`) next to the library's `/help`, command autocomplete, click-to-reply, and an echo connector declared with `@connector`/`@require(HookAsk)` |
+| `agent_inbox.py` | The inbound direction: a connector declaring `@require(HookAsk, HookAnswer)` and running its own `http.server` on a background thread. An agent POSTs a question to `/ask`, it lands in the chat tagged with its origin and task id, and your reply is routed back to the task that asked. Shows why connectors own their listener — and why they need `shutdown()` |
 | `headless.py` | The same chat with no terminal UI: a `ChatSession` wired to stdin/stdout. Same commands, same connector, same hooks — the presentation layer is one `print`. Reads from a pipe when stdin is not a TTY, so it doubles as a scriptable transcript |
 
 The demo runs without credentials or a backend. The shipped `A2AConnector` and

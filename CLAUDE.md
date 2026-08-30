@@ -11,7 +11,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **135 pass** |
+| `pytest -q` | **143 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -52,31 +52,46 @@ Textual `App`. `connectors`, `commands` and `backend` are all optional. Commands
 displayed as an incoming message; unregistered commands fall through to the `command_handler`
 callback.
 
-## Connectors go both ways
+## Connectors declare what they do
 
-A connector is the link between the user and an agent or API, and its direction is declared by
-type rather than by a flag:
+A connector is the link between the user and an agent or API. It is a **plain class** — there is
+no base class and no `isinstance` anywhere — and it says what it can do by declaring hooks:
 
-- `BaseConnector` is the outbound half — `ask(message)` sends and returns the far side's answer.
-  It is named `ask`, not `send`, because it is an exchange: every implementation returns the reply
-  and callers feed it straight into the chat.
-- `BidirectionalConnector` adds the inbound half for a far side that can start the conversation.
-  The connector brings its own listener (a server, a poll loop) and calls `ask_user(text,
-  correlation_id)`; the user's reply comes back through `answer(correlation_id, text)`.
+```python
+@connector("agent")
+@require(HookAsk, HookAnswer)
+class AgentConnector:
+    def ask(self, message, **kwargs): ...          # the user asks, it answers
+    def answer(self, correlation_id, text): ...    # the agent asked, the user answers
+```
 
-The connector never imports `ChatSession`: `add_connector` hands it an `Inbox` callable, so the
-dependency points inwards. A question that arrives carries `origin` and `correlation_id` on its
-`ChatMessage`, and `ChatSession._route_reply` uses them to send a reply back out — which means the
-existing click-to-reply in the TUI answers an agent with no UI change at all.
+`require` validates presence and callability **at class-definition time**, so a method left out
+or misspelled is an import error rather than a hook that silently never fires. `@connector(name)`
+names the class; an instance may override it with `self.name` for two links of the same kind to
+different agents.
 
-`shutdown()` is the pair of `initialize()`, called for every connector by `ChatSession.close()`
-and by the app's `on_unmount`. A connector holding a server thread would otherwise outlive the
-chat. `BaseBackend` still has no equivalent — `DatabaseBackend` leaks its engine.
+A `Hook` carries the method it demands and what the chat grants back. `HookAnswer` grants `inbox`:
+the session sets it at registration, the connector calls `self.inbox(text, correlation_id)` from
+its own listener, and the user's reply arrives at `answer`. The connector never imports
+`ChatSession`, so the dependency still points inwards. A question that arrives carries `origin` and
+`correlation_id` on its `ChatMessage`, and `ChatSession._route_reply` sends the reply back — which
+means the TUI's existing click-to-reply answers an agent with no UI change at all.
 
-Connectors opt into events with `@hook_point(...)`; `_Chat` triggers every hook centrally
-(`send_message`, `receive_message`, `execute_command`, `add_connector`, `save_data`,
-`load_data`), so a connector that declares no hook points simply never gets called. The payload
-each hook delivers is tabulated in `hook_point`'s docstring; `on_command_executed` is called on
+Direction and event participation are declared the same way because they are the same question.
+An earlier design split them — `@hook_point` for events, a `BidirectionalConnector` subclass for
+direction — which was two mechanisms for one thing; the subclasses are gone.
+
+Lifecycle is deliberately **not** a hook: `initialize()` and `shutdown()` are called when present.
+A connector holding nothing needs neither, and making it declare that it holds nothing is
+ceremony. `ChatSession.close()` shuts down every connector that has one, and the app's `on_unmount`
+calls it, so a connector holding a server thread does not outlive the chat. `BaseBackend` still has
+no equivalent — `DatabaseBackend` leaks its engine.
+
+One cost, stated plainly: with no base class, `connectors` is typed `Any`, so mypy no longer checks
+connector shape. `require` moved that check from type-check time to import time; it did not
+disappear, but it is not the same guarantee.
+
+The payload each hook delivers is tabulated in `chat_hooks.py`; `on_command_executed` is called on
 both the success and the failure path with the same keys (`command`, `result`, `error`).
 
 ---
@@ -89,11 +104,11 @@ src/chatinho/
   chat_app.py      create_chat + the private _Chat app — Textual presentation only
   chat_session.py  ChatSession: every use case, no UI framework
   chat_message.py  ChatMessage + MessageStore (history, ids, threading) — no Textual
-  chat_hooks.py    HOOK_* constants, hook_point, HookRegistry — no Textual
+  chat_hooks.py    Hook, @connector, @require, HookRegistry — no Textual
   chat_log.py      ChatLog widget: renders the store, owns the reply target
   chat_input.py    CommandInput + CommandSuggestions (autocomplete popup)
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
-  connectors/      base.py (ABC), a2a.py, openai.py
+  connectors/      a2a.py, openai.py — plain classes, no base
   commands/        base.py (ABC), help.py, test.py
   backends/        base.py (ABC), database.py (SQLAlchemy)
 examples/          demo.py, headless.py, agent_inbox.py

@@ -6,7 +6,7 @@ and exercises it synchronously. No ``run_test()``, no event loop, no Textual.
 
 import pytest
 
-from chatinho import BaseCommand, BaseConnector, HOOK_MESSAGE_SENT, hook_point
+from chatinho import BaseCommand, HookAsk, HookMessageSent, connector, require
 from chatinho.chat_session import ChatSession
 
 
@@ -36,14 +36,11 @@ class _Spy(BaseCommand):
         return "ok"
 
 
-@hook_point(HOOK_MESSAGE_SENT)
-class _Recorder(BaseConnector):
-    def __init__(self, name: str = "rec") -> None:
-        super().__init__(name)
+@connector("rec")
+@require(HookAsk, HookMessageSent)
+class _Recorder:
+    def __init__(self) -> None:
         self.sent: list = []
-
-    def initialize(self) -> None:
-        pass
 
     def ask(self, message: str, **kwargs) -> str:
         return "sent: %s" % message

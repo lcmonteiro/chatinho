@@ -10,17 +10,21 @@ Run with:  bash run.sh
 
 from typing import Any
 
-from chatinho import BaseCommand, BaseConnector, ChatMessage, HelpCommand, create_chat
+from chatinho import (
+    BaseCommand,
+    ChatMessage,
+    HelpCommand,
+    HookAsk,
+    connector,
+    create_chat,
+    require,
+)
 
 
-class EchoConnector(BaseConnector):
+@connector("echo")
+@require(HookAsk)
+class EchoConnector:
     """Connector that echoes what it is given — stands in for a real transport."""
-
-    def __init__(self) -> None:
-        super().__init__(name="echo")
-
-    def initialize(self) -> None:
-        """Nothing to set up: the echo is local."""
 
     def ask(self, message: str, **kwargs) -> str:
         """Returns the echoed answer instead of hitting the network."""
