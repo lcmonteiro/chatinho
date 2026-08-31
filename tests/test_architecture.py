@@ -17,8 +17,6 @@ CORE_MODULES = [
     "chat_session.py",
     "chat_message.py",
     "chat_hooks.py",
-    "commands/base.py",
-    "backends/base.py",
 ]
 
 # Modules that are allowed to know about Textual: the presentation layer.

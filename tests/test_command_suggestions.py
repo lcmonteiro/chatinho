@@ -1,6 +1,6 @@
 """Tests for the command-suggestion (autocomplete) popup.
 
-Commands are registered via ``create_chat(commands={...})``; the popup shows
+Commands are registered via ``create_chat(commands=[...])``; the popup shows
 matches for the "/token" currently being typed, and Tab/Down/Up/Escape
 drive it without stealing focus from the input.
 """
@@ -8,21 +8,25 @@ drive it without stealing focus from the input.
 import pytest
 from textual.widgets import Input, OptionList
 
-from chatinho import BaseCommand, create_chat
+from chatinho import HookExecute, command, create_chat, require
 
 
-class _StubCommand(BaseCommand):
-    """Command that only exists to be listed by the suggestion popup."""
+def stub(name: str, description: str):
+    """Builds a command that only exists to be listed by the popup."""
+    @command(name, description)
+    @require(HookExecute)
+    class _Stub:
+        def execute(self, *args, **kwargs) -> None:
+            return None
+    return _Stub()
 
-    def execute(self, *args, **kwargs) -> None:
-        return None
 
-
-COMMANDS = {
-    "help"    : _StubCommand("help", "Show help"),
-    "history" : _StubCommand("history", "Show history"),
-    "hello"   : _StubCommand("hello", ""),
-}
+COMMANDS = [
+    stub("help", "Show help"),
+    stub("history", "Show history"),
+    stub("hello", ""),
+]
+COMMAND_NAMES = {"help", "history", "hello"}
 
 
 @pytest.mark.asyncio
@@ -42,7 +46,7 @@ async def test_slash_alone_lists_all_commands():
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/")
         assert suggestions.has_class("-visible")
-        assert {o.id for o in suggestions.options} == set(COMMANDS)
+        assert {o.id for o in suggestions.options} == COMMAND_NAMES
 
 
 @pytest.mark.asyncio

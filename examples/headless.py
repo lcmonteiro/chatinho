@@ -16,11 +16,12 @@ import sys
 from typing import Any, Iterator
 
 from chatinho import (
-    BaseCommand,
     ChatMessage,
     ChatSession,
     HelpCommand,
     HookAsk,
+    HookExecute,
+    command,
     connector,
     require,
 )
@@ -36,11 +37,10 @@ class EchoConnector:
         return f"Received: {message}"
 
 
-class UpperCommand(BaseCommand):
+@command("upper", "Upper-case the rest of the line")
+@require(HookExecute)
+class UpperCommand:
     """Command that shouts its arguments back."""
-
-    def __init__(self) -> None:
-        super().__init__(name="upper", description="Upper-case the rest of the line")
 
     def execute(self, *args, **kwargs) -> Any:
         """Returns the command's arguments in upper case."""
@@ -72,10 +72,7 @@ def main() -> None:
     """Builds a headless chat and drives it from stdin."""
     session = ChatSession(
         connectors = [EchoConnector()],
-        commands   = dict(
-            help  = HelpCommand(),
-            upper = UpperCommand(),
-        ),
+        commands   = [HelpCommand(), UpperCommand()],
     )
 
     # The presentation layer, in one line: print whatever enters the history.

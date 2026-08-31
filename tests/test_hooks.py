@@ -7,7 +7,8 @@ hook centrally, so a connector that declares no hook points is never called.
 import pytest
 
 from chatinho import (
-    BaseCommand,
+    HookExecute,
+    command,
     HookAsk,
     HookCommandExecuted,
     HookMessageSent,
@@ -47,12 +48,16 @@ class SilentConnector(_Connector):
     """Same methods, but declares nothing at all."""
 
 
-class _Echo(BaseCommand):
+@command("echo", "")
+@require(HookExecute)
+class _Echo:
     def execute(self, *args, **kwargs) -> str:
         return "ok"
 
 
-class _Boom(BaseCommand):
+@command("boom", "")
+@require(HookExecute)
+class _Boom:
     def execute(self, *args, **kwargs):
         raise RuntimeError("kaboom")
 
@@ -78,7 +83,7 @@ async def test_a_connector_that_declares_nothing_is_never_called():
 @pytest.mark.asyncio
 async def test_command_hook_carries_same_keys_on_success_and_failure():
     link = RecordingConnector()
-    app = create_chat(connectors=[link], commands={"echo": _Echo("echo"), "boom": _Boom("boom")})
+    app = create_chat(connectors=[link], commands=[_Echo(), _Boom()])
     async with app.run_test():
         app.send_command("echo")
         app.send_command("boom")

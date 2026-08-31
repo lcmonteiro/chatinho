@@ -12,9 +12,13 @@ presentation layer, not here.
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from .backends import BaseBackend
 from .chat_hooks import (
+    Hook,
     HookAnswer,
+    HookDelete,
+    HookExecute,
+    HookLoad,
+    HookSave,
     HookBackendLoad,
     HookBackendSave,
     HookCommandExecuted,
@@ -28,7 +32,6 @@ from .chat_hooks import (
 )
 from .chat_hooks import Inbox
 from .chat_message import ChatMessage, MessageStore
-from .commands import BaseCommand
 
 logger = logging.getLogger(__name__)
 
@@ -51,13 +54,13 @@ class ChatSession:
     def __init__(
         self,
         connectors      : Optional[List[Any]] = None,
-        commands        : Optional[Dict[str, BaseCommand]] = None,
-        backend         : Optional[BaseBackend] = None,
+        commands        : Optional[List[Any]] = None,
+        backend         : Optional[Any] = None,
         command_handler : Optional[Callable[[str], None]] = None,
     ) -> None:
         self.connectors : Dict[str, Any] = {}
-        self.commands   : Dict[str, BaseCommand] = dict(commands) if commands else {}
-        self.backend    : Optional[BaseBackend] = backend
+        self.commands   : Dict[str, Any] = {}
+        self.backend    : Optional[Any] = backend
         self.command_handler : Optional[Callable[[str], None]] = command_handler
 
         self._store : MessageStore = MessageStore()
@@ -70,8 +73,11 @@ class ChatSession:
 
         for connector in connectors or []:
             self.add_connector(connector)
+        for cmd in commands or []:
+            self.add_command(cmd)
         if self.backend is not None:
-            self.backend.initialize()
+            self._grant(self.backend, name_of(self.backend))
+            self._start(self.backend)
 
         logger.info(
             "Chat session initialized with %d connector(s), %d command(s) and %s backend",
@@ -226,6 +232,40 @@ class ChatSession:
             raise ValueError("Connector '%s' not found" % connector_name)
         return self.receive_message(text, origin=connector_name, correlation_id=correlation_id)
 
+    def _backend_for(self, hook: Hook) -> Any:
+        """Returns the backend, refusing when it cannot do what is being asked.
+
+        Checking the declaration rather than assuming the method is there is
+        what stops a capability the backend never had from failing silently —
+        the shape of bug that left ``/test`` reporting ✗ for months.
+
+        Args:
+            hook: The capability the caller needs.
+
+        Returns:
+            Any: The configured backend.
+
+        Raises:
+            RuntimeError: If there is no backend, or it does not declare *hook*.
+        """
+        if self.backend is None:
+            raise RuntimeError("No backend configured")
+        if not declares(self.backend, hook):
+            raise RuntimeError(
+                "Backend %r does not declare %s" % (name_of(self.backend), hook)
+            )
+        return self.backend
+
+    @staticmethod
+    def _start(obj: Any) -> None:
+        """Calls ``initialize()`` when the object has one.
+
+        Lifecycle is not a hook: an object holding nothing needs neither half,
+        and making it declare that it holds nothing is ceremony.
+        """
+        if callable(getattr(obj, "initialize", None)):
+            obj.initialize()
+
     def _inbox_for(self, connector_name: str) -> Inbox:
         """Builds the callable handed to a bidirectional connector."""
         def inbox(text: str, correlation_id: Optional[str] = None) -> str:
@@ -263,14 +303,17 @@ class ChatSession:
         A connector that owns a server or a thread needs to be told to stop;
         one that failed must not stop the others from being closed.
         """
-        for connector in self.connectors.values():
-            shutdown = getattr(connector, "shutdown", None)
+        closeable = list(self.connectors.values()) + list(self.commands.values())
+        if self.backend is not None:
+            closeable.append(self.backend)
+        for obj in closeable:
+            shutdown = getattr(obj, "shutdown", None)
             if not callable(shutdown):
                 continue
             try:
                 shutdown()
             except Exception as exc:
-                logger.error("Connector %r failed to shut down: %s", name_of(connector), exc)
+                logger.error("%r failed to shut down: %s", name_of(obj), exc)
 
     # === Commands ===================================================================
 
@@ -313,9 +356,14 @@ class ChatSession:
         """
         if command_name not in self.commands:
             raise ValueError("Command '%s' not found" % command_name)
+        cmd = self.commands[command_name]
+        if not declares(cmd, HookExecute):
+            raise RuntimeError(
+                "Command %r does not declare %s" % (command_name, HookExecute)
+            )
 
         try:
-            result = self.commands[command_name].execute(*args, **kwargs)
+            result = cmd.execute(*args, **kwargs)
         except Exception as exc:
             logger.error("Error executing command '%s': %s", command_name, exc)
             # Both paths carry the same keys, so a handler declaring
@@ -344,19 +392,20 @@ class ChatSession:
         self.connectors[name] = connector
         self._hooks.register(connector)
         self._grant(connector, name)
-        # Lifecycle is optional: a connector holding nothing needs neither.
-        if callable(getattr(connector, "initialize", None)):
-            connector.initialize()
+        self._start(connector)
         self._hooks.trigger(HookConnectorAdded, connector=connector)
 
     def _grant(self, connector: Any, name: str) -> None:
-        """Sets the attributes the connector's declared hooks ask for.
+        """Sets the attributes an object's declared hooks ask for.
 
-        ``HookAnswer`` grants ``inbox``: the connector gets a way into the chat
-        without ever importing the session, so the dependency keeps pointing
-        inwards.
+        ``HookAnswer`` grants ``inbox`` and ``HookSay`` grants ``say``: both are
+        ways into the chat that the object receives rather than imports, so the
+        dependency keeps pointing inwards.
         """
-        grants = {"inbox": lambda: self._inbox_for(name)}
+        grants = {
+            "inbox": lambda: self._inbox_for(name),
+            "say"  : lambda: self.receive_message,
+        }
         for hook in hooks_of(connector):
             for granted in hook.grants:
                 build = grants.get(granted)
@@ -364,6 +413,33 @@ class ChatSession:
                     logger.warning("Hook %s asks for unknown grant %r", hook, granted)
                     continue
                 setattr(connector, granted, build())
+
+    def add_command(self, cmd: Any) -> None:
+        """Registers *cmd* under its declared name and grants what it asks for.
+
+        Args:
+            cmd: The command to add.
+
+        Raises:
+            TypeError: If *cmd* does not declare HookExecute. A command that
+                cannot execute is not a command, and registering it silently
+                would only surface as a missing ``/name`` much later.
+        """
+        if not declares(cmd, HookExecute):
+            raise TypeError(
+                "%r does not declare %s: a command must @require(HookExecute)"
+                % (cmd, HookExecute)
+            )
+        name = name_of(cmd)
+        previous = self.commands.get(name)
+        if previous is not None:
+            logger.info("Replacing command %r", name)
+            self._hooks.unregister(previous)
+
+        self.commands[name] = cmd
+        self._hooks.register(cmd)
+        self._grant(cmd, name)
+        self._start(cmd)
 
     def ask_connector(self, connector_name: str, message: str, **kwargs) -> Any:
         """Asks a specific connector and returns its answer.
@@ -398,9 +474,7 @@ class ChatSession:
         Raises:
             RuntimeError: If the session was created without a backend.
         """
-        if self.backend is None:
-            raise RuntimeError("No backend configured")
-        saved = self.backend.save(key, data)
+        saved = self._backend_for(HookSave).save(key, data)
         self._hooks.trigger(HookBackendSave, key=key, data=data)
         return saved
 
@@ -416,9 +490,7 @@ class ChatSession:
         Raises:
             RuntimeError: If the session was created without a backend.
         """
-        if self.backend is None:
-            raise RuntimeError("No backend configured")
-        data = self.backend.load(key)
+        data = self._backend_for(HookLoad).load(key)
         self._hooks.trigger(HookBackendLoad, key=key, data=data)
         return data
 
@@ -434,9 +506,7 @@ class ChatSession:
         Raises:
             RuntimeError: If the session was created without a backend.
         """
-        if self.backend is None:
-            raise RuntimeError("No backend configured")
-        return self.backend.delete(key)
+        return self._backend_for(HookDelete).delete(key)
 
     # === Internals ==================================================================
 

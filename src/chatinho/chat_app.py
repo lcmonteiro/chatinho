@@ -30,13 +30,11 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
 from textual.widgets import Input
 
-from .backends import BaseBackend
 from .chat_input import COMMAND_PREFIX, SUGGESTIONS_ID, CommandInput, CommandSuggestions
 from .chat_log import ChatLog
 from .chat_message import ChatMessage
 from .chat_session import ChatSession
 from .chat_style import ChatStyle
-from .commands import BaseCommand
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +44,8 @@ INPUT_ID    : str = "input-line"
 
 def create_chat(
     connectors      : Optional[List[Any]] = None,
-    commands        : Optional[Dict[str, BaseCommand]] = None,
-    backend         : Optional[BaseBackend] = None,
+    commands        : Optional[List[Any]] = None,
+    backend         : Optional[Any] = None,
     title           : str = "Chatinho",
     welcome_message : str = "",
     command_handler : Optional[Callable[[str], None]] = None,
@@ -237,12 +235,12 @@ class _Chat(App):
         return self.session.connectors
 
     @property
-    def commands(self) -> Dict[str, BaseCommand]:
+    def commands(self) -> Dict[str, Any]:
         """The session's registered commands, keyed by name."""
         return self.session.commands
 
     @property
-    def backend(self) -> Optional[BaseBackend]:
+    def backend(self) -> Optional[Any]:
         """The session's backend, if one was configured."""
         return self.session.backend
 

@@ -6,7 +6,7 @@ reaching up into the application.
 """
 
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from textual.app import ScreenStackError
 from textual.binding import Binding
@@ -14,7 +14,6 @@ from textual.css.query import NoMatches
 from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
-from .commands import BaseCommand
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ SUGGESTIONS_ID : str = "command-suggestions"
 class CommandSuggestions(OptionList):
     """Popup listing the registered commands matching the "/token" being typed."""
 
-    def __init__(self, commands: Dict[str, BaseCommand], **kwargs) -> None:
+    def __init__(self, commands: Dict[str, Any], **kwargs) -> None:
         super().__init__(**kwargs)
         # Held by reference: the application owns the dict and keeps it current.
         self._commands = commands
@@ -82,7 +81,7 @@ class CommandSuggestions(OptionList):
 
     def _label(self, name: str) -> str:
         """Returns the popup label for the command registered as *name*."""
-        description = self._commands[name].description
+        description = getattr(self._commands[name], "description", "")
         if description:
             return f"{COMMAND_PREFIX}{name}  —  {description}"
         return f"{COMMAND_PREFIX}{name}"

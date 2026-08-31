@@ -11,10 +11,11 @@ Run with:  bash run.sh
 from typing import Any
 
 from chatinho import (
-    BaseCommand,
     ChatMessage,
     HelpCommand,
     HookAsk,
+    HookExecute,
+    command,
     connector,
     create_chat,
     require,
@@ -31,11 +32,10 @@ class EchoConnector:
         return f"Received: _{message}_"
 
 
-class CodeCommand(BaseCommand):
+@command("code", "Show a Python code block")
+@require(HookExecute)
+class CodeCommand:
     """Command that shows a Python code block with syntax highlighting."""
-
-    def __init__(self) -> None:
-        super().__init__(name="code", description="Show a Python code block")
 
     def execute(self, *args, **kwargs) -> Any:
         """Returns a Markdown code block."""
@@ -64,10 +64,7 @@ def main() -> None:
     """Builds the demo chat and runs it."""
     chat = create_chat(
         connectors      = [EchoConnector()],
-        commands        = dict(
-            help = HelpCommand(),
-            code = CodeCommand(),
-        ),
+        commands        = [HelpCommand(), CodeCommand()],
         title           = "chatinho demo",
         welcome_message = WELCOME,
     )
