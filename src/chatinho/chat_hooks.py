@@ -33,20 +33,29 @@ logger = logging.getLogger(__name__)
 # user: ``inbox(text, correlation_id) -> message id``.
 Inbox = Callable[[str, Optional[str]], str]
 
+# What a class granted ``say`` calls to write into the conversation:
+# ``say(text) -> message id``. Annotate it on the class — the chat sets it at
+# registration, so without the annotation a type checker cannot see it.
+Say = Callable[[str], str]
+
 
 @dataclass(frozen=True)
 class Hook:
     """One capability: the method it demands, and what the chat gives back.
 
+    A hook can demand a method, grant an attribute, or both. A grant-only hook
+    validates nothing — there is nothing on the class to check — but declaring
+    it is still what tells the chat to hand the capability over.
+
     Attributes:
         name: How the hook reads in errors and logs.
-        method: The method a connector declaring this hook must implement.
-        grants: Attributes the session sets on the connector when it registers,
-            for hooks whose capability needs something from the chat.
+        method: The method a class declaring this hook must implement, or None
+            when the hook only grants.
+        grants: Attributes the chat sets on the object when it registers.
     """
 
     name   : str
-    method : str
+    method : Optional[str] = None
     grants : Tuple[str, ...] = ()
 
     def __str__(self) -> str:
@@ -70,6 +79,29 @@ HookAnswer = Hook(
     # answer(correlation_id, text).
 )
 
+# === Roles: what a command is for ===============================================
+
+HookExecute = Hook(
+    name="HookExecute",
+    method="execute",
+    # The user typed /name. execute(**kwargs) -> whatever should be displayed,
+    # or None when the command wrote its own output through HookSay.
+)
+
+HookSay = Hook(
+    name="HookSay",
+    grants=("say",),
+    # Grant-only: the chat hands over say(text), so a command can write into the
+    # conversation as it works instead of returning one final string. Nothing to
+    # validate — the class does not implement say, it receives it.
+)
+
+# === Roles: what a backend is for ===============================================
+
+HookSave   = Hook("HookSave",   "save")
+HookLoad   = Hook("HookLoad",   "load")
+HookDelete = Hook("HookDelete", "delete")
+
 # === Events: what a connector wants to be told about ============================
 
 HookMessageSent     = Hook("HookMessageSent",     "on_message_sent")
@@ -82,6 +114,11 @@ HookBackendLoad     = Hook("HookBackendLoad",     "on_backend_load")
 ALL_HOOKS: Tuple[Hook, ...] = (
     HookAsk,
     HookAnswer,
+    HookExecute,
+    HookSay,
+    HookSave,
+    HookLoad,
+    HookDelete,
     HookMessageSent,
     HookMessageReceived,
     HookCommandExecuted,
@@ -113,6 +150,56 @@ def connector(name: str) -> Callable[[type], type]:
     """
     if not isinstance(name, str) or not name.strip():
         raise ValueError("A connector name must be a non-empty string, got %r" % (name,))
+
+    def decorator(cls: type) -> type:
+        cls.name = name  # type: ignore[attr-defined]
+        return cls
+    return decorator
+
+
+def command(name: str, description: str = "") -> Callable[[type], type]:
+    """Names a command class and gives it the text the UI shows.
+
+    The name is what the user types after ``/``; the description is what the
+    autocomplete popup and ``/help`` display beside it.
+
+    Args:
+        name: The command name, without the prefix; a non-empty string.
+        description: One line shown beside the name.
+
+    Returns:
+        Callable: The class decorator.
+
+    Raises:
+        ValueError: If *name* is empty or not a string.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("A command name must be a non-empty string, got %r" % (name,))
+
+    def decorator(cls: type) -> type:
+        cls.name = name                # type: ignore[attr-defined]
+        cls.description = description  # type: ignore[attr-defined]
+        return cls
+    return decorator
+
+
+def backend(name: str) -> Callable[[type], type]:
+    """Names a backend class.
+
+    The name only identifies the backend in logs — a chat has one — but naming
+    it keeps the three roles reading the same way.
+
+    Args:
+        name: The backend's name; a non-empty string.
+
+    Returns:
+        Callable: The class decorator.
+
+    Raises:
+        ValueError: If *name* is empty or not a string.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("A backend name must be a non-empty string, got %r" % (name,))
 
     def decorator(cls: type) -> type:
         cls.name = name  # type: ignore[attr-defined]
@@ -160,7 +247,7 @@ def require(hook: Hook, *extra: Any, **options: Any) -> Callable[[type], type]:
         raise TypeError("require() takes a Hook, got %r" % (hook,))
 
     def decorator(cls: type) -> type:
-        if not callable(getattr(cls, hook.method, None)):
+        if hook.method is not None and not callable(getattr(cls, hook.method, None)):
             raise TypeError(
                 "%s declares %s but does not implement %s()"
                 % (cls.__name__, hook.name, hook.method)
@@ -238,9 +325,16 @@ class HookRegistry:
             hook: The capability to trigger.
             **payload: Passed to the connector's method as keyword arguments.
         """
+        method = hook.method
+        if method is None:
+            # A grant-only hook has nothing to call: it hands a capability over
+            # at registration, it is not an event.
+            logger.warning("Hook %s only grants; there is nothing to trigger", hook)
+            return
+
         for obj in self._by_hook.get(hook, []):
             try:
-                getattr(obj, hook.method)(**payload)
+                getattr(obj, method)(**payload)
             except Exception as exc:
                 logger.error(
                     "Error in hook '%s' for connector %r: %s", hook, name_of(obj), exc,

@@ -36,10 +36,17 @@ from .chat_session import ChatSession
 from .chat_message import ChatMessage
 from .chat_hooks import (
     connector,
+    command,
+    backend,
     require,
     Hook,
     HookAsk,
     HookAnswer,
+    HookExecute,
+    HookSay,
+    HookSave,
+    HookLoad,
+    HookDelete,
     HookMessageSent,
     HookMessageReceived,
     HookCommandExecuted,
@@ -49,8 +56,8 @@ from .chat_hooks import (
 )
 from .chat_style import ChatStyle
 from .connectors import A2AConnector, OpenAIConnector
-from .backends import DatabaseBackend, BaseBackend
-from .commands import HelpCommand, TestCommand, BaseCommand
+from .backends import DatabaseBackend
+from .commands import HelpCommand, TestCommand
 
 __all__ = [
     "create_chat",
@@ -59,10 +66,17 @@ __all__ = [
     "ChatStyle",
     # Connector capabilities
     "connector",
+    "command",
+    "backend",
     "require",
     "Hook",
     "HookAsk",
     "HookAnswer",
+    "HookExecute",
+    "HookSay",
+    "HookSave",
+    "HookLoad",
+    "HookDelete",
     "HookMessageSent",
     "HookMessageReceived",
     "HookCommandExecuted",
@@ -73,10 +87,8 @@ __all__ = [
     "A2AConnector",
     "OpenAIConnector",
     # Backends
-    "BaseBackend",
     "DatabaseBackend",
     # Commands
-    "BaseCommand",
     "HelpCommand",
     "TestCommand",
 ]

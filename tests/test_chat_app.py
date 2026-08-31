@@ -10,7 +10,7 @@ import threading
 import pytest
 from textual.widgets import Input
 
-from chatinho import BaseCommand, HelpCommand, create_chat
+from chatinho import HelpCommand, HookExecute, command, create_chat, require
 
 
 @pytest.mark.asyncio
@@ -172,7 +172,7 @@ async def test_submit_command_sends_command():
 
 @pytest.mark.asyncio
 async def test_registered_command_is_executed_and_result_displayed():
-    app = create_chat(commands={"help": HelpCommand()})
+    app = create_chat(commands=[HelpCommand()])
     async with app.run_test():
         app.send_command("help")
         assert len(app.messages) == 2
@@ -184,11 +184,13 @@ async def test_registered_command_is_executed_and_result_displayed():
 
 @pytest.mark.asyncio
 async def test_failing_command_is_reported_instead_of_raising():
-    class Boom(BaseCommand):
+    @command("boom", "always fails")
+    @require(HookExecute)
+    class Boom:
         def execute(self, *args, **kwargs):
             raise RuntimeError("kaboom")
 
-    app = create_chat(commands={"boom": Boom("boom", "always fails")})
+    app = create_chat(commands=[Boom()])
     async with app.run_test():
         app.send_command("boom")
         assert len(app.messages) == 2

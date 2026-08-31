@@ -10,6 +10,7 @@ import pytest
 
 from chatinho import (
     A2AConnector,
+    command,
     ChatSession,
     HookAnswer,
     HookAsk,
@@ -231,3 +232,48 @@ def test_lifecycle_is_optional_not_declared():
     session = ChatSession(connectors=[Bare()])
     session.close()
     assert session.ask_connector("bare", "ping") == "ok"
+
+
+# === Grant-only hooks ============================================================
+
+
+def test_a_grant_only_hook_validates_nothing():
+    """HookSay is received, not implemented — there is nothing to check."""
+    from chatinho import HookSay
+
+    @require(HookSay)
+    class Quiet:
+        pass
+
+    assert declares(Quiet(), HookSay)
+    assert HookSay.method is None
+    assert HookSay.grants == ("say",)
+
+
+def test_triggering_a_grant_only_hook_warns_instead_of_crashing(caplog):
+    import logging
+
+    from chatinho import HookSay
+    from chatinho.chat_hooks import HookRegistry
+
+    @require(HookSay)
+    class Quiet:
+        pass
+
+    registry = HookRegistry()
+    registry.register(Quiet())
+    with caplog.at_level(logging.WARNING):
+        registry.trigger(HookSay, text="ola")
+    assert "only grants" in caplog.text
+
+
+def test_a_command_that_cannot_execute_is_refused_at_registration():
+    from chatinho import ChatSession
+
+    @command("broken", "declares nothing")
+    class Broken:
+        def execute(self, **kwargs):
+            return "never reached"
+
+    with pytest.raises(TypeError, match="must @require"):
+        ChatSession(commands=[Broken()])

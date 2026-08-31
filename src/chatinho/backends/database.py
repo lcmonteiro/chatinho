@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, Column, String, Text, DateTime
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.sql import func
 
-from .base import BaseBackend
+from ..chat_hooks import HookDelete, HookLoad, HookSave, backend, require
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,11 @@ class ChatData(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 
-class DatabaseBackend(BaseBackend):
+@backend("database")
+@require(HookSave)
+@require(HookLoad)
+@require(HookDelete)
+class DatabaseBackend:
     """Backend that stores data in a SQL database."""
     
     def __init__(
@@ -39,7 +43,7 @@ class DatabaseBackend(BaseBackend):
         echo: bool = False,
         **kwargs
     ):
-        super().__init__(database_url=database_url, echo=echo, **kwargs)
+        self.config = kwargs
         self.database_url = database_url
         self.echo = echo
         self.engine = None
@@ -70,6 +74,16 @@ class DatabaseBackend(BaseBackend):
         except Exception as e:
             logger.error(f"Failed to initialize database backend: {e}")
             raise
+
+    def shutdown(self) -> None:
+        """Disposes of the engine's connection pool.
+
+        Without this the pool outlives the chat — the leak flagged in review.
+        """
+        if self.engine is not None:
+            self.engine.dispose()
+            self.engine = None
+            self.SessionLocal = None
     
     def _get_session(self):
         """Get a database session."""

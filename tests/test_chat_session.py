@@ -6,29 +6,40 @@ and exercises it synchronously. No ``run_test()``, no event loop, no Textual.
 
 import pytest
 
-from chatinho import BaseCommand, HookAsk, HookMessageSent, connector, require
+from chatinho import (
+    HookAsk,
+    HookDelete,
+    HookExecute,
+    HookLoad,
+    HookMessageSent,
+    HookSave,
+    HookSay,
+    backend,
+    command,
+    connector,
+    require,
+)
 from chatinho.chat_session import ChatSession
 
 
-class _Echo(BaseCommand):
-    def __init__(self) -> None:
-        super().__init__("echo", "echoes its args")
-
+@command("echo", "echoes its args")
+@require(HookExecute)
+class _Echo:
     def execute(self, *args, **kwargs) -> str:
         return "echo: %s" % kwargs.get("args", "")
 
 
-class _Boom(BaseCommand):
-    def __init__(self) -> None:
-        super().__init__("boom", "always fails")
-
+@command("boom", "always fails")
+@require(HookExecute)
+class _Boom:
     def execute(self, *args, **kwargs):
         raise RuntimeError("kaboom")
 
 
-class _Spy(BaseCommand):
+@command("spy", "records what it is handed")
+@require(HookExecute)
+class _Spy:
     def __init__(self) -> None:
-        super().__init__("spy", "records what it is handed")
         self.seen = None
 
     def execute(self, chat_instance=None, **kwargs) -> str:
@@ -50,6 +61,10 @@ class _Recorder:
         self.sent.append(msg.text)
 
 
+@backend("memory")
+@require(HookSave)
+@require(HookLoad)
+@require(HookDelete)
 class _Backend:
     """In-memory backend, enough to exercise the persistence use cases."""
 
@@ -110,7 +125,7 @@ def test_a_session_with_no_observers_still_works():
 
 
 def test_on_command_replaces_dispatch():
-    session = ChatSession(commands={"echo": _Echo()})
+    session = ChatSession(commands=[_Echo()])
     seen: list = []
     session.on_command = seen.append
     session.send_command("echo hello")
@@ -123,21 +138,21 @@ def test_on_command_replaces_dispatch():
 
 
 def test_registered_command_runs_and_its_result_is_displayed():
-    session = ChatSession(commands={"echo": _Echo()})
+    session = ChatSession(commands=[_Echo()])
     session.send_command("echo hello")
     assert [m.text for m in session.messages] == ["echo hello", "echo: hello"]
 
 
 def test_unregistered_command_falls_through_to_the_handler():
     seen: list = []
-    session = ChatSession(commands={"echo": _Echo()}, command_handler=seen.append)
+    session = ChatSession(commands=[_Echo()], command_handler=seen.append)
     session.send_command("stats")
     assert seen == ["stats"]
     assert len(session.messages) == 1
 
 
 def test_failing_command_is_reported_instead_of_raising():
-    session = ChatSession(commands={"boom": _Boom()})
+    session = ChatSession(commands=[_Boom()])
     session.send_command("boom")
     assert "kaboom" in session.messages[-1].text
 
@@ -150,7 +165,7 @@ def test_execute_command_rejects_unknown_names():
 def test_commands_are_handed_the_session_not_a_ui_object():
     """The Dependency Rule: a command must not receive the framework."""
     spy = _Spy()
-    session = ChatSession(commands={"spy": spy})
+    session = ChatSession(commands=[spy])
     session.send_command("spy")
     assert spy.seen is session
     assert type(spy.seen).__module__ == "chatinho.chat_session"
@@ -202,3 +217,41 @@ def test_messages_returns_a_copy():
     session.send_message("guardada")
     session.messages.clear()
     assert [m.text for m in session.messages] == ["guardada"]
+
+
+# === HookSay: um comando escreve enquanto trabalha ==============================
+
+
+@command("progress", "writes as it goes")
+@require(HookExecute)
+@require(HookSay)
+class _Progress:
+    def execute(self, **kwargs) -> None:
+        self.say("a começar")
+        self.say("a terminar")
+
+
+def test_a_command_declaring_hooksay_is_granted_say():
+    session = ChatSession(commands=[_Progress()])
+    session.send_command("progress")
+    assert [m.text for m in session.messages] == ["progress", "a começar", "a terminar"]
+
+
+def test_a_command_without_hooksay_is_not_granted_it():
+    session = ChatSession(commands=[_Echo()])
+    assert not hasattr(session.commands["echo"], "say")
+
+
+def test_the_backend_must_declare_what_the_session_asks_of_it():
+    """A capability the backend never had must fail loudly, not silently."""
+    @backend("read-only")
+    @require(HookLoad)
+    class ReadOnly:
+        def load(self, key):
+            return None
+
+    session = ChatSession(backend=ReadOnly())
+    assert session.load_data("k") is None
+    for call in (lambda: session.save_data("k", 1), lambda: session.delete_data("k")):
+        with pytest.raises(RuntimeError, match="does not declare"):
+            call()

@@ -1,94 +1,65 @@
-"""Test command for chatinho."""
+"""Test command for chatinho: a health check of what the chat is wired to."""
 
-from .base import BaseCommand
 import logging
 import time
+
+from ..chat_hooks import HookExecute, HookSay, Say, command, require
 
 logger = logging.getLogger(__name__)
 
 
-class TestCommand(BaseCommand):
-    """Command that runs a simple test to verify the chat is working."""
-    
-    def __init__(self, **kwargs):
-        super().__init__(
-            name="test",
-            description="Executa um teste simples",
-            **kwargs
-        )
-    
-    def execute(self, chat_instance=None, **kwargs):
-        """Execute the test command.
-        
+@command("test", "Executa um teste simples")
+@require(HookExecute)
+@require(HookSay)
+class TestCommand:
+    """Exercises the backend and reports what is registered.
+
+    Declares HookSay, so it writes each line as it goes rather than returning
+    one block at the end — a health check is more useful as it happens.
+    """
+
+    # Granted by the session because this class declares HookSay.
+    say : Say
+
+    def execute(self, chat_instance=None, **kwargs) -> None:
+        """Runs the checks, writing each result through ``say``.
+
         Args:
-            chat_instance: The chat instance (optional, for testing connectors/backend)
-            **kwargs: Additional arguments
-            
-        Returns:
-            str: Test results
+            chat_instance: The session under test.
+            **kwargs: Ignored.
         """
         logger.debug("Executing test command")
-        
-        results = ["=== Teste do Chatinho ==="]
-        
-        # Test backend if available
-        if chat_instance and hasattr(chat_instance, 'backend'):
-            try:
-                test_key = f"test_{int(time.time())}"
-                test_data = {"message": "Hello from chatinho!", "timestamp": time.time()}
-                
-                # Test save
-                save_result = chat_instance.save_data(test_key, test_data)
-                results.append(f"Backend save: {'✓' if save_result else '✗'}")
-                
-                # Test load
-                loaded_data = chat_instance.load_data(test_key)
-                load_result = loaded_data == test_data if loaded_data is not None else False
-                results.append(f"Backend load: {'✓' if load_result else '✗'}")
-                
-                # Test delete
-                if hasattr(chat_instance, 'delete_data'):
-                    delete_result = chat_instance.delete_data(test_key)
-                else:
-                    delete_result = False
-                results.append(f"Backend delete: {'✓' if delete_result else '✗'}")
-                
-            except Exception as e:
-                results.append(f"Backend test: ✗ (Erro: {e})")
-                logger.error(f"Backend test failed: {e}")
-        else:
-            results.append("Backend: Não disponível para teste")
-        
-        # Test commands
-        if chat_instance and hasattr(chat_instance, 'commands'):
-            results.append(f"Comandos registrados: {len(chat_instance.commands)}")
-            for name in chat_instance.commands.keys():
-                results.append(f"  - {name}")
-        else:
-            results.append("Comandos: Não disponíveis para teste")
-        
-        # Test connectors
-        if chat_instance and hasattr(chat_instance, 'connectors'):
-            results.append(f"Conectores registrados: {len(chat_instance.connectors)}")
-            for name in chat_instance.connectors.keys():
-                results.append(f"  - {name}")
-        else:
-            results.append("Conectores: Não disponíveis para teste")
-        
-        results.append("=========================")
-        return "\n".join(results)
+        self.say("=== Teste do Chatinho ===")
+        self._check_backend(chat_instance)
+        self._report("Comandos", getattr(chat_instance, "commands", None))
+        self._report("Conectores", getattr(chat_instance, "connectors", None))
+        self.say("=========================")
 
+    def _check_backend(self, chat_instance) -> None:
+        """Round-trips a value through the backend and reports each step."""
+        if getattr(chat_instance, "backend", None) is None:
+            self.say("Backend: não configurado")
+            return
+        key = "test_%d" % int(time.time())
+        data = {"message": "Hello from chatinho!", "timestamp": time.time()}
+        try:
+            self.say("Backend save: %s" % self._tick(chat_instance.save_data(key, data)))
+            self.say("Backend load: %s" % self._tick(chat_instance.load_data(key) == data))
+            self.say("Backend delete: %s" % self._tick(chat_instance.delete_data(key)))
+        except Exception as exc:
+            logger.error("Backend test failed: %s", exc)
+            self.say("Backend: ✗ (%s)" % exc)
 
-# Keep backward compatibility with the old ChatApp style
-def test_command_handler(command: str, chat_app=None):
-    """Legacy handler function for backward compatibility."""
-    if command == "test":
-        if chat_app:
-            return ("=== Teste do Chatinho ===\n"
-                   "Backend: Funcional\n"
-                   "Comandos: help, test\n"
-                   "Conectores: Nenhum configurado\n"
-                   "=========================")
-        else:
-            return "Teste executado com sucesso"
-    return None
+    def _report(self, label: str, registered) -> None:
+        """Says how many of *registered* there are, and their names."""
+        if not registered:
+            self.say("%s: nenhum registado" % label)
+            return
+        self.say("%s registados: %d" % (label, len(registered)))
+        for name in sorted(registered):
+            self.say("  - %s" % name)
+
+    @staticmethod
+    def _tick(ok) -> str:
+        """Renders a result as a tick or a cross."""
+        return "✓" if ok else "✗"

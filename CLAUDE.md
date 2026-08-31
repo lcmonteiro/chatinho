@@ -11,7 +11,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **150 pass** |
+| `pytest -q` | **152 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -52,10 +52,48 @@ Textual `App`. `connectors`, `commands` and `backend` are all optional. Commands
 displayed as an incoming message; unregistered commands fall through to the `command_handler`
 callback.
 
-## Connectors declare what they do
+## Everything declares what it does
 
-A connector is the link between the user and an agent or API. It is a **plain class** — there is
-no base class and no `isinstance` anywhere — and it says what it can do by declaring hooks:
+Connectors, commands and backends all follow one rule: a **plain class**, no base class, no
+`isinstance` anywhere, declaring its capabilities with `@require`.
+
+```python
+@command("deploy", "Ship it")
+@require(HookExecute)
+@require(HookSay)          # grant-only: say() is received, not implemented
+class DeployCommand:
+    say : Say              # annotate it, or a type checker cannot see the grant
+
+    def execute(self, **kwargs) -> None:
+        self.say("shipping…")
+
+@backend("database")
+@require(HookSave)
+@require(HookLoad)
+@require(HookDelete)
+class DatabaseBackend: ...
+```
+
+A hook can demand a method, grant an attribute, or both. `HookSay` grants only: the class receives
+`say` and implements nothing, so `require` validates nothing — declaring it is what tells the chat
+to hand the capability over. `HookRegistry.trigger` refuses a grant-only hook with a warning; there
+is no event to dispatch.
+
+Separate hooks per backend operation is what lets `ChatSession` check before it calls:
+`save_data` raises `Backend 'read-only' does not declare HookSave` instead of an AttributeError
+somewhere deeper. That is the structural version of the `delete_data` bug — a capability the
+backend never had, failing silently for months.
+
+`add_command` refuses an object that does not declare `HookExecute`: a command that cannot execute
+is not a command, and registering it silently only surfaces as a missing `/name` much later.
+
+Commands are passed as a **list**, like connectors — the name lives on the class, so a dict key
+would only be a second place for it to disagree.
+
+## Connectors, specifically
+
+A connector is the link between the user and an agent or API. It says what it can do by declaring
+hooks:
 
 ```python
 @connector("agent")
@@ -89,9 +127,9 @@ direction — which was two mechanisms for one thing; the subclasses are gone.
 
 Lifecycle is deliberately **not** a hook: `initialize()` and `shutdown()` are called when present.
 A connector holding nothing needs neither, and making it declare that it holds nothing is
-ceremony. `ChatSession.close()` shuts down every connector that has one, and the app's `on_unmount`
-calls it, so a connector holding a server thread does not outlive the chat. `BaseBackend` still has
-no equivalent — `DatabaseBackend` leaks its engine.
+ceremony. `ChatSession.close()` shuts down every connector, command and backend that has one, and the app's
+`on_unmount` calls it, so a connector holding a server thread does not outlive the chat.
+`DatabaseBackend.shutdown()` disposes of its engine — the leak flagged in review is closed.
 
 One cost, stated plainly: with no base class, `connectors` is typed `Any`, so mypy no longer checks
 connector shape. `require` moved that check from type-check time to import time; it did not
@@ -115,8 +153,8 @@ src/chatinho/
   chat_input.py    CommandInput + CommandSuggestions (autocomplete popup)
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      a2a.py, openai.py — plain classes, no base
-  commands/        base.py (ABC), help.py, test.py
-  backends/        base.py (ABC), database.py (SQLAlchemy)
+  commands/        help.py, test.py — plain classes, no base
+  backends/        database.py (SQLAlchemy) — plain class, no base
 examples/          demo.py, headless.py, agent_inbox.py
 tests/             test_chat_app.py, test_callbacks.py, test_command_suggestions.py,
                    test_hooks.py (mounted) + test_chat_session.py, test_message_store.py,
