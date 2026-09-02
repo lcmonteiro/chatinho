@@ -26,13 +26,16 @@ answer is posted back to the agent — here, printed by the connector.
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Optional
+from typing import Any, Callable, List, Optional
 
 from chatinho import (
     ChatMessage,
     ChatSession,
     HookAnswer,
     HookAsk,
+    HookLoadMessages,
+    HookReceiveMessage,
+    HookSendMessage,
     connector,
     require,
 )
@@ -103,18 +106,29 @@ class AgentConnector:
         print(f"\n  → answered task {correlation_id!r}: {text}\n")
 
 
-def main() -> None:
-    """Runs a headless chat with an agent-facing inbox."""
-    agent = AgentConnector()
-    session = ChatSession(connectors=[agent])
+@require(HookSendMessage)
+@require(HookLoadMessages)
+@require(HookReceiveMessage)
+class Terminal:
+    """The presentation: shows the agent's questions and sends the answers."""
 
-    def show(msg: ChatMessage) -> None:
+    send_message  : Callable[..., str]
+    load_messages : Callable[..., List[ChatMessage]]
+
+    def on_receive_message(self, msg: ChatMessage, **kwargs) -> None:
+        """Prints what came in, tagged with the connector and the task."""
         if msg.is_sent_by_me:
             return
         tag = f" [{msg.origin}/{msg.correlation_id}]" if msg.origin else ""
         print(f"< {msg.text}{tag}")
 
-    session.on_message_added = show
+
+def main() -> None:
+    """Runs a headless chat with an agent-facing inbox."""
+    agent = AgentConnector()
+    session = ChatSession(connectors=[agent])
+    view = Terminal()
+    session.attach(view)
 
     print(f"Listening on http://{HOST}:{PORT}/ask — the agent asks, you answer.")
     print('  curl -XPOST %s:%d/ask -d \'{"task": "t1", "text": "Deploy?"}\'' % (HOST, PORT))
@@ -130,13 +144,13 @@ def main() -> None:
                 break
             task, _, answer = line.partition(":")
             question = next(
-                (m for m in reversed(session.messages) if m.correlation_id == task.strip()),
+                (m for m in reversed(view.load_messages()) if m.correlation_id == task.strip()),
                 None,
             )
             if question is None:
                 print(f"  no open question for task {task.strip()!r}")
                 continue
-            session.send_message(answer.strip(), reply_to=question.id)
+            view.send_message(answer.strip(), reply_to=question.id)
     finally:
         session.close()
         print("--- listener stopped ---")

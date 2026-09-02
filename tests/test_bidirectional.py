@@ -11,6 +11,7 @@ import pytest
 
 from chatinho import ChatSession, HookAnswer, HookAsk, connector, require
 from chatinho.chat_hooks import declares
+from conftest import driven
 
 
 @connector("agent")
@@ -73,11 +74,11 @@ def test_only_a_connector_declaring_hookanswer_is_granted_an_inbox():
 
 def test_the_inbox_puts_the_question_in_the_history():
     agent = Agent()
-    session = ChatSession(connectors=[agent])
+    session, view = driven(connectors=[agent])
     agent.inbox("Deploy to production?", correlation_id="task-1")
 
-    assert len(session.messages) == 1
-    question = session.messages[0]
+    assert len(view.load_messages()) == 1
+    question = view.load_messages()[0]
     assert question.text == "Deploy to production?"
     assert question.is_sent_by_me is False
     assert question.origin == "agent"
@@ -91,7 +92,7 @@ def test_a_connector_that_was_never_registered_has_no_inbox():
 
 def test_deliver_rejects_an_unknown_connector():
     with pytest.raises(ValueError):
-        ChatSession().deliver("nope", "ola")
+        ChatSession()._deliver("nope", "ola")
 
 
 # === The user answers ===========================================================
@@ -99,39 +100,39 @@ def test_deliver_rejects_an_unknown_connector():
 
 def test_replying_to_the_question_routes_the_answer_back():
     agent = Agent()
-    session = ChatSession(connectors=[agent])
+    session, view = driven(connectors=[agent])
     question = agent.inbox("Deploy to production?", correlation_id="task-1")
 
-    session.send_message("yes, go ahead", reply_to=question)
+    view.send_message("yes, go ahead", reply_to=question)
 
     assert agent.answered == [("task-1", "yes, go ahead")]
 
 
 def test_an_unrelated_message_is_not_routed_anywhere():
     agent = Agent()
-    session = ChatSession(connectors=[agent])
+    session, view = driven(connectors=[agent])
     agent.inbox("uma pergunta", correlation_id="task-1")
-    session.send_message("a falar sozinho")
+    view.send_message("a falar sozinho")
     assert agent.answered == []
 
 
 def test_replying_to_a_local_message_is_not_routed():
     """Only messages with an origin are owed an answer."""
     agent = Agent()
-    session = ChatSession(connectors=[agent])
-    local = session.receive_message("mensagem local, sem origem")
-    session.send_message("resposta", reply_to=local)
+    session, view = driven(connectors=[agent])
+    local = view.say("mensagem local, sem origem")
+    view.send_message("resposta", reply_to=local)
     assert agent.answered == []
 
 
 def test_each_answer_carries_its_own_correlation():
     agent = Agent()
-    session = ChatSession(connectors=[agent])
+    session, view = driven(connectors=[agent])
     first = agent.inbox("primeira?", correlation_id="task-1")
     second = agent.inbox("segunda?", correlation_id="task-2")
 
-    session.send_message("resposta a segunda", reply_to=second)
-    session.send_message("resposta a primeira", reply_to=first)
+    view.send_message("resposta a segunda", reply_to=second)
+    view.send_message("resposta a primeira", reply_to=first)
 
     assert agent.answered == [
         ("task-2", "resposta a segunda"),
@@ -145,19 +146,19 @@ def test_a_connector_that_fails_to_answer_does_not_lose_the_message():
             raise RuntimeError("link down")
 
     agent = Broken()
-    session = ChatSession(connectors=[agent])
+    session, view = driven(connectors=[agent])
     question = agent.inbox("pergunta", correlation_id="task-1")
-    session.send_message("resposta", reply_to=question)
+    view.send_message("resposta", reply_to=question)
 
-    assert [m.text for m in session.messages] == ["pergunta", "resposta"]
+    assert [m.text for m in view.load_messages()] == ["pergunta", "resposta"]
 
 
 def test_both_directions_coexist_on_one_connector():
     agent = Agent()
-    session = ChatSession(connectors=[agent])
+    session, view = driven(connectors=[agent])
     assert session.ask_connector("agent", "ola") == "agent says: ola"
     question = agent.inbox("e tu?", correlation_id="task-1")
-    session.send_message("eu bem", reply_to=question)
+    view.send_message("eu bem", reply_to=question)
     assert agent.asked == ["ola"]
     assert agent.answered == [("task-1", "eu bem")]
 
@@ -167,7 +168,7 @@ def test_both_directions_coexist_on_one_connector():
 
 def test_close_shuts_every_connector_down():
     agent, one_way = Agent(), OutboundOnly()
-    session = ChatSession(connectors=[agent, one_way])
+    session, view = driven(connectors=[agent, one_way])
     assert agent.started is True
     session.close()
     assert agent.stopped is True
@@ -179,6 +180,6 @@ def test_one_failing_shutdown_does_not_block_the_others():
             raise RuntimeError("will not stop")
 
     stubborn, agent = Stubborn("stubborn"), Agent("fine")
-    session = ChatSession(connectors=[stubborn, agent])
+    session, view = driven(connectors=[stubborn, agent])
     session.close()
     assert agent.stopped is True

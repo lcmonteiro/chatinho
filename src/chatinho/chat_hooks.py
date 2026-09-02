@@ -25,7 +25,7 @@ question — what does this connector do?
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +33,26 @@ logger = logging.getLogger(__name__)
 # user: ``inbox(text, correlation_id) -> message id``.
 Inbox = Callable[[str, Optional[str]], str]
 
-# What a class granted ``say`` calls to write into the conversation:
-# ``say(text) -> message id``. Annotate it on the class — the chat sets it at
-# registration, so without the annotation a type checker cannot see it.
-Say = Callable[[str], str]
+class Say(Protocol):
+    """What ``HookSay`` grants: writing into the conversation from outside.
+
+    A protocol rather than a ``Callable`` alias because the granted call takes
+    keyword arguments, and an alias cannot say so — it typed the grant more
+    narrowly than the thing actually handed over. Annotate it on the class: the
+    chat sets the attribute at registration, so without the annotation a type
+    checker cannot see it.
+    """
+
+    def __call__(
+        self,
+        text : str,
+        *,
+        reply_to       : Optional[str] = None,
+        origin         : Optional[str] = None,
+        correlation_id : Optional[str] = None,
+    ) -> str:
+        """Adds *text* to the conversation and returns the new message's id."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -79,6 +95,47 @@ HookAnswer = Hook(
     # answer(correlation_id, text).
 )
 
+# === The chat itself: what a plugin may do to the conversation ==================
+#
+# These five are the whole of the chat as a plugin sees it. Three are granted —
+# the session sets them at registration and the plugin calls them — and two are
+# demanded, so the session calls the plugin. Nothing else about the session is
+# reachable: its methods are protected, and declaring a hook is the only door.
+
+HookSendMessage = Hook(
+    name="HookSendMessage",
+    grants=("send_message",),
+    # send_message(text, reply_to=None) -> message id. Enters the history as
+    # sent by the user, and routes an answer back when it replies to a message
+    # that arrived through a connector.
+)
+
+HookSendCommand = Hook(
+    name="HookSendCommand",
+    grants=("send_command",),
+    # send_command(command) -> message id. The command line without the prefix.
+)
+
+HookLoadMessages = Hook(
+    name="HookLoadMessages",
+    grants=("load_messages",),
+    # load_messages(since=None, start=None, limit=None) -> List[ChatMessage].
+    # The history, by time or by index. The only way to read it.
+)
+
+HookReceiveMessage = Hook(
+    name="HookReceiveMessage",
+    method="on_receive_message",
+    # A message entered the conversation. Called for every one of them, whoever
+    # sent it, so a presentation can repaint on this alone.
+)
+
+HookReceiveCommand = Hook(
+    name="HookReceiveCommand",
+    method="on_receive_command",
+    # A command entered the conversation, before it is dispatched.
+)
+
 # === Roles: what a command is for ===============================================
 
 HookExecute = Hook(
@@ -105,13 +162,17 @@ HookDelete = Hook("HookDelete", "delete")
 # === Events: what a connector wants to be told about ============================
 
 HookMessageSent     = Hook("HookMessageSent",     "on_message_sent")
-HookMessageReceived = Hook("HookMessageReceived", "on_message_received")
 HookCommandExecuted = Hook("HookCommandExecuted", "on_command_executed")
 HookConnectorAdded  = Hook("HookConnectorAdded",  "on_connector_added")
 HookBackendSave     = Hook("HookBackendSave",     "on_backend_save")
 HookBackendLoad     = Hook("HookBackendLoad",     "on_backend_load")
 
 ALL_HOOKS: Tuple[Hook, ...] = (
+    HookSendMessage,
+    HookSendCommand,
+    HookLoadMessages,
+    HookReceiveMessage,
+    HookReceiveCommand,
     HookAsk,
     HookAnswer,
     HookExecute,
@@ -120,7 +181,6 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookLoad,
     HookDelete,
     HookMessageSent,
-    HookMessageReceived,
     HookCommandExecuted,
     HookConnectorAdded,
     HookBackendSave,

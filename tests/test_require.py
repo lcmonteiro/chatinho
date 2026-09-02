@@ -20,6 +20,7 @@ from chatinho import (
     require,
 )
 from chatinho.chat_hooks import declares, hooks_of, name_of, options_of
+from conftest import driven
 
 
 # === @require validates ==========================================================
@@ -163,8 +164,8 @@ def test_declaring_nothing_is_allowed_and_means_nothing_fires():
 
     quiet = Quiet()
     quiet.name = "quiet"
-    session = ChatSession(connectors=[quiet])
-    session.send_message("ola")  # would raise if the undeclared hook fired
+    _, view = driven(connectors=[quiet])
+    view.send_message("ola")  # would raise if the undeclared hook fired
     assert hooks_of(quiet) == frozenset()
 
 
