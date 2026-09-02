@@ -52,6 +52,32 @@ Textual `App`. `connectors`, `commands` and `backend` are all optional. Commands
 displayed as an incoming message; unregistered commands fall through to the `command_handler`
 callback.
 
+## The conversation is protected
+
+`ChatSession` had nineteen public members; it has ten. The five interfaces onto the conversation
+are not among them — they are `_`-prefixed and reached **only** by declaring a hook:
+
+| hook | | what the plugin gets |
+|---|---|---|
+| `HookSendMessage`    | concede | `send_message(text, reply_to=None) -> id` |
+| `HookSendCommand`    | concede | `send_command(command) -> id` |
+| `HookLoadMessages`   | concede | `load_messages(since=, start=, limit=) -> List[ChatMessage]` |
+| `HookSay`            | concede | `say(text, reply_to=, origin=, correlation_id=) -> id` |
+| `HookReceiveMessage` | exige   | `on_receive_message(msg)` — every message, whoever sent it |
+| `HookReceiveCommand` | exige   | `on_receive_command(msg)` — before the session dispatches |
+
+`ChatSession.attach(obj)` is the whole plugin contract for anything not addressed by name:
+register the hooks, hand over the grants, call `initialize()`. `add_connector` and `add_command`
+add a name and then call it.
+
+`load_messages` replaced six duplicate readers (`store`, `messages`, `new_id`, `find_message`,
+`get_replies`, `window`) — five of which forwarded to a `_store` that was itself public, and one of
+which, `window`, had no caller at all: `ChatLog` was already reading the store it had been handed.
+
+One thing stated plainly: Python has no `protected`. The `_` is convention, and the grants still
+reach back — `say.__self__` is the session and `inbox`'s closure holds it. This buys intent and a
+single documented door, not enforcement.
+
 ## Everything declares what it does
 
 Connectors, commands and backends all follow one rule: a **plain class**, no base class, no
@@ -169,10 +195,13 @@ that do.
 
 `ChatSession` holds every use case — send/receive, command dispatch, connectors, persistence — and
 imports no UI framework. `_Chat` is its Textual presentation: it owns the widget tree, the reply
-target (a click is a UI concept), thread marshalling and the welcome message, and attaches to the
-session through observer slots (`on_message_added`, `on_message_sent`, …). The session never
-reaches back. `create_chat()` still returns the app; `ChatSession(...)` is the headless door, and
-commands now receive the **session** as `chat_instance`, not a Textual `App`.
+target (a click is a UI concept), thread marshalling and the welcome message.
+
+**The presentation is a plugin like any other.** It declares seven hooks and `session.attach(self)`
+hands the capabilities over; there is no privileged path, and the observer slots are gone. A
+terminal reaches the conversation through exactly the doors a connector does. `create_chat()` still
+returns the app; `ChatSession(...)` is the headless door, and commands receive the **session** as
+`chat_instance`, not a Textual `App`.
 
 `tests/test_architecture.py` enforces this: it parses the core modules and fails if `textual`,
 `openai`, `sqlalchemy` or `requests` appears in their imports, or if the session ever imports its
@@ -186,13 +215,15 @@ through the refactor.
 
 ## Public API
 
-`__init__.py` exports `create_chat`, `ChatMessage`, `ChatStyle`, `hook_point` and the six `HOOK_*`
+`__init__.py` exports `create_chat`, `ChatMessage`, `ChatStyle`, `hook_point` and the `Hook*`
 constants, `BaseConnector`, `A2AConnector`, `OpenAIConnector`, `BaseBackend`, `DatabaseBackend`,
 `BaseCommand`, `HelpCommand`, `TestCommand`.
 
 There is no `Chat` or `ChatApp` export: the app class is private, so `create_chat` is the only way
-to build one. Lifecycle hooks (`on_command`, `on_message_sent`, `on_message_received`) are
-customised by assigning them on the returned instance, not by subclassing.
+to build one. The app's own callbacks (`on_command`, `on_message_sent`, `on_message_received`) are
+customised by assigning them on the returned instance, not by subclassing. Note that `on_command`
+is a **notice**, not a veto: the session dispatches registered commands itself, so `/name` runs
+whether or not it is replaced.
 
 ---
 

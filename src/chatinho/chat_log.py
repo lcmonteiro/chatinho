@@ -13,7 +13,7 @@ from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
-from .chat_message import ChatMessage, MessageStore
+from .chat_message import ChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -69,21 +69,22 @@ class _MessageContainer(Horizontal):
 
 
 class ChatLog(TouchScrollableContainer):
-    """Renders the last ``max_displayed`` messages of a :class:`MessageStore`.
+    """Renders the last ``max_displayed`` messages the chat will hand over.
 
-    The full history stays in the store — messages leaving the window are
-    unmounted from the terminal, not forgotten.
+    Reads through ``load_messages`` — the capability the presentation was
+    granted — rather than holding the history itself. Messages leaving the
+    window are unmounted from the terminal, not forgotten.
     """
 
     def __init__(
         self,
-        store         : MessageStore,
+        load_messages : Callable[..., List[ChatMessage]],
         max_displayed : int = 100,
         on_reply_target_change : Optional[Callable[[Optional[str]], None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
-        self._store = store
+        self._load_messages = load_messages
         self.max_displayed : int = max_displayed
         self._on_reply_target_change = on_reply_target_change
         self._msg_widgets : Dict[str, Widget] = {}
@@ -104,7 +105,7 @@ class ChatLog(TouchScrollableContainer):
         # lose their reading position)
         was_at_bottom = self.scroll_offset.y >= (self.max_scroll_y - 1)
 
-        desired_ids = [m.id for m in self._store.window(self.max_displayed)]
+        desired_ids = [m.id for m in self._load_messages(limit=self.max_displayed)]
         current = set(self._rendered_msg_ids)
         desired = set(desired_ids)
 
@@ -118,13 +119,17 @@ class ChatLog(TouchScrollableContainer):
         # Mount the new ones, in the correct order
         for msg_id in desired_ids:
             if msg_id not in current:
-                msg = self._store.find(msg_id)
+                msg = self._find(msg_id)
                 if msg is not None:
                     self.mount(self._render_message(msg))
 
         self._rendered_msg_ids = desired_ids
         if was_at_bottom:
             self.scroll_to_bottom()
+
+    def _find(self, msg_id: str) -> Optional[ChatMessage]:
+        """Returns the message with *msg_id*, or None."""
+        return next((m for m in self._load_messages() if m.id == msg_id), None)
 
     def scroll_to_bottom(self) -> None:
         """Scrolls the log to the newest message."""
@@ -143,7 +148,7 @@ class ChatLog(TouchScrollableContainer):
 
         # Quote of the original message when this is a reply
         if msg.reply_to is not None:
-            original = self._store.find(msg.reply_to)
+            original = self._find(msg.reply_to)
             if original is not None:
                 preview = " ".join(original.text.split())[:60]
                 parts.append(
