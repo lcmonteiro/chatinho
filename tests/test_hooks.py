@@ -10,8 +10,7 @@ from chatinho import (
     HookExecute,
     command,
     HookAsk,
-    HookCommandExecuted,
-    HookMessageSent,
+    HookReceiveMessage,
     create_chat,
     require,
 )
@@ -23,23 +22,17 @@ class _Connector:
     def __init__(self, name: str = "rec") -> None:
         self.name = name
         self.sent: list = []
-        self.executed: list = []
 
     def ask(self, message: str, **kwargs) -> None:
         return None
 
-    def on_message_sent(self, msg, **kwargs) -> None:
+    def on_receive_message(self, msg, **kwargs) -> None:
         self.sent.append(msg)
 
-    # The signature a handler would naturally declare: it must work on the
-    # failure path too, where there is no result.
-    def on_command_executed(self, command, result, error, **kwargs) -> None:
-        self.executed.append((command, result, error))
 
 
 @require(HookAsk)
-@require(HookMessageSent)
-@require(HookCommandExecuted)
+@require(HookReceiveMessage)
 class RecordingConnector(_Connector):
     """Connector that declares the hooks it records."""
 
@@ -81,17 +74,15 @@ async def test_a_connector_that_declares_nothing_is_never_called():
 
 
 @pytest.mark.asyncio
-async def test_command_hook_carries_same_keys_on_success_and_failure():
-    link = RecordingConnector()
-    app = create_chat(connectors=[link], commands=[_Echo(), _Boom()])
+async def test_a_failing_command_is_reported_in_the_conversation():
+    """There is no command event any more: the failure lands where a user sees it."""
+    app = create_chat(commands=[_Echo(), _Boom()])
     async with app.run_test():
         app.send_command("echo")
         app.send_command("boom")
-    assert len(link.executed) == 2
-    assert link.executed[0] == ("echo", "ok", None)
-    command, result, error = link.executed[1]
-    assert (command, result) == ("boom", None)
-    assert isinstance(error, RuntimeError)
+    texts = [m.text for m in app.messages]
+    assert "ok" in texts
+    assert any("kaboom" in t for t in texts)
 
 
 @pytest.mark.asyncio

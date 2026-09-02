@@ -47,16 +47,11 @@ from .chat_hooks import (
     HookSave,
     HookLoad,
     HookDelete,
-    HookMessageSent,
     HookReceiveMessage,
     HookReceiveCommand,
     HookSendMessage,
     HookSendCommand,
     HookLoadMessages,
-    HookCommandExecuted,
-    HookConnectorAdded,
-    HookBackendSave,
-    HookBackendLoad,
 )
 from .chat_style import ChatStyle
 from .connectors import A2AConnector, OpenAIConnector
@@ -81,16 +76,11 @@ __all__ = [
     "HookSave",
     "HookLoad",
     "HookDelete",
-    "HookMessageSent",
     "HookReceiveMessage",
     "HookReceiveCommand",
     "HookSendMessage",
     "HookSendCommand",
     "HookLoadMessages",
-    "HookCommandExecuted",
-    "HookConnectorAdded",
-    "HookBackendSave",
-    "HookBackendLoad",
     # Connectors
     "A2AConnector",
     "OpenAIConnector",

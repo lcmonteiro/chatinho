@@ -29,13 +29,8 @@ from .chat_hooks import (
     HookExecute,
     HookLoad,
     HookSave,
-    HookBackendLoad,
-    HookBackendSave,
-    HookCommandExecuted,
-    HookConnectorAdded,
     HookReceiveCommand,
     HookReceiveMessage,
-    HookMessageSent,
     HookRegistry,
     declares,
     hooks_of,
@@ -144,7 +139,6 @@ class ChatSession:
         ))
         self._route_reply(msg)
         self._hooks.trigger(HookReceiveMessage, msg=msg)
-        self._hooks.trigger(HookMessageSent, msg=msg)
         return msg.id
 
     def _send_command(self, command: str) -> str:
@@ -170,7 +164,6 @@ class ChatSession:
         ))
         self._hooks.trigger(HookReceiveCommand, msg=msg)
         self.dispatch_command(command)
-        self._hooks.trigger(HookMessageSent, msg=msg)
         return msg.id
 
     def _receive_message(
@@ -366,15 +359,10 @@ class ChatSession:
             )
 
         try:
-            result = cmd.execute(*args, **kwargs)
-        except Exception as exc:
-            logger.error("Error executing command '%s': %s", command_name, exc)
-            # Both paths carry the same keys, so a handler declaring
-            # (command, result, error) is called on failure too.
-            self._hooks.trigger(HookCommandExecuted, command=command_name, result=None, error=exc)
+            return cmd.execute(*args, **kwargs)
+        except Exception:
+            logger.error("Error executing command '%s'", command_name, exc_info=True)
             raise
-        self._hooks.trigger(HookCommandExecuted, command=command_name, result=result, error=None)
-        return result
 
     # === Connectors =================================================================
 
@@ -409,7 +397,6 @@ class ChatSession:
 
         self.connectors[name] = connector
         self.attach(connector)
-        self._hooks.trigger(HookConnectorAdded, connector=connector)
 
     def _grant(self, connector: Any, name: str) -> None:
         """Sets the attributes an object's declared hooks ask for.
@@ -491,9 +478,7 @@ class ChatSession:
         Raises:
             RuntimeError: If the session was created without a backend.
         """
-        saved = self._backend_for(HookSave).save(key, data)
-        self._hooks.trigger(HookBackendSave, key=key, data=data)
-        return saved
+        return self._backend_for(HookSave).save(key, data)
 
     def load_data(self, key: str) -> Any:
         """Loads data through the backend and triggers the load hook.
@@ -507,9 +492,7 @@ class ChatSession:
         Raises:
             RuntimeError: If the session was created without a backend.
         """
-        data = self._backend_for(HookLoad).load(key)
-        self._hooks.trigger(HookBackendLoad, key=key, data=data)
-        return data
+        return self._backend_for(HookLoad).load(key)
 
     def delete_data(self, key: str) -> bool:
         """Deletes data through the backend.
