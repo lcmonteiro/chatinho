@@ -34,7 +34,6 @@ from .chat_input import COMMAND_PREFIX, SUGGESTIONS_ID, CommandInput, CommandSug
 from .chat_log import ChatLog
 from .chat_hooks import (
     HookLoadMessages,
-    HookMessageSent,
     HookReceiveCommand,
     HookReceiveMessage,
     HookSay,
@@ -101,7 +100,6 @@ def create_chat(
 @require(HookSay)
 @require(HookReceiveMessage)
 @require(HookReceiveCommand)
-@require(HookMessageSent)
 class _Chat(App):
     """Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
 
@@ -236,23 +234,20 @@ class _Chat(App):
     def on_receive_message(self, msg: ChatMessage, **kwargs) -> None:
         """A message entered the conversation: repaint, then notify.
 
-        Fires for every message whoever sent it, which is what lets the
-        terminal repaint from a single hook.
+        Fires for every message whoever sent it — the message itself says which
+        — so the terminal repaints, and the right callback runs, from one hook.
         """
         self._repaint()
-        if not msg.is_sent_by_me:
+        if msg.is_sent_by_me:
+            self.on_message_sent(msg)
+        else:
             self.on_message_received(msg)
 
     def on_receive_command(self, msg: ChatMessage, **kwargs) -> None:
         """A command entered the conversation, before the session dispatches it."""
         self._repaint()
         self.on_command(msg.text)
-
-    def on_message_sent(self, msg: ChatMessage, **kwargs) -> None:
-        """Called after sending a message (normal or command).
-
-        Useful for hooking the send to a transport (WebSocket, API, …).
-        """
+        self.on_message_sent(msg)
 
     # === Overridables — assign on the instance to customise =========================
 
@@ -261,6 +256,12 @@ class _Chat(App):
 
         A notification only: the session dispatches the command itself, so a
         registered ``/name`` runs whether or not this is replaced.
+        """
+
+    def on_message_sent(self, msg: ChatMessage) -> None:
+        """Called after sending a message (normal or command).
+
+        Useful for hooking the send to a transport (WebSocket, API, …).
         """
 
     def on_message_received(self, msg: ChatMessage) -> None:

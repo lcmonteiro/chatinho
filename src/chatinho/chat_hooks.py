@@ -7,10 +7,10 @@ no-op at runtime.
 
     @connector("weather")
     @require(HookAsk)
-    @require(HookMessageSent)
+    @require(HookReceiveMessage)
     class WeatherConnector:
         def ask(self, message, **kwargs): ...
-        def on_message_sent(self, msg, **kwargs): ...
+        def on_receive_message(self, msg, **kwargs): ...
 
 One hook per ``require``, stacked. Each declaration is its own line, so it has
 somewhere to carry options that belong to that hook alone:
@@ -159,13 +159,12 @@ HookSave   = Hook("HookSave",   "save")
 HookLoad   = Hook("HookLoad",   "load")
 HookDelete = Hook("HookDelete", "delete")
 
-# === Events: what a connector wants to be told about ============================
-
-HookMessageSent     = Hook("HookMessageSent",     "on_message_sent")
-HookCommandExecuted = Hook("HookCommandExecuted", "on_command_executed")
-HookConnectorAdded  = Hook("HookConnectorAdded",  "on_connector_added")
-HookBackendSave     = Hook("HookBackendSave",     "on_backend_save")
-HookBackendLoad     = Hook("HookBackendLoad",     "on_backend_load")
+# There is no "events" family. There were five — one per interesting moment —
+# and every one of them was either derivable or unused: HookMessageSent carried
+# nothing that HookReceiveMessage does not, since a message says whether it was
+# sent by us, and it fired a second time for the same message; the other four
+# had no consumer anywhere. The only things broadcast are the two notices about
+# the conversation above.
 
 ALL_HOOKS: Tuple[Hook, ...] = (
     HookSendMessage,
@@ -180,11 +179,6 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookSave,
     HookLoad,
     HookDelete,
-    HookMessageSent,
-    HookCommandExecuted,
-    HookConnectorAdded,
-    HookBackendSave,
-    HookBackendLoad,
 )
 
 # Lifecycle is not a hook: initialize() and shutdown() are optional and called

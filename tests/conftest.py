@@ -3,7 +3,7 @@
 The conversation is protected: nothing calls ``session._send_message``. A
 plugin declares the hooks it needs and the session hands the capabilities over
 at ``attach``. :class:`Driver` is that plugin with the terminal taken out — the
-same seven declarations ``_Chat`` makes — so a test drives a chat exactly the
+same declarations ``_Chat`` makes — so a test drives a chat exactly the
 way the TUI does.
 """
 
@@ -14,7 +14,6 @@ import pytest
 from chatinho import (
     ChatMessage,
     HookLoadMessages,
-    HookMessageSent,
     HookReceiveCommand,
     HookReceiveMessage,
     HookSay,
@@ -31,7 +30,6 @@ from chatinho.chat_session import ChatSession
 @require(HookSay)
 @require(HookReceiveMessage)
 @require(HookReceiveCommand)
-@require(HookMessageSent)
 class Driver:
     """Everything a presentation is, minus the terminal."""
 
@@ -47,15 +45,14 @@ class Driver:
         self.sent      : List[ChatMessage] = []
 
     def on_receive_message(self, msg: ChatMessage, **kwargs) -> None:
-        """Records every message that entered the conversation."""
+        """Records every message, split by who sent it."""
         self.received.append(msg)
+        if msg.is_sent_by_me:
+            self.sent.append(msg)
 
     def on_receive_command(self, msg: ChatMessage, **kwargs) -> None:
         """Records every command, before the session dispatches it."""
         self.commanded.append(msg)
-
-    def on_message_sent(self, msg: ChatMessage, **kwargs) -> None:
-        """Records every message that went out."""
         self.sent.append(msg)
 
 

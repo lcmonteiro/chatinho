@@ -18,7 +18,7 @@ from chatinho import (
     HookDelete,
     HookExecute,
     HookLoad,
-    HookMessageSent,
+    HookReceiveMessage,
     HookSave,
     HookSay,
     backend,
@@ -56,7 +56,7 @@ class _Spy:
 
 @connector("rec")
 @require(HookAsk)
-@require(HookMessageSent)
+@require(HookReceiveMessage)
 class _Recorder:
     def __init__(self) -> None:
         self.sent: list = []
@@ -64,7 +64,7 @@ class _Recorder:
     def ask(self, message: str, **kwargs) -> str:
         return "sent: %s" % message
 
-    def on_message_sent(self, msg, **kwargs) -> None:
+    def on_receive_message(self, msg, **kwargs) -> None:
         self.sent.append(msg.text)
 
 

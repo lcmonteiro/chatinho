@@ -24,7 +24,6 @@ from chatinho import (
     HookAsk,
     HookExecute,
     HookLoadMessages,
-    HookMessageSent,
     HookReceiveCommand,
     HookReceiveMessage,
     HookSay,
@@ -38,13 +37,13 @@ from chatinho import (
 
 @connector("echo")
 @require(HookAsk)
-@require(HookMessageSent)
+@require(HookReceiveMessage)
 @require(HookSay)
 class EchoConnector:
     """Stands in for a real transport, and answers on its own.
 
-    ``HookMessageSent`` tells it a message went out; ``HookSay`` gives it the
-    way to write the answer back. It never imports the session.
+    ``HookReceiveMessage`` tells it what entered the conversation; ``HookSay``
+    gives it the way to write the answer back. It never imports the session.
     """
 
     say : Callable[..., str]
@@ -53,9 +52,9 @@ class EchoConnector:
         """Returns the echoed answer instead of hitting the network."""
         return "Received: %s" % message
 
-    def on_message_sent(self, msg: ChatMessage, **kwargs) -> None:
-        """Answers every message that is not a command."""
-        if not msg.is_command:
+    def on_receive_message(self, msg: ChatMessage, **kwargs) -> None:
+        """Answers what the user sent, and never its own answers."""
+        if msg.is_sent_by_me:
             self.say(self.ask(msg.text), reply_to=msg.id)
 
 
@@ -110,12 +109,14 @@ def read_lines() -> Iterator[str]:
 def main() -> None:
     """Builds a headless chat and drives it from stdin."""
     session = ChatSession(
-        connectors      = [EchoConnector()],
         commands        = [HelpCommand(), UpperCommand()],
         command_handler = lambda command: print("? unknown command: /%s — try /help" % command),
     )
+    # Hooks fire in registration order, and the echo answers re-entrantly: were
+    # it registered first, its reply would print before the message it answers.
     view = Terminal()
     session.attach(view)
+    session.add_connector(EchoConnector())
 
     print("Type a message, /help for commands, /quit to leave.")
     for line in read_lines():

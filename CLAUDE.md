@@ -66,6 +66,18 @@ are not among them — they are `_`-prefixed and reached **only** by declaring a
 | `HookReceiveMessage` | exige   | `on_receive_message(msg)` — every message, whoever sent it |
 | `HookReceiveCommand` | exige   | `on_receive_command(msg)` — before the session dispatches |
 
+There are twelve hooks and no "events" family. There were five events and each
+was either derivable or unused: `HookMessageSent` carried nothing that
+`HookReceiveMessage` does not — a message says whether it was sent by us — and
+fired a *second* time for the same message; `HookCommandExecuted`,
+`HookConnectorAdded`, `HookBackendSave` and `HookBackendLoad` had no consumer in
+`src`, `examples` or `tests`. The only things broadcast now are the two notices
+about the conversation.
+
+Hooks fire in registration order, which matters when a plugin writes
+re-entrantly: `examples/headless.py` attaches its presentation before adding the
+echo connector, or the answer prints before the message it answers.
+
 `ChatSession.attach(obj)` is the whole plugin contract for anything not addressed by name:
 register the hooks, hand over the grants, call `initialize()`. `add_connector` and `add_command`
 add a name and then call it.
@@ -161,8 +173,7 @@ One cost, stated plainly: with no base class, `connectors` is typed `Any`, so my
 connector shape. `require` moved that check from type-check time to import time; it did not
 disappear, but it is not the same guarantee.
 
-The payload each hook delivers is tabulated in `chat_hooks.py`; `on_command_executed` is called on
-both the success and the failure path with the same keys (`command`, `result`, `error`).
+The payload each hook delivers is tabulated in `chat_hooks.py`.
 
 ---
 
