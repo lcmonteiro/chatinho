@@ -50,7 +50,7 @@ def test_a_misspelled_method_is_caught_the_same_way():
 
         @require(HookOnAsk)
         class Typo:
-            async def on_asks(self, msg):   # noqa: the typo is the point
+            async def on_asks(self, msg):   # the typo is the point
                 pass
 
 
