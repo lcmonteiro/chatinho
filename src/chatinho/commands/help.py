@@ -1,32 +1,36 @@
-"""Help command for chatinho."""
-
-import logging
-
-from ..chat_hooks import HookExecute, command, require
-
-logger = logging.getLogger(__name__)
+"""The ``/help`` tool: lists what can be asked."""
 
 
-@command("help", "Mostra esta ajuda")
-@require(HookExecute)
+from ..chat_hooks import (HookOnAsk, HookParticipants, Participants,
+                          declares, name_of, require, tool)
+from ..chat_message import LOCAL, ChatMessage
+
+
+@tool("help", "Lists the available tools")
+@require(HookOnAsk)
+@require(HookParticipants)
 class HelpCommand:
-    """Lists the commands the chat has registered."""
+    """Answers with the tools registered in the chat it belongs to.
 
-    def execute(self, chat_instance=None, **kwargs) -> str:
-        """Returns one line per registered command.
+    A command is an ask addressed to a tool, so ``/help`` is this participant
+    being asked. ``HookParticipants`` is what lets it
+    enumerate its siblings without ever seeing the session.
+    """
+
+    participants : Participants
+
+    async def on_ask(self, msg: ChatMessage) -> str:
+        """Returns one line per tool that can be asked.
 
         Args:
-            chat_instance: The session, for reading its commands.
-            **kwargs: Ignored.
+            msg: The question; its text is ignored.
 
         Returns:
-            str: The help text.
+            str: The listing, or a note when there is nothing to list.
         """
-        logger.debug("Executing help command")
-        commands = getattr(chat_instance, "commands", None)
-        if not commands:
-            return "Nenhum comando registado."
-        lines = ["Comandos disponíveis:"]
-        for name, cmd in sorted(commands.items()):
-            lines.append("  /%s - %s" % (name, getattr(cmd, "description", "")))
-        return "\n".join(lines)
+        lines = [
+            "/%s - %s" % (name_of(who), getattr(who, "description", ""))
+            for at, who in sorted(self.participants().items())
+            if at != LOCAL and declares(who, HookOnAsk)
+        ]
+        return "Available tools:\n  " + "\n  ".join(lines) if lines else "No tools registered."

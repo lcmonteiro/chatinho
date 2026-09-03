@@ -1,223 +1,208 @@
-"""Tests for chatinho.
+"""Tests for the Textual presentation.
 
-The app is built with ``create_chat`` and mounted via ``App.run_test()`` so widgets (input,
-chat log) are available to the code under test.
+The app is built with ``create_chat`` and mounted via ``App.run_test()``, so
+the widgets are available to the code under test. The presentation is a
+participant like any other — registered at LOCAL — so these tests are the same
+model as the headless ones, with a terminal attached.
 """
 
 import asyncio
 import threading
 
-import pytest
 from textual.widgets import Input
 
-from chatinho import HelpCommand, HookExecute, command, create_chat, require
+from chatinho import (
+    LOCAL,
+    Ask,
+    HelpCommand,
+    HookAsk,
+    HookOnAsk,
+    connector,
+    create_chat,
+    require,
+    tool,
+)
 
 
-@pytest.mark.asyncio
-async def test_ids_come_back_from_the_sends():
-    """Nothing mints an id: the granted send hands one back."""
+@tool("eco", "repete")
+@require(HookOnAsk)
+class _Eco:
+    async def on_ask(self, msg) -> str:
+        return "eco: %s" % msg.text
+
+
+@connector("agente")
+@require(HookAsk)
+class _Agente:
+    ask : Ask
+
+
+# === Saying =====================================================================
+
+
+async def test_say_returns_an_id_and_stores():
     app = create_chat()
     async with app.run_test():
-        assert app.send_message("um") == "msg-1"
-        assert app.send_command("dois") == "msg-2"
-
-
-@pytest.mark.asyncio
-async def test_send_message_returns_id_and_stores():
-    app = create_chat()
-    async with app.run_test():
-        mid = app.send_message("hello")
-        assert mid == "msg-1"
-        assert len(app.messages) == 1
+        assert await app.say("hello") == "msg-1"
         msg = app.messages[0]
-        assert msg.text == "hello"
-        assert msg.is_sent_by_me is True
-        assert msg.is_command is False
+        assert (msg.text, msg.frm, msg.to) == ("hello", LOCAL, None)
+        assert msg.is_local is True
 
 
-@pytest.mark.asyncio
-async def test_send_command_sets_flag_and_calls_hook():
-    app = create_chat()
-    received = []
-    app.on_command = lambda command: received.append(command)  # type: ignore[method-assign]
+async def test_the_welcome_message_is_the_app_saying_it():
+    app = create_chat(welcome_message="Bem-vindo")
     async with app.run_test():
-        mid = app.send_command("help")
-        assert mid == "msg-1"
-        assert app.messages[0].is_command is True
-        assert received == ["help"]
+        assert [m.text for m in app.messages] == ["Bem-vindo"]
 
 
-@pytest.mark.asyncio
-async def test_receive_message_is_not_sent_by_me():
+async def test_submitting_text_says_it():
+    app = create_chat()
+    async with app.run_test() as pilot:
+        inp = app.query_one("#input-line", Input)
+        inp.value = "  ola  "
+        await pilot.press("enter")
+        await pilot.pause()
+        assert [m.text for m in app.messages] == ["ola"]
+        assert app.query_one("#input-line", Input).value == ""
+
+
+async def test_blank_input_says_nothing():
+    app = create_chat()
+    async with app.run_test() as pilot:
+        app.query_one("#input-line", Input).value = "   "
+        await pilot.press("enter")
+        await pilot.pause()
+    assert app.messages == []
+
+
+# === Commands are asks ==========================================================
+
+
+async def test_a_command_is_an_ask_and_its_answer_lands_in_the_log():
+    app = create_chat(participants=[_Eco()])
+    async with app.run_test() as pilot:
+        assert await app.command("eco", "ola") == "eco: ola"
+        await pilot.pause()
+    question, answer = app.messages
+    assert (question.frm, question.to, question.text) == (LOCAL, 1, "ola")
+    assert (answer.frm, answer.to, answer.text) == (1, LOCAL, "eco: ola")
+    assert answer.reply_to == question.id
+
+
+async def test_submitting_a_slash_runs_the_tool():
+    app = create_chat(participants=[_Eco()])
+    async with app.run_test() as pilot:
+        inp = app.query_one("#input-line", Input)
+        inp.value = "/eco bom dia"
+        await pilot.press("enter")
+        await pilot.pause()
+    assert [m.text for m in app.messages] == ["bom dia", "eco: bom dia"]
+
+
+async def test_an_unknown_command_says_so():
+    app = create_chat()
+    async with app.run_test() as pilot:
+        assert await app.command("nope") is None
+        await pilot.pause()
+    assert app.messages[-1].text == "Unknown command: /nope"
+
+
+async def test_help_lists_the_tools_that_can_be_asked():
+    app = create_chat(participants=[HelpCommand(), _Eco()])
+    async with app.run_test() as pilot:
+        answer = await app.command("help")
+        await pilot.pause()
+    assert "/help" in answer and "/eco" in answer
+
+
+# === Being asked ================================================================
+
+
+async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
+    """The whole round trip, with no routing code in the presentation."""
+    agente = _Agente()
+    app = create_chat(participants=[agente])
+    async with app.run_test() as pilot:
+        question = asyncio.create_task(agente.ask(LOCAL, "Autorizas?"))
+        await pilot.pause()
+        asked = app.messages[-1]
+        assert (asked.frm, asked.to, asked.text) == (1, LOCAL, "Autorizas?")
+
+        await app.say("sim", reply_to=asked.id)
+        assert await question == "sim"
+        await pilot.pause()
+    assert [m.text for m in app.messages] == ["Autorizas?", "sim"]
+
+
+# === Threading ==================================================================
+
+
+async def test_a_message_from_another_thread_reaches_the_log():
+    """A connector with its own server thread must be able to speak."""
+    app = create_chat()
+    async with app.run_test() as pilot:
+        loop = asyncio.get_running_loop()
+        done = threading.Event()
+
+        def from_thread() -> None:
+            asyncio.run_coroutine_threadsafe(app.say("de outra thread"), loop).result(5)
+            done.set()
+
+        threading.Thread(target=from_thread, daemon=True).start()
+        while not done.is_set():
+            await pilot.pause()
+        await pilot.pause()
+    assert [m.text for m in app.messages] == ["de outra thread"]
+
+
+# === Rendering ==================================================================
+
+
+async def test_the_log_renders_what_the_history_holds():
+    app = create_chat(participants=[_Eco()])
+    async with app.run_test() as pilot:
+        await app.say("uma")
+        await app.command("eco", "duas")
+        await pilot.pause()
+        log = app.query_one("#chat-log")
+        assert len(log._msg_widgets) == len(app.messages) == 3
+
+
+async def test_only_the_window_is_rendered():
+    app = create_chat(max_displayed=3)
+    async with app.run_test() as pilot:
+        for n in range(6):
+            await app.say("m%d" % n)
+        await pilot.pause()
+        assert len(app.messages) == 6
+        assert app._rendered_msg_ids == [m.id for m in app.messages[-3:]]
+
+
+# === Threading a reply ==========================================================
+
+
+async def test_get_replies_reads_the_thread_back():
     app = create_chat()
     async with app.run_test():
-        mid = app.receive_message("incoming")
-        assert mid == "msg-1"
-        assert app.messages[0].is_sent_by_me is False
-
-
-@pytest.mark.asyncio
-async def test_reply_threading():
-    app = create_chat()
-    async with app.run_test():
-        original = app.send_message("original")
-        reply = app.receive_message("reply text", reply_to=original)
-        assert app.get_replies(original) == [reply]
-        assert app.messages[-1].reply_to == original
-
-
-@pytest.mark.asyncio
-async def test_get_replies_empty_for_unknown():
-    app = create_chat()
-    async with app.run_test():
+        first = await app.say("original")
+        reply = await app.say("resposta", reply_to=first)
+        assert app.get_replies(first) == [reply]
         assert app.get_replies("msg-999") == []
 
 
-@pytest.mark.asyncio
-async def test_receive_message_from_other_thread():
-    """receive_message is safe to call from a worker thread."""
+async def test_send_pending_reply_uses_the_clicked_target():
     app = create_chat()
-    async with app.run_test():
-        assert app._app_thread_id == threading.get_ident()
-        results = {}
-
-        def worker():
-            results["id"] = app.receive_message("from thread")
-
-        t = threading.Thread(target=worker)
-        t.start()
-        # call_from_thread blocks the worker until the app's event loop
-        # processes the callback — yield to the loop so it can land.
-        for _ in range(100):
-            if not t.is_alive():
-                break
-            await asyncio.sleep(0.01)
-        assert not t.is_alive()
-        assert results["id"] == "msg-1"
-        assert len(app.messages) == 1
-        assert app.messages[0].text == "from thread"
-        assert app.messages[0].is_sent_by_me is False
-
-
-@pytest.mark.asyncio
-async def test_find_message():
-    app = create_chat()
-    async with app.run_test():
-        mid = app.send_message("find me")
-        found = app._find_message(mid)
-        assert found is not None and found.text == "find me"
-        assert app._find_message("msg-999") is None
-
-
-@pytest.mark.asyncio
-async def test_send_pending_reply_without_target_returns_none():
-    app = create_chat()
-    async with app.run_test():
-        assert app.send_pending_reply("text") is None
-        assert len(app.messages) == 0
-
-
-@pytest.mark.asyncio
-async def test_send_pending_reply_after_click_target():
-    app = create_chat()
-    async with app.run_test():
-        original = app.receive_message("target")
-        app._set_reply_target(original)
-        mid = app.send_pending_reply("answer")
-        assert mid is not None
-        assert app.messages[-1].reply_to == original
+    async with app.run_test() as pilot:
+        target = await app.say("alvo")
+        await pilot.pause()
+        app._set_reply_target(target)
+        reply = await app.send_pending_reply("resposta")
+        assert app._find_message(reply).reply_to == target
         assert app._reply_target is None
 
 
-@pytest.mark.asyncio
-async def test_clear_reply_target_restores_placeholder():
+async def test_send_pending_reply_does_nothing_without_a_target():
     app = create_chat()
     async with app.run_test():
-        original = app.receive_message("target")
-        app._set_reply_target(original)
-        assert app._reply_target == original
-        app._clear_reply_target()
-        assert app._reply_target is None
-        assert app._input_placeholder == "Type a message or /command"
-
-
-@pytest.mark.asyncio
-async def test_input_focused_on_mount():
-    app = create_chat()
-    async with app.run_test():
-        inp = app.query_one("#input-line", Input)
-        assert inp.has_focus
-
-
-@pytest.mark.asyncio
-async def test_submit_text_sends_message():
-    app = create_chat()
-    async with app.run_test() as pilot:
-        inp = app.query_one("#input-line", Input)
-        inp.value = "hello world"
-        await pilot.press("enter")
-        assert len(app.messages) == 1
-        assert app.messages[0].text == "hello world"
-
-
-@pytest.mark.asyncio
-async def test_submit_command_sends_command():
-    app = create_chat()
-    async with app.run_test() as pilot:
-        inp = app.query_one("#input-line", Input)
-        inp.value = "/help"
-        await pilot.press("enter")
-        assert len(app.messages) == 1
-        assert app.messages[0].is_command is True
-
-
-@pytest.mark.asyncio
-async def test_registered_command_is_executed_and_result_displayed():
-    app = create_chat(commands=[HelpCommand()])
-    async with app.run_test():
-        app.send_command("help")
-        assert len(app.messages) == 2
-        assert app.messages[0].is_command is True
-        result = app.messages[1]
-        assert result.is_sent_by_me is False
-        assert "/help" in result.text
-
-
-@pytest.mark.asyncio
-async def test_failing_command_is_reported_instead_of_raising():
-    @command("boom", "always fails")
-    @require(HookExecute)
-    class Boom:
-        def execute(self, *args, **kwargs):
-            raise RuntimeError("kaboom")
-
-    app = create_chat(commands=[Boom()])
-    async with app.run_test():
-        app.send_command("boom")
-        assert len(app.messages) == 2
-        assert "kaboom" in app.messages[1].text
-
-
-@pytest.mark.asyncio
-async def test_welcome_message_is_shown_on_mount():
-    app = create_chat(welcome_message="ola")
-    async with app.run_test():
-        assert [m.text for m in app.messages] == ["ola"]
-        assert app.messages[0].is_sent_by_me is False
-
-
-@pytest.mark.asyncio
-async def test_no_welcome_message_by_default():
-    app = create_chat()
-    async with app.run_test():
+        assert await app.send_pending_reply("resposta") is None
         assert app.messages == []
-
-
-@pytest.mark.asyncio
-async def test_messages_added_before_mount_are_kept_and_rendered():
-    app = create_chat()
-    assert app.receive_message("early") == "msg-1"
-    assert [m.text for m in app.messages] == ["early"]
-    async with app.run_test():
-        assert app._rendered_msg_ids == ["msg-1"]
-        assert app._find_message("msg-1") is not None

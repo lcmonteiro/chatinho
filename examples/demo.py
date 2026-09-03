@@ -1,43 +1,61 @@
-"""Demo of the chatinho library: shows markdown, code blocks, commands,
-replies and command autocomplete.
+"""Demo of the chatinho library: markdown, code blocks, tools and replies.
 
-Everything is built through the public ``create_chat`` factory: a connector
-stands in for a transport, commands are registered objects, and the bot
-replies by sending the message back through the connector.
+Everything is built through the public ``create_chat`` factory. A tool is a
+participant that can be asked, and a command is that ask: typing ``/code`` asks
+the participant named "code".
 
 Run with:  bash run.sh
 """
 
-from typing import Any
+import asyncio
 
 from chatinho import (
     ChatMessage,
     HelpCommand,
-    HookAsk,
-    HookExecute,
-    command,
+    HookOnAsk,
+    HookOnSay,
+    HookSay,
+    Say,
     connector,
     create_chat,
     require,
+    tool,
 )
 
 
-@connector("echo")
-@require(HookAsk)
+@connector("eco")
+@require(HookOnSay)
+@require(HookSay)
 class EchoConnector:
-    """Connector that echoes what it is given — stands in for a real transport."""
+    """Answers whatever the user says — a transport stand-in that talks back.
 
-    def ask(self, message: str, **kwargs) -> str:
-        """Returns the echoed answer instead of hitting the network."""
-        return f"Received: _{message}_"
+    ``HookOnSay`` is what tells it something was said; ``HookSay`` is what lets
+    it reply. It never imports the session.
+    """
+
+    say : Say
+
+    def __init__(self) -> None:
+        #: The welcome message is the app talking, and the app *is* participant
+        #: zero, so a connector cannot tell it from something the user typed.
+        #: Skipping the first broadcast is the honest way to say so.
+        self._greeted = False
+
+    async def on_say(self, msg: ChatMessage) -> None:
+        """Echoes the user, after a beat, without blocking the terminal."""
+        if not self._greeted:
+            self._greeted = True
+            return
+        await asyncio.sleep(0.6)
+        await self.say("Received: _%s_" % msg.text, reply_to=msg.id)
 
 
-@command("code", "Show a Python code block")
-@require(HookExecute)
+@tool("code", "Show a Python code block")
+@require(HookOnAsk)
 class CodeCommand:
-    """Command that shows a Python code block with syntax highlighting."""
+    """Answers with a Python code block, syntax-highlighted by the log."""
 
-    def execute(self, *args, **kwargs) -> Any:
+    async def on_ask(self, msg: ChatMessage) -> str:
         """Returns a Markdown code block."""
         return (
             "Here is an example with **syntax highlighting**:\n\n"
@@ -53,8 +71,8 @@ class CodeCommand:
 
 WELCOME = (
     "Welcome to **chatinho**! 👋\n\n"
-    "You can send commands — type `/` to see suggestions:\n"
-    "- `/help` — lists the registered commands\n"
+    "A command is a question put to a tool — type `/` to see who can be asked:\n"
+    "- `/help` — lists the tools\n"
     "- `/code` — shows an example with syntax highlighting\n\n"
     "Everything you type is rendered as Markdown, and the echo connector replies to it."
 )
@@ -62,27 +80,11 @@ WELCOME = (
 
 def main() -> None:
     """Builds the demo chat and runs it."""
-    chat = create_chat(
-        connectors      = [EchoConnector()],
-        commands        = [HelpCommand(), CodeCommand()],
+    create_chat(
+        participants    = [HelpCommand(), CodeCommand(), EchoConnector()],
         title           = "chatinho demo",
         welcome_message = WELCOME,
-    )
-
-    def echo_reply(msg: ChatMessage) -> None:
-        """Sends each message through the connector and shows the answer.
-
-        Uses set_timer instead of time.sleep so the UI thread is never
-        blocked: the sent message paints immediately, and the reply lands
-        0.6s later without freezing the app.
-        """
-        if msg.is_command:
-            return
-        answer = chat.ask_connector("echo", msg.text)
-        chat.set_timer(0.6, lambda: chat.receive_message(answer, reply_to=msg.id))
-
-    chat.on_message_sent = echo_reply  # type: ignore[method-assign]
-    chat.run()
+    ).run()
 
 
 if __name__ == "__main__":
