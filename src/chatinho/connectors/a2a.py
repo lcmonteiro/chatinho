@@ -4,13 +4,13 @@ import logging
 from typing import Any, Dict
 import requests
 
-from ..chat_hooks import HookAsk, connector, require
+from ..chat_hooks import HookOnAsk, connector, require
 
 logger = logging.getLogger(__name__)
 
 
 @connector("a2a")
-@require(HookAsk)
+@require(HookOnAsk)
 class A2AConnector:
     """Connector for communicating with A2A (Agent-to-Agent) protocol endpoints."""
     
@@ -52,11 +52,11 @@ class A2AConnector:
             logger.warning(f"Could not connect to A2A endpoint during initialization: {e}")
             # Don't fail initialization - allow for lazy connection
     
-    def ask(self, message: str, **kwargs) -> Any:
+    async def on_ask(self, msg: Any, **kwargs) -> Any:
         """Ask the A2A agent and return its answer.
         
         Args:
-            message: The message to send
+            msg: The question; its text is what goes out
             **kwargs: Additional parameters including:
                 - context_id: Optional context ID for conversation continuity
                 - task_id: Optional task ID if this is part of an ongoing task
@@ -65,7 +65,7 @@ class A2AConnector:
         Returns:
             Dict: Response from the A2A agent
         """
-        logger.debug(f"Sending message via A2A connector '{self.name}': {message[:100]}...")
+        logger.debug(f"Answering via A2A connector '{self.name}': {msg.text[:100]}...")
         
         # Prepare A2A SendMessageRequest
         request_data: Dict[str, Any] = {
@@ -73,7 +73,7 @@ class A2AConnector:
                 "parts": [
                     {
                         "type": "text",
-                        "text": message
+                        "text": msg.text
                     }
                 ],
                 "role": "user"

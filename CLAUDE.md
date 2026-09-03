@@ -11,7 +11,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **152 pass** |
+| `pytest -q` | **115 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -52,43 +52,42 @@ Textual `App`. `connectors`, `commands` and `backend` are all optional. Commands
 displayed as an incoming message; unregistered commands fall through to the `command_handler`
 callback.
 
-## The conversation is protected
+## Three verbs, and everyone has an id
 
-`ChatSession` had nineteen public members; it has ten. The five interfaces onto the conversation
-are not among them — they are `_`-prefixed and reached **only** by declaring a hook:
+Everyone in a chat is a **participant** with an integer id. `LOCAL` — zero — is the user;
+connectors and tools are numbered from one. A connector carries an id *and* a visible name, and
+keeping them apart is what lets it be renamed without breaking replies in flight: the old code
+routed on `origin`, which was the display name.
 
-| hook | | what the plugin gets |
+There are three verbs and nothing else:
+
+| | | |
 |---|---|---|
-| `HookSendMessage`    | concede | `send_message(text, reply_to=None) -> id` |
-| `HookSendCommand`    | concede | `send_command(command) -> id` |
-| `HookLoadMessages`   | concede | `load_messages(since=, start=, limit=) -> List[ChatMessage]` |
-| `HookSay`            | concede | `say(text, reply_to=, origin=, correlation_id=) -> id` |
-| `HookReceiveMessage` | exige   | `on_receive_message(msg)` — every message, whoever sent it |
-| `HookReceiveCommand` | exige   | `on_receive_command(msg)` — before the session dispatches |
+| `say(text, reply_to=)` | concede | a message for everyone but the speaker |
+| `ask(to, text)` | concede | a message for one participant — **awaits** its reply |
+| `answer(msg, text)` | concede | the reply an ask is waiting on |
+| `on_say(msg)` | exige | someone spoke to everyone |
+| `on_ask(msg)` | exige | someone asked *you*; return the answer, or `answer()` later |
 
-There are twelve hooks and no "events" family. There were five events and each
-was either derivable or unused: `HookMessageSent` carried nothing that
-`HookReceiveMessage` does not — a message says whether it was sent by us — and
-fired a *second* time for the same message; `HookCommandExecuted`,
-`HookConnectorAdded`, `HookBackendSave` and `HookBackendLoad` had no consumer in
-`src`, `examples` or `tests`. The only things broadcast now are the two notices
-about the conversation.
+A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:
+`ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
+by the message it answers. A broadcast is owed to nobody.
 
-Hooks fire in registration order, which matters when a plugin writes
-re-entrantly: `examples/headless.py` attaches its presentation before adding the
-echo connector, or the answer prints before the message it answers.
+**A command is an ask to a tool.** `/help` asks the participant named "help". That deleted
+`HookExecute`, `dispatch_command`, `command_handler` and the whole idea of dispatch.
 
-`ChatSession.attach(obj)` is the whole plugin contract for anything not addressed by name:
-register the hooks, hand over the grants, call `initialize()`. `add_connector` and `add_command`
-add a name and then call it.
+**The presentation is participant zero.** `_Chat` declares the same hooks a connector does and is
+attached at `LOCAL`. `send_message`, `on_receive_message`, `inbox`, `deliver`, `origin` and
+`correlation_id` are all gone from the vocabulary.
 
-`load_messages` replaced six duplicate readers (`store`, `messages`, `new_id`, `find_message`,
-`get_replies`, `window`) — five of which forwarded to a `_store` that was itself public, and one of
-which, `window`, had no caller at all: `ChatLog` was already reading the store it had been handed.
+Everything is a coroutine, and **every participant has its own queue and its own task**, so a
+subsystem that takes a second to answer holds up nobody but itself — `test_chat_session.py` asserts
+two asks of 0.3s and 0s finish in under 0.45s.
+
+`HookRegistry` went with them: dispatch is per-participant queues now, so nothing used it.
 
 One thing stated plainly: Python has no `protected`. The `_` is convention, and the grants still
-reach back — `say.__self__` is the session and `inbox`'s closure holds it. This buys intent and a
-single documented door, not enforcement.
+reach back. This buys intent and a single documented door, not enforcement.
 
 ## Everything declares what it does
 

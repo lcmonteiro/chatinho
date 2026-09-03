@@ -1,280 +1,212 @@
-"""Tests for @connector and @require — how a connector says what it does.
+"""Tests for @require, @connector, @tool and @backend.
 
-There is no base class. A connector is a plain object that declares its
-capabilities, and ``require`` checks at class-definition time that it
-implements them, so a missing or misspelled method is an import error rather
-than a hook that silently never fires.
+A participant is a plain class. ``require`` checks at class-definition time
+that it implements what it declared, so a missing or misspelled method is an
+import error rather than a hook that silently never fires.
 """
 
 import pytest
 
 from chatinho import (
-    A2AConnector,
-    command,
-    ChatSession,
-    HookAnswer,
     HookAsk,
-    HookReceiveMessage,
-    OpenAIConnector,
+    HookLoadMessages,
+    HookOnAsk,
+    HookOnSay,
+    HookSay,
+    backend,
     connector,
+    declares,
+    hooks_of,
+    name_of,
+    options_of,
     require,
+    tool,
 )
-from chatinho.chat_hooks import declares, hooks_of, name_of, options_of
 from conftest import driven
 
 
-# === @require validates ==========================================================
+# === Validation at class-definition time ========================================
 
 
-def test_a_class_that_implements_what_it_declares_is_accepted():
-    @require(HookAsk)
+def test_a_declared_method_that_exists_is_accepted():
+    @require(HookOnSay)
     class Fine:
-        def ask(self, message, **kwargs):
-            return "ok"
+        async def on_say(self, msg):
+            pass
 
-    assert declares(Fine(), HookAsk)
+    assert declares(Fine(), HookOnSay)
 
 
-def test_a_missing_method_is_an_error_at_class_definition():
-    with pytest.raises(TypeError, match=r"declares HookAnswer.*does not implement answer\(\)"):
-        @require(HookAnswer)
+def test_a_declared_method_that_is_missing_is_an_import_error():
+    with pytest.raises(TypeError, match="does not implement on_say"):
+
+        @require(HookOnSay)
         class Missing:
-            def ask(self, message, **kwargs):
-                return "ok"
+            pass
 
 
-def test_a_misspelled_method_is_caught():
-    """The error this is really for."""
-    with pytest.raises(TypeError, match="on_receive_message"):
-        @require(HookReceiveMessage)
+def test_a_misspelled_method_is_caught_the_same_way():
+    with pytest.raises(TypeError, match="on_ask"):
+
+        @require(HookOnAsk)
         class Typo:
-            def on_messages_sent(self, msg, **kwargs):
+            async def on_asks(self, msg):   # noqa: the typo is the point
                 pass
 
 
-def test_a_non_callable_attribute_does_not_satisfy_a_hook():
-    with pytest.raises(TypeError):
-        @require(HookAsk)
-        class NotAMethod:
-            ask = "not callable"
+def test_a_grant_only_hook_validates_nothing():
+    """HookSay hands say() over; there is nothing on the class to check."""
 
-
-def test_stacked_requires_accumulate():
-    @require(HookAsk)
-    @require(HookReceiveMessage)
-    class Both:
-        def ask(self, message, **kwargs):
-            return "ok"
-
-        def on_receive_message(self, msg, **kwargs):
-            pass
-
-    assert hooks_of(Both()) == frozenset({HookAsk, HookReceiveMessage})
-
-
-# === One hook per require, with its own options ==================================
-
-
-def test_require_takes_one_hook_and_says_what_to_do_instead():
-    with pytest.raises(TypeError, match="stack decorators"):
-        @require(HookAsk, HookReceiveMessage)
-        class TwoAtOnce:
-            def ask(self, message, **kwargs):
-                return "ok"
-
-            def on_receive_message(self, msg, **kwargs):
-                pass
-
-
-def test_require_rejects_something_that_is_not_a_hook():
-    with pytest.raises(TypeError, match="takes a Hook"):
-        @require("ask")
-        class NotAHook:
-            def ask(self, message, **kwargs):
-                return "ok"
-
-
-def test_each_hook_carries_its_own_options():
-    @require(HookAsk, timeout=30)
-    @require(HookAnswer, correlation="taskId")
-    class Configured:
-        def ask(self, message, **kwargs):
-            return "ok"
-
-        def answer(self, correlation_id, text):
-            pass
-
-    configured = Configured()
-    assert options_of(configured, HookAsk) == {"timeout": 30}
-    assert options_of(configured, HookAnswer) == {"correlation": "taskId"}
-
-
-def test_a_hook_declared_without_options_has_none():
-    @require(HookAsk)
-    class Plain:
-        def ask(self, message, **kwargs):
-            return "ok"
-
-    assert options_of(Plain(), HookAsk) == {}
-    assert options_of(Plain(), HookReceiveMessage) == {}
-
-
-def test_options_are_returned_as_a_copy():
-    @require(HookAsk, timeout=30)
-    class Configured:
-        def ask(self, message, **kwargs):
-            return "ok"
-
-    configured = Configured()
-    options_of(configured, HookAsk)["timeout"] = 999
-    assert options_of(configured, HookAsk) == {"timeout": 30}
-
-
-def test_declaring_the_same_hook_twice_merges_options():
-    """Decorators apply bottom-up, so the highest one wins per key."""
-    @require(HookAsk, timeout=99)
-    @require(HookAsk, timeout=30, retries=2)
-    class Twice:
-        def ask(self, message, **kwargs):
-            return "ok"
-
-    assert options_of(Twice(), HookAsk) == {"timeout": 99, "retries": 2}
-
-
-def test_options_do_not_leak_between_classes():
-    @require(HookAsk, timeout=30)
-    class First:
-        def ask(self, message, **kwargs):
-            return "ok"
-
-    @require(HookAsk)
-    class Second(First):
+    @require(HookSay)
+    class Silent:
         pass
 
-    assert options_of(First(), HookAsk) == {"timeout": 30}
-    assert options_of(Second(), HookAsk) == {"timeout": 30}
-    Second._hooks[HookAsk]["timeout"] = 1
-    assert options_of(First(), HookAsk) == {"timeout": 30}
+    assert declares(Silent(), HookSay)
+
+
+# === Stacking ===================================================================
+
+
+def test_hooks_stack_and_are_all_remembered():
+    @require(HookOnSay)
+    @require(HookAsk)
+    class Both:
+        async def on_say(self, msg):
+            pass
+
+    assert hooks_of(Both()) == frozenset({HookAsk, HookOnSay})
+
+
+def test_two_hooks_in_one_require_says_to_stack_instead():
+    with pytest.raises(TypeError, match="stack decorators"):
+
+        @require(HookAsk, HookOnSay)
+        class Wrong:
+            async def on_say(self, msg):
+                pass
+
+
+def test_require_refuses_something_that_is_not_a_hook():
+    with pytest.raises(TypeError, match="takes a Hook"):
+
+        @require("HookAsk")
+        class Wrong:
+            pass
 
 
 def test_declaring_nothing_is_allowed_and_means_nothing_fires():
     class Quiet:
-        def on_receive_message(self, msg, **kwargs):
+        name = "quiet"
+
+        async def on_say(self, msg):
             raise AssertionError("must never be called")
 
+    assert hooks_of(Quiet()) == frozenset()
+
+
+async def test_an_undeclared_hook_is_never_dispatched_to():
+    """The methods are there; without the declaration nothing reaches them."""
+
+    class Quiet:
+        name = "quiet"
+
+        def __init__(self):
+            self.heard = []
+
+        async def on_say(self, msg):
+            self.heard.append(msg)
+
+    session, view = await driven()
     quiet = Quiet()
-    quiet.name = "quiet"
-    _, view = driven(connectors=[quiet])
-    view.send_message("ola")  # would raise if the undeclared hook fired
-    assert hooks_of(quiet) == frozenset()
+    session.attach(quiet)
+    await session.start()
+    await view.say("ola")
+    assert quiet.heard == []
+    await session.close()
 
 
-# === @connector names ============================================================
+# === Options ====================================================================
 
 
-def test_connector_names_the_class():
+def test_options_ride_along_with_the_hook_that_owns_them():
+    @require(HookAsk, timeout=30)
+    @require(HookOnSay, batch=5)
+    class Tuned:
+        async def on_say(self, msg):
+            pass
+
+    tuned = Tuned()
+    assert options_of(tuned, HookAsk) == {"timeout": 30}
+    assert options_of(tuned, HookOnSay) == {"batch": 5}
+    assert options_of(tuned, HookLoadMessages) == {}
+
+
+def test_options_of_hands_back_a_copy():
+    @require(HookAsk, timeout=30)
+    class Tuned:
+        pass
+
+    tuned = Tuned()
+    options_of(tuned, HookAsk)["timeout"] = 1
+    assert options_of(tuned, HookAsk) == {"timeout": 30}
+
+
+def test_declaring_the_same_hook_twice_merges_the_options():
+    """Decorators apply bottom-up, so the one written highest wins."""
+
+    @require(HookAsk, timeout=1)
+    @require(HookAsk, timeout=99, retries=2)
+    class Tuned:
+        pass
+
+    assert options_of(Tuned(), HookAsk) == {"timeout": 1, "retries": 2}
+
+
+def test_a_subclass_does_not_write_into_its_parents_declaration():
+    @require(HookAsk)
+    class Parent:
+        pass
+
+    @require(HookOnSay)
+    class Child(Parent):
+        async def on_say(self, msg):
+            pass
+
+    assert hooks_of(Parent()) == frozenset({HookAsk})
+    assert hooks_of(Child()) == frozenset({HookAsk, HookOnSay})
+
+
+# === Names ======================================================================
+
+
+def test_connector_names_the_class_and_an_instance_may_override_it():
     @connector("weather")
-    @require(HookAsk)
     class Weather:
-        def ask(self, message, **kwargs):
-            return "sol"
+        pass
 
-    assert Weather().name == "weather"
     assert name_of(Weather()) == "weather"
+    other = Weather()
+    other.name = "weather-eu"
+    assert name_of(other) == "weather-eu"
 
 
-def test_an_instance_may_override_the_class_name():
-    """Two links of the same kind to different agents."""
-    @connector("agent")
-    @require(HookAsk)
-    class Agent:
-        def __init__(self, name=None):
-            if name is not None:
-                self.name = name
+def test_a_tool_carries_the_text_the_popup_shows():
+    @tool("deploy", "Ship it")
+    class Deploy:
+        pass
 
-        def ask(self, message, **kwargs):
-            return "ok"
-
-    session = ChatSession(connectors=[Agent("north"), Agent("south")])
-    assert sorted(session.connectors) == ["north", "south"]
+    assert (name_of(Deploy()), Deploy().description) == ("deploy", "Ship it")
 
 
-@pytest.mark.parametrize("bad", ["", "   ", None, 42])
-def test_a_connector_needs_a_real_name(bad):
-    with pytest.raises(ValueError):
-        connector(bad)
-
-
-def test_name_of_falls_back_to_the_class_name():
+def test_an_undecorated_class_falls_back_to_its_class_name():
     class Anonymous:
         pass
 
     assert name_of(Anonymous()) == "Anonymous"
 
 
-# === The shipped connectors declare themselves ===================================
-
-
-def test_the_shipped_connectors_declare_only_the_outbound_role():
-    for cls in (A2AConnector, OpenAIConnector):
-        instance = cls.__new__(cls)  # no network in __init__
-        assert declares(instance, HookAsk)
-        assert not declares(instance, HookAnswer)
-
-
-def test_lifecycle_is_optional_not_declared():
-    """A connector holding nothing implements neither initialize nor shutdown."""
-    @connector("bare")
-    @require(HookAsk)
-    class Bare:
-        def ask(self, message, **kwargs):
-            return "ok"
-
-    session = ChatSession(connectors=[Bare()])
-    session.close()
-    assert session.ask_connector("bare", "ping") == "ok"
-
-
-# === Grant-only hooks ============================================================
-
-
-def test_a_grant_only_hook_validates_nothing():
-    """HookSay is received, not implemented — there is nothing to check."""
-    from chatinho import HookSay
-
-    @require(HookSay)
-    class Quiet:
-        pass
-
-    assert declares(Quiet(), HookSay)
-    assert HookSay.method is None
-    assert HookSay.grants == ("say",)
-
-
-def test_triggering_a_grant_only_hook_warns_instead_of_crashing(caplog):
-    import logging
-
-    from chatinho import HookSay
-    from chatinho.chat_hooks import HookRegistry
-
-    @require(HookSay)
-    class Quiet:
-        pass
-
-    registry = HookRegistry()
-    registry.register(Quiet())
-    with caplog.at_level(logging.WARNING):
-        registry.trigger(HookSay, text="ola")
-    assert "only grants" in caplog.text
-
-
-def test_a_command_that_cannot_execute_is_refused_at_registration():
-    from chatinho import ChatSession
-
-    @command("broken", "declares nothing")
-    class Broken:
-        def execute(self, **kwargs):
-            return "never reached"
-
-    with pytest.raises(TypeError, match="must @require"):
-        ChatSession(commands=[Broken()])
+@pytest.mark.parametrize("naming", [connector, tool, backend])
+@pytest.mark.parametrize("bad", ["", "   ", None, 7])
+def test_an_empty_name_is_refused(naming, bad):
+    with pytest.raises(ValueError, match="non-empty string"):
+        naming(bad)

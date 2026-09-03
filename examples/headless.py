@@ -1,10 +1,10 @@
 """The same chat, without a terminal UI.
 
-``ChatSession`` holds every use case — messages, command dispatch, connectors,
-persistence — and imports no UI framework. The conversation itself is
-protected: nothing here calls the session. ``Terminal`` below declares the
-hooks it needs and the session hands the capabilities over at ``attach`` —
-exactly what ``_Chat`` does, with the terminal taken out.
+``ChatSession`` routes messages between participants and imports no UI
+framework. The conversation is protected: nothing here calls the session.
+``Terminal`` below declares the hooks it needs and is registered at ``LOCAL``,
+because the user is participant zero — exactly what ``_Chat`` does, with the
+terminal taken out.
 
 Note that ``import chatinho`` still loads Textual today, because the package's
 ``__init__`` eagerly imports the application. ``chatinho.chat_session`` itself
@@ -14,125 +14,130 @@ Run it:            python examples/headless.py
 Feed it a script:  printf '/help\\nola\\n' | python examples/headless.py
 """
 
+import asyncio
 import sys
-from typing import Any, Callable, Iterator, List
+from typing import List, Optional
 
 from chatinho import (
+    LOCAL,
+    Ask,
     ChatMessage,
     ChatSession,
     HelpCommand,
     HookAsk,
-    HookExecute,
     HookLoadMessages,
-    HookReceiveCommand,
-    HookReceiveMessage,
+    HookOnAsk,
+    HookOnSay,
+    HookParticipants,
     HookSay,
-    HookSendCommand,
-    HookSendMessage,
-    command,
+    LoadMessages,
+    Participants,
+    Say,
     connector,
     require,
+    tool,
 )
 
 
-@connector("echo")
-@require(HookAsk)
-@require(HookReceiveMessage)
+@connector("eco")
+@require(HookOnSay)
 @require(HookSay)
 class EchoConnector:
-    """Stands in for a real transport, and answers on its own.
+    """Answers whatever is said to everyone, and never its own answers.
 
-    ``HookReceiveMessage`` tells it what entered the conversation; ``HookSay``
-    gives it the way to write the answer back. It never imports the session.
+    A sender does not hear its own broadcast, which is what stops this from
+    answering itself forever.
     """
 
-    say : Callable[..., str]
+    say : Say
 
-    def ask(self, message: str, **kwargs) -> str:
-        """Returns the echoed answer instead of hitting the network."""
-        return "Received: %s" % message
-
-    def on_receive_message(self, msg: ChatMessage, **kwargs) -> None:
-        """Answers what the user sent, and never its own answers."""
-        if msg.is_sent_by_me:
-            self.say(self.ask(msg.text), reply_to=msg.id)
+    async def on_say(self, msg: ChatMessage) -> None:
+        """Replies to the message that was just said."""
+        await self.say("Received: %s" % msg.text, reply_to=msg.id)
 
 
-@command("upper", "Upper-case the rest of the line")
-@require(HookExecute)
+@tool("upper", "Upper-case the rest of the line")
+@require(HookOnAsk)
 class UpperCommand:
-    """Command that shouts its arguments back."""
+    """Shouts its arguments back."""
 
-    def execute(self, *args, **kwargs) -> Any:
-        """Returns the command's arguments in upper case."""
-        arguments = kwargs.get("args", "")
-        return arguments.upper() if arguments else "Usage: /upper <text>"
+    async def on_ask(self, msg: ChatMessage) -> str:
+        """Returns the question in upper case."""
+        return msg.text.upper() if msg.text else "Usage: /upper <text>"
 
 
-@require(HookSendMessage)
-@require(HookSendCommand)
+@require(HookSay)
+@require(HookAsk)
+@require(HookOnSay)
+@require(HookOnAsk)
 @require(HookLoadMessages)
-@require(HookReceiveMessage)
-@require(HookReceiveCommand)
+@require(HookParticipants)
 class Terminal:
     """The presentation layer: prints what arrives, sends what is typed."""
 
     # Granted by the session at attach.
-    send_message  : Callable[..., str]
-    send_command  : Callable[[str], str]
-    load_messages : Callable[..., List[ChatMessage]]
+    say           : Say
+    ask           : Ask
+    load_messages : LoadMessages
+    participants  : Participants
 
-    def on_receive_message(self, msg: ChatMessage, **kwargs) -> None:
-        """Renders one message on a plain terminal."""
-        marker = ">" if msg.is_sent_by_me else "<"
-        reply  = " (replying to %s)" % msg.reply_to if msg.reply_to else ""
-        print("%s %s%s" % (marker, msg.text, reply))
+    async def on_say(self, msg: ChatMessage) -> None:
+        """Renders one broadcast on a plain terminal."""
+        reply = " (replying to %s)" % msg.reply_to if msg.reply_to else ""
+        print("< %s%s" % (msg.text, reply))
 
-    def on_receive_command(self, msg: ChatMessage, **kwargs) -> None:
-        """Echoes the command line, before the session dispatches it."""
-        print("> /%s" % msg.text)
+    async def on_ask(self, msg: ChatMessage) -> Optional[str]:
+        """Shows a question put to the user; the reply is theirs to type."""
+        print("? %s  — reply with  =<answer>" % msg.text)
+        return None
 
-
-def read_lines() -> Iterator[str]:
-    """Yields input lines, prompting only when there is someone to prompt."""
-    if sys.stdin.isatty():
-        while True:
-            try:
-                yield input("chatinho> ")
-            except EOFError:
-                return
-    else:
-        for line in sys.stdin:
-            yield line
+    async def command(self, line: str) -> None:
+        """Runs ``/name args``: an ask addressed to the tool of that name."""
+        name, _, args = line.partition(" ")
+        at = next((i for i, w in self.participants().items()
+                   if i != LOCAL and getattr(w, "name", "") == name), None)
+        if at is None:
+            print("? unknown command: /%s — try /help" % name)
+            return
+        print("> /%s %s" % (name, args))
+        print("< %s" % await self.ask(at, args.strip()))
 
 
-def main() -> None:
+async def read_lines() -> List[str]:
+    """Reads stdin off the event loop, so nothing blocks while we wait."""
+    return await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readlines)
+
+
+async def main() -> None:
     """Builds a headless chat and drives it from stdin."""
-    session = ChatSession(
-        commands        = [HelpCommand(), UpperCommand()],
-        command_handler = lambda command: print("? unknown command: /%s — try /help" % command),
-    )
-    # Hooks fire in registration order, and the echo answers re-entrantly: were
-    # it registered first, its reply would print before the message it answers.
+    session = ChatSession()
     view = Terminal()
-    session.attach(view)
-    session.add_connector(EchoConnector())
+    session.attach(view, at=LOCAL)
+    session.attach(HelpCommand())
+    session.attach(UpperCommand())
+    # Registered last on purpose: hooks fire in registration order, and the
+    # echo answers re-entrantly, so listening first keeps the reply below the
+    # message it answers.
+    session.attach(EchoConnector())
+    await session.start()
 
     print("Type a message, /help for commands, /quit to leave.")
-    for line in read_lines():
+    for line in await read_lines():
         text = line.strip()
-        if not text:
-            continue
-        if text in ("/quit", "/exit"):
+        if not text or text in ("/quit", "/exit"):
             break
         if text.startswith("/"):
-            view.send_command(text[1:].strip())
+            await view.command(text[1:].strip())
         else:
-            view.send_message(text)
+            print("> %s" % text)
+            await view.say(text)
+            # Nothing blocks here: the echo answers on its own queue, so give
+            # the loop a moment to run it before reading the next line.
+            await asyncio.sleep(0.05)
 
-    session.close()
+    await session.close()
     print("--- %d messages, no terminal UI ---" % len(view.load_messages()))
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

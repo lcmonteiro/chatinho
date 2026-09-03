@@ -137,7 +137,7 @@ class ChatLog(TouchScrollableContainer):
 
     def _render_message(self, msg: ChatMessage) -> Widget:
         """Render a message as a clickable container with header and body."""
-        sender = "You" if msg.is_sent_by_me else "Other"
+        sender = "You" if msg.is_local else "Other"
         time_str = msg.timestamp.strftime("%H:%M")
         prefix = f"[{time_str}] {sender} · {msg.id}"
         if msg.reply_to is not None:
@@ -166,7 +166,7 @@ class ChatLog(TouchScrollableContainer):
             on_select=self._on_message_clicked,
             classes="message-container",
         )
-        if msg.is_sent_by_me:
+        if msg.is_local:
             container.add_class("sent")
         else:
             container.add_class("received")

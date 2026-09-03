@@ -1,5 +1,18 @@
 """Message model and history for chatinho.
 
+Every participant in a chat has an integer id, and :data:`LOCAL` — zero — is
+the chat itself: the user. A connector links the chat to one agent or
+subsystem and carries both an ``id``, which is how messages are addressed, and
+a ``name``, which is what the chat displays. Keeping them apart is what lets a
+connector be renamed without breaking the replies already in flight.
+
+A message says where it came from and where it is going, and that is all the
+routing there is:
+
+    to is None   → everyone heard it          (say)
+    to is an id  → one participant was asked  (ask)
+    reply_to set → it answers that message    (answer)
+
 Neither class touches Textual, so both can be exercised without mounting an
 application.
 """
@@ -9,29 +22,47 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
 
+#: The chat itself — the user's own id. Every other participant is a connector
+#: or a tool, numbered from one.
+LOCAL : int = 0
+
 
 @dataclass
 class ChatMessage:
-    """Represents a chat message."""
+    """One message, addressed.
 
-    id          : str
-    text        : str
-    timestamp   : datetime = field(default_factory=datetime.now)
-    is_command  : bool = False
-    reply_to    : Optional[str] = None
-    is_sent_by_me : bool = True
-    # Set when the message came in through a connector rather than from the
-    # chat itself; ``correlation_id`` is the far side's own id for the
-    # exchange, and is what routes the user's reply back.
-    origin         : Optional[str] = None
-    correlation_id : Optional[str] = None
+    Attributes:
+        id: Unique within a chat, assigned by the store.
+        text: What was said.
+        frm: The id of whoever said it; :data:`LOCAL` for the user.
+        to: The id it was addressed to, or None when it went to everyone.
+        reply_to: The id of the message this answers, when it answers one.
+        timestamp: When it entered the history.
+    """
+
+    id        : str
+    text      : str
+    frm       : int = LOCAL
+    to        : Optional[int] = None
+    reply_to  : Optional[str] = None
+    timestamp : datetime = field(default_factory=datetime.now)
+
+    @property
+    def is_broadcast(self) -> bool:
+        """Whether it went to everyone rather than to one participant."""
+        return self.to is None
+
+    @property
+    def is_local(self) -> bool:
+        """Whether the user said it."""
+        return self.frm == LOCAL
 
 
 class MessageStore:
     """The chat's message history: ids, lookup and reply threading.
 
-    The full history is kept here; the rendering window (see :meth:`window`)
-    only decides how much of it a widget paints.
+    The full history is kept here; how much of it a widget paints is the
+    widget's business.
     """
 
     def __init__(self) -> None:
@@ -39,9 +70,7 @@ class MessageStore:
         self._next_id      : int = 1
         self._id_lock      : threading.Lock = threading.Lock()
         self._index        : Dict[str, ChatMessage] = {}
-        # Mapping from message id to list of reply ids (for threading)
         self._replies      : Dict[str, List[str]] = {}
-        self._replies_lock : threading.Lock = threading.Lock()
 
     @property
     def messages(self) -> List[ChatMessage]:
@@ -56,47 +85,29 @@ class MessageStore:
     def new_id(self) -> str:
         """Returns a fresh message id. Safe to call from any thread."""
         with self._id_lock:
-            msg_id = f"msg-{self._next_id}"
+            msg_id = "msg-%d" % self._next_id
             self._next_id += 1
         return msg_id
 
     def add(self, msg: ChatMessage) -> ChatMessage:
-        """Appends *msg* to the history, threading it if it is a reply.
+        """Appends *msg*, indexes it and records it against what it answers.
 
         Args:
-            msg: The message to store.
+            msg: The message to keep.
 
         Returns:
-            ChatMessage: The stored message, for chaining.
+            ChatMessage: The same message, for chaining.
         """
         self._messages.append(msg)
         self._index[msg.id] = msg
         if msg.reply_to is not None:
-            self.record_reply(msg.reply_to, msg.id)
+            self._replies.setdefault(msg.reply_to, []).append(msg.id)
         return msg
 
-    def record_reply(self, reply_to: str, msg_id: str) -> None:
-        """Thread-safely records that *msg_id* replies to *reply_to*."""
-        with self._replies_lock:
-            self._replies.setdefault(reply_to, []).append(msg_id)
-
-    def replies(self, msg_id: str) -> List[str]:
-        """Returns the ids of the messages that reply to *msg_id*."""
-        with self._replies_lock:
-            return list(self._replies.get(msg_id, []))
-
     def find(self, msg_id: str) -> Optional[ChatMessage]:
-        """Returns the message with the given id, or None."""
+        """Returns the message with *msg_id*, or None."""
         return self._index.get(msg_id)
 
-    def window(self, size: int) -> List[ChatMessage]:
-        """Returns the last *size* messages, oldest first.
-
-        Args:
-            size: How many messages the window holds.
-
-        Returns:
-            List[ChatMessage]: The tail of the history, at most *size* long.
-        """
-        start = max(0, len(self._messages) - size)
-        return self._messages[start:]
+    def replies(self, msg_id: str) -> List[str]:
+        """Returns the ids of the messages that answer *msg_id*."""
+        return list(self._replies.get(msg_id, []))

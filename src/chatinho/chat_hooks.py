@@ -1,57 +1,94 @@
-"""Capabilities a connector declares, and the registry that dispatches to them.
+"""Capabilities a participant declares, and the registry that dispatches them.
 
-A connector is a plain class. It says what it can do by declaring hooks, and
-:func:`require` checks at class-definition time that it implements what it
-declared — so a missing or misspelled method is an import error, not a silent
-no-op at runtime.
+A participant — a connector, a tool, or the presentation — is a plain class. It
+says what it can do by declaring hooks, and :func:`require` checks at
+class-definition time that it implements what it declared, so a missing or
+misspelled method is an import error rather than a silent no-op at runtime.
+
+There are three verbs and nothing else:
+
+    say(text)          a message for everyone
+    ask(to, text)      a message for one participant, awaiting its reply
+    answer(msg, text)  the reply that ask is waiting on
+
+and two ways of being told:
+
+    on_say(msg)   someone spoke to everyone
+    on_ask(msg)   someone asked *you*; return the answer, or answer() later
+
+Everything is a coroutine and every participant has its own queue, so a slow
+subsystem holds up nobody but itself.
 
     @connector("weather")
-    @require(HookAsk)
-    @require(HookReceiveMessage)
+    @require(HookOnAsk)
     class WeatherConnector:
-        def ask(self, message, **kwargs): ...
-        def on_receive_message(self, msg, **kwargs): ...
+        async def on_ask(self, msg): return "sunny"
 
 One hook per ``require``, stacked. Each declaration is its own line, so it has
 somewhere to carry options that belong to that hook alone:
 
     @require(HookAsk, timeout=30)
-    @require(HookAnswer, correlation="taskId")
 
-Nothing here is inherited: no base class, no ``isinstance``. Direction and
-event participation are declared the same way, because they are the same
-question — what does this connector do?
+Nothing here is inherited: no base class, no ``isinstance``.
 """
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Tuple
+
+from .chat_message import ChatMessage
 
 logger = logging.getLogger(__name__)
 
-# What a connector granted ``inbox`` calls to put a question in front of the
-# user: ``inbox(text, correlation_id) -> message id``.
-Inbox = Callable[[str, Optional[str]], str]
 
 class Say(Protocol):
-    """What ``HookSay`` grants: writing into the conversation from outside.
+    """Granted by ``HookSay``: a message for everyone."""
 
-    A protocol rather than a ``Callable`` alias because the granted call takes
-    keyword arguments, and an alias cannot say so — it typed the grant more
-    narrowly than the thing actually handed over. Annotate it on the class: the
-    chat sets the attribute at registration, so without the annotation a type
-    checker cannot see it.
+    async def __call__(self, text: str, *, reply_to: Optional[str] = None) -> str:
+        """Adds *text* to the conversation and returns the new message's id."""
+        ...
+
+
+class Ask(Protocol):
+    """Granted by ``HookAsk``: a message for one participant, and its reply."""
+
+    async def __call__(self, to: int, text: str) -> str:
+        """Asks participant *to* and waits for the answer it sends back."""
+        ...
+
+
+class Answer(Protocol):
+    """Granted by ``HookOnAsk``: the reply an ask is waiting on.
+
+    Only needed when the answer is not ready inline — a connector that has to
+    reach a server returns None from ``on_ask`` and calls this once it knows.
     """
+
+    async def __call__(self, msg: ChatMessage, text: str) -> str:
+        """Answers *msg* with *text* and returns the reply's id."""
+        ...
+
+
+class Participants(Protocol):
+    """Granted by ``HookParticipants``: who else is in the chat, by id."""
+
+    def __call__(self) -> Dict[int, Any]:
+        """Returns a copy of the roster, keyed by participant id."""
+        ...
+
+
+class LoadMessages(Protocol):
+    """Granted by ``HookLoadMessages``: the history, by time or by index."""
 
     def __call__(
         self,
-        text : str,
         *,
-        reply_to       : Optional[str] = None,
-        origin         : Optional[str] = None,
-        correlation_id : Optional[str] = None,
-    ) -> str:
-        """Adds *text* to the conversation and returns the new message's id."""
+        since : Optional[datetime] = None,
+        start : Optional[int] = None,
+        limit : Optional[int] = None,
+    ) -> List[ChatMessage]:
+        """Returns the messages that survive the filters, oldest first."""
         ...
 
 
@@ -78,111 +115,72 @@ class Hook:
         return self.name
 
 
-# === Roles: what a connector is for =============================================
+# === The three verbs ============================================================
+
+HookSay = Hook(
+    name="HookSay",
+    grants=("say",),
+    # say(text, reply_to=None) -> id. Reaches every participant but the sender.
+    # A reply to a say is another say: a broadcast is owed to nobody, so there
+    # is no fourth verb for answering one.
+)
 
 HookAsk = Hook(
     name="HookAsk",
-    method="ask",
-    # The user asks, the far side answers. ask(message, **kwargs) -> answer.
+    grants=("ask",),
+    # await ask(to, text) -> the answer. Addressed and owed: exactly one
+    # participant, exactly one reply. ask(LOCAL, ...) asks the user.
 )
 
-HookAnswer = Hook(
-    name="HookAnswer",
-    method="answer",
-    grants=("inbox",),
-    # The far side can start the conversation: it calls self.inbox(text,
-    # correlation_id) from its own listener, and the user's reply arrives as
-    # answer(correlation_id, text).
+HookOnSay = Hook(
+    name="HookOnSay",
+    method="on_say",
+    # Someone spoke to everyone. Nothing is owed back.
 )
 
-# === The chat itself: what a plugin may do to the conversation ==================
-#
-# These five are the whole of the chat as a plugin sees it. Three are granted —
-# the session sets them at registration and the plugin calls them — and two are
-# demanded, so the session calls the plugin. Nothing else about the session is
-# reachable: its methods are protected, and declaring a hook is the only door.
-
-HookSendMessage = Hook(
-    name="HookSendMessage",
-    grants=("send_message",),
-    # send_message(text, reply_to=None) -> message id. Enters the history as
-    # sent by the user, and routes an answer back when it replies to a message
-    # that arrived through a connector.
-)
-
-HookSendCommand = Hook(
-    name="HookSendCommand",
-    grants=("send_command",),
-    # send_command(command) -> message id. The command line without the prefix.
+HookOnAsk = Hook(
+    name="HookOnAsk",
+    method="on_ask",
+    grants=("answer",),
+    # Someone asked you. Return the answer to reply inline, or return None and
+    # call self.answer(msg, text) once you know it — which is why being
+    # askable is what grants the way to answer.
 )
 
 HookLoadMessages = Hook(
     name="HookLoadMessages",
     grants=("load_messages",),
-    # load_messages(since=None, start=None, limit=None) -> List[ChatMessage].
     # The history, by time or by index. The only way to read it.
 )
 
-HookReceiveMessage = Hook(
-    name="HookReceiveMessage",
-    method="on_receive_message",
-    # A message entered the conversation. Called for every one of them, whoever
-    # sent it, so a presentation can repaint on this alone.
+HookParticipants = Hook(
+    name="HookParticipants",
+    grants=("participants",),
+    # Who else is here, by id. The roster's counterpart to load_messages: /help
+    # lists it and the autocomplete popup matches against it, and neither can
+    # be written without a way to see past its own class.
 )
 
-HookReceiveCommand = Hook(
-    name="HookReceiveCommand",
-    method="on_receive_command",
-    # A command entered the conversation, before it is dispatched.
-)
-
-# === Roles: what a command is for ===============================================
-
-HookExecute = Hook(
-    name="HookExecute",
-    method="execute",
-    # The user typed /name. execute(**kwargs) -> whatever should be displayed,
-    # or None when the command wrote its own output through HookSay.
-)
-
-HookSay = Hook(
-    name="HookSay",
-    grants=("say",),
-    # Grant-only: the chat hands over say(text), so a command can write into the
-    # conversation as it works instead of returning one final string. Nothing to
-    # validate — the class does not implement say, it receives it.
-)
-
-# === Roles: what a backend is for ===============================================
+# === What a backend is for ======================================================
 
 HookSave   = Hook("HookSave",   "save")
 HookLoad   = Hook("HookLoad",   "load")
 HookDelete = Hook("HookDelete", "delete")
 
-# There is no "events" family. There were five — one per interesting moment —
-# and every one of them was either derivable or unused: HookMessageSent carried
-# nothing that HookReceiveMessage does not, since a message says whether it was
-# sent by us, and it fired a second time for the same message; the other four
-# had no consumer anywhere. The only things broadcast are the two notices about
-# the conversation above.
-
 ALL_HOOKS: Tuple[Hook, ...] = (
-    HookSendMessage,
-    HookSendCommand,
-    HookLoadMessages,
-    HookReceiveMessage,
-    HookReceiveCommand,
-    HookAsk,
-    HookAnswer,
-    HookExecute,
     HookSay,
+    HookAsk,
+    HookOnSay,
+    HookOnAsk,
+    HookLoadMessages,
+    HookParticipants,
     HookSave,
     HookLoad,
     HookDelete,
 )
 
 # Lifecycle is not a hook: initialize() and shutdown() are optional and called
-# when present. A connector that holds nothing needs neither, and forcing it to
+# when present. A participant holding nothing needs neither, and making it
 # declare that it holds nothing is ceremony.
 
 
@@ -211,11 +209,13 @@ def connector(name: str) -> Callable[[type], type]:
     return decorator
 
 
-def command(name: str, description: str = "") -> Callable[[type], type]:
-    """Names a command class and gives it the text the UI shows.
+def tool(name: str, description: str = "") -> Callable[[type], type]:
+    """Names a tool and gives it the text the UI shows.
 
-    The name is what the user types after ``/``; the description is what the
-    autocomplete popup and ``/help`` display beside it.
+    A tool is a participant like any other, and a command is an ask addressed
+    to one: typing ``/help`` asks the tool named "help". The name is what the
+    user types after ``/``; the description is what the autocomplete popup and
+    ``/help`` display beside it.
 
     Args:
         name: The command name, without the prefix; a non-empty string.
@@ -228,7 +228,7 @@ def command(name: str, description: str = "") -> Callable[[type], type]:
         ValueError: If *name* is empty or not a string.
     """
     if not isinstance(name, str) or not name.strip():
-        raise ValueError("A command name must be a non-empty string, got %r" % (name,))
+        raise ValueError("A tool name must be a non-empty string, got %r" % (name,))
 
     def decorator(cls: type) -> type:
         cls.name = name                # type: ignore[attr-defined]
@@ -338,64 +338,6 @@ def declares(obj: Any, hook: Hook) -> bool:
     return hook in hooks_of(obj)
 
 
-class HookRegistry:
-    """Dispatches events to the connectors that declared them."""
-
-    def __init__(self) -> None:
-        self._by_hook : Dict[Hook, List[Any]] = {hook: [] for hook in ALL_HOOKS}
-
-    def register(self, obj: Any) -> None:
-        """Registers *obj* for every hook its class declared.
-
-        Args:
-            obj: The connector to register.
-        """
-        for hook in hooks_of(obj):
-            if hook in self._by_hook:
-                self._by_hook[hook].append(obj)
-            else:
-                logger.warning("Connector %r declares unknown hook: %s", name_of(obj), hook)
-
-    def unregister(self, obj: Any) -> None:
-        """Removes *obj* from every hook, by identity.
-
-        Args:
-            obj: The connector to drop.
-        """
-        for registered in self._by_hook.values():
-            registered[:] = [c for c in registered if c is not obj]
-
-    def connectors_for(self, hook: Hook) -> List[Any]:
-        """Returns the connectors registered for *hook*."""
-        return list(self._by_hook.get(hook, []))
-
-    def trigger(self, hook: Hook, **payload: Any) -> None:
-        """Calls every connector registered for *hook*.
-
-        A connector raising inside a hook is logged and skipped: one bad
-        connector must not take the chat down.
-
-        Args:
-            hook: The capability to trigger.
-            **payload: Passed to the connector's method as keyword arguments.
-        """
-        method = hook.method
-        if method is None:
-            # A grant-only hook has nothing to call: it hands a capability over
-            # at registration, it is not an event.
-            logger.warning("Hook %s only grants; there is nothing to trigger", hook)
-            return
-
-        for obj in self._by_hook.get(hook, []):
-            try:
-                getattr(obj, method)(**payload)
-            except Exception as exc:
-                logger.error(
-                    "Error in hook '%s' for connector %r: %s", hook, name_of(obj), exc,
-                    exc_info=True,
-                )
-
-
 def name_of(obj: Any) -> str:
-    """Returns a connector's name, falling back to its class name."""
+    """Returns a participant's visible name, falling back to its class name."""
     return str(getattr(obj, "name", type(obj).__name__))

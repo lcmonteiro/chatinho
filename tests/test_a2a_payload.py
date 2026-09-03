@@ -4,19 +4,20 @@ Correlation is what routes an answer back to the right exchange, so where
 taskId and contextId sit in the payload is load-bearing, not cosmetic.
 """
 
+import asyncio
 from unittest.mock import MagicMock
 
-from chatinho import A2AConnector
+from chatinho import A2AConnector, ChatMessage
 
 
 def sent_payload(**kwargs) -> dict:
-    """Runs ask() against a stubbed session and returns the JSON it posted."""
+    """Runs on_ask() against a stubbed transport and returns the JSON it posted."""
     connector = A2AConnector(name="a2a", url="https://agent.example", api_key="k")
     connector.session = MagicMock()
     connector.session.post.return_value = MagicMock(
         status_code=200, json=lambda: {"ok": True}, raise_for_status=lambda: None
     )
-    connector.ask("ola", **kwargs)
+    asyncio.run(connector.on_ask(ChatMessage(id="msg-1", text="ola"), **kwargs))
     return connector.session.post.call_args.kwargs["json"]
 
 
