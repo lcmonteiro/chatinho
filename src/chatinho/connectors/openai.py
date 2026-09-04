@@ -4,13 +4,13 @@ import logging
 from typing import Any, Optional
 import openai
 
-from ..chat_hooks import HookAsk, connector, require
+from ..chat_hooks import HookOnAsk, connector, require
 
 logger = logging.getLogger(__name__)
 
 
 @connector("openai")
-@require(HookAsk)
+@require(HookOnAsk)
 class OpenAIConnector:
     """Connector for communicating with OpenAI API."""
     
@@ -44,11 +44,11 @@ class OpenAIConnector:
             logger.error(f"Failed to initialize OpenAI connector '{self.name}': {e}")
             raise
     
-    def ask(self, message: str, **kwargs) -> Any:
+    async def on_ask(self, msg: Any, **kwargs) -> Any:
         """Ask the OpenAI model and return its reply.
         
         Args:
-            message: The message to send
+            msg: The question; its text is what goes out
             **kwargs: Additional parameters including:
                 - model: Override default model
                 - temperature: Override default temperature
@@ -59,7 +59,7 @@ class OpenAIConnector:
         Returns:
             str: Response from OpenAI
         """
-        logger.debug(f"Sending message via OpenAI connector '{self.name}': {message[:100]}...")
+        logger.debug(f"Answering via OpenAI connector '{self.name}': {msg.text[:100]}...")
         
         # Prepare messages
         messages = []
@@ -75,7 +75,7 @@ class OpenAIConnector:
             messages.extend(conversation_history)
         
         # Add the current message
-        messages.append({"role": "user", "content": message})
+        messages.append({"role": "user", "content": msg.text})
         
         # Prepare request parameters
         params = {

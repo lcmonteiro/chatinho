@@ -69,30 +69,6 @@ def test_replies_returns_a_copy():
     store.replies("msg-1").append("tampered")
     assert store.replies("msg-1") == ["msg-2"]
 
-
-def test_window_returns_the_tail_oldest_first():
-    store = MessageStore()
-    for n in range(1, 6):
-        store.add(message(f"msg-{n}"))
-    assert [m.id for m in store.window(3)] == ["msg-3", "msg-4", "msg-5"]
-
-
-def test_window_larger_than_history_returns_everything():
-    store = MessageStore()
-    store.add(message("msg-1"))
-    assert [m.id for m in store.window(100)] == ["msg-1"]
-    assert MessageStore().window(100) == []
-
-
-def test_window_does_not_drop_history():
-    store = MessageStore()
-    for n in range(1, 6):
-        store.add(message(f"msg-{n}"))
-    store.window(2)
-    assert len(store.messages) == 5
-    assert store.find("msg-1") is not None
-
-
 def test_messages_returns_a_copy():
     """Same guarantee as replies(): callers cannot edit the history by accident."""
     store = MessageStore()

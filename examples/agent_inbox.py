@@ -1,15 +1,15 @@
 """A connector that an agent can start a conversation through.
 
 The other examples show the outbound half — the user asks, the far side
-answers. This one shows the inbound half: an agent asks *the user* something,
-the question lands in the chat, and the user's reply is routed back to the
-agent that asked, correlated by the agent's own task id.
+answers. This one shows the inbound half: an agent asks *the user* something
+through ``ask(LOCAL, ...)``, the question lands in the chat, and the user's
+reply resolves the very ``await`` the agent is sitting on. There is no inbox,
+no correlation id and no routing code: an ask is addressed and owed, and the
+session matches the reply to it.
 
 The connector brings its own listener: a small HTTP server on a background
-thread, using nothing but the standard library. Declaring ``HookAnswer`` is
-what says "the far side can start a conversation": ``require`` checks the class
-implements ``answer``, and the session grants it an ``inbox`` to call. The
-transport machinery belongs to the connector, not to the library and not to you.
+thread, using nothing but the standard library. Because that thread is not the
+event loop, it hands its work over with ``run_coroutine_threadsafe``.
 
 Run it:
 
@@ -17,25 +17,31 @@ Run it:
 
 then, from another terminal, play the agent:
 
-    curl -XPOST localhost:8765/ask -d '{"task": "t1", "text": "Deploy to prod?"}'
+    curl -XPOST localhost:8765/ask -d '{"text": "Deploy to prod?"}'
 
-Answer in the chat by replying to the question (type ``t1: yes``) and the
-answer is posted back to the agent — here, printed by the connector.
+Answer in the chat by typing the answer, and it is posted back to the agent —
+here, printed by the connector.
 """
 
+import asyncio
 import json
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Callable, List, Optional
+from typing import List, Optional
 
 from chatinho import (
+    LOCAL,
+    Ask,
     ChatMessage,
     ChatSession,
-    HookAnswer,
     HookAsk,
     HookLoadMessages,
-    HookReceiveMessage,
-    HookSendMessage,
+    HookOnAsk,
+    HookOnSay,
+    HookSay,
+    LoadMessages,
+    Say,
     connector,
     require,
 )
@@ -46,32 +52,33 @@ PORT = 8765
 
 @connector("agent")
 @require(HookAsk)
-@require(HookAnswer)
 class AgentConnector:
-    """A two-way link: the user can ask the agent, and the agent can ask back.
+    """A one-way link inwards: the agent asks, the user answers.
 
-    Inbound arrives as ``POST /ask`` with ``{"task": ..., "text": ...}``; the
-    handler calls ``self.inbox``, which the session granted because this class
-    declares ``HookAnswer``. Safe to call from this server thread.
+    Inbound arrives as ``POST /ask`` with ``{"text": ...}``; the handler runs
+    on the server's own thread, so it schedules the ask onto the loop rather
+    than touching it directly.
     """
+
+    ask : Ask
 
     def __init__(self, host: str = HOST, port: int = PORT) -> None:
         self.host = host
         self.port = port
-        self._server: Optional[ThreadingHTTPServer] = None
-        self._thread: Optional[threading.Thread] = None
+        self._server : Optional[ThreadingHTTPServer] = None
+        self._thread : Optional[threading.Thread] = None
+        self._loop   : Optional[asyncio.AbstractEventLoop] = None
 
-    # === Lifecycle ==============================================================
-
-    def initialize(self) -> None:
-        """Starts the listener on a background thread."""
-        connector = self
+    async def listen(self) -> None:
+        """Starts the listener, remembering the loop the chat runs on."""
+        self._loop = asyncio.get_running_loop()
+        agent = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self) -> None:  # noqa: N802 — http.server's spelling
-                length = int(self.headers.get("Content-Length", 0))
+                length  = int(self.headers.get("Content-Length", 0))
                 payload = json.loads(self.rfile.read(length) or b"{}")
-                connector.inbox(payload.get("text", ""), payload.get("task"))
+                agent.put(payload.get("text", ""))
                 self.send_response(202)
                 self.end_headers()
 
@@ -81,6 +88,22 @@ class AgentConnector:
         self._server = ThreadingHTTPServer((self.host, self.port), Handler)
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
+
+    def put(self, text: str) -> None:
+        """Asks the user, from the server thread, and prints the answer.
+
+        The ask is a coroutine and this is not the loop, so it is handed over
+        with ``run_coroutine_threadsafe`` and answered whenever the user gets
+        round to it.
+        """
+        if self._loop is None:
+            return
+
+        async def asked() -> None:
+            answer = await self.ask(LOCAL, text)
+            print("\n  → the user answered: %s\n" % answer)
+
+        asyncio.run_coroutine_threadsafe(asked(), self._loop)
 
     def shutdown(self) -> None:
         """Stops the listener. Without this the thread outlives the chat."""
@@ -92,69 +115,62 @@ class AgentConnector:
             self._thread.join(timeout=2)
             self._thread = None
 
-    # === Outbound ===============================================================
 
-    def ask(self, message: str, **kwargs) -> Any:
-        """The user asks the agent. Stubbed here — the demo is about inbound."""
-        return "the agent would answer: %s" % message
-
-    def answer(self, correlation_id: Optional[str], text: str) -> None:
-        """The user's reply, routed back to the task that asked for it.
-
-        A real connector would POST this to the agent's callback URL.
-        """
-        print(f"\n  → answered task {correlation_id!r}: {text}\n")
-
-
-@require(HookSendMessage)
+@require(HookSay)
+@require(HookOnSay)
+@require(HookOnAsk)
 @require(HookLoadMessages)
-@require(HookReceiveMessage)
 class Terminal:
-    """The presentation: shows the agent's questions and sends the answers."""
+    """The user: shows the agent's questions and lets them be answered."""
 
-    send_message  : Callable[..., str]
-    load_messages : Callable[..., List[ChatMessage]]
+    say           : Say
+    load_messages : LoadMessages
 
-    def on_receive_message(self, msg: ChatMessage, **kwargs) -> None:
-        """Prints what came in, tagged with the connector and the task."""
-        if msg.is_sent_by_me:
-            return
-        tag = f" [{msg.origin}/{msg.correlation_id}]" if msg.origin else ""
-        print(f"< {msg.text}{tag}")
+    async def on_say(self, msg: ChatMessage) -> None:
+        """Renders a broadcast."""
+        print("< %s" % msg.text)
+
+    async def on_ask(self, msg: ChatMessage) -> Optional[str]:
+        """Shows the question; the answer is whatever the user types next."""
+        print("\n< %s   [%s asks]" % (msg.text, msg.frm))
+        return None
 
 
-def main() -> None:
+async def read_lines() -> List[str]:
+    """Reads stdin off the event loop, so the listener keeps serving."""
+    return await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readlines)
+
+
+async def main() -> None:
     """Runs a headless chat with an agent-facing inbox."""
-    agent = AgentConnector()
-    session = ChatSession(connectors=[agent])
+    session = ChatSession()
     view = Terminal()
-    session.attach(view)
+    session.attach(view, at=LOCAL)
+    agent = AgentConnector()
+    session.attach(agent)
+    await session.start()
+    await agent.listen()
 
-    print(f"Listening on http://{HOST}:{PORT}/ask — the agent asks, you answer.")
-    print('  curl -XPOST %s:%d/ask -d \'{"task": "t1", "text": "Deploy?"}\'' % (HOST, PORT))
-    print("Reply with  <task-id>: <answer>   e.g.  t1: yes.   /quit to leave.\n")
+    print("Listening on http://%s:%d/ask — the agent asks, you answer." % (HOST, PORT))
+    print('  curl -XPOST %s:%d/ask -d \'{"text": "Deploy?"}\'' % (HOST, PORT))
+    print("Type your answer to whatever it asks.   /quit to leave.\n")
 
     try:
-        while True:
-            try:
-                line = input("you> ").strip()
-            except EOFError:
+        for line in await read_lines():
+            text = line.strip()
+            if not text or text == "/quit":
                 break
-            if not line or line == "/quit":
-                break
-            task, _, answer = line.partition(":")
-            question = next(
-                (m for m in reversed(view.load_messages()) if m.correlation_id == task.strip()),
+            unanswered = next(
+                (m for m in reversed(view.load_messages())
+                 if m.to == LOCAL and not any(r.reply_to == m.id for r in view.load_messages())),
                 None,
             )
-            if question is None:
-                print(f"  no open question for task {task.strip()!r}")
-                continue
-            view.send_message(answer.strip(), reply_to=question.id)
+            await view.say(text, reply_to=unanswered.id if unanswered else None)
+            await asyncio.sleep(0.05)
     finally:
-        session.close()
+        await session.close()
         print("--- listener stopped ---")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

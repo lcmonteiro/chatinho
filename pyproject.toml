@@ -55,6 +55,8 @@ chatinho = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Every participant is a coroutine now, so every test that drives one is too.
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 110

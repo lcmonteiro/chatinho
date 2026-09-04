@@ -6,13 +6,16 @@ reaching up into the application.
 """
 
 import logging
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from textual.app import ScreenStackError
 from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
+
+from .chat_hooks import HookOnAsk, declares, name_of
+from .chat_message import LOCAL
 
 
 logger = logging.getLogger(__name__)
@@ -23,12 +26,16 @@ SUGGESTIONS_ID : str = "command-suggestions"
 
 
 class CommandSuggestions(OptionList):
-    """Popup listing the registered commands matching the "/token" being typed."""
+    """Popup listing the tools whose name matches the "/token" being typed.
 
-    def __init__(self, commands: Dict[str, Any], **kwargs) -> None:
+    A command is an ask addressed to a tool, so the suggestions are simply the
+    participants that can be asked, listed by the name the chat displays.
+    """
+
+    def __init__(self, participants: Any, **kwargs) -> None:
         super().__init__(**kwargs)
         # Held by reference: the application owns the dict and keeps it current.
-        self._commands = commands
+        self._participants = participants
 
     @property
     def has_suggestions(self) -> bool:
@@ -44,7 +51,7 @@ class CommandSuggestions(OptionList):
         matches = []
         if text.startswith(COMMAND_PREFIX) and " " not in text:
             token = text[len(COMMAND_PREFIX):]
-            matches = sorted(name for name in self._commands if name.startswith(token))
+            matches = sorted(n for n in self._names() if n.startswith(token))
 
         if not matches:
             self.hide()
@@ -79,9 +86,22 @@ class CommandSuggestions(OptionList):
         self.hide()
         return name
 
+    def _tools(self) -> List[Any]:
+        """Every participant that can be asked — the user is not one."""
+        return [who for at, who in self._participants().items()
+                if at != LOCAL and declares(who, HookOnAsk)]
+
+    def _names(self) -> List[str]:
+        """Their visible names."""
+        return [name_of(who) for who in self._tools()]
+
+    def _tool(self, name: str) -> Any:
+        """The participant with that visible name, or None."""
+        return next((w for w in self._tools() if name_of(w) == name), None)
+
     def _label(self, name: str) -> str:
         """Returns the popup label for the command registered as *name*."""
-        description = getattr(self._commands[name], "description", "")
+        description = getattr(self._tool(name), "description", "")
         if description:
             return f"{COMMAND_PREFIX}{name}  —  {description}"
         return f"{COMMAND_PREFIX}{name}"
