@@ -2,16 +2,23 @@
 
 Every test here builds a full chat (messages, commands, connectors, backend)
 and exercises it synchronously. No ``run_test()``, no event loop, no Textual.
+
+The conversation is protected, so the tests reach it the way the TUI does:
+through a :class:`~tests.conftest.Driver` that declares the hooks and is handed
+the capabilities at ``attach``.
 """
 
 import pytest
 
+from conftest import driven
+
 from chatinho import (
     HookAsk,
+    HookSendMessage,
     HookDelete,
     HookExecute,
     HookLoad,
-    HookMessageSent,
+    HookReceiveMessage,
     HookSave,
     HookSay,
     backend,
@@ -49,7 +56,7 @@ class _Spy:
 
 @connector("rec")
 @require(HookAsk)
-@require(HookMessageSent)
+@require(HookReceiveMessage)
 class _Recorder:
     def __init__(self) -> None:
         self.sent: list = []
@@ -57,7 +64,7 @@ class _Recorder:
     def ask(self, message: str, **kwargs) -> str:
         return "sent: %s" % message
 
-    def on_message_sent(self, msg, **kwargs) -> None:
+    def on_receive_message(self, msg, **kwargs) -> None:
         self.sent.append(msg.text)
 
 
@@ -90,71 +97,82 @@ class _Backend:
 
 
 def test_send_and_receive_build_the_history():
-    session = ChatSession()
-    sent = session.send_message("ola")
-    got = session.receive_message("olá de volta", reply_to=sent)
-    assert [m.text for m in session.messages] == ["ola", "olá de volta"]
-    assert session.messages[0].is_sent_by_me is True
-    assert session.messages[1].is_sent_by_me is False
-    assert session.get_replies(sent) == [got]
+    _, view = driven()
+    sent = view.send_message("ola")
+    got = view.say("olá de volta", reply_to=sent)
+    history = view.load_messages()
+    assert [m.text for m in history] == ["ola", "olá de volta"]
+    assert history[0].is_sent_by_me is True
+    assert history[1].is_sent_by_me is False
+    assert [m.id for m in history if m.reply_to == sent] == [got]
 
 
-def test_find_message_and_ids():
-    session = ChatSession()
-    mid = session.send_message("procura-me")
-    assert session.find_message(mid).text == "procura-me"
-    assert session.find_message("msg-999") is None
+def test_load_messages_narrows_by_index_and_by_time():
+    _, view = driven()
+    for n in range(5):
+        view.send_message("m%d" % n)
+    assert [m.text for m in view.load_messages(limit=2)] == ["m3", "m4"]
+    assert [m.text for m in view.load_messages(start=3)] == ["m3", "m4"]
+    cut = view.load_messages()[3].timestamp
+    assert [m.text for m in view.load_messages(since=cut)] == ["m3", "m4"]
+    assert view.load_messages(limit=0) == []
 
 
 # === Observers ==================================================================
 
 
-def test_observers_fire_in_order_added_then_sent():
-    session = ChatSession()
-    calls: list = []
-    session.on_message_added = lambda msg: calls.append(("added", msg.text))
-    session.on_message_sent = lambda msg: calls.append(("sent", msg.text))
-    session.send_message("ola")
-    assert calls == [("added", "ola"), ("sent", "ola")]
+def test_hooks_fire_in_order_received_then_sent():
+    _, view = driven()
+    view.send_message("ola")
+    assert [m.text for m in view.received] == ["ola"]
+    assert [m.text for m in view.sent] == ["ola"]
 
 
-def test_a_session_with_no_observers_still_works():
-    session = ChatSession()
-    session.send_message("ninguem esta a ver")
-    assert len(session.messages) == 1
+def test_a_plugin_gets_only_what_it_declared():
+    """Declaring one hook grants one capability, and nothing else."""
+
+    @require(HookSendMessage)
+    class OnlySends:
+        send_message: object
+
+    session, _ = driven()
+    only = OnlySends()
+    session.attach(only)
+    only.send_message("basta isto")
+    assert not hasattr(only, "load_messages")
+    assert not hasattr(only, "say")
 
 
-def test_on_command_replaces_dispatch():
-    session = ChatSession(commands=[_Echo()])
-    seen: list = []
-    session.on_command = seen.append
-    session.send_command("echo hello")
-    assert seen == ["echo hello"]
-    # dispatch was replaced, so no result message was added
-    assert len(session.messages) == 1
+def test_the_session_dispatches_whoever_is_watching():
+    """on_receive_command is a notice; the registered command runs regardless."""
+    session, view = driven()
+    session.add_command(_Echo())
+    view.send_command("echo hello")
+    assert [m.text for m in view.commanded] == ["echo hello"]
+    assert [m.text for m in view.load_messages()] == ["echo hello", "echo: hello"]
 
 
 # === Commands ===================================================================
 
 
 def test_registered_command_runs_and_its_result_is_displayed():
-    session = ChatSession(commands=[_Echo()])
-    session.send_command("echo hello")
-    assert [m.text for m in session.messages] == ["echo hello", "echo: hello"]
+    _, view = driven(commands=[_Echo()])
+    view.send_command("echo hello")
+    assert [m.text for m in view.load_messages()] == ["echo hello", "echo: hello"]
 
 
 def test_unregistered_command_falls_through_to_the_handler():
     seen: list = []
-    session = ChatSession(commands=[_Echo()], command_handler=seen.append)
-    session.send_command("stats")
+    _, view = driven(commands=[_Echo()], command_handler=seen.append)
+    view.send_command("stats")
     assert seen == ["stats"]
-    assert len(session.messages) == 1
+    assert len(view.load_messages()) == 1
 
 
 def test_failing_command_is_reported_instead_of_raising():
-    session = ChatSession(commands=[_Boom()])
-    session.send_command("boom")
-    assert "kaboom" in session.messages[-1].text
+    _, view = driven(commands=[_Boom()])
+    view.send_command("boom")
+    assert "kaboom" in view.load_messages()[-1].text
 
 
 def test_execute_command_rejects_unknown_names():
@@ -165,8 +183,8 @@ def test_execute_command_rejects_unknown_names():
 def test_commands_are_handed_the_session_not_a_ui_object():
     """The Dependency Rule: a command must not receive the framework."""
     spy = _Spy()
-    session = ChatSession(commands=[spy])
-    session.send_command("spy")
+    session, view = driven(commands=[spy])
+    view.send_command("spy")
     assert spy.seen is session
     assert type(spy.seen).__module__ == "chatinho.chat_session"
 
@@ -175,10 +193,10 @@ def test_commands_are_handed_the_session_not_a_ui_object():
 
 
 def test_connectors_and_hooks_work_headless():
-    connector = _Recorder()
-    session = ChatSession(connectors=[connector])
-    session.send_message("ola")
-    assert connector.sent == ["ola"]
+    link = _Recorder()
+    session, view = driven(connectors=[link])
+    view.send_message("ola")
+    assert link.sent == ["ola"]
     assert session.ask_connector("rec", "ping") == "sent: ping"
 
 
@@ -211,12 +229,12 @@ def test_persistence_without_a_backend_raises():
             call()
 
 
-def test_messages_returns_a_copy():
-    """The guarantee holds through the session, not just the store."""
-    session = ChatSession()
-    session.send_message("guardada")
-    session.messages.clear()
-    assert [m.text for m in session.messages] == ["guardada"]
+def test_load_messages_returns_a_copy():
+    """The guarantee holds through the grant, not just the store."""
+    _, view = driven()
+    view.send_message("guardada")
+    view.load_messages().clear()
+    assert [m.text for m in view.load_messages()] == ["guardada"]
 
 
 # === HookSay: um comando escreve enquanto trabalha ==============================
@@ -232,9 +250,9 @@ class _Progress:
 
 
 def test_a_command_declaring_hooksay_is_granted_say():
-    session = ChatSession(commands=[_Progress()])
-    session.send_command("progress")
-    assert [m.text for m in session.messages] == ["progress", "a começar", "a terminar"]
+    _, view = driven(commands=[_Progress()])
+    view.send_command("progress")
+    assert [m.text for m in view.load_messages()] == ["progress", "a começar", "a terminar"]
 
 
 def test_a_command_without_hooksay_is_not_granted_it():

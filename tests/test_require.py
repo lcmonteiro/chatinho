@@ -14,12 +14,13 @@ from chatinho import (
     ChatSession,
     HookAnswer,
     HookAsk,
-    HookMessageSent,
+    HookReceiveMessage,
     OpenAIConnector,
     connector,
     require,
 )
 from chatinho.chat_hooks import declares, hooks_of, name_of, options_of
+from conftest import driven
 
 
 # === @require validates ==========================================================
@@ -44,8 +45,8 @@ def test_a_missing_method_is_an_error_at_class_definition():
 
 def test_a_misspelled_method_is_caught():
     """The error this is really for."""
-    with pytest.raises(TypeError, match="on_message_sent"):
-        @require(HookMessageSent)
+    with pytest.raises(TypeError, match="on_receive_message"):
+        @require(HookReceiveMessage)
         class Typo:
             def on_messages_sent(self, msg, **kwargs):
                 pass
@@ -60,15 +61,15 @@ def test_a_non_callable_attribute_does_not_satisfy_a_hook():
 
 def test_stacked_requires_accumulate():
     @require(HookAsk)
-    @require(HookMessageSent)
+    @require(HookReceiveMessage)
     class Both:
         def ask(self, message, **kwargs):
             return "ok"
 
-        def on_message_sent(self, msg, **kwargs):
+        def on_receive_message(self, msg, **kwargs):
             pass
 
-    assert hooks_of(Both()) == frozenset({HookAsk, HookMessageSent})
+    assert hooks_of(Both()) == frozenset({HookAsk, HookReceiveMessage})
 
 
 # === One hook per require, with its own options ==================================
@@ -76,12 +77,12 @@ def test_stacked_requires_accumulate():
 
 def test_require_takes_one_hook_and_says_what_to_do_instead():
     with pytest.raises(TypeError, match="stack decorators"):
-        @require(HookAsk, HookMessageSent)
+        @require(HookAsk, HookReceiveMessage)
         class TwoAtOnce:
             def ask(self, message, **kwargs):
                 return "ok"
 
-            def on_message_sent(self, msg, **kwargs):
+            def on_receive_message(self, msg, **kwargs):
                 pass
 
 
@@ -115,7 +116,7 @@ def test_a_hook_declared_without_options_has_none():
             return "ok"
 
     assert options_of(Plain(), HookAsk) == {}
-    assert options_of(Plain(), HookMessageSent) == {}
+    assert options_of(Plain(), HookReceiveMessage) == {}
 
 
 def test_options_are_returned_as_a_copy():
@@ -158,13 +159,13 @@ def test_options_do_not_leak_between_classes():
 
 def test_declaring_nothing_is_allowed_and_means_nothing_fires():
     class Quiet:
-        def on_message_sent(self, msg, **kwargs):
+        def on_receive_message(self, msg, **kwargs):
             raise AssertionError("must never be called")
 
     quiet = Quiet()
     quiet.name = "quiet"
-    session = ChatSession(connectors=[quiet])
-    session.send_message("ola")  # would raise if the undeclared hook fired
+    _, view = driven(connectors=[quiet])
+    view.send_message("ola")  # would raise if the undeclared hook fired
     assert hooks_of(quiet) == frozenset()
 
 

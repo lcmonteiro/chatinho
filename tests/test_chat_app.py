@@ -14,11 +14,12 @@ from chatinho import HelpCommand, HookExecute, command, create_chat, require
 
 
 @pytest.mark.asyncio
-async def test_new_id_increments():
+async def test_ids_come_back_from_the_sends():
+    """Nothing mints an id: the granted send hands one back."""
     app = create_chat()
     async with app.run_test():
-        assert app._new_id() == "msg-1"
-        assert app._new_id() == "msg-2"
+        assert app.send_message("um") == "msg-1"
+        assert app.send_command("dois") == "msg-2"
 
 
 @pytest.mark.asyncio

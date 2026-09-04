@@ -32,6 +32,16 @@ from textual.widgets import Input
 
 from .chat_input import COMMAND_PREFIX, SUGGESTIONS_ID, CommandInput, CommandSuggestions
 from .chat_log import ChatLog
+from .chat_hooks import (
+    HookLoadMessages,
+    HookReceiveCommand,
+    HookReceiveMessage,
+    HookSay,
+    HookSendCommand,
+    HookSendMessage,
+    Say,
+    require,
+)
 from .chat_message import ChatMessage
 from .chat_session import ChatSession
 from .chat_style import ChatStyle
@@ -84,18 +94,35 @@ def create_chat(
     )
 
 
+@require(HookSendMessage)
+@require(HookSendCommand)
+@require(HookLoadMessages)
+@require(HookSay)
+@require(HookReceiveMessage)
+@require(HookReceiveCommand)
 class _Chat(App):
     """Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
+
+    The presentation is a plugin like any other: it declares the hooks it needs
+    and the session hands the capabilities over at :meth:`ChatSession.attach`.
+    There is no privileged path — a terminal reaches the conversation through
+    exactly the doors a connector does.
 
     Build instances with :func:`create_chat` rather than directly.
 
     ``max_displayed`` limits how many messages are rendered in the
-    terminal (sliding window). The full history is always kept in
-    ``messages`` — older messages only leave the screen, not memory.
+    terminal (sliding window). The full history is always kept — older messages
+    only leave the screen, not memory.
     """
 
     # Default stylesheet, rendered from ChatStyle() at class definition time.
     CSS = ChatStyle().to_css()
+
+    # Granted by the session at attach; annotated so a type checker can see them.
+    send_message  : Callable[..., str]
+    send_command  : Callable[[str], str]
+    load_messages : Callable[..., List[ChatMessage]]
+    say           : Say
 
     def __init__(
         self,
@@ -114,13 +141,9 @@ class _Chat(App):
         self.title   = title
         self.welcome_message = welcome_message
 
-        # Attach as the session's presentation layer. The lambdas resolve the
-        # attribute at call time, so assigning app.on_message_sent = ... after
-        # construction still overrides the hook.
-        self.session.on_message_added    = lambda msg: self._repaint()
-        self.session.on_message_sent     = lambda msg: self.on_message_sent(msg)
-        self.session.on_message_received = lambda msg: self.on_message_received(msg)
-        self.session.on_command          = lambda command: self.on_command(command)
+        # Attach as a plugin: this is what grants send_message, send_command,
+        # load_messages and say, and what subscribes on_receive_* below.
+        self.session.attach(self)
 
         self._input_placeholder = "Type a message or /command"
         self.max_displayed : int = max_displayed
@@ -131,7 +154,7 @@ class _Chat(App):
         """Create child widgets."""
         yield Container(
             ChatLog(
-                self.session.store,
+                self.load_messages,
                 max_displayed=self.max_displayed,
                 on_reply_target_change=self._on_reply_target_change,
                 id=CHAT_LOG_ID,
@@ -147,7 +170,7 @@ class _Chat(App):
         """Focus the input and show the welcome message when the app starts."""
         self._app_thread_id = threading.get_ident()
         self.query_one(f"#{INPUT_ID}", Input).focus()
-        if self.session.messages:
+        if self.load_messages():
             # Messages added before the app was mounted (see _repaint)
             self._chat_log.sync()
             self._chat_log.scroll_to_bottom()
@@ -206,17 +229,34 @@ class _Chat(App):
         """Whether the command-suggestion popup currently has entries."""
         return self.query_one(f"#{SUGGESTIONS_ID}", CommandSuggestions).has_suggestions
 
-    # === Hooks (callbacks — all start with ``on_``) ==============================
+    # === Hooks the session calls ====================================================
+
+    def on_receive_message(self, msg: ChatMessage, **kwargs) -> None:
+        """A message entered the conversation: repaint, then notify.
+
+        Fires for every message whoever sent it — the message itself says which
+        — so the terminal repaints, and the right callback runs, from one hook.
+        """
+        self._repaint()
+        if msg.is_sent_by_me:
+            self.on_message_sent(msg)
+        else:
+            self.on_message_received(msg)
+
+    def on_receive_command(self, msg: ChatMessage, **kwargs) -> None:
+        """A command entered the conversation, before the session dispatches it."""
+        self._repaint()
+        self.on_command(msg.text)
+        self.on_message_sent(msg)
+
+    # === Overridables — assign on the instance to customise =========================
 
     def on_command(self, command: str) -> None:
         """Called when the user sends a command (without the '/' prefix).
 
-        Delegates to the session's dispatch: registered commands are executed
-        and their result displayed, anything else falls through to the
-        ``command_handler`` passed to :func:`create_chat`. Override to replace
-        that behaviour entirely.
+        A notification only: the session dispatches the command itself, so a
+        registered ``/name`` runs whether or not this is replaced.
         """
-        self.session.dispatch_command(command)
 
     def on_message_sent(self, msg: ChatMessage) -> None:
         """Called after sending a message (normal or command).
@@ -252,15 +292,7 @@ class _Chat(App):
     @property
     def messages(self) -> List[ChatMessage]:
         """The full message history, oldest first."""
-        return self.session.messages
-
-    def send_message(self, text: str, *, reply_to: Optional[str] = None) -> str:
-        """Sends a normal message and returns its id."""
-        return self.session.send_message(text, reply_to=reply_to)
-
-    def send_command(self, command: str) -> str:
-        """Sends a command (without the '/' prefix) and returns its id."""
-        return self.session.send_command(command)
+        return self.load_messages()
 
     def receive_message(
         self,
@@ -275,17 +307,13 @@ class _Chat(App):
         Safe to call from any thread: if called off the app's main thread the
         repaint is marshalled via ``call_from_thread`` (see :meth:`_repaint`).
         """
-        return self.session.receive_message(
+        return self.say(
             text, reply_to=reply_to, origin=origin, correlation_id=correlation_id,
         )
 
-    def deliver(self, connector_name: str, text: str, correlation_id: Optional[str] = None) -> str:
-        """Puts a question that arrived through a connector in front of the user."""
-        return self.session.deliver(connector_name, text, correlation_id)
-
     def get_replies(self, msg_id: str) -> List[str]:
         """Returns the ids of the messages that reply to *msg_id*."""
-        return self.session.get_replies(msg_id)
+        return [m.id for m in self.load_messages() if m.reply_to == msg_id]
 
     def add_connector(self, connector: Any) -> None:
         """Registers *connector*, initializes it and registers its hooks."""
@@ -339,11 +367,8 @@ class _Chat(App):
 
     # Thin delegates: the state lives in the session and the log widget.
 
-    def _new_id(self) -> str:
-        return self.session.new_id()
-
     def _find_message(self, msg_id: str) -> Optional[ChatMessage]:
-        return self.session.find_message(msg_id)
+        return next((m for m in self.load_messages() if m.id == msg_id), None)
 
     @property
     def _reply_target(self) -> Optional[str]:

@@ -65,13 +65,19 @@ async def test_input_submission_trims_command_before_handler():
 
 
 @pytest.mark.asyncio
-async def test_on_command_override_skips_handler_unless_super():
+async def test_dispatch_happens_whatever_the_presentation_does():
+    """on_command is a notice now: the session dispatches either way.
+
+    Replacing it used to swallow the dispatch. It cannot any more — a command
+    is the session's to run, so a chat answers ``/name`` with no presentation
+    at all.
+    """
     commands: list[str] = []
     app = create_chat(command_handler=commands.append)
-    app.on_command = lambda command: None  # swallow: do not delegate
+    app.on_command = lambda command: None  # no longer swallows
     async with app.run_test():
         app.send_command("help")
-    assert commands == []
+    assert commands == ["help"]
 
 
 # === on_command / on_message_sent (send_command) ==============================

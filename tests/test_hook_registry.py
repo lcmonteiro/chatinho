@@ -5,7 +5,7 @@ Like the store, the registry is Textual-free: these run without an app.
 
 import logging
 
-from chatinho import HookAsk, HookMessageSent, require
+from chatinho import HookAsk, HookReceiveMessage, require
 from chatinho.chat_hooks import HookRegistry
 
 
@@ -19,12 +19,12 @@ class _Connector:
     def ask(self, message: str, **kwargs) -> None:
         return None
 
-    def on_message_sent(self, msg, **kwargs) -> None:
+    def on_receive_message(self, msg, **kwargs) -> None:
         self.seen.append(msg)
 
 
 @require(HookAsk)
-@require(HookMessageSent)
+@require(HookReceiveMessage)
 class Declared(_Connector):
     """Declares the hook it implements."""
 
@@ -33,9 +33,9 @@ class Undeclared(_Connector):
     """Implements the method but never declares it."""
 
 
-@require(HookMessageSent)
+@require(HookReceiveMessage)
 class Exploding(_Connector):
-    def on_message_sent(self, msg, **kwargs) -> None:
+    def on_receive_message(self, msg, **kwargs) -> None:
         raise RuntimeError("kaboom")
 
 
@@ -43,7 +43,7 @@ def test_declared_connector_receives_the_payload():
     registry = HookRegistry()
     link = Declared()
     registry.register(link)
-    registry.trigger(HookMessageSent, msg="ola")
+    registry.trigger(HookReceiveMessage, msg="ola")
     assert link.seen == ["ola"]
 
 
@@ -51,9 +51,9 @@ def test_undeclared_connector_is_never_called():
     registry = HookRegistry()
     link = Undeclared()
     registry.register(link)
-    registry.trigger(HookMessageSent, msg="ola")
+    registry.trigger(HookReceiveMessage, msg="ola")
     assert link.seen == []
-    assert registry.connectors_for(HookMessageSent) == []
+    assert registry.connectors_for(HookReceiveMessage) == []
 
 
 def test_unregister_drops_the_connector():
@@ -61,7 +61,7 @@ def test_unregister_drops_the_connector():
     link = Declared()
     registry.register(link)
     registry.unregister(link)
-    registry.trigger(HookMessageSent, msg="ola")
+    registry.trigger(HookReceiveMessage, msg="ola")
     assert link.seen == []
 
 
@@ -71,7 +71,7 @@ def test_unregister_only_drops_the_named_object():
     registry.register(kept)
     registry.register(dropped)
     registry.unregister(dropped)
-    registry.trigger(HookMessageSent, msg="ola")
+    registry.trigger(HookReceiveMessage, msg="ola")
     assert kept.seen == ["ola"]
     assert dropped.seen == []
 
@@ -82,14 +82,14 @@ def test_a_raising_connector_does_not_stop_the_others(caplog):
     registry.register(boom)
     registry.register(ok)
     with caplog.at_level(logging.ERROR):
-        registry.trigger(HookMessageSent, msg="ola")
+        registry.trigger(HookReceiveMessage, msg="ola")
     assert ok.seen == ["ola"]
     assert "kaboom" in caplog.text
 
 
 def test_an_undeclared_hook_dispatches_to_nobody(caplog):
-    from chatinho import HookBackendSave
+    from chatinho import HookReceiveCommand
     registry = HookRegistry()
     registry.register(Declared())
-    registry.trigger(HookBackendSave, key="k", data=1)
-    assert registry.connectors_for(HookBackendSave) == []
+    registry.trigger(HookReceiveCommand, msg=None)
+    assert registry.connectors_for(HookReceiveCommand) == []
