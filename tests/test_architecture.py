@@ -6,6 +6,8 @@ noticing months later that the session cannot run without a terminal.
 """
 
 import ast
+import importlib
+import inspect
 import pathlib
 
 import pytest
@@ -74,3 +76,49 @@ def test_the_session_does_not_depend_on_the_app():
     assert "chat_app" not in relative, "the session must never import its presentation"
     assert "chat_log" not in relative
     assert "chat_input" not in relative
+
+
+# === Names we must not take from Textual ========================================
+
+
+def _assigned_attributes(path: str, class_name: str) -> set:
+    """Returns the ``self.X`` names a class assigns anywhere in its body."""
+    tree = ast.parse(pathlib.Path(path).read_text())
+    cls  = next(n for n in ast.walk(tree)
+                if isinstance(n, ast.ClassDef) and n.name == class_name)
+    names = set()
+    for node in ast.walk(cls):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if (isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"):
+                    names.add(target.attr)
+    return names
+
+
+@pytest.mark.parametrize(
+    "module, class_name, base",
+    [
+        ("src/chatinho/chat_app.py",   "_Chat",              "textual.app:App"),
+        ("src/chatinho/chat_log.py",   "ChatLog",            "textual.containers:Container"),
+        ("src/chatinho/chat_input.py", "CommandInput",       "textual.widgets:Input"),
+        ("src/chatinho/chat_input.py", "CommandSuggestions", "textual.widgets:OptionList"),
+    ],
+)
+def test_we_never_shadow_a_textual_method(module, class_name, base):
+    """Replacing one of Textual's own methods with data breaks it in silence.
+
+    Setting a Textual *property* is ordinary use — ``self.title``, ``self.value``
+    — so only methods are checked. The one that bit was ``_context``:
+    MessagePump's own context manager, shadowed by a granted reader of the same
+    name, which hung the widget's message loop with no error at all until a
+    test timed out. ``id`` at least raised.
+    """
+    where, attribute = base.split(":")
+    parent = getattr(importlib.import_module(where), attribute)
+    taken  = sorted(
+        name for name in _assigned_attributes(module, class_name)
+        if inspect.isroutine(getattr(parent, name, None))
+    )
+    assert taken == [], "%s assigns %s, which is a method on %s" % (class_name, taken, attribute)

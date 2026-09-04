@@ -71,20 +71,22 @@ class _MessageContainer(Horizontal):
 class ChatLog(TouchScrollableContainer):
     """Renders the last ``max_displayed`` messages the chat will hand over.
 
-    Reads through ``load_messages`` — the capability the presentation was
+    Reads through ``context`` — the capability the presentation was
     granted — rather than holding the history itself. Messages leaving the
     window are unmounted from the terminal, not forgotten.
     """
 
     def __init__(
         self,
-        load_messages : Callable[..., List[ChatMessage]],
+        context : Callable[..., List[ChatMessage]],
         max_displayed : int = 100,
         on_reply_target_change : Optional[Callable[[Optional[str]], None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
-        self._load_messages = load_messages
+        # Not `_context`: Textual's MessagePump owns that name as a context
+        # manager, and shadowing it hangs the widget's message loop.
+        self._read_context = context
         self.max_displayed : int = max_displayed
         self._on_reply_target_change = on_reply_target_change
         self._msg_widgets : Dict[str, Widget] = {}
@@ -105,7 +107,7 @@ class ChatLog(TouchScrollableContainer):
         # lose their reading position)
         was_at_bottom = self.scroll_offset.y >= (self.max_scroll_y - 1)
 
-        desired_ids = [m.id for m in self._load_messages(limit=self.max_displayed)]
+        desired_ids = [m.id for m in self._read_context(limit=self.max_displayed)]
         current = set(self._rendered_msg_ids)
         desired = set(desired_ids)
 
@@ -129,7 +131,7 @@ class ChatLog(TouchScrollableContainer):
 
     def _find(self, msg_id: str) -> Optional[ChatMessage]:
         """Returns the message with *msg_id*, or None."""
-        return next((m for m in self._load_messages() if m.id == msg_id), None)
+        return next((m for m in self._read_context() if m.id == msg_id), None)
 
     def scroll_to_bottom(self) -> None:
         """Scrolls the log to the newest message."""

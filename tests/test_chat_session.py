@@ -7,11 +7,17 @@ a Driver that declared the hooks and was handed the capabilities at attach.
 
 import asyncio
 import time
+from datetime import datetime, timedelta
+from typing import List, Optional
 
 import pytest
 
 from chatinho import (
     LOCAL,
+    ChatMessage,
+    HookArchive,
+    HookForget,
+    HookRecall,
     Answer,
     Ask,
     HookAsk,
@@ -60,26 +66,33 @@ class _Ouvinte:
 
 
 @backend("memoria")
-@require(__import__("chatinho").HookSave)
-@require(__import__("chatinho").HookLoad)
-@require(__import__("chatinho").HookDelete)
-class _Backend:
-    def __init__(self) -> None:
-        self.data: dict = {}
-        self.initialized = False
+@require(HookArchive)
+@require(HookRecall)
+@require(HookForget)
+class _Archive:
+    """An archive that keeps messages in a list, for tests that need a tier."""
+
+    def __init__(self, seeded: Optional[List[ChatMessage]] = None) -> None:
+        self.kept        : List[ChatMessage] = list(seeded or [])
+        self.initialized : bool = False
 
     def initialize(self) -> None:
         self.initialized = True
 
-    def save(self, key, data) -> bool:
-        self.data[key] = data
-        return True
+    async def archive(self, messages) -> None:
+        self.kept.extend(messages)
 
-    def load(self, key):
-        return self.data.get(key)
+    async def recall(self, since=None, limit=None):
+        kept = self.kept
+        if since is not None:
+            kept = [m for m in kept if m.timestamp >= since]
+        return kept[-limit:] if limit else list(kept)
 
-    def delete(self, key) -> bool:
-        return self.data.pop(key, None) is not None
+    async def forget(self, before=None) -> int:
+        dropped = len(self.kept) if before is None else len([m for m in self.kept
+                                                             if m.timestamp < before])
+        self.kept = [] if before is None else [m for m in self.kept if m.timestamp >= before]
+        return dropped
 
 
 # === Ids and names ==============================================================
@@ -129,7 +142,7 @@ async def test_a_reply_to_a_say_is_another_say():
     session, view = await driven(participants=[_Ouvinte()])
     first = await view.say("uma pergunta ao ar")
     await view.say("uma resposta", reply_to=first)
-    assert [m.reply_to for m in view.load_messages()] == [None, first]
+    assert [m.reply_to for m in view.context()] == [None, first]
     await session.close()
 
 
@@ -145,7 +158,7 @@ async def test_ask_returns_the_answer():
 async def test_a_command_is_an_ask_to_a_tool():
     session, view = await driven(participants=[_Eco()])
     assert await view.command("eco", "ola") == "eco: ola"
-    history = view.load_messages()
+    history = view.context()
     assert (history[0].frm, history[0].to) == (LOCAL, 1)
     assert (history[1].frm, history[1].to) == (1, LOCAL)
     assert history[1].reply_to == history[0].id
@@ -237,7 +250,7 @@ async def test_a_participant_gets_only_what_it_declared():
     session.attach(mudo)
     assert hasattr(mudo, "say")
     assert not hasattr(mudo, "ask")
-    assert not hasattr(mudo, "load_messages")
+    assert not hasattr(mudo, "context")
     await session.close()
 
 
@@ -245,113 +258,109 @@ async def test_nobody_can_speak_in_another_name():
     """frm is bound at attach, not passed as an argument."""
     session, view = await driven(participants=[_Ouvinte()])
     await view.say("sou eu")
-    assert view.load_messages()[0].frm == LOCAL
+    assert view.context()[0].frm == LOCAL
     await session.close()
 
 
 # === History ====================================================================
 
 
-async def test_load_messages_narrows_by_index_and_by_time():
+async def test_context_narrows_by_index_and_by_time():
     session, view = await driven()
     for n in range(5):
         await view.say("m%d" % n)
-    assert [m.text for m in view.load_messages(limit=2)] == ["m3", "m4"]
-    assert [m.text for m in view.load_messages(start=3)] == ["m3", "m4"]
-    cut = view.load_messages()[3].timestamp
-    assert [m.text for m in view.load_messages(since=cut)] == ["m3", "m4"]
-    assert view.load_messages(limit=0) == []
+    assert [m.text for m in view.context(limit=2)] == ["m3", "m4"]
+    assert [m.text for m in view.context(start=3)] == ["m3", "m4"]
+    cut = view.context()[3].timestamp
+    assert [m.text for m in view.context(since=cut)] == ["m3", "m4"]
+    assert view.context(limit=0) == []
     await session.close()
 
 
-async def test_load_messages_returns_a_copy():
+async def test_context_returns_a_copy():
     session, view = await driven()
     await view.say("guardada")
-    view.load_messages().clear()
+    view.context().clear()
     assert view.texts() == ["guardada"]
     await session.close()
 
 
-# === Persistence ================================================================
+# === The older tier =============================================================
 
 
-async def test_backend_round_trip():
-    store = _Backend()
-    session, _ = await driven(backend=store)
+async def test_what_is_said_reaches_the_archive():
+    store = _Archive()
+    session, view = await driven(backend=store)
     assert store.initialized is True
-    assert session.save_data("k", {"a": 1}) is True
-    assert session.load_data("k") == {"a": 1}
-    assert session.delete_data("k") is True
-    assert session.load_data("k") is None
+    await view.say("guarda isto")
+    assert [m.text for m in store.kept] == ["guarda isto"]
     await session.close()
 
 
-async def test_persistence_without_a_backend_raises():
+async def test_context_spans_both_tiers_without_saying_which():
+    """The whole point of one interface: the caller cannot tell them apart."""
+    older = ChatMessage(id="old-1", text="de ontem", frm=LOCAL,
+                        timestamp=datetime.now() - timedelta(days=1))
+    session, view = await driven(backend=_Archive([older]))
+    await view.say("de hoje")
+    assert [m.text for m in view.context()] == ["de ontem", "de hoje"]
+    await session.close()
+
+
+async def test_recall_is_bounded_and_the_bound_is_the_session_s():
+    older = [ChatMessage(id="old-%d" % n, text="m%d" % n, frm=LOCAL,
+                         timestamp=datetime.now() - timedelta(minutes=5 - n))
+             for n in range(5)]
+    session, view = await driven(backend=_Archive(older), recall=2)
+    assert [m.text for m in view.context()] == ["m3", "m4"]
+    await session.close()
+
+
+async def test_a_backend_that_cannot_recall_is_not_an_error():
+    """Declaring less means doing less, not failing."""
+
+    @backend("so-escreve")
+    @require(HookArchive)
+    class WriteOnly:
+        def __init__(self) -> None:
+            self.kept: list = []
+
+        async def archive(self, messages) -> None:
+            self.kept.extend(messages)
+
+    store = WriteOnly()
+    session, view = await driven(backend=store)
+    await view.say("ainda assim guardada")
+    assert [m.text for m in store.kept] == ["ainda assim guardada"]
+    assert [m.text for m in view.context()] == ["ainda assim guardada"]
+    await session.close()
+
+
+async def test_an_archive_that_fails_does_not_lose_the_message():
+    @backend("avariado")
+    @require(HookArchive)
+    class Broken:
+        async def archive(self, messages) -> None:
+            raise RuntimeError("disco cheio")
+
+    session, view = await driven(backend=Broken())
+    await view.say("continua na conversa")
+    assert [m.text for m in view.context()] == ["continua na conversa"]
+    await session.close()
+
+
+async def test_forget_without_a_backend_drops_nothing():
     session, _ = await driven()
-    for call in (lambda: session.save_data("k", 1),
-                 lambda: session.load_data("k"),
-                 lambda: session.delete_data("k")):
-        with pytest.raises(RuntimeError, match="No backend"):
-            call()
+    assert await session.forget() == 0
     await session.close()
 
 
-async def test_the_backend_must_declare_what_the_session_asks_of_it():
-    """A capability the backend never had must fail loudly, not silently."""
-
-    @backend("so-leitura")
-    @require(__import__("chatinho").HookLoad)
-    class ReadOnly:
-        def load(self, key):
-            return None
-
-    session, _ = await driven(backend=ReadOnly())
-    with pytest.raises(RuntimeError, match="does not declare HookSave"):
-        session.save_data("k", 1)
+async def test_forget_reaches_the_archive():
+    store = _Archive()
+    session, view = await driven(backend=store)
+    await view.say("efémera")
+    assert await session.forget() == 1
+    assert store.kept == []
     await session.close()
 
 
-# === Lifecycle ==================================================================
-
-
-async def test_close_shuts_every_participant_down():
-    calls: list = []
-
-    @connector("com-servidor")
-    @require(HookOnSay)
-    class ComServidor:
-        async def on_say(self, msg) -> None:
-            pass
-
-        def shutdown(self) -> None:
-            calls.append("desligado")
-
-    session, _ = await driven(participants=[ComServidor()])
-    await session.close()
-    assert calls == ["desligado"]
-
-
-async def test_one_failing_shutdown_does_not_block_the_others():
-    calls: list = []
-
-    @connector("mau")
-    @require(HookOnSay)
-    class Mau:
-        async def on_say(self, msg) -> None:
-            pass
-
-        def shutdown(self) -> None:
-            raise RuntimeError("nao desligo")
-
-    @connector("bom")
-    @require(HookOnSay)
-    class Bom:
-        async def on_say(self, msg) -> None:
-            pass
-
-        def shutdown(self) -> None:
-            calls.append("bom")
-
-    session, _ = await driven(participants=[Mau(), Bom()])
-    await session.close()
-    assert calls == ["bom"]

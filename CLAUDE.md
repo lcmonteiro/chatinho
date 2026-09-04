@@ -68,6 +68,7 @@ There are three verbs and nothing else:
 | `answer(msg, text)` | concede | the reply an ask is waiting on |
 | `on_say(msg)` | exige | someone spoke to everyone |
 | `on_ask(msg)` | exige | someone asked *you*; return the answer, or `answer()` later |
+| `context(since=, start=, limit=)` | concede | the conversation so far, at any depth |
 
 A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:
 `ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
@@ -85,6 +86,31 @@ subsystem that takes a second to answer holds up nobody but itself — `test_cha
 two asks of 0.3s and 0s finish in under 0.45s.
 
 `HookRegistry` went with them: dispatch is per-participant queues now, so nothing used it.
+
+## Context has two tiers and one interface
+
+The backend is not a key-value store. It is where the conversation goes when it is no longer
+recent: `HookArchive`/`archive(msgs)`, `HookRecall`/`recall(since=, limit=)`,
+`HookForget`/`forget(before=)`, all coroutines, all running their SQLAlchemy work in an executor
+so one slow write holds up nobody.
+
+A participant declares `HookContext` and calls `context(...)`. It never learns which tier a
+message came from — the recent turns were said this session, the older ones were recalled at
+`start()`. That is the whole point of one interface.
+
+Two costs, both deliberate and both stated in the code:
+
+- **`context()` is synchronous, so the window is whatever `recall` pulled back.** Asking for older
+  than that returns nothing rather than reaching down again. Making it reach would make it a
+  coroutine, and the terminal renders the log from inside a synchronous Textual paint.
+- **Archiving is awaited, not fired and forgotten.** A background task races `close()` and loses,
+  which made "the conversation survives" true only sometimes. Waiting holds up the speaker, never
+  the loop.
+
+`tests/test_architecture.py` also refuses any name our Textual subclasses assign that is a
+*method* on the Textual parent. Setting `self.title` or `self.value` is ordinary use; shadowing
+`MessagePump._context` hung the widget's message loop with no error at all, and `id` — a validated
+property on `DOMNode` — at least raised.
 
 One thing stated plainly: Python has no `protected`. The `_` is convention, and the grants still
 reach back. This buys intent and a single documented door, not enforcement.

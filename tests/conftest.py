@@ -17,12 +17,12 @@ from chatinho import (
     Ask,
     ChatMessage,
     HookAsk,
-    HookLoadMessages,
+    HookContext,
     HookOnAsk,
     HookOnSay,
     HookParticipants,
     HookSay,
-    LoadMessages,
+    Context,
     Participants,
     Say,
     connector,
@@ -36,7 +36,7 @@ from chatinho.chat_session import ChatSession
 @require(HookAsk)
 @require(HookOnSay)
 @require(HookOnAsk)
-@require(HookLoadMessages)
+@require(HookContext)
 @require(HookParticipants)
 class Driver:
     """Everything the presentation is, minus the terminal."""
@@ -45,7 +45,7 @@ class Driver:
     say           : Say
     ask           : Ask
     answer        : Answer
-    load_messages : LoadMessages
+    context : Context
     participants  : Participants
 
     def __init__(self, answers: Optional[List[str]] = None) -> None:
@@ -65,7 +65,7 @@ class Driver:
 
     def texts(self) -> List[str]:
         """The whole history as plain strings, oldest first."""
-        return [m.text for m in self.load_messages()]
+        return [m.text for m in self.context()]
 
     def id_of(self, name: str) -> Optional[int]:
         """The id of the participant with that visible name."""

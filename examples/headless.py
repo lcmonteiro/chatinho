@@ -25,12 +25,12 @@ from chatinho import (
     ChatSession,
     HelpCommand,
     HookAsk,
-    HookLoadMessages,
+    HookContext,
     HookOnAsk,
     HookOnSay,
     HookParticipants,
     HookSay,
-    LoadMessages,
+    Context,
     Participants,
     Say,
     connector,
@@ -70,7 +70,7 @@ class UpperCommand:
 @require(HookAsk)
 @require(HookOnSay)
 @require(HookOnAsk)
-@require(HookLoadMessages)
+@require(HookContext)
 @require(HookParticipants)
 class Terminal:
     """The presentation layer: prints what arrives, sends what is typed."""
@@ -78,7 +78,7 @@ class Terminal:
     # Granted by the session at attach.
     say           : Say
     ask           : Ask
-    load_messages : LoadMessages
+    context : Context
     participants  : Participants
 
     async def on_say(self, msg: ChatMessage) -> None:
@@ -136,7 +136,7 @@ async def main() -> None:
             await asyncio.sleep(0.05)
 
     await session.close()
-    print("--- %d messages, no terminal UI ---" % len(view.load_messages()))
+    print("--- %d messages, no terminal UI ---" % len(view.context()))
 
 
 if __name__ == "__main__":

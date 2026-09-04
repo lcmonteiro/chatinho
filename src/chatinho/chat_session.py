@@ -23,12 +23,11 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .chat_hooks import (
-    Hook,
-    HookDelete,
-    HookLoad,
+    HookArchive,
+    HookForget,
     HookOnAsk,
     HookOnSay,
-    HookSave,
+    HookRecall,
     declares,
     hooks_of,
     name_of,
@@ -50,15 +49,19 @@ class ChatSession:
     - ``HookAsk``          grants ``ask(to, text)``, which awaits the answer.
     - ``HookOnAsk``        demands ``on_ask(msg)`` and grants ``answer(msg, text)``.
     - ``HookOnSay``        demands ``on_say(msg)``.
-    - ``HookLoadMessages`` grants ``load_messages(since=, start=, limit=)``.
+    - ``HookContext``      grants ``context(since=, start=, limit=)``.
     """
 
     def __init__(
         self,
         participants : Optional[List[Any]] = None,
         backend      : Optional[Any] = None,
+        recall       : int = 200,
     ) -> None:
+        #: Where the conversation goes when it is no longer recent.
         self.backend : Optional[Any] = backend
+        #: How much of the archive ``start()`` pulls back into the session.
+        self.recall  : int = recall
 
         self._store    : MessageStore = MessageStore()
         self._by_id    : Dict[int, Any] = {}
@@ -134,7 +137,7 @@ class ChatSession:
             "say"           : lambda: self._say_for(at),
             "ask"           : lambda: self._ask_for(at),
             "answer"        : lambda: self._answer_for(at),
-            "load_messages" : lambda: self._load_messages,
+            "context"       : lambda: self._context,
             "participants"  : lambda: self._participants,
         }
         for hook in hooks_of(who):
@@ -186,6 +189,11 @@ class ChatSession:
         no further: the asker is already holding it.
         """
         self._store.add(msg)
+        # Awaited, not fired and forgotten: a task left running races close()
+        # and loses, which made "the conversation survives" true only sometimes.
+        # The backend does its work in an executor, so waiting here holds up
+        # the speaker, never the loop or anybody else's queue.
+        await self._archive(msg)
         waiting = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
         if waiting is not None and not waiting.done():
             waiting.set_result(msg.text)
@@ -233,14 +241,24 @@ class ChatSession:
 
     # === History ====================================================================
 
-    def _load_messages(
+    def _context(
         self,
         *,
         since : Optional[datetime] = None,
         start : Optional[int] = None,
         limit : Optional[int] = None,
     ) -> List[ChatMessage]:
-        """Reads the history, by time or by index. Granted by ``HookLoadMessages``.
+        """The conversation so far, by time or by index. Granted by ``HookContext``.
+
+        One interface over two tiers: what was said this session, and what
+        :meth:`start` recalled from the archive. Whoever asks never learns
+        which tier a message came from.
+
+        Deliberately synchronous, and that costs something worth naming: the
+        window is whatever ``recall`` pulled back at startup, so asking for
+        older than that returns nothing rather than reaching down again. Making
+        it reach would make it a coroutine, and the terminal renders the log
+        from inside a synchronous Textual paint.
 
         The three narrow independently and are applied in order, so
         ``load_messages(since=t, limit=20)`` is the last twenty since *t*.
@@ -270,6 +288,7 @@ class ChatSession:
         Separate from construction because the tasks need a running loop, and a
         session is usually built before there is one.
         """
+        await self._recall()
         for at in self._queues:
             if at not in self._tasks or self._tasks[at].done():
                 self._tasks[at] = asyncio.create_task(self._drain(at))
@@ -291,29 +310,45 @@ class ChatSession:
                 except Exception:
                     logger.error("Shutting %r down failed", name_of(who), exc_info=True)
 
-    # === Persistence ================================================================
+    # === The older tier =============================================================
 
-    def _backend_for(self, hook: Hook) -> Any:
-        """Returns the backend, if it declared *hook*.
+    async def _recall(self) -> None:
+        """Pulls the tail of the archive back into the session.
 
-        Raises:
-            RuntimeError: If there is no backend, or it never declared *hook*.
+        Called once by :meth:`start`, before anyone can ask for context, so a
+        chat reopens where it left off. A backend that cannot recall is not an
+        error: it simply has nothing to give back.
         """
-        if self.backend is None:
-            raise RuntimeError("No backend configured")
-        if not declares(self.backend, hook):
-            raise RuntimeError(
-                "Backend %r does not declare %s" % (name_of(self.backend), hook))
-        return self.backend
+        if self.backend is None or not declares(self.backend, HookRecall):
+            return
+        try:
+            for msg in await self.backend.recall(limit=self.recall):
+                self._store.add(msg)
+        except Exception:
+            logger.error("Recalling the archive failed; starting empty", exc_info=True)
 
-    def save_data(self, key: str, data: Any) -> bool:
-        """Saves *data* under *key* through the backend."""
-        return self._backend_for(HookSave).save(key, data)
+    async def _archive(self, msg: ChatMessage) -> None:
+        """Hands one message to the archive, if there is one that takes them.
 
-    def load_data(self, key: str) -> Any:
-        """Returns what was saved under *key*, or None."""
-        return self._backend_for(HookLoad).load(key)
+        Failing to archive must not lose the message: it is already in the
+        session, and the conversation carries on without the older tier.
+        """
+        if self.backend is None or not declares(self.backend, HookArchive):
+            return
+        try:
+            await self.backend.archive([msg])
+        except Exception:
+            logger.error("Archiving %s failed", msg.id, exc_info=True)
 
-    def delete_data(self, key: str) -> bool:
-        """Deletes what was saved under *key*."""
-        return self._backend_for(HookDelete).delete(key)
+    async def forget(self, before: Optional[datetime] = None) -> int:
+        """Drops archived messages older than *before*, or all of them.
+
+        Args:
+            before: Keep everything from this moment on; None forgets the lot.
+
+        Returns:
+            int: How many the backend dropped, or zero when it cannot forget.
+        """
+        if self.backend is None or not declares(self.backend, HookForget):
+            return 0
+        return await self.backend.forget(before=before)

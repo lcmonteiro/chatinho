@@ -1,142 +1,150 @@
-"""Tests for DatabaseBackend — the only real persistence adapter.
+"""Tests for the message archive — the older tier of the conversation.
 
-It had never stored a row: ``ChatData.id`` was a String primary key with no
-default that ``save()`` never set, so every INSERT failed the NOT NULL
-constraint, the broad ``except`` swallowed it and ``save()`` returned False.
-Nothing noticed because nothing tested it. These run against SQLite, in
-memory and on disk.
+The backend is not a key-value store. It keeps messages, the session recalls a
+window at startup, and every method is a coroutine that does its SQLAlchemy
+work off the event loop.
 """
+
+from datetime import datetime, timedelta
 
 import pytest
 
-from chatinho import DatabaseBackend
-from chatinho.backends.database import ChatData
+from chatinho import LOCAL, ChatMessage, ChatSession, DatabaseBackend
+from conftest import Driver
+
+
+def message(mid: str, text: str, at: datetime, frm: int = LOCAL) -> ChatMessage:
+    """Builds one message stamped at a given moment."""
+    return ChatMessage(id=mid, text=text, frm=frm, timestamp=at)
 
 
 @pytest.fixture
-def backend():
-    """An initialized in-memory backend."""
-    backend = DatabaseBackend("sqlite:///:memory:")
-    backend.initialize()
-    return backend
+async def archive():
+    """A started, on-disk-free archive."""
+    store = DatabaseBackend("sqlite:///:memory:")
+    store.initialize()
+    yield store
+    store.shutdown()
 
 
-# === The regression =============================================================
+# === The archive itself =========================================================
 
 
-def test_save_actually_stores_a_row(backend):
-    """The bug: save() reported False and stored nothing."""
-    assert backend.save("k", {"a": 1}) is True
-    session = backend._get_session()
-    try:
-        assert session.query(ChatData).filter(ChatData.key == "k").count() == 1
-    finally:
-        session.close()
+async def test_what_goes_in_comes_back_out(archive):
+    now = datetime.now()
+    await archive.archive([message("msg-1", "ola", now), message("msg-2", "adeus", now)])
+    assert [m.text for m in await archive.recall()] == ["ola", "adeus"]
 
 
-def test_save_does_not_swallow_an_integrity_error(backend):
-    """A round trip proves the INSERT really committed, not just returned True."""
-    backend.save("k", "value")
-    assert backend.load("k") == "value"
+async def test_a_message_keeps_its_address_and_its_thread(archive):
+    now = datetime.now()
+    await archive.archive([
+        ChatMessage(id="msg-1", text="que tempo?", frm=LOCAL, to=1, timestamp=now),
+        ChatMessage(id="msg-2", text="sol", frm=1, to=LOCAL, reply_to="msg-1",
+                    timestamp=now + timedelta(seconds=1)),
+    ])
+    question, answer = await archive.recall()
+    assert (question.frm, question.to) == (LOCAL, 1)
+    assert (answer.frm, answer.to, answer.reply_to) == (1, LOCAL, "msg-1")
 
 
-# === Round trips by type ========================================================
+async def test_archiving_the_same_message_twice_is_not_two_rows(archive):
+    """The message id is the primary key, so a re-archive replaces."""
+    now = datetime.now()
+    await archive.archive([message("msg-1", "primeira", now)])
+    await archive.archive([message("msg-1", "corrigida", now)])
+    recalled = await archive.recall()
+    assert [(m.id, m.text) for m in recalled] == [("msg-1", "corrigida")]
 
 
-@pytest.mark.parametrize(
-    "value",
-    [
-        {"message": "Hello", "n": 1},
-        ["a", "b", "c"],
-        "plain string",
-        42,
-        3.5,
-        True,
-    ],
-)
-def test_round_trip_preserves_the_value(backend, value):
-    assert backend.save("k", value) is True
-    assert backend.load("k") == value
+async def test_recall_takes_the_tail_oldest_first(archive):
+    base = datetime.now()
+    await archive.archive([message("msg-%d" % n, "m%d" % n, base + timedelta(seconds=n))
+                           for n in range(5)])
+    assert [m.text for m in await archive.recall(limit=2)] == ["m3", "m4"]
 
 
-def test_round_trip_preserves_non_ascii(backend):
-    backend.save("k", {"texto": "olá, ção — ✓"})
-    assert backend.load("k") == {"texto": "olá, ção — ✓"}
+async def test_recall_narrows_by_time(archive):
+    base = datetime.now()
+    await archive.archive([message("msg-%d" % n, "m%d" % n, base + timedelta(seconds=n))
+                           for n in range(5)])
+    cut = base + timedelta(seconds=3)
+    assert [m.text for m in await archive.recall(since=cut)] == ["m3", "m4"]
 
 
-# === Overwrite, missing keys, delete ============================================
+async def test_forget_drops_only_what_is_older(archive):
+    base = datetime.now()
+    await archive.archive([message("msg-%d" % n, "m%d" % n, base + timedelta(seconds=n))
+                           for n in range(5)])
+    assert await archive.forget(before=base + timedelta(seconds=3)) == 3
+    assert [m.text for m in await archive.recall()] == ["m3", "m4"]
 
 
-def test_saving_the_same_key_twice_overwrites(backend):
-    backend.save("k", "primeiro")
-    assert backend.save("k", "segundo") is True
-    assert backend.load("k") == "segundo"
-    session = backend._get_session()
-    try:
-        assert session.query(ChatData).count() == 1
-    finally:
-        session.close()
+async def test_forget_without_a_cut_forgets_everything(archive):
+    await archive.archive([message("msg-1", "ola", datetime.now())])
+    assert await archive.forget() == 1
+    assert await archive.recall() == []
 
 
-def test_overwrite_can_change_the_stored_type(backend):
-    backend.save("k", "uma string")
-    backend.save("k", {"agora": "json"})
-    assert backend.load("k") == {"agora": "json"}
+async def test_using_it_before_initialize_says_so():
+    store = DatabaseBackend("sqlite:///:memory:")
+    with pytest.raises(RuntimeError, match="not initialized"):
+        await store.archive([message("msg-1", "ola", datetime.now())])
 
 
-def test_load_returns_none_for_an_unknown_key(backend):
-    assert backend.load("nao-existe") is None
+async def test_shutdown_disposes_of_the_engine(archive):
+    assert archive.engine is not None
+    archive.shutdown()
+    assert archive.engine is None
 
 
-def test_delete_removes_the_row(backend):
-    backend.save("k", "value")
-    assert backend.delete("k") is True
-    assert backend.load("k") is None
+# === Wired to a session =========================================================
 
 
-def test_delete_returns_false_for_an_unknown_key(backend):
-    assert backend.delete("nao-existe") is False
+async def test_a_conversation_survives_the_session_that_had_it(tmp_path):
+    """The whole point: close the chat, open another, and the context is there."""
+    store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
+
+    first = ChatSession(backend=store)
+    view = Driver()
+    first.attach(view, at=LOCAL)
+    await first.start()
+    await view.say("lembra-te disto")
+    await first.close()
+
+    second = ChatSession(backend=store)
+    again = Driver()
+    second.attach(again, at=LOCAL)
+    await second.start()
+    assert [m.text for m in again.context()] == ["lembra-te disto"]
+    await second.close()
 
 
-def test_keys_do_not_collide(backend):
-    backend.save("a", 1)
-    backend.save("b", 2)
-    assert (backend.load("a"), backend.load("b")) == (1, 2)
-    backend.delete("a")
-    assert backend.load("b") == 2
+async def test_a_session_without_a_backend_simply_has_no_older_tier():
+    session = ChatSession()
+    view = Driver()
+    session.attach(view, at=LOCAL)
+    await session.start()
+    await view.say("só em memória")
+    assert [m.text for m in view.context()] == ["só em memória"]
+    assert await session.forget() == 0
+    await session.close()
 
 
-# === Lifecycle ==================================================================
+async def test_recall_is_bounded_by_what_the_session_asks_for(tmp_path):
+    """The window is stated, not hidden: older than `recall` is out of reach."""
+    store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
+    first = ChatSession(backend=store)
+    view = Driver()
+    first.attach(view, at=LOCAL)
+    await first.start()
+    for n in range(5):
+        await view.say("m%d" % n)
+    await first.close()
 
-
-def test_using_the_backend_before_initialize_raises():
-    backend = DatabaseBackend("sqlite:///:memory:")
-    for call in (
-        lambda: backend.save("k", 1),
-        lambda: backend.load("k"),
-        lambda: backend.delete("k"),
-    ):
-        with pytest.raises(RuntimeError):
-            call()
-
-
-def test_data_survives_on_a_real_file(tmp_path):
-    """Not an in-memory artefact: a second backend reads the first one's rows."""
-    db = tmp_path / "chat.db"
-    writer = DatabaseBackend(f"sqlite:///{db}")
-    writer.initialize()
-    assert writer.save("k", {"a": 1}) is True
-
-    reader = DatabaseBackend(f"sqlite:///{db}")
-    reader.initialize()
-    assert reader.load("k") == {"a": 1}
-
-
-def test_an_absolute_sqlite_path_is_honoured(tmp_path):
-    """The URL is handed to SQLAlchemy untouched, so absolute paths work."""
-    db = tmp_path / "nested" / "chat.db"
-    db.parent.mkdir()
-    backend = DatabaseBackend(f"sqlite:////{db.relative_to('/')}")
-    backend.initialize()
-    assert backend.save("k", "value") is True
-    assert db.exists()
+    second = ChatSession(backend=store, recall=2)
+    again = Driver()
+    second.attach(again, at=LOCAL)
+    await second.start()
+    assert [m.text for m in again.context()] == ["m3", "m4"]
+    await second.close()

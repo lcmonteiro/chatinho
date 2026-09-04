@@ -78,8 +78,13 @@ class Participants(Protocol):
         ...
 
 
-class LoadMessages(Protocol):
-    """Granted by ``HookLoadMessages``: the history, by time or by index."""
+class Context(Protocol):
+    """Granted by ``HookContext``: the conversation so far, at any depth.
+
+    One interface over two tiers. The recent turns live in the session; older
+    ones live in the backend and are recalled into it at ``start()``. Whoever
+    asks never learns which tier a message came from — that is the point.
+    """
 
     def __call__(
         self,
@@ -147,10 +152,12 @@ HookOnAsk = Hook(
     # askable is what grants the way to answer.
 )
 
-HookLoadMessages = Hook(
-    name="HookLoadMessages",
-    grants=("load_messages",),
-    # The history, by time or by index. The only way to read it.
+HookContext = Hook(
+    name="HookContext",
+    grants=("context",),
+    # context(since=, start=, limit=) -> the conversation so far, by time or by
+    # index. The only way to read it, and it spans both tiers: what the session
+    # holds and what the backend recalled into it.
 )
 
 HookParticipants = Hook(
@@ -161,22 +168,26 @@ HookParticipants = Hook(
     # be written without a way to see past its own class.
 )
 
-# === What a backend is for ======================================================
+# === What a backend is for: the older context ===================================
+#
+# The backend is not a key-value store; it is where the conversation goes when
+# it is no longer recent. Nobody asks it directly — a participant asks the
+# session for context, and the session is what reaches down here.
 
-HookSave   = Hook("HookSave",   "save")
-HookLoad   = Hook("HookLoad",   "load")
-HookDelete = Hook("HookDelete", "delete")
+HookArchive = Hook("HookArchive", "archive")   # async archive(messages) -> None
+HookRecall  = Hook("HookRecall",  "recall")    # async recall(since=, limit=) -> List
+HookForget  = Hook("HookForget",  "forget")    # async forget(before=) -> int
 
 ALL_HOOKS: Tuple[Hook, ...] = (
     HookSay,
     HookAsk,
     HookOnSay,
     HookOnAsk,
-    HookLoadMessages,
+    HookContext,
     HookParticipants,
-    HookSave,
-    HookLoad,
-    HookDelete,
+    HookArchive,
+    HookRecall,
+    HookForget,
 )
 
 # Lifecycle is not a hook: initialize() and shutdown() are optional and called

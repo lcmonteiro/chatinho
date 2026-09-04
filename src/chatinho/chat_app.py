@@ -36,12 +36,12 @@ from .chat_hooks import (
     Answer,
     Ask,
     HookAsk,
-    HookLoadMessages,
+    HookContext,
     HookOnAsk,
     HookOnSay,
     HookParticipants,
     HookSay,
-    LoadMessages,
+    Context,
     Participants,
     Say,
     connector,
@@ -100,7 +100,7 @@ def create_chat(
 @require(HookAsk)
 @require(HookOnSay)
 @require(HookOnAsk)
-@require(HookLoadMessages)
+@require(HookContext)
 @require(HookParticipants)
 class _Chat(App):
     """Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
@@ -119,7 +119,7 @@ class _Chat(App):
     say           : Say
     ask           : Ask
     answer        : Answer
-    load_messages : LoadMessages
+    context : Context
     participants  : Participants
 
     def __init__(
@@ -137,7 +137,7 @@ class _Chat(App):
 
         self.session : ChatSession = session if session is not None else ChatSession()
         # Participant zero: the user. This is what grants say, ask, answer and
-        # load_messages, and what subscribes on_say and on_ask below.
+        # context, and what subscribes on_say and on_ask below.
         self.session.attach(self, at=LOCAL)
         self._repaint_after("say", "ask", "answer")
 
@@ -170,7 +170,7 @@ class _Chat(App):
         """Create child widgets."""
         yield Container(
             ChatLog(
-                self.load_messages,
+                self.context,
                 max_displayed=self.max_displayed,
                 on_reply_target_change=self._on_reply_target_change,
                 id=CHAT_LOG_ID,
@@ -187,7 +187,7 @@ class _Chat(App):
         self._app_thread_id = threading.get_ident()
         await self.session.start()
         self.query_one("#%s" % INPUT_ID, Input).focus()
-        if self.load_messages():
+        if self.context():
             self._chat_log.sync()
             self._chat_log.scroll_to_bottom()
         if self.welcome_message:
@@ -261,11 +261,11 @@ class _Chat(App):
     @property
     def messages(self) -> List[ChatMessage]:
         """The full message history, oldest first."""
-        return self.load_messages()
+        return self.context()
 
     def get_replies(self, msg_id: str) -> List[str]:
         """Returns the ids of the messages that answer *msg_id*."""
-        return [m.id for m in self.load_messages() if m.reply_to == msg_id]
+        return [m.id for m in self.context() if m.reply_to == msg_id]
 
     # === Presentation-owned behaviour ===============================================
 
@@ -321,7 +321,7 @@ class _Chat(App):
         inp.placeholder = self._input_placeholder if msg_id is None else "Reply to %s…" % msg_id
 
     def _find_message(self, msg_id: str) -> Optional[ChatMessage]:
-        return next((m for m in self.load_messages() if m.id == msg_id), None)
+        return next((m for m in self.context() if m.id == msg_id), None)
 
     @property
     def _reply_target(self) -> Optional[str]:
