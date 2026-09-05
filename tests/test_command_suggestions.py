@@ -1,7 +1,7 @@
 """Tests for the command-suggestion (autocomplete) popup.
 
-A command is an ask to a tool, so the popup lists the participants that
-can be asked. They are registered via ``create_chat(participants=[...])``; the popup shows
+A command is an ask to a tool, so the popup lists the peers that
+can be asked. They are registered via ``create_chat(peers=[...])``; the popup shows
 matches for the "/token" currently being typed, and Tab/Down/Up/Escape
 drive it without stealing focus from the input.
 """
@@ -42,7 +42,7 @@ async def test_no_suggestions_without_registered_commands():
 
 @pytest.mark.asyncio
 async def test_slash_alone_lists_all_commands():
-    app = create_chat(participants=COMMANDS)
+    app = create_chat(peers=COMMANDS)
     async with app.run_test() as pilot:
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/")
@@ -52,7 +52,7 @@ async def test_slash_alone_lists_all_commands():
 
 @pytest.mark.asyncio
 async def test_typing_filters_suggestions_by_prefix():
-    app = create_chat(participants=COMMANDS)
+    app = create_chat(peers=COMMANDS)
     async with app.run_test() as pilot:
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/", "h", "e")
@@ -61,7 +61,7 @@ async def test_typing_filters_suggestions_by_prefix():
 
 @pytest.mark.asyncio
 async def test_no_match_hides_suggestions():
-    app = create_chat(participants=COMMANDS)
+    app = create_chat(peers=COMMANDS)
     async with app.run_test() as pilot:
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/", "z")
@@ -72,7 +72,7 @@ async def test_no_match_hides_suggestions():
 @pytest.mark.asyncio
 async def test_space_after_token_hides_suggestions():
     """Once a full command is followed by a space, it's no longer being typed."""
-    app = create_chat(participants=COMMANDS)
+    app = create_chat(peers=COMMANDS)
     async with app.run_test() as pilot:
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/", "h", "e", "l", "p", "space")
@@ -81,7 +81,7 @@ async def test_space_after_token_hides_suggestions():
 
 @pytest.mark.asyncio
 async def test_tab_completes_highlighted_suggestion():
-    app = create_chat(participants=COMMANDS)
+    app = create_chat(peers=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         suggestions = app.query_one("#command-suggestions", OptionList)
@@ -94,7 +94,7 @@ async def test_tab_completes_highlighted_suggestion():
 
 @pytest.mark.asyncio
 async def test_down_moves_highlight_then_tab_completes_it():
-    app = create_chat(participants=COMMANDS)
+    app = create_chat(peers=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         suggestions = app.query_one("#command-suggestions", OptionList)
@@ -109,7 +109,7 @@ async def test_down_moves_highlight_then_tab_completes_it():
 
 @pytest.mark.asyncio
 async def test_enter_accepts_suggestion_instead_of_submitting():
-    app = create_chat(participants=COMMANDS)
+    app = create_chat(peers=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         await pilot.press("/", "h", "e")
@@ -120,7 +120,7 @@ async def test_enter_accepts_suggestion_instead_of_submitting():
 
 @pytest.mark.asyncio
 async def test_escape_hides_suggestions_without_changing_input():
-    app = create_chat(participants=COMMANDS)
+    app = create_chat(peers=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         suggestions = app.query_one("#command-suggestions", OptionList)
@@ -133,7 +133,7 @@ async def test_escape_hides_suggestions_without_changing_input():
 @pytest.mark.asyncio
 async def test_tab_falls_through_to_focus_next_without_suggestions():
     """Tab must keep its normal Textual behavior when no popup is open."""
-    app = create_chat(participants=COMMANDS)
+    app = create_chat(peers=COMMANDS)
     async with app.run_test() as pilot:
         focused_before = app.focused
         await pilot.press("x")  # not a command prefix — no popup
@@ -144,7 +144,7 @@ async def test_tab_falls_through_to_focus_next_without_suggestions():
 @pytest.mark.asyncio
 async def test_an_unknown_command_says_so_instead_of_vanishing():
     """There is no dispatch to fall through: an unknown name has no id."""
-    app = create_chat(participants=COMMANDS)
+    app = create_chat(peers=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         inp.value = "/nao-existe"

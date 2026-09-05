@@ -1,6 +1,6 @@
-"""Capabilities a participant declares, and the registry that dispatches them.
+"""Capabilities a peer declares, and the registry that dispatches them.
 
-A participant — a connector, a tool, or the presentation — is a plain class. It
+A peer — a connector, a tool, or the presentation — is a plain class. It
 says what it can do by declaring hooks, and :func:`require` checks at
 class-definition time that it implements what it declared, so a missing or
 misspelled method is an import error rather than a silent no-op at runtime.
@@ -8,7 +8,7 @@ misspelled method is an import error rather than a silent no-op at runtime.
 There are three verbs and nothing else:
 
     say(text)          a message for everyone
-    ask(to, text)      a message for one participant, awaiting its reply
+    ask(to, text)      a message for one peer, awaiting its reply
     answer(msg, text)  the reply that ask is waiting on
 
 and two ways of being told:
@@ -16,7 +16,7 @@ and two ways of being told:
     on_say(msg)   someone spoke to everyone
     on_ask(msg)   someone asked *you*; return the answer, or answer() later
 
-Everything is a coroutine and every participant has its own queue, so a slow
+Everything is a coroutine and every peer has its own queue, so a slow
 subsystem holds up nobody but itself.
 
     @connector("weather")
@@ -51,10 +51,10 @@ class Say(Protocol):
 
 
 class Ask(Protocol):
-    """Granted by ``HookAsk``: a message for one participant, and its reply."""
+    """Granted by ``HookAsk``: a message for one peer, and its reply."""
 
     async def __call__(self, to: int, text: str) -> str:
-        """Asks participant *to* and waits for the answer it sends back."""
+        """Asks peer *to* and waits for the answer it sends back."""
         ...
 
 
@@ -70,11 +70,11 @@ class Answer(Protocol):
         ...
 
 
-class Participants(Protocol):
-    """Granted by ``HookParticipants``: who else is in the chat, by id."""
+class Peers(Protocol):
+    """Granted by ``HookPeers``: who else is in the chat, by id."""
 
     def __call__(self) -> Dict[int, Any]:
-        """Returns a copy of the roster, keyed by participant id."""
+        """Returns a copy of the roster, keyed by peer id."""
         ...
 
 
@@ -125,7 +125,7 @@ class Hook:
 HookSay = Hook(
     name="HookSay",
     grants=("say",),
-    # say(text, reply_to=None) -> id. Reaches every participant but the sender.
+    # say(text, reply_to=None) -> id. Reaches every peer but the sender.
     # A reply to a say is another say: a broadcast is owed to nobody, so there
     # is no fourth verb for answering one.
 )
@@ -134,7 +134,7 @@ HookAsk = Hook(
     name="HookAsk",
     grants=("ask",),
     # await ask(to, text) -> the answer. Addressed and owed: exactly one
-    # participant, exactly one reply. ask(LOCAL, ...) asks the user.
+    # peer, exactly one reply. ask(LOCAL, ...) asks the user.
 )
 
 HookOnSay = Hook(
@@ -160,9 +160,9 @@ HookContext = Hook(
     # holds and what the backend recalled into it.
 )
 
-HookParticipants = Hook(
-    name="HookParticipants",
-    grants=("participants",),
+HookPeers = Hook(
+    name="HookPeers",
+    grants=("peers",),
     # Who else is here, by id. The roster's counterpart to load_messages: /help
     # lists it and the autocomplete popup matches against it, and neither can
     # be written without a way to see past its own class.
@@ -185,7 +185,7 @@ HookLoad = Hook(
     name="HookLoad",
     method="load",
     # async load(since=, limit=) -> List[ChatMessage]. The older context, read
-    # back at start(). A participant that listens and loads *is* the archive:
+    # back at start(). A peer that listens and loads *is* the archive:
     # it heard the conversation, and it gives it back.
 )
 
@@ -201,14 +201,14 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookOnSay,
     HookOnAsk,
     HookContext,
-    HookParticipants,
+    HookPeers,
     HookListen,
     HookLoad,
     HookForget,
 )
 
 # Lifecycle is not a hook: initialize() and shutdown() are optional and called
-# when present. A participant holding nothing needs neither, and making it
+# when present. A peer holding nothing needs neither, and making it
 # declare that it holds nothing is ceremony.
 
 
@@ -240,7 +240,7 @@ def connector(name: str) -> Callable[[type], type]:
 def tool(name: str, description: str = "") -> Callable[[type], type]:
     """Names a tool and gives it the text the UI shows.
 
-    A tool is a participant like any other, and a command is an ask addressed
+    A tool is a peer like any other, and a command is an ask addressed
     to one: typing ``/help`` asks the tool named "help". The name is what the
     user types after ``/``; the description is what the autocomplete popup and
     ``/help`` display beside it.
@@ -367,5 +367,5 @@ def declares(obj: Any, hook: Hook) -> bool:
 
 
 def name_of(obj: Any) -> str:
-    """Returns a participant's visible name, falling back to its class name."""
+    """Returns a peer's visible name, falling back to its class name."""
     return str(getattr(obj, "name", type(obj).__name__))

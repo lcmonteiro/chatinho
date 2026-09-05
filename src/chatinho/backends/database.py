@@ -1,7 +1,7 @@
 """The older tier of the conversation, kept in a SQL database.
 
 The backend is not a key-value store, and nothing pushes at it: it is a
-participant that declared ``HookListen``, so the conversation crosses it the
+peer that declared ``HookListen``, so the conversation crosses it the
 way it crosses anyone, and it writes what it hears. At ``start()`` the session
 asks whoever declared ``HookLoad`` for the older context, which is how a chat
 reopens where it left off.
@@ -55,7 +55,7 @@ class ArchivedMessage(Base):
 class DatabaseBackend:
     """Listens to the conversation and keeps it, one row per message.
 
-    Nothing pushes at it: it is a participant with its own queue that declared
+    Nothing pushes at it: it is a peer with its own queue that declared
     ``HookListen``, so every message crosses it the way a message crosses
     anyone, and it writes what it hears. ``HookLoad`` is the other half — it
     gives back what it held when the next session starts.

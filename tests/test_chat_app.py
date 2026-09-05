@@ -2,7 +2,7 @@
 
 The app is built with ``create_chat`` and mounted via ``App.run_test()``, so
 the widgets are available to the code under test. The presentation is a
-participant like any other — registered at LOCAL — so these tests are the same
+peer like any other — registered at LOCAL — so these tests are the same
 model as the headless ones, with a terminal attached.
 """
 
@@ -79,7 +79,7 @@ async def test_blank_input_says_nothing():
 
 
 async def test_a_command_is_an_ask_and_its_answer_lands_in_the_log():
-    app = create_chat(participants=[_Eco()])
+    app = create_chat(peers=[_Eco()])
     async with app.run_test() as pilot:
         assert await app.command("eco", "ola") == "eco: ola"
         await pilot.pause()
@@ -90,7 +90,7 @@ async def test_a_command_is_an_ask_and_its_answer_lands_in_the_log():
 
 
 async def test_submitting_a_slash_runs_the_tool():
-    app = create_chat(participants=[_Eco()])
+    app = create_chat(peers=[_Eco()])
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         inp.value = "/eco bom dia"
@@ -108,7 +108,7 @@ async def test_an_unknown_command_says_so():
 
 
 async def test_help_lists_the_tools_that_can_be_asked():
-    app = create_chat(participants=[HelpCommand(), _Eco()])
+    app = create_chat(peers=[HelpCommand(), _Eco()])
     async with app.run_test() as pilot:
         answer = await app.command("help")
         await pilot.pause()
@@ -121,7 +121,7 @@ async def test_help_lists_the_tools_that_can_be_asked():
 async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
     """The whole round trip, with no routing code in the presentation."""
     agente = _Agente()
-    app = create_chat(participants=[agente])
+    app = create_chat(peers=[agente])
     async with app.run_test() as pilot:
         question = asyncio.create_task(agente.ask(LOCAL, "Autorizas?"))
         await pilot.pause()
@@ -159,7 +159,7 @@ async def test_a_message_from_another_thread_reaches_the_log():
 
 
 async def test_the_log_renders_what_the_history_holds():
-    app = create_chat(participants=[_Eco()])
+    app = create_chat(peers=[_Eco()])
     async with app.run_test() as pilot:
         await app.say("uma")
         await app.command("eco", "duas")

@@ -1,19 +1,19 @@
-"""The chat core: participants, messages and the three verbs.
+"""The chat core: peers, messages and the three verbs.
 
 :class:`ChatSession` holds every use case the chat offers and imports no UI
 framework, so it can be driven from a TUI, a script or a test without a
 terminal.
 
-Everyone in a chat is a **participant** with an integer id. :data:`LOCAL` —
+Everyone in a chat is a **peer** with an integer id. :data:`LOCAL` —
 zero — is the user; every connector and every tool is numbered from one. A
-participant is a plain class that declares what it can do, and the session
+peer is a plain class that declares what it can do, and the session
 hands the capabilities over at :meth:`attach`.
 
 The conversation is protected: ``_say``, ``_ask``, ``_answer`` and
 ``_load_messages`` are never called directly. Declaring a hook is the only door
 in, and implementing ``on_say`` or ``on_ask`` is the only door out.
 
-Every participant has its own queue and its own task draining it, so a
+Every peer has its own queue and its own task draining it, so a
 subsystem that takes a second to answer holds up nobody but itself.
 """
 
@@ -40,7 +40,7 @@ COMMAND_PREFIX : str = "/"
 
 
 class ChatSession:
-    """Routes messages between participants, and keeps the history.
+    """Routes messages between peers, and keeps the history.
 
     The five interfaces onto the conversation are reached only by declaring a
     hook — three the session grants, two it calls:
@@ -55,7 +55,7 @@ class ChatSession:
 
     def __init__(
         self,
-        participants : Optional[List[Any]] = None,
+        peers : Optional[List[Any]] = None,
         backend      : Optional[Any] = None,
         recall       : int = 200,
     ) -> None:
@@ -71,22 +71,22 @@ class ChatSession:
         self._pending  : Dict[str, "asyncio.Future[str]"] = {}
         self._next_id  : int = 1
 
-        for who in participants or []:
+        for who in peers or []:
             self.attach(who)
         if backend is not None:
-            # A participant like any other: it gets an id and a queue, and it
+            # A peer like any other: it gets an id and a queue, and it
             # hears the conversation rather than being pushed at. `backend` is
             # only sugar for the role — the session finds what it needs by what
             # the thing declared, not by which parameter it arrived in.
             self.attach(backend)
 
-    # === Participants ===============================================================
+    # === Peers ===============================================================
 
     def attach(self, who: Any, at: Optional[int] = None) -> int:
         """Registers *who*, hands over its grants and returns its id.
 
         The whole plugin contract. An id is assigned unless the caller pins one
-        — the presentation pins :data:`LOCAL`, because the user is participant
+        — the presentation pins :data:`LOCAL`, because the user is peer
         zero by definition.
 
         Args:
@@ -94,7 +94,7 @@ class ChatSession:
             at: The id to register it under; assigned when omitted.
 
         Returns:
-            int: The id the participant now answers to.
+            int: The id the peer now answers to.
 
         Raises:
             ValueError: If *at* is already taken.
@@ -105,10 +105,10 @@ class ChatSession:
         elif at in self._by_id:
             raise ValueError("Id %d is already taken by %r" % (at, name_of(self._by_id[at])))
 
-        # chat_id, not id: Textual's DOMNode already owns `id` and validates it
-        # as a string. A participant rarely needs its own number anyway — the
+        # peer_id, not id: Textual's DOMNode already owns `id` and validates it
+        # as a string. A peer rarely needs its own number anyway — the
         # grants bind `frm` for it — but knowing it costs nothing.
-        who.chat_id = at
+        who.peer_id = at
         self._by_id[at] = who
         self._queues[at] = asyncio.Queue()
         self._grant(who, at)
@@ -116,25 +116,25 @@ class ChatSession:
         return at
 
     def id_of(self, name: str) -> Optional[int]:
-        """Returns the id of the participant with that visible name, or None.
+        """Returns the id of the peer with that visible name, or None.
 
         The name is what the chat displays and what the user types after ``/``;
         the id is what messages are addressed to. Keeping them apart is what
-        lets a participant be renamed without breaking replies in flight.
+        lets a peer be renamed without breaking replies in flight.
         """
         for at, who in self._by_id.items():
             if name_of(who) == name:
                 return at
         return None
 
-    def _participants(self) -> Dict[int, Any]:
-        """Everyone registered, by id. Granted by ``HookParticipants``."""
+    def _peers(self) -> Dict[int, Any]:
+        """Everyone registered, by id. Granted by ``HookPeers``."""
         return dict(self._by_id)
 
     def _grant(self, who: Any, at: int) -> None:
         """Sets the attributes *who*'s declared hooks ask for.
 
-        Each grant is bound to the participant's own id, so nobody can speak in
+        Each grant is bound to the peer's own id, so nobody can speak in
         another's name: the ``frm`` of a message is not an argument.
         """
         grants = {
@@ -142,7 +142,7 @@ class ChatSession:
             "ask"           : lambda: self._ask_for(at),
             "answer"        : lambda: self._answer_for(at),
             "context"       : lambda: self._context,
-            "participants"  : lambda: self._participants,
+            "peers"  : lambda: self._peers,
         }
         for hook in hooks_of(who):
             for granted in hook.grants:
@@ -171,7 +171,7 @@ class ChatSession:
     def _ask_for(self, frm: int):
         async def ask(to: int, text: str) -> str:
             if to not in self._by_id:
-                raise ValueError("No participant with id %d" % to)
+                raise ValueError("No peer with id %d" % to)
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
             future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
@@ -213,7 +213,7 @@ class ChatSession:
         return msg.id
 
     async def _deliver(self, who: Any, msg: ChatMessage) -> None:
-        """Hands one message to one participant, every way it declared to get it.
+        """Hands one message to one peer, every way it declared to get it.
 
         The three are not exclusive: something that listens *and* answers gets
         both calls for the same message, because it asked for both.
@@ -225,7 +225,7 @@ class ChatSession:
             if declares(who, HookOnSay):
                 await who.on_say(msg)
             return
-        if msg.to != getattr(who, "chat_id", None):
+        if msg.to != getattr(who, "peer_id", None):
             return
         if not declares(who, HookOnAsk):
             logger.warning("%r was asked but does not declare %s", name_of(who), HookOnAsk)
@@ -235,9 +235,9 @@ class ChatSession:
             await who.answer(msg, reply)
 
     async def _drain(self, at: int) -> None:
-        """One participant's queue, one message at a time.
+        """One peer's queue, one message at a time.
 
-        A participant that raises is logged and its queue carries on: one bad
+        A peer that raises is logged and its queue carries on: one bad
         subsystem must not take the chat down, nor stall its own backlog.
         """
         queue = self._queues[at]
@@ -246,7 +246,7 @@ class ChatSession:
             try:
                 await self._deliver(self._by_id[at], msg)
             except Exception:
-                logger.error("Participant %d failed on %s", at, msg.id, exc_info=True)
+                logger.error("Peer %d failed on %s", at, msg.id, exc_info=True)
             finally:
                 queue.task_done()
 
@@ -294,7 +294,7 @@ class ChatSession:
     # === Lifecycle ==================================================================
 
     async def start(self) -> None:
-        """Starts one drain task per participant.
+        """Starts one drain task per peer.
 
         Separate from construction because the tasks need a running loop, and a
         session is usually built before there is one.
@@ -305,9 +305,9 @@ class ChatSession:
                 self._tasks[at] = asyncio.create_task(self._drain(at))
 
     async def close(self) -> None:
-        """Stops the drain tasks and shuts every participant down.
+        """Stops the drain tasks and shuts every peer down.
 
-        A participant holding a server or a thread would otherwise outlive the
+        A peer holding a server or a thread would otherwise outlive the
         chat it was serving.
         """
         # Drain before cancelling: a message still in a queue is a message a

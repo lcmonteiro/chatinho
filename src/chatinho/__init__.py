@@ -1,15 +1,15 @@
 """Chatinho: an extensible chat client library.
 
-Everyone in a chat is a **participant** with an integer id. ``LOCAL`` — zero —
-is the user; connectors and tools are numbered from one. A participant is a
+Everyone in a chat is a **peer** with an integer id. ``LOCAL`` — zero —
+is the user; connectors and tools are numbered from one. A peer is a
 plain class that declares what it can do, and there are only three verbs:
 
     say(text)          a message for everyone
-    ask(to, text)      a message for one participant, awaiting its reply
+    ask(to, text)      a message for one peer, awaiting its reply
     answer(msg, text)  the reply that ask is waiting on
 
-A command is an ask addressed to a tool: typing ``/help`` asks the participant
-named "help". Everything is a coroutine and every participant has its own
+A command is an ask addressed to a tool: typing ``/help`` asks the peer
+named "help". Everything is a coroutine and every peer has its own
 queue, so a slow subsystem holds up nobody but itself.
 
 Example:
@@ -18,7 +18,7 @@ Example:
     >>> from chatinho.backends import DatabaseBackend
     >>>
     >>> chat = create_chat(
-    ...     participants = [OpenAIConnector(name="gpt", api_key="***"), HelpCommand()],
+    ...     peers = [OpenAIConnector(name="gpt", api_key="***"), HelpCommand()],
     ...     backend      = DatabaseBackend("sqlite:///my_database.db"),
     ... )
     >>> chat.run()
@@ -46,7 +46,7 @@ from .chat_hooks import (
     HookOnSay,
     HookOnAsk,
     HookContext,
-    HookParticipants,
+    HookPeers,
     HookListen,
     HookLoad,
     HookForget,
@@ -54,7 +54,7 @@ from .chat_hooks import (
     Ask,
     Answer,
     Context,
-    Participants,
+    Peers,
 )
 from .chat_style import ChatStyle
 from .connectors import A2AConnector, OpenAIConnector
@@ -85,7 +85,7 @@ __all__ = [
     "HookOnSay",
     "HookOnAsk",
     "HookContext",
-    "HookParticipants",
+    "HookPeers",
     # the older tier
     "HookListen",
     "HookLoad",
@@ -95,7 +95,7 @@ __all__ = [
     "Ask",
     "Answer",
     "Context",
-    "Participants",
+    "Peers",
     # batteries
     "A2AConnector",
     "OpenAIConnector",

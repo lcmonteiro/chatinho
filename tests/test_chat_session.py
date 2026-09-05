@@ -1,6 +1,6 @@
 """Tests for ChatSession — the hub, driven without a terminal.
 
-Everyone is a participant with an id, LOCAL is the user, and there are three
+Everyone is a peer with an id, LOCAL is the user, and there are three
 verbs. Every test here reaches the conversation the way the TUI does: through
 a Driver that declared the hooks and was handed the capabilities at attach.
 """
@@ -98,10 +98,10 @@ class _Archive:
 # === Ids and names ==============================================================
 
 
-async def test_the_user_is_participant_zero_and_the_rest_are_numbered():
-    session, view = await driven(participants=[_Eco(), _Lento()])
-    assert view.chat_id == LOCAL
-    assert sorted(view.participants()) == [0, 1, 2]
+async def test_the_user_is_peer_zero_and_the_rest_are_numbered():
+    session, view = await driven(peers=[_Eco(), _Lento()])
+    assert view.peer_id == LOCAL
+    assert sorted(view.peers()) == [0, 1, 2]
     assert session.id_of("eco") == 1
     assert session.id_of("lento") == 2
     assert session.id_of("nao-existe") is None
@@ -117,8 +117,8 @@ async def test_a_taken_id_is_refused():
 
 async def test_renaming_does_not_change_the_address():
     """The id routes; the name is only what the chat shows."""
-    session, view = await driven(participants=[_Eco()])
-    eco = view.participants()[1]
+    session, view = await driven(peers=[_Eco()])
+    eco = view.peers()[1]
     eco.name = "outro-nome"
     assert await view.ask(1, "ola") == "eco: ola"
     assert session.id_of("outro-nome") == 1
@@ -130,7 +130,7 @@ async def test_renaming_does_not_change_the_address():
 
 async def test_a_say_reaches_everyone_but_the_speaker():
     ouvinte = _Ouvinte()
-    session, view = await driven(participants=[ouvinte])
+    session, view = await driven(peers=[ouvinte])
     await view.say("bom dia")
     await asyncio.sleep(0.02)
     assert ouvinte.heard == ["bom dia"]
@@ -139,7 +139,7 @@ async def test_a_say_reaches_everyone_but_the_speaker():
 
 
 async def test_a_reply_to_a_say_is_another_say():
-    session, view = await driven(participants=[_Ouvinte()])
+    session, view = await driven(peers=[_Ouvinte()])
     first = await view.say("uma pergunta ao ar")
     await view.say("uma resposta", reply_to=first)
     assert [m.reply_to for m in view.context()] == [None, first]
@@ -150,13 +150,13 @@ async def test_a_reply_to_a_say_is_another_say():
 
 
 async def test_ask_returns_the_answer():
-    session, view = await driven(participants=[_Eco()])
+    session, view = await driven(peers=[_Eco()])
     assert await view.ask(1, "ola") == "eco: ola"
     await session.close()
 
 
 async def test_a_command_is_an_ask_to_a_tool():
-    session, view = await driven(participants=[_Eco()])
+    session, view = await driven(peers=[_Eco()])
     assert await view.command("eco", "ola") == "eco: ola"
     history = view.context()
     assert (history[0].frm, history[0].to) == (LOCAL, 1)
@@ -167,14 +167,14 @@ async def test_a_command_is_an_ask_to_a_tool():
 
 async def test_asking_an_unknown_id_raises():
     session, view = await driven()
-    with pytest.raises(ValueError, match="No participant with id"):
+    with pytest.raises(ValueError, match="No peer with id"):
         await view.ask(99, "ola")
     await session.close()
 
 
-async def test_a_slow_participant_holds_up_only_itself():
-    """Each participant has its own queue: one second is not two."""
-    session, view = await driven(participants=[_Lento(), _Eco()])
+async def test_a_slow_peer_holds_up_only_itself():
+    """Each peer has its own queue: one second is not two."""
+    session, view = await driven(peers=[_Lento(), _Eco()])
     started = time.perf_counter()
     slow, quick = await asyncio.gather(view.ask(1, "?"), view.ask(2, "ola"))
     elapsed = time.perf_counter() - started
@@ -183,17 +183,17 @@ async def test_a_slow_participant_holds_up_only_itself():
     await session.close()
 
 
-async def test_a_participant_that_raises_does_not_take_the_chat_down():
-    session, view = await driven(participants=[_Rebenta(), _Eco()])
+async def test_a_peer_that_raises_does_not_take_the_chat_down():
+    session, view = await driven(peers=[_Rebenta(), _Eco()])
     asyncio.create_task(view.ask(1, "?"))       # never answers
     await asyncio.sleep(0.05)
     assert await view.ask(2, "ola") == "eco: ola"
     await session.close()
 
 
-async def test_a_participant_can_ask_the_user():
+async def test_a_peer_can_ask_the_user():
     """ask(LOCAL, ...) is what the old inbox was, with no extra concept."""
-    session, view = await driven(participants=[_Eco()])
+    session, view = await driven(peers=[_Eco()])
     view.answers.append("sim, autorizo")
 
     @connector("agente")
@@ -239,7 +239,7 @@ async def test_an_answer_given_later_still_resolves_the_ask():
 # === Grants =====================================================================
 
 
-async def test_a_participant_gets_only_what_it_declared():
+async def test_a_peer_gets_only_what_it_declared():
     @connector("mudo")
     @require(HookSay)
     class Mudo:
@@ -256,7 +256,7 @@ async def test_a_participant_gets_only_what_it_declared():
 
 async def test_nobody_can_speak_in_another_name():
     """frm is bound at attach, not passed as an argument."""
-    session, view = await driven(participants=[_Ouvinte()])
+    session, view = await driven(peers=[_Ouvinte()])
     await view.say("sou eu")
     assert view.context()[0].frm == LOCAL
     await session.close()

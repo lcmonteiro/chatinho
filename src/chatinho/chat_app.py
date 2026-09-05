@@ -4,8 +4,8 @@ The public entry point is :func:`create_chat`, which returns a ready-to-run
 application. The class itself (``_Chat``) is private on purpose: build one
 through the factory rather than instantiating it directly.
 
-The presentation is a participant like any other — it is registered at
-:data:`~chatinho.chat_message.LOCAL`, because the user is participant zero by
+The presentation is a peer like any other — it is registered at
+:data:`~chatinho.chat_message.LOCAL`, because the user is peer zero by
 definition, and it declares the same hooks a connector does. There is no
 privileged path: a terminal reaches the conversation through exactly the doors
 a weather service does.
@@ -39,10 +39,10 @@ from .chat_hooks import (
     HookContext,
     HookOnAsk,
     HookOnSay,
-    HookParticipants,
+    HookPeers,
     HookSay,
     Context,
-    Participants,
+    Peers,
     Say,
     connector,
     name_of,
@@ -61,22 +61,22 @@ INPUT_ID    : str = "input-line"
 
 
 def create_chat(
-    participants    : Optional[List[Any]] = None,
+    peers    : Optional[List[Any]] = None,
     backend         : Optional[Any] = None,
     title           : str = "Chatinho",
     welcome_message : str = "",
     max_displayed   : int = 100,
     style           : Optional[ChatStyle] = None,
 ) -> "_Chat":
-    """Create a chat application from participants and a backend.
+    """Create a chat application from peers and a backend.
 
-    A participant is a connector or a tool: both are plain classes declaring
+    A peer is a connector or a tool: both are plain classes declaring
     the hooks they need. For a chat without a terminal — a script, a bot, a
     test — build a :class:`~chatinho.chat_session.ChatSession` directly and
     attach your own presentation.
 
     Args:
-        participants: Connectors and tools to register, numbered from one.
+        peers: Connectors and tools to register, numbered from one.
         backend: Backend used by ``save_data``/``load_data``.
         title: Title of the chat application.
         welcome_message: Message displayed on mount; empty means none.
@@ -87,7 +87,7 @@ def create_chat(
         _Chat: The configured application; call ``run()`` to start it.
     """
     return _Chat(
-        session         = ChatSession(participants=participants, backend=backend),
+        session         = ChatSession(peers=peers, backend=backend),
         title           = title,
         welcome_message = welcome_message,
         max_displayed   = max_displayed,
@@ -101,7 +101,7 @@ def create_chat(
 @require(HookOnSay)
 @require(HookOnAsk)
 @require(HookContext)
-@require(HookParticipants)
+@require(HookPeers)
 class _Chat(App):
     """Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
 
@@ -120,7 +120,7 @@ class _Chat(App):
     ask           : Ask
     answer        : Answer
     context : Context
-    participants  : Participants
+    peers  : Peers
 
     def __init__(
         self,
@@ -136,7 +136,7 @@ class _Chat(App):
             self.CSS = style.to_css()  # type: ignore[misc]
 
         self.session : ChatSession = session if session is not None else ChatSession()
-        # Participant zero: the user. This is what grants say, ask, answer and
+        # Peer zero: the user. This is what grants say, ask, answer and
         # context, and what subscribes on_say and on_ask below.
         self.session.attach(self, at=LOCAL)
         self._repaint_after("say", "ask", "answer")
@@ -176,7 +176,7 @@ class _Chat(App):
                 id=CHAT_LOG_ID,
             ),
             Vertical(
-                CommandSuggestions(self.participants, id=SUGGESTIONS_ID),
+                CommandSuggestions(self.peers, id=SUGGESTIONS_ID),
                 CommandInput(placeholder=self._input_placeholder, id=INPUT_ID),
                 id="input-area",
             ),
@@ -194,7 +194,7 @@ class _Chat(App):
             await self.say(self.welcome_message)
 
     async def on_unmount(self) -> None:
-        """Shut the session's participants down when the app closes.
+        """Shut the session's peers down when the app closes.
 
         A connector that owns a server or a thread would otherwise outlive the
         terminal it was serving.
@@ -229,7 +229,7 @@ class _Chat(App):
         """Runs ``/name args``: an ask addressed to the tool of that name.
 
         There is no command dispatch any more — a command is a question put to
-        a participant, and its answer arrives as an ordinary message.
+        a peer, and its answer arrives as an ordinary message.
 
         Args:
             name: The tool's visible name, without the prefix.
@@ -238,7 +238,7 @@ class _Chat(App):
         Returns:
             Optional[str]: The tool's answer, or None when no such tool exists.
         """
-        at = next((i for i, w in self.participants().items() if name_of(w) == name), None)
+        at = next((i for i, w in self.peers().items() if name_of(w) == name), None)
         if at is None or at == LOCAL:
             await self.say("Unknown command: %s%s" % (COMMAND_PREFIX, name))
             return None
@@ -295,7 +295,7 @@ class _Chat(App):
     def _repaint(self) -> None:
         """Schedules a render on the app's own message pump.
 
-        Always through ``call_later``, never straight: a participant may speak
+        Always through ``call_later``, never straight: a peer may speak
         from a coroutine the app did not start — one handed to
         ``run_coroutine_threadsafe`` by its own server thread — and querying
         the widget tree from there finds no active app. Going through the pump

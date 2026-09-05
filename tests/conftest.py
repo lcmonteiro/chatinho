@@ -1,6 +1,6 @@
-"""A headless participant, shared by the tests that drive a session directly.
+"""A headless peer, shared by the tests that drive a session directly.
 
-The conversation is protected: nothing calls ``session._say``. A participant
+The conversation is protected: nothing calls ``session._say``. A peer
 declares the hooks it needs and the session hands the capabilities over at
 ``attach``. :class:`Driver` is the presentation with the terminal taken out —
 the same declarations ``_Chat`` makes — so a test drives a chat exactly the way
@@ -20,10 +20,10 @@ from chatinho import (
     HookContext,
     HookOnAsk,
     HookOnSay,
-    HookParticipants,
+    HookPeers,
     HookSay,
     Context,
-    Participants,
+    Peers,
     Say,
     connector,
     require,
@@ -37,7 +37,7 @@ from chatinho.chat_session import ChatSession
 @require(HookOnSay)
 @require(HookOnAsk)
 @require(HookContext)
-@require(HookParticipants)
+@require(HookPeers)
 class Driver:
     """Everything the presentation is, minus the terminal."""
 
@@ -46,7 +46,7 @@ class Driver:
     ask           : Ask
     answer        : Answer
     context : Context
-    participants  : Participants
+    peers  : Peers
 
     def __init__(self, answers: Optional[List[str]] = None) -> None:
         self.heard   : List[ChatMessage] = []
@@ -68,8 +68,8 @@ class Driver:
         return [m.text for m in self.context()]
 
     def id_of(self, name: str) -> Optional[int]:
-        """The id of the participant with that visible name."""
-        return next((i for i, w in self.participants().items()
+        """The id of the peer with that visible name."""
+        return next((i for i, w in self.peers().items()
                      if getattr(w, "name", "") == name), None)
 
     async def command(self, name: str, args: str = "") -> Any:

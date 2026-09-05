@@ -18,12 +18,12 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 ---
 
-## Everyone is a participant
+## Everyone is a peer
 
-A chat is participants exchanging messages. Each has an integer id, and `LOCAL` — zero — is the
+A chat is peers exchanging messages. Each has an integer id, and `LOCAL` — zero — is the
 user. Connectors and tools are numbered from one.
 
-A participant carries an **id** *and* a **visible name**, and they are deliberately different
+A peer carries an **id** *and* a **visible name**, and they are deliberately different
 things: the id routes, the name is what the chat displays and what the user types after `/`. An
 older design routed on the display name, so renaming a connector broke the replies already in
 flight.
@@ -32,11 +32,11 @@ A message says where it came from and where it is going, and that is all the rou
 
 ```
 to is None    → everyone heard it          (say)
-to is an id   → one participant was asked  (ask)
+to is an id   → one peer was asked  (ask)
 reply_to set  → it answers that message    (answer)
 ```
 
-**The presentation is participant zero.** `_Chat` declares the same hooks a connector does and is
+**The presentation is peer zero.** `_Chat` declares the same hooks a connector does and is
 attached at `LOCAL`. There is no privileged path: a terminal reaches the conversation through
 exactly the doors a weather service does.
 
@@ -45,14 +45,14 @@ exactly the doors a weather service does.
 | | | |
 |---|---|---|
 | `say(text, reply_to=)` | grants | a message for everyone but the speaker |
-| `ask(to, text)` | grants | a message for one participant — **awaits** its reply |
+| `ask(to, text)` | grants | a message for one peer — **awaits** its reply |
 | `answer(msg, text)` | grants | the reply an ask is waiting on |
 
 A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:
 `ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
 by the message it answers. A broadcast is owed to nobody.
 
-**A command is an ask to a tool.** `/help` asks the participant named "help". Its answer arrives
+**A command is an ask to a tool.** `/help` asks the peer named "help". Its answer arrives
 as an ordinary message. There is no dispatch, no command registry and no `command_handler`;
 `_Chat.command(name, args)` looks the name up and asks.
 
@@ -75,9 +75,9 @@ speaks from answering its own words forever.
 
 ## Nothing blocks
 
-Everything is a coroutine, and **every participant has its own queue and its own task**. A
+Everything is a coroutine, and **every peer has its own queue and its own task**. A
 subsystem that takes a second to answer holds up nobody but itself —
-`test_a_slow_participant_holds_up_only_itself` sends two asks, one to a participant that sleeps
+`test_a_slow_peer_holds_up_only_itself` sends two asks, one to a peer that sleeps
 0.3s and one that answers instantly, and fails if together they take more than 0.45s.
 
 Two consequences worth knowing before they surprise you:
@@ -86,16 +86,16 @@ Two consequences worth knowing before they surprise you:
   was said, not during. Tests assert after `close()`, not straight after `say()`, because the
   former is a guarantee and the latter is timing.
 - **`close()` drains every queue before cancelling anything.** A message still in a queue is a
-  message a listener has not held yet. Five seconds, then a warning: a participant that will not
+  message a listener has not held yet. Five seconds, then a warning: a peer that will not
   finish must not hang the shutdown.
 
 ## Context has two tiers and one interface
 
-A participant declares `HookContext` and calls `context(since=, start=, limit=)`. It never learns
+A peer declares `HookContext` and calls `context(since=, start=, limit=)`. It never learns
 which tier a message came from — the recent turns were said this session, the older ones were
 loaded at `start()`.
 
-The backend is not a key-value store, and nothing pushes at it. **It is a participant that
+The backend is not a key-value store, and nothing pushes at it. **It is a peer that
 listens**: `HookListen` to hear the conversation, `HookLoad`/`load(since=, limit=)` to give it
 back, `HookForget`/`forget(before=)` to drop it. All coroutines, all running their SQLAlchemy in
 an executor so one slow write holds up nobody.
@@ -114,7 +114,7 @@ log from inside a *synchronous* Textual paint.
 | `HookOnSay` | `on_say` | — |
 | `HookOnAsk` | `on_ask` | `answer` |
 | `HookContext` | — | `context` |
-| `HookParticipants` | — | `participants` |
+| `HookPeers` | — | `peers` |
 | `HookListen` | `on_listen` | — |
 | `HookLoad` | `load` | — |
 | `HookForget` | `forget` | — |
@@ -124,7 +124,7 @@ accident: being askable is what makes a way to answer worth having.
 
 ## Everything declares what it does
 
-A participant is a **plain class**. No base class, no `isinstance` anywhere in the library.
+A peer is a **plain class**. No base class, no `isinstance` anywhere in the library.
 
 ```python
 @connector("weather")
@@ -152,7 +152,7 @@ instance may override with `self.name`. The session assigns the id at `attach`.
 grants, call `initialize()` if it has one.
 
 Lifecycle is deliberately **not** a hook: `initialize()` and `shutdown()` are called when present.
-A participant holding nothing needs neither, and making it declare that it holds nothing is
+A peer holding nothing needs neither, and making it declare that it holds nothing is
 ceremony. `close()` shuts down everything that has one, and the app's `on_unmount` calls it, so a
 connector holding a server thread does not outlive the chat.
 
@@ -161,7 +161,7 @@ Two costs, stated plainly:
 - **Python has no `protected`.** `_say`, `_ask`, `_context` are convention, and the grants still
   reach back — `say.__self__` *is* the session. This buys one documented door and the intent
   behind it, not enforcement.
-- **With no base class, participants are typed `Any`**, so mypy no longer checks their shape.
+- **With no base class, peers are typed `Any`**, so mypy no longer checks their shape.
   `require` moved that check from type-check time to import time; it did not disappear, but it is
   not the same guarantee.
 
@@ -173,15 +173,15 @@ Two costs, stated plainly:
 src/chatinho/
   __init__.py      public API
   chat_app.py      create_chat + the private _Chat app — Textual presentation only  (338)
-  chat_session.py  ChatSession: participants, queues, routing, context             (362)
-  chat_hooks.py    Hook, the nine constants, @require, the grant protocols         (371)
+  chat_session.py  ChatSession: peers, queues, routing, context                     (362)
+  chat_hooks.py    Hook, the nine constants, @require, the grant protocols          (371)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL
   chat_log.py      ChatLog widget: renders through the granted context reader
   chat_input.py    CommandInput + CommandSuggestions (autocomplete over the tools)
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      a2a.py, openai.py — plain classes, no base
   commands/        help.py, test.py — tools, plain classes, no base
-  backends/        database.py (SQLAlchemy) — a participant that listens and loads
+  backends/        database.py (SQLAlchemy) — a peer that listens and loads
 examples/          demo.py (TUI), headless.py (stdin), agent_inbox.py (HTTP, inbound)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
@@ -212,7 +212,7 @@ silent case.
 `__init__.py` exports 33 names: `create_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`;
 the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, `options_of`,
 `declares`, `name_of`, `Hook`); the nine `Hook*` constants; the grant protocols (`Say`, `Ask`,
-`Answer`, `Context`, `Participants`); and the batteries (`A2AConnector`, `OpenAIConnector`,
+`Answer`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `HelpCommand`, `TestCommand`).
 
 There is no `Chat` or `ChatApp` export: the app class is private, so `create_chat` is the only way
@@ -244,7 +244,7 @@ mypy src/chatinho
 pytest -q
 ```
 
-`pyproject.toml` sets `asyncio_mode = "auto"`: every participant is a coroutine, so every test that
+`pyproject.toml` sets `asyncio_mode = "auto"`: every peer is a coroutine, so every test that
 drives one is too, and marking each of them would be noise.
 
 ---

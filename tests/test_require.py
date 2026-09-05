@@ -1,6 +1,6 @@
 """Tests for @require, @connector, @tool and @backend.
 
-A participant is a plain class. ``require`` checks at class-definition time
+A peer is a plain class. ``require`` checks at class-definition time
 that it implements what it declared, so a missing or misspelled method is an
 import error rather than a hook that silently never fires.
 """
