@@ -1,9 +1,9 @@
 """The same chat, without a terminal UI.
 
-``ChatSession`` routes messages between participants and imports no UI
+``ChatSession`` routes messages between peers and imports no UI
 framework. The conversation is protected: nothing here calls the session.
 ``Terminal`` below declares the hooks it needs and is registered at ``LOCAL``,
-because the user is participant zero — exactly what ``_Chat`` does, with the
+because the user is peer zero — exactly what ``_Chat`` does, with the
 terminal taken out.
 
 Note that ``import chatinho`` still loads Textual today, because the package's
@@ -25,13 +25,13 @@ from chatinho import (
     ChatSession,
     HelpCommand,
     HookAsk,
-    HookLoadMessages,
+    HookContext,
     HookOnAsk,
     HookOnSay,
-    HookParticipants,
+    HookPeers,
     HookSay,
-    LoadMessages,
-    Participants,
+    Context,
+    Peers,
     Say,
     connector,
     require,
@@ -70,16 +70,16 @@ class UpperCommand:
 @require(HookAsk)
 @require(HookOnSay)
 @require(HookOnAsk)
-@require(HookLoadMessages)
-@require(HookParticipants)
+@require(HookContext)
+@require(HookPeers)
 class Terminal:
     """The presentation layer: prints what arrives, sends what is typed."""
 
     # Granted by the session at attach.
     say           : Say
     ask           : Ask
-    load_messages : LoadMessages
-    participants  : Participants
+    context : Context
+    peers  : Peers
 
     async def on_say(self, msg: ChatMessage) -> None:
         """Renders one broadcast on a plain terminal."""
@@ -94,7 +94,7 @@ class Terminal:
     async def command(self, line: str) -> None:
         """Runs ``/name args``: an ask addressed to the tool of that name."""
         name, _, args = line.partition(" ")
-        at = next((i for i, w in self.participants().items()
+        at = next((i for i, w in self.peers().items()
                    if i != LOCAL and getattr(w, "name", "") == name), None)
         if at is None:
             print("? unknown command: /%s — try /help" % name)
@@ -136,7 +136,7 @@ async def main() -> None:
             await asyncio.sleep(0.05)
 
     await session.close()
-    print("--- %d messages, no terminal UI ---" % len(view.load_messages()))
+    print("--- %d messages, no terminal UI ---" % len(view.context()))
 
 
 if __name__ == "__main__":

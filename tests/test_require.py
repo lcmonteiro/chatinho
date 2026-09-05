@@ -1,6 +1,6 @@
 """Tests for @require, @connector, @tool and @backend.
 
-A participant is a plain class. ``require`` checks at class-definition time
+A peer is a plain class. ``require`` checks at class-definition time
 that it implements what it declared, so a missing or misspelled method is an
 import error rather than a hook that silently never fires.
 """
@@ -9,7 +9,7 @@ import pytest
 
 from chatinho import (
     HookAsk,
-    HookLoadMessages,
+    HookContext,
     HookOnAsk,
     HookOnSay,
     HookSay,
@@ -138,7 +138,7 @@ def test_options_ride_along_with_the_hook_that_owns_them():
     tuned = Tuned()
     assert options_of(tuned, HookAsk) == {"timeout": 30}
     assert options_of(tuned, HookOnSay) == {"batch": 5}
-    assert options_of(tuned, HookLoadMessages) == {}
+    assert options_of(tuned, HookContext) == {}
 
 
 def test_options_of_hands_back_a_copy():

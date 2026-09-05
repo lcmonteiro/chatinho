@@ -36,11 +36,11 @@ from chatinho import (
     ChatMessage,
     ChatSession,
     HookAsk,
-    HookLoadMessages,
+    HookContext,
     HookOnAsk,
     HookOnSay,
     HookSay,
-    LoadMessages,
+    Context,
     Say,
     connector,
     require,
@@ -119,12 +119,12 @@ class AgentConnector:
 @require(HookSay)
 @require(HookOnSay)
 @require(HookOnAsk)
-@require(HookLoadMessages)
+@require(HookContext)
 class Terminal:
     """The user: shows the agent's questions and lets them be answered."""
 
     say           : Say
-    load_messages : LoadMessages
+    context : Context
 
     async def on_say(self, msg: ChatMessage) -> None:
         """Renders a broadcast."""
@@ -161,8 +161,8 @@ async def main() -> None:
             if not text or text == "/quit":
                 break
             unanswered = next(
-                (m for m in reversed(view.load_messages())
-                 if m.to == LOCAL and not any(r.reply_to == m.id for r in view.load_messages())),
+                (m for m in reversed(view.context())
+                 if m.to == LOCAL and not any(r.reply_to == m.id for r in view.context())),
                 None,
             )
             await view.say(text, reply_to=unanswered.id if unanswered else None)

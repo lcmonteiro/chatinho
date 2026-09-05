@@ -29,13 +29,13 @@ class CommandSuggestions(OptionList):
     """Popup listing the tools whose name matches the "/token" being typed.
 
     A command is an ask addressed to a tool, so the suggestions are simply the
-    participants that can be asked, listed by the name the chat displays.
+    peers that can be asked, listed by the name the chat displays.
     """
 
-    def __init__(self, participants: Any, **kwargs) -> None:
+    def __init__(self, peers: Any, **kwargs) -> None:
         super().__init__(**kwargs)
         # Held by reference: the application owns the dict and keeps it current.
-        self._participants = participants
+        self._peers = peers
 
     @property
     def has_suggestions(self) -> bool:
@@ -87,8 +87,8 @@ class CommandSuggestions(OptionList):
         return name
 
     def _tools(self) -> List[Any]:
-        """Every participant that can be asked — the user is not one."""
-        return [who for at, who in self._participants().items()
+        """Every peer that can be asked — the user is not one."""
+        return [who for at, who in self._peers().items()
                 if at != LOCAL and declares(who, HookOnAsk)]
 
     def _names(self) -> List[str]:
@@ -96,7 +96,7 @@ class CommandSuggestions(OptionList):
         return [name_of(who) for who in self._tools()]
 
     def _tool(self, name: str) -> Any:
-        """The participant with that visible name, or None."""
+        """The peer with that visible name, or None."""
         return next((w for w in self._tools() if name_of(w) == name), None)
 
     def _label(self, name: str) -> str:

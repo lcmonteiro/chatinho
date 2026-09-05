@@ -1,8 +1,8 @@
 """Demo of the chatinho library: markdown, code blocks, tools and replies.
 
 Everything is built through the public ``create_chat`` factory. A tool is a
-participant that can be asked, and a command is that ask: typing ``/code`` asks
-the participant named "code".
+peer that can be asked, and a command is that ask: typing ``/code`` asks
+the peer named "code".
 
 Run with:  bash run.sh
 """
@@ -36,7 +36,7 @@ class EchoConnector:
     say : Say
 
     def __init__(self) -> None:
-        #: The welcome message is the app talking, and the app *is* participant
+        #: The welcome message is the app talking, and the app *is* peer
         #: zero, so a connector cannot tell it from something the user typed.
         #: Skipping the first broadcast is the honest way to say so.
         self._greeted = False
@@ -81,7 +81,7 @@ WELCOME = (
 def main() -> None:
     """Builds the demo chat and runs it."""
     create_chat(
-        participants    = [HelpCommand(), CodeCommand(), EchoConnector()],
+        peers    = [HelpCommand(), CodeCommand(), EchoConnector()],
         title           = "chatinho demo",
         welcome_message = WELCOME,
     ).run()

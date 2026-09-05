@@ -1,6 +1,6 @@
 """Message model and history for chatinho.
 
-Every participant in a chat has an integer id, and :data:`LOCAL` — zero — is
+Every peer in a chat has an integer id, and :data:`LOCAL` — zero — is
 the chat itself: the user. A connector links the chat to one agent or
 subsystem and carries both an ``id``, which is how messages are addressed, and
 a ``name``, which is what the chat displays. Keeping them apart is what lets a
@@ -10,7 +10,7 @@ A message says where it came from and where it is going, and that is all the
 routing there is:
 
     to is None   → everyone heard it          (say)
-    to is an id  → one participant was asked  (ask)
+    to is an id  → one peer was asked  (ask)
     reply_to set → it answers that message    (answer)
 
 Neither class touches Textual, so both can be exercised without mounting an
@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
 
-#: The chat itself — the user's own id. Every other participant is a connector
+#: The chat itself — the user's own id. Every other peer is a connector
 #: or a tool, numbered from one.
 LOCAL : int = 0
 
@@ -49,7 +49,7 @@ class ChatMessage:
 
     @property
     def is_broadcast(self) -> bool:
-        """Whether it went to everyone rather than to one participant."""
+        """Whether it went to everyone rather than to one peer."""
         return self.to is None
 
     @property
