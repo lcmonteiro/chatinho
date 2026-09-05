@@ -47,8 +47,8 @@ from .chat_hooks import (
     HookOnAsk,
     HookContext,
     HookParticipants,
-    HookArchive,
-    HookRecall,
+    HookListen,
+    HookLoad,
     HookForget,
     Say,
     Ask,
@@ -87,8 +87,8 @@ __all__ = [
     "HookContext",
     "HookParticipants",
     # the older tier
-    "HookArchive",
-    "HookRecall",
+    "HookListen",
+    "HookLoad",
     "HookForget",
     # what the grants look like
     "Say",

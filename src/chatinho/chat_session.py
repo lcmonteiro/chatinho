@@ -23,16 +23,16 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .chat_hooks import (
-    HookArchive,
     HookForget,
+    HookListen,
+    HookLoad,
     HookOnAsk,
     HookOnSay,
-    HookRecall,
     declares,
     hooks_of,
     name_of,
 )
-from .chat_message import LOCAL, ChatMessage, MessageStore
+from .chat_message import ChatMessage, MessageStore
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,7 @@ class ChatSession:
     - ``HookOnAsk``        demands ``on_ask(msg)`` and grants ``answer(msg, text)``.
     - ``HookOnSay``        demands ``on_say(msg)``.
     - ``HookContext``      grants ``context(since=, start=, limit=)``.
+    - ``HookListen``       demands ``on_listen(msg)`` — every message that crosses.
     """
 
     def __init__(
@@ -73,8 +74,11 @@ class ChatSession:
         for who in participants or []:
             self.attach(who)
         if backend is not None:
-            self._grant(backend, LOCAL)
-            self._start(backend)
+            # A participant like any other: it gets an id and a queue, and it
+            # hears the conversation rather than being pushed at. `backend` is
+            # only sugar for the role — the session finds what it needs by what
+            # the thing declared, not by which parameter it arrived in.
+            self.attach(backend)
 
     # === Participants ===============================================================
 
@@ -189,32 +193,39 @@ class ChatSession:
         no further: the asker is already holding it.
         """
         self._store.add(msg)
-        # Awaited, not fired and forgotten: a task left running races close()
-        # and loses, which made "the conversation survives" true only sometimes.
-        # The backend does its work in an executor, so waiting here holds up
-        # the speaker, never the loop or anybody else's queue.
-        await self._archive(msg)
         waiting = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
         if waiting is not None and not waiting.done():
             waiting.set_result(msg.text)
             return msg.id
 
+        # You never hear yourself, whichever way you were listening.
+        listeners = {at for at, who in self._by_id.items()
+                     if at != msg.frm and declares(who, HookListen)}
         if msg.to is not None:
-            targets = [msg.to]
+            audience = {msg.to}
         else:
-            targets = [at for at, who in self._by_id.items()
-                       if at != msg.frm and declares(who, HookOnSay)]
-        for at in targets:
+            audience = {at for at, who in self._by_id.items()
+                        if at != msg.frm and declares(who, HookOnSay)}
+        for at in listeners | audience:
             queue = self._queues.get(at)
             if queue is not None:
                 queue.put_nowait(msg)
         return msg.id
 
     async def _deliver(self, who: Any, msg: ChatMessage) -> None:
-        """Hands one message to one participant, and answers if it answered."""
+        """Hands one message to one participant, every way it declared to get it.
+
+        The three are not exclusive: something that listens *and* answers gets
+        both calls for the same message, because it asked for both.
+        """
+        if declares(who, HookListen):
+            await who.on_listen(msg)
+
         if msg.is_broadcast:
             if declares(who, HookOnSay):
                 await who.on_say(msg)
+            return
+        if msg.to != getattr(who, "chat_id", None):
             return
         if not declares(who, HookOnAsk):
             logger.warning("%r was asked but does not declare %s", name_of(who), HookOnAsk)
@@ -299,10 +310,18 @@ class ChatSession:
         A participant holding a server or a thread would otherwise outlive the
         chat it was serving.
         """
+        # Drain before cancelling: a message still in a queue is a message a
+        # listener has not held yet, and cancelling first made "the
+        # conversation survives" true only sometimes.
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*(q.join() for q in self._queues.values())), timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.warning("Gave up waiting for the queues to drain")
         for task in self._tasks.values():
             task.cancel()
         self._tasks.clear()
-        for who in list(self._by_id.values()) + ([self.backend] if self.backend else []):
+        for who in list(self._by_id.values()):
             shutdown = getattr(who, "shutdown", None)
             if callable(shutdown):
                 try:
@@ -319,26 +338,14 @@ class ChatSession:
         chat reopens where it left off. A backend that cannot recall is not an
         error: it simply has nothing to give back.
         """
-        if self.backend is None or not declares(self.backend, HookRecall):
+        holder = next((w for w in self._by_id.values() if declares(w, HookLoad)), None)
+        if holder is None:
             return
         try:
-            for msg in await self.backend.recall(limit=self.recall):
+            for msg in await holder.load(limit=self.recall):
                 self._store.add(msg)
         except Exception:
-            logger.error("Recalling the archive failed; starting empty", exc_info=True)
-
-    async def _archive(self, msg: ChatMessage) -> None:
-        """Hands one message to the archive, if there is one that takes them.
-
-        Failing to archive must not lose the message: it is already in the
-        session, and the conversation carries on without the older tier.
-        """
-        if self.backend is None or not declares(self.backend, HookArchive):
-            return
-        try:
-            await self.backend.archive([msg])
-        except Exception:
-            logger.error("Archiving %s failed", msg.id, exc_info=True)
+            logger.error("Loading the older context failed; starting empty", exc_info=True)
 
     async def forget(self, before: Optional[datetime] = None) -> int:
         """Drops archived messages older than *before*, or all of them.
@@ -349,6 +356,7 @@ class ChatSession:
         Returns:
             int: How many the backend dropped, or zero when it cannot forget.
         """
-        if self.backend is None or not declares(self.backend, HookForget):
+        holder = next((w for w in self._by_id.values() if declares(w, HookForget)), None)
+        if holder is None:
             return 0
-        return await self.backend.forget(before=before)
+        return await holder.forget(before=before)

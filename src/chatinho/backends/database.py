@@ -1,9 +1,10 @@
 """The older tier of the conversation, kept in a SQL database.
 
-The backend is not a key-value store: it is where messages go when they are no
-longer recent. Nobody asks it directly — a participant asks the session for
-context, and the session is what reaches down here, recalling a window at
-startup and archiving each message as it is said.
+The backend is not a key-value store, and nothing pushes at it: it is a
+participant that declared ``HookListen``, so the conversation crosses it the
+way it crosses anyone, and it writes what it hears. At ``start()`` the session
+asks whoever declared ``HookLoad`` for the older context, which is how a chat
+reopens where it left off.
 
 Every method is a coroutine and every one of them runs its SQLAlchemy work in
 an executor, because SQLAlchemy is synchronous and the chat's whole promise is
@@ -19,7 +20,7 @@ from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from ..chat_hooks import HookArchive, HookForget, HookRecall, backend, require
+from ..chat_hooks import HookForget, HookListen, HookLoad, backend, require
 from ..chat_message import ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -48,11 +49,17 @@ class ArchivedMessage(Base):
 
 
 @backend("database")
-@require(HookArchive)
-@require(HookRecall)
+@require(HookListen)
+@require(HookLoad)
 @require(HookForget)
 class DatabaseBackend:
-    """Keeps the conversation in a SQL database, one row per message."""
+    """Listens to the conversation and keeps it, one row per message.
+
+    Nothing pushes at it: it is a participant with its own queue that declared
+    ``HookListen``, so every message crosses it the way a message crosses
+    anyone, and it writes what it hears. ``HookLoad`` is the other half — it
+    gives back what it held when the next session starts.
+    """
 
     def __init__(self, database_url: str, echo: bool = False, **kwargs: Any) -> None:
         """Prepares the backend; the connection opens in :meth:`initialize`.
@@ -98,20 +105,20 @@ class DatabaseBackend:
 
     # === The archive ================================================================
 
-    async def archive(self, messages: List[ChatMessage]) -> None:
-        """Writes *messages* to the archive, replacing any already there.
+    async def on_listen(self, msg: ChatMessage) -> None:
+        """Keeps one message that crossed the session.
 
         Args:
-            messages: What to keep, in the order it was said.
+            msg: What was said, addressed exactly as it was said.
         """
-        await self._off_loop(self._archive, messages)
+        await self._off_loop(self._write, [msg])
 
-    async def recall(
+    async def load(
         self,
         since : Optional[datetime] = None,
         limit : Optional[int] = None,
     ) -> List[ChatMessage]:
-        """Reads the tail of the archive back, oldest first.
+        """Reads the tail of what was heard back, oldest first.
 
         Args:
             since: Keep only messages stamped at or after this moment.
@@ -120,7 +127,7 @@ class DatabaseBackend:
         Returns:
             List[ChatMessage]: Rebuilt messages, oldest first.
         """
-        return await self._off_loop(self._recall, since, limit)
+        return await self._off_loop(self._read, since, limit)
 
     async def forget(self, before: Optional[datetime] = None) -> int:
         """Drops archived messages older than *before*, or all of them.
@@ -150,8 +157,8 @@ class DatabaseBackend:
             raise RuntimeError("Backend not initialized: call initialize() first")
         return self.SessionLocal()
 
-    def _archive(self, messages: List[ChatMessage]) -> None:
-        """The synchronous half of :meth:`archive`."""
+    def _write(self, messages: List[ChatMessage]) -> None:
+        """The synchronous half of :meth:`on_listen`."""
         with self._session() as session:
             for msg in messages:
                 session.merge(ArchivedMessage(
@@ -160,8 +167,8 @@ class DatabaseBackend:
                 ))
             session.commit()
 
-    def _recall(self, since: Optional[datetime], limit: Optional[int]) -> List[ChatMessage]:
-        """The synchronous half of :meth:`recall`."""
+    def _read(self, since: Optional[datetime], limit: Optional[int]) -> List[ChatMessage]:
+        """The synchronous half of :meth:`load`."""
         with self._session() as session:
             query = session.query(ArchivedMessage)
             if since is not None:

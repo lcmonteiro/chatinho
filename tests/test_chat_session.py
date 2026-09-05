@@ -15,9 +15,9 @@ import pytest
 from chatinho import (
     LOCAL,
     ChatMessage,
-    HookArchive,
+    HookListen,
     HookForget,
-    HookRecall,
+    HookLoad,
     Answer,
     Ask,
     HookAsk,
@@ -66,8 +66,8 @@ class _Ouvinte:
 
 
 @backend("memoria")
-@require(HookArchive)
-@require(HookRecall)
+@require(HookListen)
+@require(HookLoad)
 @require(HookForget)
 class _Archive:
     """An archive that keeps messages in a list, for tests that need a tier."""
@@ -79,10 +79,10 @@ class _Archive:
     def initialize(self) -> None:
         self.initialized = True
 
-    async def archive(self, messages) -> None:
-        self.kept.extend(messages)
+    async def on_listen(self, msg) -> None:
+        self.kept.append(msg)
 
-    async def recall(self, since=None, limit=None):
+    async def load(self, since=None, limit=None):
         kept = self.kept
         if since is not None:
             kept = [m for m in kept if m.timestamp >= since]
@@ -288,13 +288,18 @@ async def test_context_returns_a_copy():
 # === The older tier =============================================================
 
 
-async def test_what_is_said_reaches_the_archive():
+async def test_what_is_said_reaches_the_one_that_listens():
+    """Listening runs on the listener's own queue, and close() drains it.
+
+    Asserting straight after ``say`` would be asserting on timing; asserting
+    after ``close`` is the guarantee that matters — nothing said is lost.
+    """
     store = _Archive()
     session, view = await driven(backend=store)
     assert store.initialized is True
     await view.say("guarda isto")
-    assert [m.text for m in store.kept] == ["guarda isto"]
     await session.close()
+    assert [m.text for m in store.kept] == ["guarda isto"]
 
 
 async def test_context_spans_both_tiers_without_saying_which():
@@ -316,31 +321,31 @@ async def test_recall_is_bounded_and_the_bound_is_the_session_s():
     await session.close()
 
 
-async def test_a_backend_that_cannot_recall_is_not_an_error():
+async def test_a_backend_that_only_listens_is_not_an_error():
     """Declaring less means doing less, not failing."""
 
     @backend("so-escreve")
-    @require(HookArchive)
+    @require(HookListen)
     class WriteOnly:
         def __init__(self) -> None:
             self.kept: list = []
 
-        async def archive(self, messages) -> None:
-            self.kept.extend(messages)
+        async def on_listen(self, msg) -> None:
+            self.kept.append(msg)
 
     store = WriteOnly()
     session, view = await driven(backend=store)
     await view.say("ainda assim guardada")
-    assert [m.text for m in store.kept] == ["ainda assim guardada"]
     assert [m.text for m in view.context()] == ["ainda assim guardada"]
     await session.close()
+    assert [m.text for m in store.kept] == ["ainda assim guardada"]
 
 
-async def test_an_archive_that_fails_does_not_lose_the_message():
+async def test_a_listener_that_fails_does_not_lose_the_message():
     @backend("avariado")
-    @require(HookArchive)
+    @require(HookListen)
     class Broken:
-        async def archive(self, messages) -> None:
+        async def on_listen(self, msg) -> None:
             raise RuntimeError("disco cheio")
 
     session, view = await driven(backend=Broken())
@@ -355,10 +360,11 @@ async def test_forget_without_a_backend_drops_nothing():
     await session.close()
 
 
-async def test_forget_reaches_the_archive():
+async def test_forget_reaches_the_one_that_holds():
     store = _Archive()
     session, view = await driven(backend=store)
     await view.say("efémera")
+    await asyncio.sleep(0.02)          # let its queue run
     assert await session.forget() == 1
     assert store.kept == []
     await session.close()

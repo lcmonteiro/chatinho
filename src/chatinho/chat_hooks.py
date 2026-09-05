@@ -168,15 +168,32 @@ HookParticipants = Hook(
     # be written without a way to see past its own class.
 )
 
-# === What a backend is for: the older context ===================================
-#
-# The backend is not a key-value store; it is where the conversation goes when
-# it is no longer recent. Nobody asks it directly — a participant asks the
-# session for context, and the session is what reaches down here.
+# === Hearing everything, and holding it =========================================
 
-HookArchive = Hook("HookArchive", "archive")   # async archive(messages) -> None
-HookRecall  = Hook("HookRecall",  "recall")    # async recall(since=, limit=) -> List
-HookForget  = Hook("HookForget",  "forget")    # async forget(before=) -> int
+HookListen = Hook(
+    name="HookListen",
+    method="on_listen",
+    # async on_listen(msg). Every message that crosses the session, whoever said
+    # it and whoever it was for — not just the broadcasts on_say brings, nor
+    # only what was addressed to you. Nothing is owed back.
+    #
+    # You still never hear yourself. That is what stops a listener that speaks
+    # from answering its own words forever, and it is the same rule as say.
+)
+
+HookLoad = Hook(
+    name="HookLoad",
+    method="load",
+    # async load(since=, limit=) -> List[ChatMessage]. The older context, read
+    # back at start(). A participant that listens and loads *is* the archive:
+    # it heard the conversation, and it gives it back.
+)
+
+HookForget = Hook(
+    name="HookForget",
+    method="forget",
+    # async forget(before=) -> int. How much of what was held gets dropped.
+)
 
 ALL_HOOKS: Tuple[Hook, ...] = (
     HookSay,
@@ -185,8 +202,8 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookOnAsk,
     HookContext,
     HookParticipants,
-    HookArchive,
-    HookRecall,
+    HookListen,
+    HookLoad,
     HookForget,
 )
 

@@ -89,10 +89,16 @@ two asks of 0.3s and 0s finish in under 0.45s.
 
 ## Context has two tiers and one interface
 
-The backend is not a key-value store. It is where the conversation goes when it is no longer
-recent: `HookArchive`/`archive(msgs)`, `HookRecall`/`recall(since=, limit=)`,
-`HookForget`/`forget(before=)`, all coroutines, all running their SQLAlchemy work in an executor
-so one slow write holds up nobody.
+The backend is not a key-value store, and nothing pushes at it. **It is a participant that
+listens**: it declares `HookListen` and hears every message that crosses the session, on its own
+queue, the way any participant hears anything. `HookLoad`/`load(since=, limit=)` is the other half
+— it gives back what it held — and `HookForget`/`forget(before=)` drops it. All coroutines, all
+running their SQLAlchemy in an executor so one slow write holds up nobody.
+
+`HookListen` is not a backend privilege. Any participant can declare it: an audit log, a metrics
+counter, anything that wants everything rather than only the broadcasts `on_say` brings or only
+what was addressed to it. The one rule it shares with `say`: **you never hear yourself**, which is
+what stops a listener that speaks from answering its own words forever.
 
 A participant declares `HookContext` and calls `context(...)`. It never learns which tier a
 message came from — the recent turns were said this session, the older ones were recalled at
@@ -103,9 +109,10 @@ Two costs, both deliberate and both stated in the code:
 - **`context()` is synchronous, so the window is whatever `recall` pulled back.** Asking for older
   than that returns nothing rather than reaching down again. Making it reach would make it a
   coroutine, and the terminal renders the log from inside a synchronous Textual paint.
-- **Archiving is awaited, not fired and forgotten.** A background task races `close()` and loses,
-  which made "the conversation survives" true only sometimes. Waiting holds up the speaker, never
-  the loop.
+- **Listening is queued, so it is not synchronous.** A listener sees a message shortly after it
+  was said, not during. `close()` drains every queue before cancelling anything, which is what
+  makes "nothing said is lost" a guarantee rather than a race — and it is why the tests assert
+  after `close()` rather than straight after `say()`.
 
 `tests/test_architecture.py` also refuses any name our Textual subclasses assign that is a
 *method* on the Textual parent. Setting `self.title` or `self.value` is ordinary use; shadowing
