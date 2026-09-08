@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .chat_hooks import (
+    HookExecute,
     HookForget,
     HookListen,
     HookLoad,
@@ -32,7 +33,7 @@ from .chat_hooks import (
     hooks_of,
     name_of,
 )
-from .chat_message import ChatMessage, MessageStore
+from .chat_message import TOOL, ChatMessage, MessageStore
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +56,10 @@ class ChatSession:
 
     def __init__(
         self,
-        peers : Optional[List[Any]] = None,
-        backend      : Optional[Any] = None,
-        recall       : int = 200,
+        connectors : Optional[List[Any]] = None,
+        commands   : Optional[List[Any]] = None,
+        backend    : Optional[Any] = None,
+        recall     : int = 200,
     ) -> None:
         #: Where the conversation goes when it is no longer recent.
         self.backend : Optional[Any] = backend
@@ -71,8 +73,14 @@ class ChatSession:
         self._pending  : Dict[str, "asyncio.Future[str]"] = {}
         self._next_id  : int = 1
 
-        for who in peers or []:
+        #: Commands are not peers: no id, no queue, nothing addressed to them.
+        #: They run when someone runs them, and answer whoever did.
+        self.commands : Dict[str, Any] = {}
+
+        for who in connectors or []:
             self.attach(who)
+        for cmd in commands or []:
+            self.add_command(cmd)
         if backend is not None:
             # A peer like any other: it gets an id and a queue, and it
             # hears the conversation rather than being pushed at. `backend` is
@@ -115,6 +123,53 @@ class ChatSession:
         self._start(who)
         return at
 
+    def add_command(self, cmd: Any) -> str:
+        """Registers a command under its declared name and returns it.
+
+        A command is not a peer. It has no id and no queue, nothing is
+        addressed to it, and it hears nothing — it runs when someone runs it.
+        What it may do to the conversation is whatever it declared: nothing at
+        all, or ``HookSay`` to write while it works.
+
+        Args:
+            cmd: A class declaring :data:`HookExecute`.
+
+        Returns:
+            str: The name it answers to.
+
+        Raises:
+            TypeError: If *cmd* does not declare HookExecute. A command that
+                cannot execute is not a command, and registering it silently
+                would only surface as a missing ``/name`` much later.
+        """
+        if not declares(cmd, HookExecute):
+            raise TypeError(
+                "%r does not declare %s: a command must @require(HookExecute)"
+                % (cmd, HookExecute))
+        name = name_of(cmd)
+        self.commands[name] = cmd
+        if hasattr(cmd, "commands"):
+            # /help lists its siblings; the roster is the session's, not its own.
+            cmd.commands = self.commands
+        # TOOL, not LOCAL: what a command writes is not the user speaking.
+        self._grant(cmd, TOOL)
+        self._start(cmd)
+        return name
+
+    def _invoke_for(self, frm: int):
+        """Builds the ``run`` granted to a peer, bound to that peer."""
+        async def invoke(name: str, args: str = "") -> Optional[str]:
+            cmd = self.commands.get(name)
+            if cmd is None:
+                logger.info("No command named %r", name)
+                return None
+            try:
+                return await cmd.execute(args, by=frm)
+            except Exception:
+                logger.error("Command %r failed", name, exc_info=True)
+                raise
+        return invoke
+
     def id_of(self, name: str) -> Optional[int]:
         """Returns the id of the peer with that visible name, or None.
 
@@ -142,6 +197,7 @@ class ChatSession:
             "ask"           : lambda: self._ask_for(at),
             "answer"        : lambda: self._answer_for(at),
             "context"       : lambda: self._context,
+            "invoke"        : lambda: self._invoke_for(at),
             "peers"  : lambda: self._peers,
         }
         for hook in hooks_of(who):
@@ -321,7 +377,7 @@ class ChatSession:
         for task in self._tasks.values():
             task.cancel()
         self._tasks.clear()
-        for who in list(self._by_id.values()):
+        for who in list(self._by_id.values()) + list(self.commands.values()):
             shutdown = getattr(who, "shutdown", None)
             if callable(shutdown):
                 try:

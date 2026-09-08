@@ -13,10 +13,13 @@ from textual.widgets import Input
 
 from chatinho import (
     LOCAL,
+    TOOL,
     Ask,
     HelpCommand,
     HookAsk,
-    HookOnAsk,
+    HookExecute,
+    HookSay,
+    Say,
     connector,
     create_chat,
     require,
@@ -25,10 +28,25 @@ from chatinho import (
 
 
 @tool("eco", "repete")
-@require(HookOnAsk)
+@require(HookExecute)
+@require(HookSay)
 class _Eco:
-    async def on_ask(self, msg) -> str:
-        return "eco: %s" % msg.text
+    """A command that writes what it produces, so the user sees it."""
+
+    say : Say
+
+    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+        await self.say("eco: %s" % args)
+        return "eco: %s" % args
+
+
+@tool("mudo", "answers without writing")
+@require(HookExecute)
+class _Mudo:
+    """A command that only answers: nothing of it reaches the conversation."""
+
+    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+        return "só para quem correu"
 
 
 @connector("agente")
@@ -78,25 +96,34 @@ async def test_blank_input_says_nothing():
 # === Commands are asks ==========================================================
 
 
-async def test_a_command_is_an_ask_and_its_answer_lands_in_the_log():
-    app = create_chat(peers=[_Eco()])
+async def test_a_command_is_seen_only_if_it_writes():
+    """The invocation is not a message, and neither is the answer."""
+    app = create_chat(commands=[_Eco(), _Mudo()])
     async with app.run_test() as pilot:
         assert await app.command("eco", "ola") == "eco: ola"
+        assert await app.command("mudo") == "só para quem correu"
         await pilot.pause()
-    question, answer = app.messages
-    assert (question.frm, question.to, question.text) == (LOCAL, 1, "ola")
-    assert (answer.frm, answer.to, answer.text) == (1, LOCAL, "eco: ola")
-    assert answer.reply_to == question.id
+        assert [m.text for m in app.messages] == ["eco: ola"]
+
+
+async def test_what_a_command_writes_is_not_the_user_speaking():
+    """A connector answering the user must not answer /help's output."""
+    app = create_chat(commands=[_Eco()])
+    async with app.run_test() as pilot:
+        await app.command("eco", "ola")
+        await pilot.pause()
+        assert app.messages[0].frm == TOOL
+        assert app.messages[0].is_local is False
 
 
 async def test_submitting_a_slash_runs_the_tool():
-    app = create_chat(peers=[_Eco()])
+    app = create_chat(commands=[_Eco()])
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         inp.value = "/eco bom dia"
         await pilot.press("enter")
         await pilot.pause()
-    assert [m.text for m in app.messages] == ["bom dia", "eco: bom dia"]
+        assert [m.text for m in app.messages] == ["eco: bom dia"]
 
 
 async def test_an_unknown_command_says_so():
@@ -108,7 +135,7 @@ async def test_an_unknown_command_says_so():
 
 
 async def test_help_lists_the_tools_that_can_be_asked():
-    app = create_chat(peers=[HelpCommand(), _Eco()])
+    app = create_chat(commands=[HelpCommand(), _Eco()])
     async with app.run_test() as pilot:
         answer = await app.command("help")
         await pilot.pause()
@@ -121,7 +148,7 @@ async def test_help_lists_the_tools_that_can_be_asked():
 async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
     """The whole round trip, with no routing code in the presentation."""
     agente = _Agente()
-    app = create_chat(peers=[agente])
+    app = create_chat(connectors=[agente])
     async with app.run_test() as pilot:
         question = asyncio.create_task(agente.ask(LOCAL, "Autorizas?"))
         await pilot.pause()
@@ -159,13 +186,15 @@ async def test_a_message_from_another_thread_reaches_the_log():
 
 
 async def test_the_log_renders_what_the_history_holds():
-    app = create_chat(peers=[_Eco()])
+    app = create_chat(commands=[_Eco()])
     async with app.run_test() as pilot:
         await app.say("uma")
         await app.command("eco", "duas")
         await pilot.pause()
         log = app.query_one("#chat-log")
-        assert len(log._msg_widgets) == len(app.messages) == 3
+        # Two: what the user said, and what the command wrote. The invocation
+        # and the answer are neither.
+        assert len(log._msg_widgets) == len(app.messages) == 2
 
 
 async def test_only_the_window_is_rendered():

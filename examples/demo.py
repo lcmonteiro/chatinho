@@ -12,7 +12,7 @@ import asyncio
 from chatinho import (
     ChatMessage,
     HelpCommand,
-    HookOnAsk,
+    HookExecute,
     HookOnSay,
     HookSay,
     Say,
@@ -36,13 +36,15 @@ class EchoConnector:
     say : Say
 
     def __init__(self) -> None:
-        #: The welcome message is the app talking, and the app *is* peer
-        #: zero, so a connector cannot tell it from something the user typed.
-        #: Skipping the first broadcast is the honest way to say so.
+        #: The welcome message is the app talking, and the app *is* peer zero,
+        #: so a connector cannot tell it from something the user typed. What a
+        #: command writes it *can* tell apart — that is what TOOL is for.
         self._greeted = False
 
     async def on_say(self, msg: ChatMessage) -> None:
         """Echoes the user, after a beat, without blocking the terminal."""
+        if not msg.is_local:
+            return                      # a command wrote it, not the user
         if not self._greeted:
             self._greeted = True
             return
@@ -51,13 +53,20 @@ class EchoConnector:
 
 
 @tool("code", "Show a Python code block")
-@require(HookOnAsk)
+@require(HookExecute)
+@require(HookSay)
 class CodeCommand:
-    """Answers with a Python code block, syntax-highlighted by the log."""
+    """Writes a Python code block, syntax-highlighted by the log.
 
-    async def on_ask(self, msg: ChatMessage) -> str:
-        """Returns a Markdown code block."""
-        return (
+    A command is seen only if it writes: ``HookSay`` is what puts its output in
+    front of the user, and what it writes is not the user speaking.
+    """
+
+    say : Say
+
+    async def execute(self, args: str = "", **kwargs) -> None:
+        """Writes a Markdown code block."""
+        await self.say(
             "Here is an example with **syntax highlighting**:\n\n"
             "```python\n"
             "def fib(n: int) -> int:\n"
@@ -71,7 +80,7 @@ class CodeCommand:
 
 WELCOME = (
     "Welcome to **chatinho**! 👋\n\n"
-    "A command is a question put to a tool — type `/` to see who can be asked:\n"
+    "Type `/` to see the commands:\n"
     "- `/help` — lists the tools\n"
     "- `/code` — shows an example with syntax highlighting\n\n"
     "Everything you type is rendered as Markdown, and the echo connector replies to it."
@@ -81,7 +90,8 @@ WELCOME = (
 def main() -> None:
     """Builds the demo chat and runs it."""
     create_chat(
-        peers    = [HelpCommand(), CodeCommand(), EchoConnector()],
+        connectors      = [EchoConnector()],
+        commands        = [HelpCommand(), CodeCommand()],
         title           = "chatinho demo",
         welcome_message = WELCOME,
     ).run()

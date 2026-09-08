@@ -78,6 +78,22 @@ class Peers(Protocol):
         ...
 
 
+class Invoke(Protocol):
+    """Granted by ``HookInvoke``: invoking a command and getting its result back.
+
+    A command is not a peer — it has no id, no queue and receives nothing. It
+    runs, it may write into the conversation, and it answers whoever ran it.
+    """
+
+    async def __call__(self, name: str, args: str = "") -> Optional[str]:
+        """Runs the command called *name* and returns what it answered.
+
+        Returns None when there is no such command, or when the command chose
+        to write its output rather than answer with it.
+        """
+        ...
+
+
 class Context(Protocol):
     """Granted by ``HookContext``: the conversation so far, at any depth.
 
@@ -152,6 +168,22 @@ HookOnAsk = Hook(
     # askable is what grants the way to answer.
 )
 
+HookInvoke = Hook(
+    name="HookInvoke",
+    grants=("invoke",),
+    # await run(name, args) -> the command's answer, or None. A peer that may
+    # invoke commands. The answer comes back to the peer that ran it; nothing
+    # about the invocation enters the conversation.
+)
+
+HookExecute = Hook(
+    name="HookExecute",
+    method="execute",
+    # async execute(args, **kwargs) -> str | None. What a command is. It is not
+    # a peer: no id, no queue, nothing addressed to it. Declare HookSay too and
+    # it can write as it works; return a string and that goes to whoever ran it.
+)
+
 HookContext = Hook(
     name="HookContext",
     grants=("context",),
@@ -200,6 +232,8 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookAsk,
     HookOnSay,
     HookOnAsk,
+    HookInvoke,
+    HookExecute,
     HookContext,
     HookPeers,
     HookListen,

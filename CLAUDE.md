@@ -9,19 +9,32 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **115 pass** |
+| `pytest -q` | **124 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
-89 of those tests run without mounting anything, in 0.79s; the 26 that mount a Textual app take
-5.0s. That ratio is the point of the layout below, not an accident of it.
+Most of them run without mounting anything; only `test_chat_app.py` and
+`test_command_suggestions.py` need a Textual app. That ratio is the point of the layout below, not an accident of it.
 
 ---
 
 ## Everyone is a peer
 
-A chat is peers exchanging messages. Each has an integer id, and `LOCAL` — zero — is the
-user. Connectors and tools are numbered from one.
+A chat is peers exchanging messages. Each has an integer id, and `LOCAL` — zero — is the user.
+Connectors are numbered from one.
+
+**A command is not a peer.** It has no id and no queue, nothing is addressed to it, and it hears
+nothing. It runs when someone runs it, and it answers whoever did. Treating commands as peers meant
+giving `on_ask` to things that only execute; they are separate parameters because they are separate
+things:
+
+```python
+create_chat(
+    connectors = [A2AConnector(url="…", api_key="…")],   # peers: id, queue, conversation
+    commands   = [HelpCommand(), TestCommand()],         # not peers: they just run
+    backend    = DatabaseBackend("sqlite:///chat.db"),   # a peer that listens
+)
+```
 
 A peer carries an **id** *and* a **visible name**, and they are deliberately different
 things: the id routes, the name is what the chat displays and what the user types after `/`. An
@@ -52,9 +65,33 @@ A reply to a `say` is another `say`. There is no fourth verb, and that is not an
 `ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
 by the message it answers. A broadcast is owed to nobody.
 
-**A command is an ask to a tool.** `/help` asks the peer named "help". Its answer arrives
-as an ordinary message. There is no dispatch, no command registry and no `command_handler`;
-`_Chat.command(name, args)` looks the name up and asks.
+## Commands run; they are not spoken to
+
+A peer that declares `HookInvoke` is granted `invoke(name, args)`, and a command declares
+`HookExecute`. That is the whole of it:
+
+```python
+@tool("upper", "Upper-case the rest of the line")
+@require(HookExecute)
+@require(HookSay)                       # only if it should be seen
+class UpperCommand:
+    say : Say
+
+    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+        await self.say(args.upper())    # what the user sees
+        return args.upper()             # what the peer that ran it gets
+```
+
+**Neither the invocation nor the answer is a message.** What the user typed does not enter the
+conversation — a command is not someone being spoken to — and the answer goes back to the peer
+that ran it. A command that should be *seen* declares `HookSay` and writes its own output.
+
+What it writes is not the user speaking: it says as `TOOL`, id −1. Without that, a connector
+answering whatever the user says would answer `/help`'s listing too — which is exactly what the
+demo did before the constant existed.
+
+`execute` is told `by`, the id of the peer that ran it, so a command can answer differently
+depending on who asked.
 
 ## Three ways to be told
 
@@ -105,7 +142,7 @@ whatever `ChatSession(recall=…)` pulled back.** Asking for older than that ret
 than reaching down again. Making it reach would make it a coroutine, and the terminal renders its
 log from inside a *synchronous* Textual paint.
 
-## The nine hooks
+## The eleven hooks
 
 | hook | demands | grants |
 |---|---|---|
@@ -113,18 +150,23 @@ log from inside a *synchronous* Textual paint.
 | `HookAsk` | — | `ask` |
 | `HookOnSay` | `on_say` | — |
 | `HookOnAsk` | `on_ask` | `answer` |
+| `HookInvoke` | — | `invoke` |
+| `HookExecute` | `execute` | — |
 | `HookContext` | — | `context` |
 | `HookPeers` | — | `peers` |
 | `HookListen` | `on_listen` | — |
 | `HookLoad` | `load` | — |
 | `HookForget` | `forget` | — |
 
+Nine became eleven when commands stopped being peers. That is the honest cost of the separation:
+`HookInvoke` and `HookExecute` are two hooks that a single `HookOnAsk` used to cover, badly.
+
 A hook can demand a method, grant an attribute, or both. `HookOnAsk` does both, and not by
 accident: being askable is what makes a way to answer worth having.
 
 ## Everything declares what it does
 
-A peer is a **plain class**. No base class, no `isinstance` anywhere in the library.
+A peer or a command is a **plain class**. No base class, no `isinstance` anywhere in the library.
 
 ```python
 @connector("weather")
@@ -148,8 +190,9 @@ misspelled is an import error rather than a hook that silently never fires.
 `@connector(name)`, `@tool(name, description)` and `@backend(name)` only name the class; an
 instance may override with `self.name`. The session assigns the id at `attach`.
 
-`ChatSession.attach(obj)` is the whole plugin contract: give it an id and a queue, hand over its
-grants, call `initialize()` if it has one.
+`ChatSession.attach(obj)` registers a peer: an id, a queue, its grants, `initialize()`.
+`ChatSession.add_command(cmd)` registers a command: a name, its grants, `initialize()` — no id and
+no queue, because there is nothing to address or deliver.
 
 Lifecycle is deliberately **not** a hook: `initialize()` and `shutdown()` are called when present.
 A peer holding nothing needs neither, and making it declare that it holds nothing is
@@ -172,15 +215,15 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (338)
-  chat_session.py  ChatSession: peers, queues, routing, context                     (362)
-  chat_hooks.py    Hook, the nine constants, @require, the grant protocols          (371)
-  chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL
+  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (349)
+  chat_session.py  ChatSession: peers, commands, queues, routing, context           (418)
+  chat_hooks.py    Hook, the eleven constants, @require, the grant protocols       (405)
+  chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
   chat_log.py      ChatLog widget: renders through the granted context reader
-  chat_input.py    CommandInput + CommandSuggestions (autocomplete over the tools)
+  chat_input.py    CommandInput + CommandSuggestions (autocomplete over the commands)
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      a2a.py, openai.py — plain classes, no base
-  commands/        help.py, test.py — tools, plain classes, no base
+  commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads
 examples/          demo.py (TUI), headless.py (stdin), agent_inbox.py (HTTP, inbound)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
@@ -199,7 +242,8 @@ is a boundary that rots. It parses the core modules and fails if:
 - `textual` appears in their imports, or `openai`, `sqlalchemy`, `requests`, `httpx`;
 - anything but the presentation layer imports Textual;
 - the session imports the app;
-- **any Textual subclass of ours assigns a name that is a method on its Textual parent.**
+- **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
+  it assigns it, or is *granted* it.
 
 That last one has bitten twice. `id` is a validated property on `DOMNode` and at least raised.
 `_context` is `MessagePump`'s own context manager: shadowing it stopped the widget's message loop
@@ -207,19 +251,24 @@ with no error at all, and the only symptom was the suite going from six seconds 
 Setting `self.title` or `self.value` is ordinary use, so properties are not flagged — only the
 silent case.
 
+The grants half was added after a third near-miss: `_Chat` was granted `run`, which is Textual's
+own `App.run()` — the documented way to start the app. mypy caught it because the class annotates
+its grants; one that did not would have shipped it. The grant is called `invoke` now.
+
 ## Public API
 
-`__init__.py` exports 33 names: `create_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`;
+`__init__.py` exports 37 names: `create_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
 the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, `options_of`,
-`declares`, `name_of`, `Hook`); the nine `Hook*` constants; the grant protocols (`Say`, `Ask`,
-`Answer`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
+`declares`, `name_of`, `Hook`); the eleven `Hook*` constants; the grant protocols (`Say`, `Ask`,
+`Answer`, `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `HelpCommand`, `TestCommand`).
 
 There is no `Chat` or `ChatApp` export: the app class is private, so `create_chat` is the only way
 to build one. For a chat without a terminal, build a `ChatSession` and attach your own
 presentation — `examples/headless.py` is exactly that, in about forty lines.
 
-`ChatSession`'s own public surface is five members: `attach`, `start`, `close`, `id_of`, `forget`.
+`ChatSession`'s own public surface is six members: `attach`, `add_command`, `start`, `close`,
+`id_of`, `forget`.
 Everything about the conversation is reached by declaring a hook.
 
 ---

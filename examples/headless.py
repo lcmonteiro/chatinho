@@ -26,11 +26,14 @@ from chatinho import (
     HelpCommand,
     HookAsk,
     HookContext,
+    HookExecute,
     HookOnAsk,
     HookOnSay,
+    HookInvoke,
     HookPeers,
     HookSay,
     Context,
+    Invoke,
     Peers,
     Say,
     connector,
@@ -52,18 +55,29 @@ class EchoConnector:
     say : Say
 
     async def on_say(self, msg: ChatMessage) -> None:
-        """Replies to the message that was just said."""
+        """Replies to what the user said — not to what a command wrote."""
+        if not msg.is_local:
+            return
         await self.say("Received: %s" % msg.text, reply_to=msg.id)
 
 
 @tool("upper", "Upper-case the rest of the line")
-@require(HookOnAsk)
+@require(HookExecute)
+@require(HookSay)
 class UpperCommand:
-    """Shouts its arguments back."""
+    """Shouts its arguments back.
 
-    async def on_ask(self, msg: ChatMessage) -> str:
-        """Returns the question in upper case."""
-        return msg.text.upper() if msg.text else "Usage: /upper <text>"
+    A command is not a peer: it has no id, nothing is addressed to it, and it
+    runs only when someone runs it.
+    """
+
+    say : Say
+
+    async def execute(self, args: str = "", **kwargs) -> str:
+        """Writes the arguments in upper case, and answers with them too."""
+        answer = args.upper() if args else "Usage: /upper <text>"
+        await self.say(answer)
+        return answer
 
 
 @require(HookSay)
@@ -72,6 +86,7 @@ class UpperCommand:
 @require(HookOnAsk)
 @require(HookContext)
 @require(HookPeers)
+@require(HookInvoke)
 class Terminal:
     """The presentation layer: prints what arrives, sends what is typed."""
 
@@ -79,7 +94,8 @@ class Terminal:
     say           : Say
     ask           : Ask
     context : Context
-    peers  : Peers
+    peers         : Peers
+    invoke        : Invoke
 
     async def on_say(self, msg: ChatMessage) -> None:
         """Renders one broadcast on a plain terminal."""
@@ -92,15 +108,16 @@ class Terminal:
         return None
 
     async def command(self, line: str) -> None:
-        """Runs ``/name args``: an ask addressed to the tool of that name."""
+        """Runs ``/name args``.
+
+        Nothing is printed here on success: a command that should be seen wrote
+        its own output, and ``on_say`` rendered it like anything else. The
+        answer comes back for the caller, which here has no use for it.
+        """
         name, _, args = line.partition(" ")
-        at = next((i for i, w in self.peers().items()
-                   if i != LOCAL and getattr(w, "name", "") == name), None)
-        if at is None:
+        if await self.invoke(name, args.strip()) is None:
             print("? unknown command: /%s — try /help" % name)
-            return
-        print("> /%s %s" % (name, args))
-        print("< %s" % await self.ask(at, args.strip()))
+        await asyncio.sleep(0.05)
 
 
 async def read_lines() -> List[str]:
@@ -113,8 +130,8 @@ async def main() -> None:
     session = ChatSession()
     view = Terminal()
     session.attach(view, at=LOCAL)
-    session.attach(HelpCommand())
-    session.attach(UpperCommand())
+    session.add_command(HelpCommand())
+    session.add_command(UpperCommand())
     # Registered last on purpose: hooks fire in registration order, and the
     # echo answers re-entrantly, so listening first keeps the reply below the
     # message it answers.

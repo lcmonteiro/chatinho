@@ -30,7 +30,7 @@ directly and attach your own presentation; it imports no UI framework.
 
 from .chat_app import create_chat
 from .chat_session import ChatSession
-from .chat_message import LOCAL, ChatMessage
+from .chat_message import LOCAL, TOOL, ChatMessage
 from .chat_hooks import (
     connector,
     tool,
@@ -45,6 +45,8 @@ from .chat_hooks import (
     HookAsk,
     HookOnSay,
     HookOnAsk,
+    HookInvoke,
+    HookExecute,
     HookContext,
     HookPeers,
     HookListen,
@@ -53,6 +55,7 @@ from .chat_hooks import (
     Say,
     Ask,
     Answer,
+    Invoke,
     Context,
     Peers,
 )
@@ -69,6 +72,7 @@ __all__ = [
     "ChatMessage",
     "ChatStyle",
     "LOCAL",
+    "TOOL",
     # declaring
     "connector",
     "tool",
@@ -84,6 +88,8 @@ __all__ = [
     "HookAsk",
     "HookOnSay",
     "HookOnAsk",
+    "HookInvoke",
+    "HookExecute",
     "HookContext",
     "HookPeers",
     # the older tier
@@ -94,6 +100,7 @@ __all__ = [
     "Say",
     "Ask",
     "Answer",
+    "Invoke",
     "Context",
     "Peers",
     # batteries

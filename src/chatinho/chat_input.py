@@ -14,8 +14,6 @@ from textual.css.query import NoMatches
 from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
-from .chat_hooks import HookOnAsk, declares, name_of
-from .chat_message import LOCAL
 
 
 logger = logging.getLogger(__name__)
@@ -26,16 +24,12 @@ SUGGESTIONS_ID : str = "command-suggestions"
 
 
 class CommandSuggestions(OptionList):
-    """Popup listing the tools whose name matches the "/token" being typed.
+    """Popup listing the commands whose name matches the "/token" being typed."""
 
-    A command is an ask addressed to a tool, so the suggestions are simply the
-    peers that can be asked, listed by the name the chat displays.
-    """
-
-    def __init__(self, peers: Any, **kwargs) -> None:
+    def __init__(self, commands: Any, **kwargs) -> None:
         super().__init__(**kwargs)
         # Held by reference: the application owns the dict and keeps it current.
-        self._peers = peers
+        self._commands = commands
 
     @property
     def has_suggestions(self) -> bool:
@@ -86,18 +80,13 @@ class CommandSuggestions(OptionList):
         self.hide()
         return name
 
-    def _tools(self) -> List[Any]:
-        """Every peer that can be asked — the user is not one."""
-        return [who for at, who in self._peers().items()
-                if at != LOCAL and declares(who, HookOnAsk)]
-
     def _names(self) -> List[str]:
-        """Their visible names."""
-        return [name_of(who) for who in self._tools()]
+        """The names of the registered commands."""
+        return list(self._commands)
 
     def _tool(self, name: str) -> Any:
-        """The peer with that visible name, or None."""
-        return next((w for w in self._tools() if name_of(w) == name), None)
+        """The command with that name, or None."""
+        return self._commands.get(name)
 
     def _label(self, name: str) -> str:
         """Returns the popup label for the command registered as *name*."""

@@ -21,9 +21,11 @@ from chatinho import (
     HookOnAsk,
     HookOnSay,
     HookPeers,
+    HookInvoke,
     HookSay,
     Context,
     Peers,
+    Invoke,
     Say,
     connector,
     require,
@@ -38,6 +40,7 @@ from chatinho.chat_session import ChatSession
 @require(HookOnAsk)
 @require(HookContext)
 @require(HookPeers)
+@require(HookInvoke)
 class Driver:
     """Everything the presentation is, minus the terminal."""
 
@@ -46,7 +49,8 @@ class Driver:
     ask           : Ask
     answer        : Answer
     context : Context
-    peers  : Peers
+    peers         : Peers
+    invoke        : Invoke
 
     def __init__(self, answers: Optional[List[str]] = None) -> None:
         self.heard   : List[ChatMessage] = []
@@ -73,10 +77,8 @@ class Driver:
                      if getattr(w, "name", "") == name), None)
 
     async def command(self, name: str, args: str = "") -> Any:
-        """Runs ``/name args``: an ask addressed to the tool of that name."""
-        at = self.id_of(name)
-        assert at is not None, "no tool named %r" % name
-        return await self.ask(at, args)
+        """Runs ``/name args``. A command is not a peer: it is run, not asked."""
+        return await self.invoke(name, args)
 
 
 async def driven(**kwargs) -> tuple:
