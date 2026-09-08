@@ -54,19 +54,17 @@ class EchoConnector:
 
 @tool("code", "Show a Python code block")
 @require(HookExecute)
-@require(HookSay)
 class CodeCommand:
     """Writes a Python code block, syntax-highlighted by the log.
 
-    A command is seen only if it writes: ``HookSay`` is what puts its output in
-    front of the user, and what it writes is not the user speaking.
+    What it answers is what the user sees: the session posts it in ``TOOL``'s
+    name, replying to the invocation. It does not need ``HookSay`` for that —
+    that is for progress while it works, which this has none of.
     """
 
-    say : Say
-
-    async def execute(self, args: str = "", **kwargs) -> None:
-        """Writes a Markdown code block."""
-        await self.say(
+    async def execute(self, args: str = "", **kwargs) -> str:
+        """Answers with a Markdown code block."""
+        return (
             "Here is an example with **syntax highlighting**:\n\n"
             "```python\n"
             "def fib(n: int) -> int:\n"

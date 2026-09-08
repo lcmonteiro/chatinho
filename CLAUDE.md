@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **124 pass** |
+| `pytest -q` | **125 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -97,10 +97,11 @@ class UpperCommand:
 
 **The invocation and the answer are both messages.** There is one conversation and everything is
 in it: a say, an ask, the answer to it, a command being run and what it answered. What `execute`
-returns is posted by the session in `TOOL`'s name, replying to the invocation — so a command that
-should be *seen* just returns, and `HookSay` is for what differs from the answer: progress while
-it works. Saying *and* returning the same text puts it in the log twice, which is exactly what
-`/help` used to do.
+returns is posted by the session in `TOOL`'s name, **replying to the invocation** — so the log
+renders it the way it renders any reply, quoting the `/command` it answers and heading it `Tool`
+rather than `Other`. A command that should be *seen* just returns; `HookSay` is for what differs
+from the answer: progress while it works. Saying *and* returning the same text puts it in the log
+twice, which is what `/help`, `/upper` and the demo's `/code` all used to do.
 
 A command is still **not a peer** — no id, no queue, nothing addressed to it — so the invocation is
 addressed to `TOOL`, id −1, and not said to the room. That is what keeps a connector that answers

@@ -13,7 +13,7 @@ from textual.containers import Horizontal, ScrollableContainer, Vertical
 from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
-from .chat_message import ChatMessage
+from .chat_message import TOOL, ChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,9 @@ class ChatLog(TouchScrollableContainer):
 
     def _render_message(self, msg: ChatMessage) -> Widget:
         """Render a message as a clickable container with header and body."""
-        sender = "You" if msg.is_local else "Other"
+        # A command is not a peer, so it is not "Other": what it answered is
+        # posted in TOOL's name, and the header says so.
+        sender = "You" if msg.is_local else ("Tool" if msg.frm == TOOL else "Other")
         time_str = msg.timestamp.strftime("%H:%M")
         prefix = f"[{time_str}] {sender} · {msg.id}"
         if msg.reply_to is not None:

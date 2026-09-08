@@ -192,6 +192,24 @@ async def test_a_message_from_another_thread_reaches_the_log():
 # === Rendering ==================================================================
 
 
+async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
+    """What a command answered quotes the invocation, and is headed Tool.
+
+    The invocation and the answer are both messages now, and the answer carries
+    ``reply_to``, so the log renders it the way it renders any reply.
+    """
+    app = create_chat(commands=[_Eco()])
+    async with app.run_test() as pilot:
+        await app.command("eco", "ola")
+        await pilot.pause()
+        log = app.query_one("#chat-log")
+        cabecalhos = [str(w.visual) for w in log.query(".message-header")]
+        citacoes   = [str(w.visual) for w in log.query(".message-quote")]
+        assert "You" in cabecalhos[0] and "↳ replying" not in cabecalhos[0]
+        assert "Tool" in cabecalhos[1] and "↳ replying" in cabecalhos[1]
+        assert citacoes == ["↳ %s: /eco ola…" % app.messages[0].id]
+
+
 async def test_the_log_renders_what_the_history_holds():
     app = create_chat(commands=[_Eco()])
     async with app.run_test() as pilot:

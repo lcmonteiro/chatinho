@@ -63,7 +63,6 @@ class EchoConnector:
 
 @tool("upper", "Upper-case the rest of the line")
 @require(HookExecute)
-@require(HookSay)
 class UpperCommand:
     """Shouts its arguments back.
 
@@ -71,13 +70,13 @@ class UpperCommand:
     runs only when someone runs it.
     """
 
-    say : Say
-
     async def execute(self, args: str = "", **kwargs) -> str:
-        """Writes the arguments in upper case, and answers with them too."""
-        answer = args.upper() if args else "Usage: /upper <text>"
-        await self.say(answer)
-        return answer
+        """Answers with the arguments in upper case.
+
+        Answering is what puts it in the conversation: saying it too would
+        write the same line twice.
+        """
+        return args.upper() if args else "Usage: /upper <text>"
 
 
 @require(HookSay)
