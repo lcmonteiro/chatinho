@@ -32,7 +32,7 @@ things:
 create_chat(
     connectors = [A2AConnector(url="…", api_key="…")],   # peers: id, queue, conversation
     commands   = [HelpCommand(), TestCommand()],         # not peers: they just run
-    backend    = DatabaseBackend("sqlite:///chat.db"),   # a peer that overhears
+    backend    = DatabaseBackend("sqlite:///chat.db"),   # a peer that listens
 )
 ```
 
@@ -45,7 +45,8 @@ A message says where it came from and where it is going, and that is all the rou
 
 ```
 to is None    → everyone heard it          (say)
-to is an id   → one peer was asked  (ask)
+to is an id   → one peer was asked         (ask)
+to is TOOL    → a command was run          (invoke)
 reply_to set  → it answers that message    (answer)
 ```
 
@@ -85,44 +86,55 @@ A peer that declares `HookInvoke` is granted `invoke(name, args)`, and a command
 ```python
 @tool("upper", "Upper-case the rest of the line")
 @require(HookExecute)
-@require(HookSay)                       # only if it should be seen
+@require(HookSay)                          # only for what differs from the answer
 class UpperCommand:
     say : Say
 
     async def execute(self, args="", by=LOCAL, **kwargs) -> str:
-        await self.say(args.upper())    # what the user sees
-        return args.upper()             # what the peer that ran it gets
+        await self.say("working…")         # progress, said as TOOL
+        return args.upper()                # the answer: posted as TOOL, and returned
 ```
 
-**Neither the invocation nor the answer is a message.** What the user typed does not enter the
-conversation — a command is not someone being spoken to — and the answer goes back to the peer
-that ran it. A command that should be *seen* declares `HookSay` and writes its own output.
+**The invocation and the answer are both messages.** There is one conversation and everything is
+in it: a say, an ask, the answer to it, a command being run and what it answered. What `execute`
+returns is posted by the session in `TOOL`'s name, replying to the invocation — so a command that
+should be *seen* just returns, and `HookSay` is for what differs from the answer: progress while
+it works. Saying *and* returning the same text puts it in the log twice, which is exactly what
+`/help` used to do.
 
-What it writes is not the user speaking: it says as `TOOL`, id −1. Without that, a connector
-answering whatever the user says would answer `/help`'s listing too — which is exactly what the
-demo did before the constant existed.
+A command is still **not a peer** — no id, no queue, nothing addressed to it — so the invocation is
+addressed to `TOOL`, id −1, and not said to the room. That is what keeps a connector that answers
+what the user says from answering somebody else's `/help`: the invocation is not a broadcast, and
+the answer comes from `TOOL` rather than from the user. Both halves matter, and the demo answered
+its own `/help` before the constant existed.
+
+One thing this costs, stated plainly: **a command can no longer answer privately.** What it
+returns reaches everyone. There used to be a distinction between a command that wrote and one that
+only answered its caller, and it is gone.
 
 `execute` is told `by`, the id of the peer that ran it, so a command can answer differently
 depending on who asked.
 
-## Three ways to be told
+## Two ways to be told
 
 | | | |
 |---|---|---|
-| `listen(msg)` | demands | someone spoke to everyone |
+| `listen(msg)` | demands | **every** message that crosses, whoever said it, whoever it was for |
 | `answer(msg)` | demands | someone asked *you*; return the reply, or `None` and say it later |
-| `overhear(msg)` | demands | **every** message that crosses, whoever said it, whoever it was for |
 
-They are not exclusive: something that overhears *and* answers gets both calls for the same
+There is one way to hear, not two. `listen` brings the whole conversation — a say, an ask, the
+answer to it, a command being run and what it answered — because there is one conversation and a
+backend, an audit log and a metrics counter each want all of it.
+
+A peer that only wants what was said to the room checks `msg.is_broadcast`, and it **must**: both
+echo connectors in `examples/` do, and without it they would reply to a `/help` the user typed.
+That check is the price of the second hook this used to be.
+
+The two are not exclusive: something that listens *and* answers gets both calls for the same
 message, because it declared both.
 
-`overhear` is not `listen` with a wider net, and the two names say which is which: you **listen**
-to what was said to the room, and you **overhear** what was not said to you at all. A backend, an
-audit log and a metrics counter want the second — everything, rather than only the broadcasts
-`listen` brings or only what was addressed to them.
-
-One rule holds across all three: **you never hear yourself.** That is what stops a listener that
-speaks from answering its own words forever.
+One rule holds across both: **you never hear yourself.** That is what stops a peer that listens
+and speaks from answering its own words forever.
 
 ## Nothing blocks
 
@@ -147,7 +159,7 @@ which tier a message came from — the recent turns were said this session, the 
 loaded at `start()`.
 
 The backend is not a key-value store, and nothing pushes at it. **It is a peer that
-overhears**: `HookOverhear` to hear the whole conversation, `HookLoad`/`load(since=, limit=)`
+listens**: `HookListen` to hear the whole conversation, `HookLoad`/`load(since=, limit=)`
 to give it back, `HookForget`/`forget(before=)` to drop it. All coroutines, all running their SQLAlchemy in
 an executor so one slow write holds up nobody.
 
@@ -156,24 +168,24 @@ whatever `ChatSession(recall=…)` pulled back.** Asking for older than that ret
 than reaching down again. Making it reach would make it a coroutine, and the terminal renders its
 log from inside a *synchronous* Textual paint.
 
-## The eleven hooks
+## The ten hooks
 
 | hook | demands | grants |
 |---|---|---|
 | `HookSay` | — | `say` |
-| `HookAsk` | — | `ask` |
 | `HookListen` | `listen` | — |
+| `HookAsk` | — | `ask` |
 | `HookAnswer` | `answer` | — |
 | `HookInvoke` | — | `invoke` |
 | `HookExecute` | `execute` | — |
 | `HookContext` | — | `context` |
 | `HookPeers` | — | `peers` |
-| `HookOverhear` | `overhear` | — |
 | `HookLoad` | `load` | — |
 | `HookForget` | `forget` | — |
 
-Nine became eleven when commands stopped being peers. That is the honest cost of the separation:
-`HookInvoke` and `HookExecute` are two hooks that a single `HookAnswer` used to cover, badly.
+Eleven became ten when the second way of hearing was folded into the first. `HookInvoke` and
+`HookExecute` are still two hooks where a single one used to serve, badly — that is the honest
+cost of a command not being a peer.
 
 Every hook is one or the other — a demand or a grant, never both. `HookAnswer` was the single
 exception until `answer` became the method a peer writes; the grant it also carried turned out to
@@ -231,16 +243,16 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (347)
-  chat_session.py  ChatSession: peers, commands, queues, routing, context           (417)
-  chat_hooks.py    Hook, the eleven constants, @require, the grant protocols       (417)
+  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (348)
+  chat_session.py  ChatSession: peers, commands, queues, routing, context           (430)
+  chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (409)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
   chat_log.py      ChatLog widget: renders through the granted context reader
   chat_input.py    CommandInput + CommandSuggestions (autocomplete over the commands)
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      a2a.py, openai.py — plain classes, no base
   commands/        help.py, test.py — commands: they run, they are not peers
-  backends/        database.py (SQLAlchemy) — a peer that overhears and loads
+  backends/        database.py (SQLAlchemy) — a peer that listens and loads
 examples/          demo.py (TUI), headless.py (stdin), agent_inbox.py (HTTP, inbound)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
@@ -273,9 +285,9 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 ## Public API
 
-`__init__.py` exports 36 names: `create_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
+`__init__.py` exports 35 names: `create_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
 the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, `options_of`,
-`declares`, `name_of`, `Hook`); the eleven `Hook*` constants; the grant protocols (`Say`, `Ask`,
+`declares`, `name_of`, `Hook`); the ten `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `HelpCommand`, `TestCommand`).
 

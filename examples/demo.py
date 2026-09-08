@@ -43,7 +43,7 @@ class EchoConnector:
 
     async def listen(self, msg: ChatMessage) -> None:
         """Echoes the user, after a beat, without blocking the terminal."""
-        if not msg.is_local:
+        if not msg.is_broadcast or not msg.is_local:
             return                      # a command wrote it, not the user
         if not self._greeted:
             self._greeted = True

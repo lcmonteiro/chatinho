@@ -1,7 +1,7 @@
 """The older tier of the conversation, kept in a SQL database.
 
 The backend is not a key-value store, and nothing pushes at it: it is a
-peer that declared ``HookOverhear``, so the conversation crosses it the
+peer that declared ``HookListen``, so the conversation crosses it the
 way it crosses anyone, and it writes what it hears. At ``start()`` the session
 asks whoever declared ``HookLoad`` for the older context, which is how a chat
 reopens where it left off.
@@ -20,7 +20,7 @@ from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from ..chat_hooks import HookForget, HookOverhear, HookLoad, backend, require
+from ..chat_hooks import HookForget, HookListen, HookLoad, backend, require
 from ..chat_message import ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -49,14 +49,14 @@ class ArchivedMessage(Base):
 
 
 @backend("database")
-@require(HookOverhear)
+@require(HookListen)
 @require(HookLoad)
 @require(HookForget)
 class DatabaseBackend:
     """Listens to the conversation and keeps it, one row per message.
 
     Nothing pushes at it: it is a peer with its own queue that declared
-    ``HookOverhear``, so every message crosses it the way a message crosses
+    ``HookListen``, so every message crosses it the way a message crosses
     anyone, and it writes what it hears. ``HookLoad`` is the other half — it
     gives back what it held when the next session starts.
     """
@@ -105,7 +105,7 @@ class DatabaseBackend:
 
     # === The archive ================================================================
 
-    async def overhear(self, msg: ChatMessage) -> None:
+    async def listen(self, msg: ChatMessage) -> None:
         """Keeps one message that crossed the session.
 
         Args:
@@ -158,7 +158,7 @@ class DatabaseBackend:
         return self.SessionLocal()
 
     def _write(self, messages: List[ChatMessage]) -> None:
-        """The synchronous half of :meth:`overhear`."""
+        """The synchronous half of :meth:`listen`."""
         with self._session() as session:
             for msg in messages:
                 session.merge(ArchivedMessage(

@@ -43,13 +43,12 @@ from .chat_hooks import (
     Hook,
     HookSay,
     HookAsk,
-    HookListen,
     HookAnswer,
     HookInvoke,
     HookExecute,
     HookContext,
     HookPeers,
-    HookOverhear,
+    HookListen,
     HookLoad,
     HookForget,
     Say,
@@ -82,7 +81,7 @@ __all__ = [
     "declares",
     "name_of",
     "Hook",
-    # the three verbs and the two ways of being told
+    # the three verbs, and hearing the whole conversation
     "HookSay",
     "HookAsk",
     "HookListen",
@@ -92,7 +91,6 @@ __all__ = [
     "HookContext",
     "HookPeers",
     # the older tier
-    "HookOverhear",
     "HookLoad",
     "HookForget",
     # what the grants look like

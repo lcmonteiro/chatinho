@@ -26,7 +26,11 @@ class HelpCommand:
         self.commands = commands
 
     async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> str:
-        """Writes the listing into the conversation, and answers with it too.
+        """Answers with the listing.
+
+        It does not say it: what a command answers is posted by the session, in
+        ``TOOL``'s name, replying to the invocation. Saying it too would put it
+        in the conversation twice.
 
         Args:
             args: Ignored.
@@ -42,6 +46,4 @@ class HelpCommand:
         listing = "Commands:\n  " + "\n  ".join(lines) if lines else "No commands registered."
 
         others = sorted(getattr(w, "name", "?") for at, w in self.peers().items() if at != LOCAL)
-        answer = listing + ("\n\nConnected: %s" % ", ".join(others) if others else "")
-        await self.say(answer)
-        return answer
+        return listing + ("\n\nConnected: %s" % ", ".join(others) if others else "")

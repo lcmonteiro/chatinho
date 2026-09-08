@@ -18,8 +18,6 @@ from chatinho import (
     HelpCommand,
     HookAsk,
     HookExecute,
-    HookSay,
-    Say,
     connector,
     create_chat,
     require,
@@ -29,14 +27,14 @@ from chatinho import (
 
 @tool("eco", "repete")
 @require(HookExecute)
-@require(HookSay)
 class _Eco:
-    """A command that writes what it produces, so the user sees it."""
+    """A command that answers; the session is what puts the answer in the log.
 
-    say : Say
+    It does not also say it: what it answers is posted in TOOL's name, so
+    saying it too would put the same line in the conversation twice.
+    """
 
     async def execute(self, args="", by=LOCAL, **kwargs) -> str:
-        await self.say("eco: %s" % args)
         return "eco: %s" % args
 
 
@@ -93,27 +91,36 @@ async def test_blank_input_says_nothing():
     assert app.messages == []
 
 
-# === Commands are asks ==========================================================
+# === Commands are run, and the running is recorded ==============================
 
 
-async def test_a_command_is_seen_only_if_it_writes():
-    """The invocation is not a message, and neither is the answer."""
+async def test_running_a_command_is_recorded_whole():
+    """The invocation and the answer are both messages, in that order."""
     app = create_chat(commands=[_Eco(), _Mudo()])
     async with app.run_test() as pilot:
         assert await app.command("eco", "ola") == "eco: ola"
         assert await app.command("mudo") == "só para quem correu"
         await pilot.pause()
-        assert [m.text for m in app.messages] == ["eco: ola"]
+        assert [m.text for m in app.messages] == [
+            "/eco ola", "eco: ola", "/mudo", "só para quem correu",
+        ]
 
 
 async def test_what_a_command_writes_is_not_the_user_speaking():
-    """A connector answering the user must not answer /help's output."""
+    """A connector answering the user must not answer /help's output.
+
+    Two things keep that true now that both cross the session: what the command
+    answered comes from TOOL, and the invocation is addressed to TOOL rather
+    than said to the room, so a peer that replies to broadcasts sees neither as
+    the user speaking.
+    """
     app = create_chat(commands=[_Eco()])
     async with app.run_test() as pilot:
         await app.command("eco", "ola")
         await pilot.pause()
-        assert app.messages[0].frm == TOOL
-        assert app.messages[0].is_local is False
+        invocacao, resposta = app.messages
+        assert invocacao.to == TOOL and invocacao.is_broadcast is False
+        assert resposta.frm == TOOL and resposta.is_local is False
 
 
 async def test_submitting_a_slash_runs_the_tool():
@@ -123,7 +130,7 @@ async def test_submitting_a_slash_runs_the_tool():
         inp.value = "/eco bom dia"
         await pilot.press("enter")
         await pilot.pause()
-        assert [m.text for m in app.messages] == ["eco: bom dia"]
+        assert [m.text for m in app.messages] == ["/eco bom dia", "eco: bom dia"]
 
 
 async def test_an_unknown_command_says_so():
@@ -192,9 +199,8 @@ async def test_the_log_renders_what_the_history_holds():
         await app.command("eco", "duas")
         await pilot.pause()
         log = app.query_one("#chat-log")
-        # Two: what the user said, and what the command wrote. The invocation
-        # and the answer are neither.
-        assert len(log._msg_widgets) == len(app.messages) == 2
+        # Three: what the user said, the invocation, and what it answered.
+        assert len(log._msg_widgets) == len(app.messages) == 3
 
 
 async def test_only_the_window_is_rendered():

@@ -56,7 +56,7 @@ class EchoConnector:
 
     async def listen(self, msg: ChatMessage) -> None:
         """Replies to what the user said — not to what a command wrote."""
-        if not msg.is_local:
+        if not msg.is_broadcast or not msg.is_local:
             return
         await self.say("Received: %s" % msg.text, reply_to=msg.id)
 

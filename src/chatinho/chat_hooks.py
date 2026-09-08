@@ -159,8 +159,16 @@ HookAsk = Hook(
 HookListen = Hook(
     name="HookListen",
     method="listen",
-    # async listen(msg). Someone spoke to everyone and you were in the room.
-    # Nothing is owed back: a reply to a say is another say.
+    # async listen(msg). Every message that crosses the session: a say, an ask,
+    # the answer to it, a command's invocation and what it answered. Whoever
+    # said it, whoever it was for. Nothing is owed back.
+    #
+    # There is one way to hear, not two. A peer that only wants what was said
+    # to the room checks msg.is_broadcast — which it must, or it will reply to
+    # a question that was never its own.
+    #
+    # You still never hear yourself. That is what stops a peer that listens and
+    # speaks from answering its own words forever.
 )
 
 HookAnswer = Hook(
@@ -208,28 +216,13 @@ HookPeers = Hook(
     # be written without a way to see past its own class.
 )
 
-# === Hearing everything, and holding it =========================================
-#
-# `overhear` is not `listen` with a wider net, and the names say which is which:
-# you listen to what was said to the room, and you overhear what was not said
-# to you at all. A backend, an audit log and a metrics counter want the second.
-
-HookOverhear = Hook(
-    name="HookOverhear",
-    method="overhear",
-    # async overhear(msg). Every message that crosses the session, whoever said
-    # it and whoever it was for — not just the broadcasts listen brings, nor
-    # only what was addressed to you. Nothing is owed back.
-    #
-    # You still never hear yourself. That is what stops a listener that speaks
-    # from answering its own words forever, and it is the same rule as say.
-)
+# === Holding the conversation ===================================================
 
 HookLoad = Hook(
     name="HookLoad",
     method="load",
     # async load(since=, limit=) -> List[ChatMessage]. The older context, read
-    # back at start(). A peer that overhears and loads *is* the archive:
+    # back at start(). A peer that listens and loads *is* the archive:
     # it heard the conversation, and it gives it back.
 )
 
@@ -248,7 +241,6 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookExecute,
     HookContext,
     HookPeers,
-    HookOverhear,
     HookLoad,
     HookForget,
 )

@@ -25,7 +25,6 @@ from typing import Any, Dict, List, Optional
 from .chat_hooks import (
     HookExecute,
     HookForget,
-    HookOverhear,
     HookLoad,
     HookAnswer,
     HookListen,
@@ -49,9 +48,8 @@ class ChatSession:
     - ``HookSay``      grants  ``say(text, reply_to=None)``.
     - ``HookAsk``      grants  ``ask(to, text)``, which awaits the answer.
     - ``HookContext``  grants  ``context(since=, start=, limit=)``.
-    - ``HookListen``   demands ``listen(msg)`` — someone spoke to everyone.
+    - ``HookListen``   demands ``listen(msg)`` — every message that crosses.
     - ``HookAnswer``   demands ``answer(msg)`` — someone asked you.
-    - ``HookOverhear`` demands ``overhear(msg)`` — every message that crosses.
     """
 
     def __init__(
@@ -157,17 +155,36 @@ class ChatSession:
         return name
 
     def _invoke_for(self, frm: int):
-        """Builds the ``run`` granted to a peer, bound to that peer."""
+        """Builds the ``invoke`` granted to a peer, bound to that peer.
+
+        A command is not a peer, so it has no id: the invocation is addressed
+        to ``TOOL`` and what the command answered comes back from ``TOOL``,
+        replying to it. Both cross the session like anything else, so a listener
+        sees the whole of what happened — but the invocation is *addressed*, not
+        a broadcast, so a peer that answers what the room says does not answer
+        somebody else's ``/help``.
+        """
         async def invoke(name: str, args: str = "") -> Optional[str]:
             cmd = self.commands.get(name)
             if cmd is None:
                 logger.info("No command named %r", name)
                 return None
+            asked = ChatMessage(
+                id=self._store.new_id(),
+                text="/%s %s" % (name, args) if args else "/%s" % name,
+                frm=frm, to=TOOL,
+            )
+            await self._post(asked)
             try:
-                return await cmd.execute(args, by=frm)
+                reply = await cmd.execute(args, by=frm)
             except Exception:
                 logger.error("Command %r failed", name, exc_info=True)
                 raise
+            if reply is not None:
+                await self._post(ChatMessage(
+                    id=self._store.new_id(), text=reply, frm=TOOL, to=None, reply_to=asked.id,
+                ))
+            return reply
         return invoke
 
     def id_of(self, name: str) -> Optional[int]:
@@ -237,23 +254,21 @@ class ChatSession:
     async def _post(self, msg: ChatMessage) -> str:
         """Keeps *msg* and puts it in the queue of everyone it is for.
 
-        An answer to an ask that is still waiting resolves that wait and goes
-        no further: the asker is already holding it.
+        An answer to an ask that is still waiting resolves that wait, and is
+        not delivered to the asker a second time — it is already holding it.
+        Everyone who listens still hears it: there is one conversation, and the
+        replies are part of it.
         """
         self._store.add(msg)
-        waiting = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
-        if waiting is not None and not waiting.done():
-            waiting.set_result(msg.text)
-            return msg.id
+        waiting  = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
+        resolved = waiting is not None and not waiting.done()
+        if resolved:
+            waiting.set_result(msg.text)          # type: ignore[union-attr]
 
-        # You never hear yourself, whichever way you were listening.
+        # You never hear yourself; that is the whole of the loop protection.
         listeners = {at for at, who in self._by_id.items()
-                     if at != msg.frm and declares(who, HookOverhear)}
-        if msg.to is not None:
-            audience = {msg.to}
-        else:
-            audience = {at for at, who in self._by_id.items()
-                        if at != msg.frm and declares(who, HookListen)}
+                     if at != msg.frm and declares(who, HookListen)}
+        audience  = {msg.to} if msg.to is not None and not resolved else set()
         for at in listeners | audience:
             queue = self._queues.get(at)
             if queue is not None:
@@ -263,19 +278,17 @@ class ChatSession:
     async def _deliver(self, who: Any, msg: ChatMessage) -> None:
         """Hands one message to one peer, every way it declared to get it.
 
-        The three are not exclusive: something that overhears *and* answers
-        gets both calls for the same message, because it asked for both.
+        The two are not exclusive: something that listens *and* answers gets
+        both calls for the same message, because it asked for both.
 
         What ``answer`` returns is posted in the peer's name. Returning None is
         not a failure: the ask stays waiting, and whatever the peer says later
         with ``reply_to`` set resolves it.
         """
-        if declares(who, HookOverhear):
-            await who.overhear(msg)
+        if declares(who, HookListen):
+            await who.listen(msg)
 
         if msg.is_broadcast:
-            if declares(who, HookListen):
-                await who.listen(msg)
             return
         at = getattr(who, "peer_id", None)
         if at is None or msg.to != at:

@@ -15,7 +15,7 @@ import pytest
 from chatinho import (
     LOCAL,
     ChatMessage,
-    HookOverhear,
+    TOOL,
     HookForget,
     HookLoad,
     Ask,
@@ -73,7 +73,7 @@ class _Ouvinte:
 
 
 @backend("memoria")
-@require(HookOverhear)
+@require(HookListen)
 @require(HookLoad)
 @require(HookForget)
 class _Archive:
@@ -86,7 +86,7 @@ class _Archive:
     def initialize(self) -> None:
         self.initialized = True
 
-    async def overhear(self, msg) -> None:
+    async def listen(self, msg) -> None:
         self.kept.append(msg)
 
     async def load(self, since=None, limit=None):
@@ -165,10 +165,20 @@ async def test_ask_returns_the_answer():
 
 
 async def test_running_a_command_answers_the_peer_that_ran_it():
-    """A command is run, not asked: nothing about it enters the conversation."""
+    """The answer goes back to whoever ran it, and the whole of it is recorded.
+
+    A command is still not a peer — it has no id and no queue — but there is
+    one conversation, so the invocation and what it answered cross the session
+    like anything else. The invocation is *addressed* to TOOL rather than said
+    to the room, which is what keeps a peer from answering somebody else's
+    command.
+    """
     session, view = await driven(commands=[_Eco()])
     assert await view.command("eco", "ola") == "eco: ola"
-    assert view.context() == [], "running a command must not say anything"
+    invocacao, resposta = view.context()
+    assert (invocacao.text, invocacao.frm, invocacao.to) == ("/eco ola", LOCAL, TOOL)
+    assert (resposta.text, resposta.frm, resposta.to) == ("eco: ola", TOOL, None)
+    assert resposta.reply_to == invocacao.id
     await session.close()
 
 
@@ -191,7 +201,7 @@ async def test_a_command_that_says_writes_and_still_answers():
 
     session, view = await driven(commands=[Relata()])
     assert await view.command("relata") == "pronto"
-    assert view.texts() == ["a trabalhar…"]
+    assert view.texts() == ["/relata", "a trabalhar…", "pronto"]
     await session.close()
 
 
@@ -388,12 +398,12 @@ async def test_a_backend_that_only_listens_is_not_an_error():
     """Declaring less means doing less, not failing."""
 
     @backend("so-escreve")
-    @require(HookOverhear)
+    @require(HookListen)
     class WriteOnly:
         def __init__(self) -> None:
             self.kept: list = []
 
-        async def overhear(self, msg) -> None:
+        async def listen(self, msg) -> None:
             self.kept.append(msg)
 
     store = WriteOnly()
@@ -406,9 +416,9 @@ async def test_a_backend_that_only_listens_is_not_an_error():
 
 async def test_a_listener_that_fails_does_not_lose_the_message():
     @backend("avariado")
-    @require(HookOverhear)
+    @require(HookListen)
     class Broken:
-        async def overhear(self, msg) -> None:
+        async def listen(self, msg) -> None:
             raise RuntimeError("disco cheio")
 
     session, view = await driven(backend=Broken())
