@@ -38,7 +38,7 @@ from chatinho import (
     HookAsk,
     HookContext,
     HookOnAsk,
-    HookOnSay,
+    HookListen,
     HookSay,
     Context,
     Say,
@@ -69,7 +69,7 @@ class AgentConnector:
         self._thread : Optional[threading.Thread] = None
         self._loop   : Optional[asyncio.AbstractEventLoop] = None
 
-    async def listen(self) -> None:
+    async def serve(self) -> None:
         """Starts the listener, remembering the loop the chat runs on."""
         self._loop = asyncio.get_running_loop()
         agent = self
@@ -117,7 +117,7 @@ class AgentConnector:
 
 
 @require(HookSay)
-@require(HookOnSay)
+@require(HookListen)
 @require(HookOnAsk)
 @require(HookContext)
 class Terminal:
@@ -126,7 +126,7 @@ class Terminal:
     say           : Say
     context : Context
 
-    async def on_say(self, msg: ChatMessage) -> None:
+    async def listen(self, msg: ChatMessage) -> None:
         """Renders a broadcast."""
         print("< %s" % msg.text)
 
@@ -149,7 +149,7 @@ async def main() -> None:
     agent = AgentConnector()
     session.attach(agent)
     await session.start()
-    await agent.listen()
+    await agent.serve()
 
     print("Listening on http://%s:%d/ask — the agent asks, you answer." % (HOST, PORT))
     print('  curl -XPOST %s:%d/ask -d \'{"text": "Deploy?"}\'' % (HOST, PORT))

@@ -11,7 +11,7 @@ hands the capabilities over at :meth:`attach`.
 
 The conversation is protected: ``_say``, ``_ask``, ``_answer`` and
 ``_load_messages`` are never called directly. Declaring a hook is the only door
-in, and implementing ``on_say`` or ``on_ask`` is the only door out.
+in, and implementing ``listen`` or ``on_ask`` is the only door out.
 
 Every peer has its own queue and its own task draining it, so a
 subsystem that takes a second to answer holds up nobody but itself.
@@ -25,10 +25,10 @@ from typing import Any, Dict, List, Optional
 from .chat_hooks import (
     HookExecute,
     HookForget,
-    HookListen,
+    HookOverhear,
     HookLoad,
     HookOnAsk,
-    HookOnSay,
+    HookListen,
     declares,
     hooks_of,
     name_of,
@@ -49,9 +49,9 @@ class ChatSession:
     - ``HookSay``          grants ``say(text, reply_to=None)``.
     - ``HookAsk``          grants ``ask(to, text)``, which awaits the answer.
     - ``HookOnAsk``        demands ``on_ask(msg)`` and grants ``answer(msg, text)``.
-    - ``HookOnSay``        demands ``on_say(msg)``.
+    - ``HookListen``        demands ``listen(msg)``.
     - ``HookContext``      grants ``context(since=, start=, limit=)``.
-    - ``HookListen``       demands ``on_listen(msg)`` — every message that crosses.
+    - ``HookOverhear``       demands ``overhear(msg)`` — every message that crosses.
     """
 
     def __init__(
@@ -256,12 +256,12 @@ class ChatSession:
 
         # You never hear yourself, whichever way you were listening.
         listeners = {at for at, who in self._by_id.items()
-                     if at != msg.frm and declares(who, HookListen)}
+                     if at != msg.frm and declares(who, HookOverhear)}
         if msg.to is not None:
             audience = {msg.to}
         else:
             audience = {at for at, who in self._by_id.items()
-                        if at != msg.frm and declares(who, HookOnSay)}
+                        if at != msg.frm and declares(who, HookListen)}
         for at in listeners | audience:
             queue = self._queues.get(at)
             if queue is not None:
@@ -274,12 +274,12 @@ class ChatSession:
         The three are not exclusive: something that listens *and* answers gets
         both calls for the same message, because it asked for both.
         """
-        if declares(who, HookListen):
-            await who.on_listen(msg)
+        if declares(who, HookOverhear):
+            await who.overhear(msg)
 
         if msg.is_broadcast:
-            if declares(who, HookOnSay):
-                await who.on_say(msg)
+            if declares(who, HookListen):
+                await who.listen(msg)
             return
         if msg.to != getattr(who, "peer_id", None):
             return

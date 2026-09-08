@@ -19,7 +19,7 @@ from chatinho import (
     HookAsk,
     HookContext,
     HookOnAsk,
-    HookOnSay,
+    HookListen,
     HookPeers,
     HookInvoke,
     HookSay,
@@ -36,7 +36,7 @@ from chatinho.chat_session import ChatSession
 @connector("driver")
 @require(HookSay)
 @require(HookAsk)
-@require(HookOnSay)
+@require(HookListen)
 @require(HookOnAsk)
 @require(HookContext)
 @require(HookPeers)
@@ -58,7 +58,7 @@ class Driver:
         #: Queued replies for questions put to the user; None means "say nothing".
         self.answers : List[str] = list(answers or [])
 
-    async def on_say(self, msg: ChatMessage) -> None:
+    async def listen(self, msg: ChatMessage) -> None:
         """Records every broadcast that reached us."""
         self.heard.append(msg)
 

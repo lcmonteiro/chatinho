@@ -28,7 +28,7 @@ from chatinho import (
     HookContext,
     HookExecute,
     HookOnAsk,
-    HookOnSay,
+    HookListen,
     HookInvoke,
     HookPeers,
     HookSay,
@@ -43,7 +43,7 @@ from chatinho import (
 
 
 @connector("eco")
-@require(HookOnSay)
+@require(HookListen)
 @require(HookSay)
 class EchoConnector:
     """Answers whatever is said to everyone, and never its own answers.
@@ -54,7 +54,7 @@ class EchoConnector:
 
     say : Say
 
-    async def on_say(self, msg: ChatMessage) -> None:
+    async def listen(self, msg: ChatMessage) -> None:
         """Replies to what the user said — not to what a command wrote."""
         if not msg.is_local:
             return
@@ -82,7 +82,7 @@ class UpperCommand:
 
 @require(HookSay)
 @require(HookAsk)
-@require(HookOnSay)
+@require(HookListen)
 @require(HookOnAsk)
 @require(HookContext)
 @require(HookPeers)
@@ -97,7 +97,7 @@ class Terminal:
     peers         : Peers
     invoke        : Invoke
 
-    async def on_say(self, msg: ChatMessage) -> None:
+    async def listen(self, msg: ChatMessage) -> None:
         """Renders one broadcast on a plain terminal."""
         reply = " (replying to %s)" % msg.reply_to if msg.reply_to else ""
         print("< %s%s" % (msg.text, reply))
@@ -111,7 +111,7 @@ class Terminal:
         """Runs ``/name args``.
 
         Nothing is printed here on success: a command that should be seen wrote
-        its own output, and ``on_say`` rendered it like anything else. The
+        its own output, and ``listen`` rendered it like anything else. The
         answer comes back for the caller, which here has no use for it.
         """
         name, _, args = line.partition(" ")

@@ -38,7 +38,7 @@ from .chat_hooks import (
     HookAsk,
     HookContext,
     HookOnAsk,
-    HookOnSay,
+    HookListen,
     HookPeers,
     HookInvoke,
     HookSay,
@@ -106,7 +106,7 @@ def create_chat(
 @connector("chat")
 @require(HookSay)
 @require(HookAsk)
-@require(HookOnSay)
+@require(HookListen)
 @require(HookOnAsk)
 @require(HookContext)
 @require(HookPeers)
@@ -147,7 +147,7 @@ class _Chat(App):
 
         self.session : ChatSession = session if session is not None else ChatSession()
         # Peer zero: the user. This is what grants say, ask, answer and
-        # context, and what subscribes on_say and on_ask below.
+        # context, and what subscribes listen and on_ask below.
         self.session.attach(self, at=LOCAL)
         self._repaint_after("say", "ask", "answer")
 
@@ -255,7 +255,7 @@ class _Chat(App):
             return None
         return await self.invoke(name, args)
 
-    async def on_say(self, msg: ChatMessage, **kwargs) -> None:
+    async def listen(self, msg: ChatMessage, **kwargs) -> None:
         """Someone spoke to everyone: repaint."""
         self._repaint()
 

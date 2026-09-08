@@ -13,7 +13,7 @@ There are three verbs and nothing else:
 
 and two ways of being told:
 
-    on_say(msg)   someone spoke to everyone
+    listen(msg)   someone spoke to everyone
     on_ask(msg)   someone asked *you*; return the answer, or answer() later
 
 Everything is a coroutine and every peer has its own queue, so a slow
@@ -137,6 +137,21 @@ class Hook:
 
 
 # === The three verbs ============================================================
+#
+# Each verb is a pair: the word you call, and the word the other side writes.
+#
+#     say     -> listen        a message for everyone
+#     ask     -> on_ask        a message for one peer, and its reply
+#     invoke  -> execute       a command run by name
+#
+# The pairs are not decoration. `say` is something you do; `listen` is what the
+# session calls on you when someone did. Only `on_ask` keeps the `on_` prefix,
+# and it earns it: it is the one demanded method that owes an answer back, and
+# `answer` is already the name of the door for giving that answer late.
+#
+# Everything below is either a grant (what you may do, set on you at attach) or
+# a demand (what you must write, called by the session). Never both for one
+# name — a grant arrives by setattr and would silently clobber your method.
 
 HookSay = Hook(
     name="HookSay",
@@ -153,10 +168,11 @@ HookAsk = Hook(
     # peer, exactly one reply. ask(LOCAL, ...) asks the user.
 )
 
-HookOnSay = Hook(
-    name="HookOnSay",
-    method="on_say",
-    # Someone spoke to everyone. Nothing is owed back.
+HookListen = Hook(
+    name="HookListen",
+    method="listen",
+    # async listen(msg). Someone spoke to everyone and you were in the room.
+    # Nothing is owed back: a reply to a say is another say.
 )
 
 HookOnAsk = Hook(
@@ -201,12 +217,16 @@ HookPeers = Hook(
 )
 
 # === Hearing everything, and holding it =========================================
+#
+# `overhear` is not `listen` with a wider net, and the names say which is which:
+# you listen to what was said to the room, and you overhear what was not said
+# to you at all. A backend, an audit log and a metrics counter want the second.
 
-HookListen = Hook(
-    name="HookListen",
-    method="on_listen",
-    # async on_listen(msg). Every message that crosses the session, whoever said
-    # it and whoever it was for — not just the broadcasts on_say brings, nor
+HookOverhear = Hook(
+    name="HookOverhear",
+    method="overhear",
+    # async overhear(msg). Every message that crosses the session, whoever said
+    # it and whoever it was for — not just the broadcasts listen brings, nor
     # only what was addressed to you. Nothing is owed back.
     #
     # You still never hear yourself. That is what stops a listener that speaks
@@ -217,7 +237,7 @@ HookLoad = Hook(
     name="HookLoad",
     method="load",
     # async load(since=, limit=) -> List[ChatMessage]. The older context, read
-    # back at start(). A peer that listens and loads *is* the archive:
+    # back at start(). A peer that overhears and loads *is* the archive:
     # it heard the conversation, and it gives it back.
 )
 
@@ -229,14 +249,14 @@ HookForget = Hook(
 
 ALL_HOOKS: Tuple[Hook, ...] = (
     HookSay,
+    HookListen,
     HookAsk,
-    HookOnSay,
     HookOnAsk,
     HookInvoke,
     HookExecute,
     HookContext,
     HookPeers,
-    HookListen,
+    HookOverhear,
     HookLoad,
     HookForget,
 )

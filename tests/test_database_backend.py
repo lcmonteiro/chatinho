@@ -21,7 +21,7 @@ def message(mid: str, text: str, at: datetime, frm: int = LOCAL) -> ChatMessage:
 async def heard(archive, *messages) -> None:
     """Lets the archive hear each message, the way the session would."""
     for msg in messages:
-        await archive.on_listen(msg)
+        await archive.overhear(msg)
 
 
 @pytest.fixture

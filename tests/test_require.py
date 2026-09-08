@@ -11,7 +11,7 @@ from chatinho import (
     HookAsk,
     HookContext,
     HookOnAsk,
-    HookOnSay,
+    HookListen,
     HookSay,
     backend,
     connector,
@@ -29,18 +29,18 @@ from conftest import driven
 
 
 def test_a_declared_method_that_exists_is_accepted():
-    @require(HookOnSay)
+    @require(HookListen)
     class Fine:
-        async def on_say(self, msg):
+        async def listen(self, msg):
             pass
 
-    assert declares(Fine(), HookOnSay)
+    assert declares(Fine(), HookListen)
 
 
 def test_a_declared_method_that_is_missing_is_an_import_error():
-    with pytest.raises(TypeError, match="does not implement on_say"):
+    with pytest.raises(TypeError, match="does not implement listen"):
 
-        @require(HookOnSay)
+        @require(HookListen)
         class Missing:
             pass
 
@@ -68,21 +68,21 @@ def test_a_grant_only_hook_validates_nothing():
 
 
 def test_hooks_stack_and_are_all_remembered():
-    @require(HookOnSay)
+    @require(HookListen)
     @require(HookAsk)
     class Both:
-        async def on_say(self, msg):
+        async def listen(self, msg):
             pass
 
-    assert hooks_of(Both()) == frozenset({HookAsk, HookOnSay})
+    assert hooks_of(Both()) == frozenset({HookAsk, HookListen})
 
 
 def test_two_hooks_in_one_require_says_to_stack_instead():
     with pytest.raises(TypeError, match="stack decorators"):
 
-        @require(HookAsk, HookOnSay)
+        @require(HookAsk, HookListen)
         class Wrong:
-            async def on_say(self, msg):
+            async def listen(self, msg):
                 pass
 
 
@@ -98,7 +98,7 @@ def test_declaring_nothing_is_allowed_and_means_nothing_fires():
     class Quiet:
         name = "quiet"
 
-        async def on_say(self, msg):
+        async def listen(self, msg):
             raise AssertionError("must never be called")
 
     assert hooks_of(Quiet()) == frozenset()
@@ -113,7 +113,7 @@ async def test_an_undeclared_hook_is_never_dispatched_to():
         def __init__(self):
             self.heard = []
 
-        async def on_say(self, msg):
+        async def listen(self, msg):
             self.heard.append(msg)
 
     session, view = await driven()
@@ -130,14 +130,14 @@ async def test_an_undeclared_hook_is_never_dispatched_to():
 
 def test_options_ride_along_with_the_hook_that_owns_them():
     @require(HookAsk, timeout=30)
-    @require(HookOnSay, batch=5)
+    @require(HookListen, batch=5)
     class Tuned:
-        async def on_say(self, msg):
+        async def listen(self, msg):
             pass
 
     tuned = Tuned()
     assert options_of(tuned, HookAsk) == {"timeout": 30}
-    assert options_of(tuned, HookOnSay) == {"batch": 5}
+    assert options_of(tuned, HookListen) == {"batch": 5}
     assert options_of(tuned, HookContext) == {}
 
 
@@ -167,13 +167,13 @@ def test_a_subclass_does_not_write_into_its_parents_declaration():
     class Parent:
         pass
 
-    @require(HookOnSay)
+    @require(HookListen)
     class Child(Parent):
-        async def on_say(self, msg):
+        async def listen(self, msg):
             pass
 
     assert hooks_of(Parent()) == frozenset({HookAsk})
-    assert hooks_of(Child()) == frozenset({HookAsk, HookOnSay})
+    assert hooks_of(Child()) == frozenset({HookAsk, HookListen})
 
 
 # === Names ======================================================================

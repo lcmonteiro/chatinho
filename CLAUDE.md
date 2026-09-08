@@ -32,7 +32,7 @@ things:
 create_chat(
     connectors = [A2AConnector(url="…", api_key="…")],   # peers: id, queue, conversation
     commands   = [HelpCommand(), TestCommand()],         # not peers: they just run
-    backend    = DatabaseBackend("sqlite:///chat.db"),   # a peer that listens
+    backend    = DatabaseBackend("sqlite:///chat.db"),   # a peer that overhears
 )
 ```
 
@@ -64,6 +64,20 @@ exactly the doors a weather service does.
 A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:
 `ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
 by the message it answers. A broadcast is owed to nobody.
+
+Each verb names a pair — the word you call, and the word the other side writes:
+
+| you call | the other side writes | |
+|---|---|---|
+| `say` | `listen` | a message for everyone |
+| `ask` | `on_ask` | a message for one peer, and its reply |
+| `invoke` | `execute` | a command run by name |
+
+The pairing is the rule, not the `on_`. `say` is something you do; `listen` is what the session
+calls on you when someone did. Only `on_ask` keeps the prefix, and it earns it twice over: it is
+the one demanded method that *owes* something back, and `answer` — the word its pair would want —
+is already the door for giving that answer late. A name cannot be both a grant and a demand,
+because a grant arrives by `setattr` and would silently clobber the method.
 
 ## Commands run; they are not spoken to
 
@@ -97,15 +111,17 @@ depending on who asked.
 
 | | | |
 |---|---|---|
-| `on_say(msg)` | demands | someone spoke to everyone |
+| `listen(msg)` | demands | someone spoke to everyone |
 | `on_ask(msg)` | demands | someone asked *you*; return the answer, or `answer()` later |
-| `on_listen(msg)` | demands | **every** message that crosses, whoever said it, whoever it was for |
+| `overhear(msg)` | demands | **every** message that crosses, whoever said it, whoever it was for |
 
-They are not exclusive: something that listens *and* answers gets both calls for the same message,
-because it declared both.
+They are not exclusive: something that overhears *and* answers gets both calls for the same
+message, because it declared both.
 
-`on_listen` is what a backend, an audit log or a metrics counter wants — everything, rather than
-only the broadcasts `on_say` brings or only what was addressed to it.
+`overhear` is not `listen` with a wider net, and the two names say which is which: you **listen**
+to what was said to the room, and you **overhear** what was not said to you at all. A backend, an
+audit log and a metrics counter want the second — everything, rather than only the broadcasts
+`listen` brings or only what was addressed to them.
 
 One rule holds across all three: **you never hear yourself.** That is what stops a listener that
 speaks from answering its own words forever.
@@ -133,8 +149,8 @@ which tier a message came from — the recent turns were said this session, the 
 loaded at `start()`.
 
 The backend is not a key-value store, and nothing pushes at it. **It is a peer that
-listens**: `HookListen` to hear the conversation, `HookLoad`/`load(since=, limit=)` to give it
-back, `HookForget`/`forget(before=)` to drop it. All coroutines, all running their SQLAlchemy in
+overhears**: `HookOverhear` to hear the whole conversation, `HookLoad`/`load(since=, limit=)`
+to give it back, `HookForget`/`forget(before=)` to drop it. All coroutines, all running their SQLAlchemy in
 an executor so one slow write holds up nobody.
 
 One cost, stated in the code as well as here: **`context()` is synchronous, so the window is
@@ -148,13 +164,13 @@ log from inside a *synchronous* Textual paint.
 |---|---|---|
 | `HookSay` | — | `say` |
 | `HookAsk` | — | `ask` |
-| `HookOnSay` | `on_say` | — |
+| `HookListen` | `listen` | — |
 | `HookOnAsk` | `on_ask` | `answer` |
 | `HookInvoke` | — | `invoke` |
 | `HookExecute` | `execute` | — |
 | `HookContext` | — | `context` |
 | `HookPeers` | — | `peers` |
-| `HookListen` | `on_listen` | — |
+| `HookOverhear` | `overhear` | — |
 | `HookLoad` | `load` | — |
 | `HookForget` | `forget` | — |
 
@@ -224,7 +240,7 @@ src/chatinho/
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      a2a.py, openai.py — plain classes, no base
   commands/        help.py, test.py — commands: they run, they are not peers
-  backends/        database.py (SQLAlchemy) — a peer that listens and loads
+  backends/        database.py (SQLAlchemy) — a peer that overhears and loads
 examples/          demo.py (TUI), headless.py (stdin), agent_inbox.py (HTTP, inbound)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,

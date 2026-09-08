@@ -15,7 +15,7 @@ import pytest
 from chatinho import (
     LOCAL,
     ChatMessage,
-    HookListen,
+    HookOverhear,
     HookForget,
     HookLoad,
     Answer,
@@ -23,7 +23,7 @@ from chatinho import (
     HookAsk,
     HookOnAsk,
     HookExecute,
-    HookOnSay,
+    HookListen,
     HookSay,
     Say,
     backend,
@@ -64,17 +64,17 @@ class _Rapido:
 
 
 @connector("ouvinte")
-@require(HookOnSay)
+@require(HookListen)
 class _Ouvinte:
     def __init__(self) -> None:
         self.heard: list = []
 
-    async def on_say(self, msg) -> None:
+    async def listen(self, msg) -> None:
         self.heard.append(msg.text)
 
 
 @backend("memoria")
-@require(HookListen)
+@require(HookOverhear)
 @require(HookLoad)
 @require(HookForget)
 class _Archive:
@@ -87,7 +87,7 @@ class _Archive:
     def initialize(self) -> None:
         self.initialized = True
 
-    async def on_listen(self, msg) -> None:
+    async def overhear(self, msg) -> None:
         self.kept.append(msg)
 
     async def load(self, since=None, limit=None):
@@ -382,12 +382,12 @@ async def test_a_backend_that_only_listens_is_not_an_error():
     """Declaring less means doing less, not failing."""
 
     @backend("so-escreve")
-    @require(HookListen)
+    @require(HookOverhear)
     class WriteOnly:
         def __init__(self) -> None:
             self.kept: list = []
 
-        async def on_listen(self, msg) -> None:
+        async def overhear(self, msg) -> None:
             self.kept.append(msg)
 
     store = WriteOnly()
@@ -400,9 +400,9 @@ async def test_a_backend_that_only_listens_is_not_an_error():
 
 async def test_a_listener_that_fails_does_not_lose_the_message():
     @backend("avariado")
-    @require(HookListen)
+    @require(HookOverhear)
     class Broken:
-        async def on_listen(self, msg) -> None:
+        async def overhear(self, msg) -> None:
             raise RuntimeError("disco cheio")
 
     session, view = await driven(backend=Broken())

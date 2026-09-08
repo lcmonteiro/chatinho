@@ -13,7 +13,7 @@ from chatinho import (
     ChatMessage,
     HelpCommand,
     HookExecute,
-    HookOnSay,
+    HookListen,
     HookSay,
     Say,
     connector,
@@ -24,12 +24,12 @@ from chatinho import (
 
 
 @connector("eco")
-@require(HookOnSay)
+@require(HookListen)
 @require(HookSay)
 class EchoConnector:
     """Answers whatever the user says — a transport stand-in that talks back.
 
-    ``HookOnSay`` is what tells it something was said; ``HookSay`` is what lets
+    ``HookListen`` is what tells it something was said; ``HookSay`` is what lets
     it reply. It never imports the session.
     """
 
@@ -41,7 +41,7 @@ class EchoConnector:
         #: command writes it *can* tell apart — that is what TOOL is for.
         self._greeted = False
 
-    async def on_say(self, msg: ChatMessage) -> None:
+    async def listen(self, msg: ChatMessage) -> None:
         """Echoes the user, after a beat, without blocking the terminal."""
         if not msg.is_local:
             return                      # a command wrote it, not the user
