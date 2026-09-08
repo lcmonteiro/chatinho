@@ -13,12 +13,11 @@ import pytest
 
 from chatinho import (
     LOCAL,
-    Answer,
     Ask,
     ChatMessage,
     HookAsk,
     HookContext,
-    HookOnAsk,
+    HookAnswer,
     HookListen,
     HookPeers,
     HookInvoke,
@@ -37,7 +36,7 @@ from chatinho.chat_session import ChatSession
 @require(HookSay)
 @require(HookAsk)
 @require(HookListen)
-@require(HookOnAsk)
+@require(HookAnswer)
 @require(HookContext)
 @require(HookPeers)
 @require(HookInvoke)
@@ -47,7 +46,6 @@ class Driver:
     # Granted by the session at attach.
     say           : Say
     ask           : Ask
-    answer        : Answer
     context : Context
     peers         : Peers
     invoke        : Invoke
@@ -62,7 +60,7 @@ class Driver:
         """Records every broadcast that reached us."""
         self.heard.append(msg)
 
-    async def on_ask(self, msg: ChatMessage) -> Optional[str]:
+    async def answer(self, msg: ChatMessage) -> Optional[str]:
         """Records the question and answers it from the queue, if it has one."""
         self.asked.append(msg)
         return self.answers.pop(0) if self.answers else None

@@ -10,7 +10,7 @@ import pytest
 from chatinho import (
     HookAsk,
     HookContext,
-    HookOnAsk,
+    HookAnswer,
     HookListen,
     HookSay,
     backend,
@@ -46,11 +46,11 @@ def test_a_declared_method_that_is_missing_is_an_import_error():
 
 
 def test_a_misspelled_method_is_caught_the_same_way():
-    with pytest.raises(TypeError, match="on_ask"):
+    with pytest.raises(TypeError, match="answer"):
 
-        @require(HookOnAsk)
+        @require(HookAnswer)
         class Typo:
-            async def on_asks(self, msg):   # the typo is the point
+            async def answers(self, msg):    # the typo is the point
                 pass
 
 

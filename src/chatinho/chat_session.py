@@ -11,7 +11,7 @@ hands the capabilities over at :meth:`attach`.
 
 The conversation is protected: ``_say``, ``_ask``, ``_answer`` and
 ``_load_messages`` are never called directly. Declaring a hook is the only door
-in, and implementing ``listen`` or ``on_ask`` is the only door out.
+in, and implementing ``listen`` or ``answer`` is the only door out.
 
 Every peer has its own queue and its own task draining it, so a
 subsystem that takes a second to answer holds up nobody but itself.
@@ -27,7 +27,7 @@ from .chat_hooks import (
     HookForget,
     HookOverhear,
     HookLoad,
-    HookOnAsk,
+    HookAnswer,
     HookListen,
     declares,
     hooks_of,
@@ -46,12 +46,12 @@ class ChatSession:
     The five interfaces onto the conversation are reached only by declaring a
     hook — three the session grants, two it calls:
 
-    - ``HookSay``          grants ``say(text, reply_to=None)``.
-    - ``HookAsk``          grants ``ask(to, text)``, which awaits the answer.
-    - ``HookOnAsk``        demands ``on_ask(msg)`` and grants ``answer(msg, text)``.
-    - ``HookListen``        demands ``listen(msg)``.
-    - ``HookContext``      grants ``context(since=, start=, limit=)``.
-    - ``HookOverhear``       demands ``overhear(msg)`` — every message that crosses.
+    - ``HookSay``      grants  ``say(text, reply_to=None)``.
+    - ``HookAsk``      grants  ``ask(to, text)``, which awaits the answer.
+    - ``HookContext``  grants  ``context(since=, start=, limit=)``.
+    - ``HookListen``   demands ``listen(msg)`` — someone spoke to everyone.
+    - ``HookAnswer``   demands ``answer(msg)`` — someone asked you.
+    - ``HookOverhear`` demands ``overhear(msg)`` — every message that crosses.
     """
 
     def __init__(
@@ -195,7 +195,6 @@ class ChatSession:
         grants = {
             "say"           : lambda: self._say_for(at),
             "ask"           : lambda: self._ask_for(at),
-            "answer"        : lambda: self._answer_for(at),
             "context"       : lambda: self._context,
             "invoke"        : lambda: self._invoke_for(at),
             "peers"  : lambda: self._peers,
@@ -235,13 +234,6 @@ class ChatSession:
             return await future
         return ask
 
-    def _answer_for(self, frm: int):
-        async def answer(msg: ChatMessage, text: str) -> str:
-            return await self._post(ChatMessage(
-                id=self._store.new_id(), text=text, frm=frm, to=msg.frm, reply_to=msg.id,
-            ))
-        return answer
-
     async def _post(self, msg: ChatMessage) -> str:
         """Keeps *msg* and puts it in the queue of everyone it is for.
 
@@ -271,8 +263,12 @@ class ChatSession:
     async def _deliver(self, who: Any, msg: ChatMessage) -> None:
         """Hands one message to one peer, every way it declared to get it.
 
-        The three are not exclusive: something that listens *and* answers gets
-        both calls for the same message, because it asked for both.
+        The three are not exclusive: something that overhears *and* answers
+        gets both calls for the same message, because it asked for both.
+
+        What ``answer`` returns is posted in the peer's name. Returning None is
+        not a failure: the ask stays waiting, and whatever the peer says later
+        with ``reply_to`` set resolves it.
         """
         if declares(who, HookOverhear):
             await who.overhear(msg)
@@ -281,14 +277,17 @@ class ChatSession:
             if declares(who, HookListen):
                 await who.listen(msg)
             return
-        if msg.to != getattr(who, "peer_id", None):
+        at = getattr(who, "peer_id", None)
+        if at is None or msg.to != at:
             return
-        if not declares(who, HookOnAsk):
-            logger.warning("%r was asked but does not declare %s", name_of(who), HookOnAsk)
+        if not declares(who, HookAnswer):
+            logger.warning("%r was asked but does not declare %s", name_of(who), HookAnswer)
             return
-        reply = await who.on_ask(msg)
+        reply = await who.answer(msg)
         if reply is not None:
-            await who.answer(msg, reply)
+            await self._post(ChatMessage(
+                id=self._store.new_id(), text=reply, frm=at, to=msg.frm, reply_to=msg.id,
+            ))
 
     async def _drain(self, at: int) -> None:
         """One peer's queue, one message at a time.

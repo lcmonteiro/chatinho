@@ -18,10 +18,9 @@ from chatinho import (
     HookOverhear,
     HookForget,
     HookLoad,
-    Answer,
     Ask,
     HookAsk,
-    HookOnAsk,
+    HookAnswer,
     HookExecute,
     HookListen,
     HookSay,
@@ -42,24 +41,24 @@ class _Eco:
 
 
 @connector("lento")
-@require(HookOnAsk)
+@require(HookAnswer)
 class _Lento:
-    async def on_ask(self, msg) -> str:
+    async def answer(self, msg) -> str:
         await asyncio.sleep(0.3)
         return "finalmente"
 
 
 @connector("rebenta")
-@require(HookOnAsk)
+@require(HookAnswer)
 class _Rebenta:
-    async def on_ask(self, msg):
+    async def answer(self, msg):
         raise RuntimeError("kaboom")
 
 
 @connector("rapido")
-@require(HookOnAsk)
+@require(HookAnswer)
 class _Rapido:
-    async def on_ask(self, msg) -> str:
+    async def answer(self, msg) -> str:
         return "eco: %s" % msg.text
 
 
@@ -267,17 +266,24 @@ async def test_a_peer_can_ask_the_user():
 
 
 async def test_an_answer_given_later_still_resolves_the_ask():
-    """on_ask may return None and answer once it knows."""
+    """answer may return None; what is said later with reply_to resolves the ask.
+
+    There is no separate grant for answering late. A peer that cannot answer
+    inline — a terminal waiting on a person, a connector waiting on a server —
+    returns None and says the answer when it has it, and the session matches it
+    by ``reply_to``. That is the same door as any other say.
+    """
 
     @connector("adiado")
-    @require(HookOnAsk)
+    @require(HookAnswer)
+    @require(HookSay)
     class Adiado:
-        answer: Answer
+        say : Say
 
         def __init__(self) -> None:
             self.pendente = None
 
-        async def on_ask(self, msg):
+        async def answer(self, msg):
             self.pendente = msg
             return None
 
@@ -288,7 +294,7 @@ async def test_an_answer_given_later_still_resolves_the_ask():
 
     pergunta = asyncio.create_task(view.ask(at, "e depois?"))
     await asyncio.sleep(0.02)
-    await adiado.answer(adiado.pendente, "agora sim")
+    await adiado.say("agora sim", reply_to=adiado.pendente.id)
     assert await pergunta == "agora sim"
     await session.close()
 

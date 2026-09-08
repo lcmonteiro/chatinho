@@ -37,7 +37,7 @@ from chatinho import (
     ChatSession,
     HookAsk,
     HookContext,
-    HookOnAsk,
+    HookAnswer,
     HookListen,
     HookSay,
     Context,
@@ -118,7 +118,7 @@ class AgentConnector:
 
 @require(HookSay)
 @require(HookListen)
-@require(HookOnAsk)
+@require(HookAnswer)
 @require(HookContext)
 class Terminal:
     """The user: shows the agent's questions and lets them be answered."""
@@ -130,7 +130,7 @@ class Terminal:
         """Renders a broadcast."""
         print("< %s" % msg.text)
 
-    async def on_ask(self, msg: ChatMessage) -> Optional[str]:
+    async def answer(self, msg: ChatMessage) -> Optional[str]:
         """Shows the question; the answer is whatever the user types next."""
         print("\n< %s   [%s asks]" % (msg.text, msg.frm))
         return None

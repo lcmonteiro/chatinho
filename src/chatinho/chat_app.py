@@ -33,11 +33,10 @@ from textual.containers import Container, Vertical
 from textual.widgets import Input
 
 from .chat_hooks import (
-    Answer,
     Ask,
     HookAsk,
     HookContext,
-    HookOnAsk,
+    HookAnswer,
     HookListen,
     HookPeers,
     HookInvoke,
@@ -107,7 +106,7 @@ def create_chat(
 @require(HookSay)
 @require(HookAsk)
 @require(HookListen)
-@require(HookOnAsk)
+@require(HookAnswer)
 @require(HookContext)
 @require(HookPeers)
 @require(HookInvoke)
@@ -127,7 +126,6 @@ class _Chat(App):
     # Granted by the session at attach; annotated so a type checker sees them.
     say           : Say
     ask           : Ask
-    answer        : Answer
     context : Context
     peers  : Peers
     invoke        : Invoke
@@ -147,9 +145,9 @@ class _Chat(App):
 
         self.session : ChatSession = session if session is not None else ChatSession()
         # Peer zero: the user. This is what grants say, ask, answer and
-        # context, and what subscribes listen and on_ask below.
+        # context, and what subscribes listen and answer below.
         self.session.attach(self, at=LOCAL)
-        self._repaint_after("say", "ask", "answer")
+        self._repaint_after("say", "ask")
 
         self.title = title
         self.welcome_message = welcome_message
@@ -162,10 +160,11 @@ class _Chat(App):
         """Wraps the granted verbs so the terminal repaints when we speak.
 
         A sender does not hear its own broadcast — that is what stops a
-        connector answering its own answer forever — and an answer that
-        resolves a pending ask reaches nobody at all. Neither would repaint the
-        log, so the presentation, which is the thing that renders, wraps its
-        own grants rather than asking the session for an exception.
+        connector answering its own answer forever — so nothing would repaint
+        the log when the user speaks. The presentation, which is the thing that
+        renders, wraps its own grants rather than asking the session for an
+        exception. Only grants: ``answer`` is a method now, and it repaints
+        itself.
         """
         for verb in granted:
             def wrap(call: Any) -> Any:
@@ -259,7 +258,7 @@ class _Chat(App):
         """Someone spoke to everyone: repaint."""
         self._repaint()
 
-    async def on_ask(self, msg: ChatMessage, **kwargs) -> Optional[str]:
+    async def answer(self, msg: ChatMessage, **kwargs) -> Optional[str]:
         """Someone asked the user something.
 
         Returns None on purpose: the answer is not ours to invent. The question

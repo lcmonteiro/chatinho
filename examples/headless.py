@@ -27,7 +27,7 @@ from chatinho import (
     HookAsk,
     HookContext,
     HookExecute,
-    HookOnAsk,
+    HookAnswer,
     HookListen,
     HookInvoke,
     HookPeers,
@@ -83,7 +83,7 @@ class UpperCommand:
 @require(HookSay)
 @require(HookAsk)
 @require(HookListen)
-@require(HookOnAsk)
+@require(HookAnswer)
 @require(HookContext)
 @require(HookPeers)
 @require(HookInvoke)
@@ -102,7 +102,7 @@ class Terminal:
         reply = " (replying to %s)" % msg.reply_to if msg.reply_to else ""
         print("< %s%s" % (msg.text, reply))
 
-    async def on_ask(self, msg: ChatMessage) -> Optional[str]:
+    async def answer(self, msg: ChatMessage) -> Optional[str]:
         """Shows a question put to the user; the reply is theirs to type."""
         print("? %s  — reply with  =<answer>" % msg.text)
         return None

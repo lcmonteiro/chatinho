@@ -11,13 +11,13 @@ from chatinho import A2AConnector, ChatMessage
 
 
 def sent_payload(**kwargs) -> dict:
-    """Runs on_ask() against a stubbed transport and returns the JSON it posted."""
+    """Runs answer() against a stubbed transport and returns the JSON it posted."""
     connector = A2AConnector(name="a2a", url="https://agent.example", api_key="k")
     connector.session = MagicMock()
     connector.session.post.return_value = MagicMock(
         status_code=200, json=lambda: {"ok": True}, raise_for_status=lambda: None
     )
-    asyncio.run(connector.on_ask(ChatMessage(id="msg-1", text="ola"), **kwargs))
+    asyncio.run(connector.answer(ChatMessage(id="msg-1", text="ola"), **kwargs))
     return connector.session.post.call_args.kwargs["json"]
 
 

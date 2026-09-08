@@ -14,15 +14,15 @@ There are three verbs and nothing else:
 and two ways of being told:
 
     listen(msg)   someone spoke to everyone
-    on_ask(msg)   someone asked *you*; return the answer, or answer() later
+    answer(msg)   someone asked *you*; return the answer, or answer() later
 
 Everything is a coroutine and every peer has its own queue, so a slow
 subsystem holds up nobody but itself.
 
     @connector("weather")
-    @require(HookOnAsk)
+    @require(HookAnswer)
     class WeatherConnector:
-        async def on_ask(self, msg): return "sunny"
+        async def answer(self, msg): return "sunny"
 
 One hook per ``require``, stacked. Each declaration is its own line, so it has
 somewhere to carry options that belong to that hook alone:
@@ -55,18 +55,6 @@ class Ask(Protocol):
 
     async def __call__(self, to: int, text: str) -> str:
         """Asks peer *to* and waits for the answer it sends back."""
-        ...
-
-
-class Answer(Protocol):
-    """Granted by ``HookOnAsk``: the reply an ask is waiting on.
-
-    Only needed when the answer is not ready inline — a connector that has to
-    reach a server returns None from ``on_ask`` and calls this once it knows.
-    """
-
-    async def __call__(self, msg: ChatMessage, text: str) -> str:
-        """Answers *msg* with *text* and returns the reply's id."""
         ...
 
 
@@ -141,17 +129,17 @@ class Hook:
 # Each verb is a pair: the word you call, and the word the other side writes.
 #
 #     say     -> listen        a message for everyone
-#     ask     -> on_ask        a message for one peer, and its reply
+#     ask     -> answer        a message for one peer, and its reply
 #     invoke  -> execute       a command run by name
 #
-# The pairs are not decoration. `say` is something you do; `listen` is what the
-# session calls on you when someone did. Only `on_ask` keeps the `on_` prefix,
-# and it earns it: it is the one demanded method that owes an answer back, and
-# `answer` is already the name of the door for giving that answer late.
+# The pairs are not decoration, and no verb keeps an `on_` prefix. `say` is
+# something you do; `listen` is what the session calls on you when someone did.
 #
 # Everything below is either a grant (what you may do, set on you at attach) or
-# a demand (what you must write, called by the session). Never both for one
-# name — a grant arrives by setattr and would silently clobber your method.
+# a demand (what you must write, called by the session) — never both, and no
+# hook is both. A grant arrives by setattr and would silently clobber a method
+# of the same name, which is why `answer` can be the demanded method only now
+# that it is not also a grant.
 
 HookSay = Hook(
     name="HookSay",
@@ -175,13 +163,17 @@ HookListen = Hook(
     # Nothing is owed back: a reply to a say is another say.
 )
 
-HookOnAsk = Hook(
-    name="HookOnAsk",
-    method="on_ask",
-    grants=("answer",),
-    # Someone asked you. Return the answer to reply inline, or return None and
-    # call self.answer(msg, text) once you know it — which is why being
-    # askable is what grants the way to answer.
+HookAnswer = Hook(
+    name="HookAnswer",
+    method="answer",
+    # async answer(msg) -> str | None. Someone asked you; what you return is
+    # the reply, and the session posts it in your name.
+    #
+    # Return None when the answer is not yours to invent yet — a terminal
+    # waiting on a person, a connector waiting on a server. The ask stays
+    # waiting, and whatever you say later with reply_to=msg.id resolves it.
+    # That is the same door, not a second one: there is no separate grant for
+    # answering late, and there never needed to be.
 )
 
 HookInvoke = Hook(
@@ -251,7 +243,7 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookSay,
     HookListen,
     HookAsk,
-    HookOnAsk,
+    HookAnswer,
     HookInvoke,
     HookExecute,
     HookContext,

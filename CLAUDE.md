@@ -25,7 +25,7 @@ Connectors are numbered from one.
 
 **A command is not a peer.** It has no id and no queue, nothing is addressed to it, and it hears
 nothing. It runs when someone runs it, and it answers whoever did. Treating commands as peers meant
-giving `on_ask` to things that only execute; they are separate parameters because they are separate
+giving `answer` to things that only execute; they are separate parameters because they are separate
 things:
 
 ```python
@@ -57,27 +57,25 @@ exactly the doors a weather service does.
 
 | | | |
 |---|---|---|
-| `say(text, reply_to=)` | grants | a message for everyone but the speaker |
-| `ask(to, text)` | grants | a message for one peer — **awaits** its reply |
-| `answer(msg, text)` | grants | the reply an ask is waiting on |
+| you call | the other side writes | |
+|---|---|---|
+| `say(text, reply_to=)` | `listen(msg)` | a message for everyone but the speaker |
+| `ask(to, text)` | `answer(msg)` | a message for one peer — **awaits** its reply |
+| `invoke(name, args)` | `execute(args, by)` | a command run by name |
+
+Every verb is a pair: the word you call, and the word the other side writes. No verb carries an
+`on_` prefix, and no name is both — a grant arrives by `setattr` and would silently clobber a
+method it shares a name with.
 
 A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:
 `ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
 by the message it answers. A broadcast is owed to nobody.
 
-Each verb names a pair — the word you call, and the word the other side writes:
-
-| you call | the other side writes | |
-|---|---|---|
-| `say` | `listen` | a message for everyone |
-| `ask` | `on_ask` | a message for one peer, and its reply |
-| `invoke` | `execute` | a command run by name |
-
-The pairing is the rule, not the `on_`. `say` is something you do; `listen` is what the session
-calls on you when someone did. Only `on_ask` keeps the prefix, and it earns it twice over: it is
-the one demanded method that *owes* something back, and `answer` — the word its pair would want —
-is already the door for giving that answer late. A name cannot be both a grant and a demand,
-because a grant arrives by `setattr` and would silently clobber the method.
+**Answering late is not a fourth thing either.** A peer that cannot answer inline — a terminal
+waiting on a person, a connector waiting on a server — returns `None` from `answer` and says the
+reply when it has it, with `reply_to` set. The session matches it and resolves the ask. All three
+presentations in this repository work exactly that way, which is why the grant that used to exist
+for it was deleted: it was a second door onto the same room.
 
 ## Commands run; they are not spoken to
 
@@ -112,7 +110,7 @@ depending on who asked.
 | | | |
 |---|---|---|
 | `listen(msg)` | demands | someone spoke to everyone |
-| `on_ask(msg)` | demands | someone asked *you*; return the answer, or `answer()` later |
+| `answer(msg)` | demands | someone asked *you*; return the reply, or `None` and say it later |
 | `overhear(msg)` | demands | **every** message that crosses, whoever said it, whoever it was for |
 
 They are not exclusive: something that overhears *and* answers gets both calls for the same
@@ -165,7 +163,7 @@ log from inside a *synchronous* Textual paint.
 | `HookSay` | — | `say` |
 | `HookAsk` | — | `ask` |
 | `HookListen` | `listen` | — |
-| `HookOnAsk` | `on_ask` | `answer` |
+| `HookAnswer` | `answer` | — |
 | `HookInvoke` | — | `invoke` |
 | `HookExecute` | `execute` | — |
 | `HookContext` | — | `context` |
@@ -175,10 +173,12 @@ log from inside a *synchronous* Textual paint.
 | `HookForget` | `forget` | — |
 
 Nine became eleven when commands stopped being peers. That is the honest cost of the separation:
-`HookInvoke` and `HookExecute` are two hooks that a single `HookOnAsk` used to cover, badly.
+`HookInvoke` and `HookExecute` are two hooks that a single `HookAnswer` used to cover, badly.
 
-A hook can demand a method, grant an attribute, or both. `HookOnAsk` does both, and not by
-accident: being askable is what makes a way to answer worth having.
+Every hook is one or the other — a demand or a grant, never both. `HookAnswer` was the single
+exception until `answer` became the method a peer writes; the grant it also carried turned out to
+be a second way of doing what `say(text, reply_to=)` already did, and nothing in the library ever
+called it.
 
 ## Everything declares what it does
 
@@ -186,12 +186,12 @@ A peer or a command is a **plain class**. No base class, no `isinstance` anywher
 
 ```python
 @connector("weather")
-@require(HookOnAsk)
+@require(HookAnswer)
 @require(HookSay)
 class WeatherConnector:
     say : Say                       # annotate a grant, or a type checker cannot see it
 
-    async def on_ask(self, msg) -> str:
+    async def answer(self, msg) -> str:
         return "sunny"
 ```
 
@@ -231,9 +231,9 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (349)
-  chat_session.py  ChatSession: peers, commands, queues, routing, context           (418)
-  chat_hooks.py    Hook, the eleven constants, @require, the grant protocols       (405)
+  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (347)
+  chat_session.py  ChatSession: peers, commands, queues, routing, context           (417)
+  chat_hooks.py    Hook, the eleven constants, @require, the grant protocols       (417)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
   chat_log.py      ChatLog widget: renders through the granted context reader
   chat_input.py    CommandInput + CommandSuggestions (autocomplete over the commands)
@@ -273,10 +273,10 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 ## Public API
 
-`__init__.py` exports 37 names: `create_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
+`__init__.py` exports 36 names: `create_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
 the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, `options_of`,
 `declares`, `name_of`, `Hook`); the eleven `Hook*` constants; the grant protocols (`Say`, `Ask`,
-`Answer`, `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
+`Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `HelpCommand`, `TestCommand`).
 
 There is no `Chat` or `ChatApp` export: the app class is private, so `create_chat` is the only way
