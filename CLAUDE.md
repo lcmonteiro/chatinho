@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **141 pass** |
+| `pytest -q` | **142 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -248,7 +248,7 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (451)
+  chat_app.py      create_chat, with the _Chat app defined inside it — Textual only    (439)
   chat_session.py  ChatSession: peers, commands, queues, routing, context           (430)
   chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (409)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
@@ -279,8 +279,11 @@ is a boundary that rots. It parses the core modules and fails if:
 - the session imports the app;
 - **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
   it assigns it, or is *granted* it;
-- **the app stops being private** — the package must not re-export `_Chat`, and building one
-  without `create_chat` must raise. That second half is the one an underscore could never do;
+- **the app class becomes reachable** — `chatinho.chat_app` must not have a `_Chat` attribute and
+  the package must not export one. It lives inside `create_chat`, so there is no name to import;
+- **a lazily resolved name loses its type** — every entry in `_BEHIND_AN_EXTRA` needs a matching
+  import under `if TYPE_CHECKING`, or PEP 562 hands a consumer's mypy `Any` and the `py.typed` this
+  package ships means nothing for it;
 - **`import chatinho` needs one of the batteries** — a subprocess imports it with `textual`,
   `openai`, `sqlalchemy` and `requests` all blocked, and each of the four lazy names has to report
   its own extra;
@@ -332,16 +335,21 @@ the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, 
 `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `HelpCommand`, `TestCommand`).
 
-There is no `Chat` or `ChatApp` export: the class name carries an underscore, and its `__init__`
-refuses anything `create_chat` did not build. So `create_chat` is the only way to build one, and
-that second half is what makes it enforced rather than asked for.
+There is no `Chat` or `ChatApp` export, and no class to export: **`_Chat` is defined inside
+`create_chat`**, so `type(app).__qualname__` is `create_chat.<locals>._Chat` and there is no name
+anywhere a caller can import. An underscore is a request and a guard in `__init__` is a refusal;
+a class in the factory's own scope is neither, because the name does not exist.
 
-The module stays `chat_app.py`. Renaming it to `_chat_app.py` was tried and reverted: it made
-`chatinho.chat_log` and `chatinho.chat_input` visibly inconsistent for no gain the construction
-guard was not already giving. **A leading double underscore buys nothing either** — `from
-chatinho.chat_app import __Chat` resolves exactly like `_Chat`, because mangling only happens
-inside a class body, where it would turn a legitimate reference into a lookup for
-`_Whatever__Chat`. Measured, not assumed.
+Two weaker attempts came first and are recorded so nobody repeats them. Renaming the module to
+`_chat_app.py` made `chatinho.chat_log` and `chatinho.chat_input` visibly inconsistent for no real
+gain. **A leading double underscore buys nothing at all**: `from chatinho.chat_app import __Chat`
+resolves exactly like `_Chat`, because mangling only happens inside a class body — where it would
+turn a legitimate reference into a lookup for `_Whatever__Chat`. Both measured, not assumed.
+
+What it costs, stated plainly: `create_chat` now returns `App`, so a consumer's type checker sees
+`run()` but not `messages`, `command()` or the grants. They are all there at run time. Typing them
+would mean a public Protocol for a class nobody can name, which is a thing to add when somebody
+wants it.
 
 For a chat without a terminal, build a `ChatSession` and attach your own presentation —
 `examples/headless.py` is exactly that, in about forty lines.

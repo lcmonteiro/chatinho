@@ -44,7 +44,15 @@ Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand``
 imports nothing but the standard library.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:                       # never executed; read by type checkers
+    # The four names below are resolved lazily at runtime, which hands a type
+    # checker ``Any`` and quietly undoes the ``py.typed`` this package ships.
+    # Importing them here restores that without importing anything at run time.
+    from .backends import DatabaseBackend
+    from .chat_app import create_chat
+    from .connectors import A2AConnector, OpenAIConnector
 
 from .chat_session import ChatSession
 from .chat_message import LOCAL, TOOL, ChatMessage

@@ -278,3 +278,27 @@ def test_the_package_does_not_re_export_the_app():
     importlib.import_module("chatinho.chat_app")
     assert not hasattr(chatinho, "_Chat"), "the package must not re-export the app"
     assert "_Chat" not in chatinho.__all__
+
+
+def test_the_lazy_names_are_visible_to_a_type_checker():
+    """PEP 562 hands a type checker ``Any``; the TYPE_CHECKING block undoes it.
+
+    The package ships ``py.typed``, so a consumer's mypy is meant to see real
+    signatures. Resolving the four battery names through ``__getattr__`` erased
+    exactly those four — measured with ``reveal_type``, which said ``Any``.
+    Importing them under ``if TYPE_CHECKING`` restores the annotations without
+    importing anything at run time, and this fails if one is left out.
+    """
+    tree = ast.parse((SRC / "__init__.py").read_text(encoding="utf-8"))
+    guarded = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.If) and getattr(node.test, "id", None) == "TYPE_CHECKING"
+        for stmt in ast.walk(node)
+        if isinstance(stmt, ast.ImportFrom)
+        for alias in stmt.names
+    }
+    assert guarded == set(chatinho._BEHIND_AN_EXTRA), (
+        "every lazily resolved name needs a TYPE_CHECKING import, or it is Any "
+        "to everyone who installs this"
+    )

@@ -323,13 +323,19 @@ def test_a_single_character_and_a_named_key_are_both_accepted():
     assert _actions_for(create_chat(quit_key="escape"), "escape") == ["quit"]
 
 
-def test_the_app_cannot_be_built_without_create_chat():
-    """The docstrings have always said to use create_chat; now it is enforced.
+def test_there_is_no_app_class_to_reach():
+    """The class lives inside create_chat, so there is nothing to import.
 
-    Reaching in and instantiating it is the one thing an underscore could
-    never stop, so that is what this closes.
+    An underscore is a request; a guard in __init__ is a refusal; a class
+    defined in the factory's own scope is neither, because the name does not
+    exist anywhere a caller can name it. That is what makes create_chat the
+    only way in.
     """
-    from chatinho.chat_app import _Chat
+    import chatinho.chat_app as module
 
-    with pytest.raises(TypeError, match="create_chat"):
-        _Chat()
+    assert not hasattr(module, "_Chat")
+    with pytest.raises(ImportError):
+        from chatinho.chat_app import _Chat  # noqa: F401
+
+    app = create_chat()
+    assert type(app).__qualname__ == "create_chat.<locals>._Chat"
