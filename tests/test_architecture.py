@@ -29,7 +29,7 @@ CORE_MODULES = [
 
 # Modules that are allowed to know about Textual: the presentation layer.
 PRESENTATION_MODULES = [
-    "_chat_app.py",
+    "chat_app.py",
     "chat_log.py",
     "chat_input.py",
 ]
@@ -73,13 +73,13 @@ def test_the_presentation_layer_is_the_only_place_that_knows_textual():
 
 def test_the_session_does_not_depend_on_the_app():
     roots = imported_roots(SRC / "chat_session.py")
-    assert "_chat_app" not in roots
+    assert "chat_app" not in roots
     tree = ast.parse((SRC / "chat_session.py").read_text(encoding="utf-8"))
     relative = {
         node.module for node in ast.walk(tree)
         if isinstance(node, ast.ImportFrom) and node.level > 0 and node.module
     }
-    assert "_chat_app" not in relative, "the session must never import its presentation"
+    assert "chat_app" not in relative, "the session must never import its presentation"
     assert "chat_log" not in relative
     assert "chat_input" not in relative
 
@@ -106,7 +106,7 @@ def _assigned_attributes(path: str, class_name: str) -> set:
 @pytest.mark.parametrize(
     "module, class_name, base",
     [
-        ("src/chatinho/_chat_app.py",  "_Chat",              "textual.app:App"),
+        ("src/chatinho/chat_app.py",   "_Chat",              "textual.app:App"),
         ("src/chatinho/chat_log.py",   "ChatLog",            "textual.containers:Container"),
         ("src/chatinho/chat_input.py", "CommandInput",       "textual.widgets:Input"),
         ("src/chatinho/chat_input.py", "CommandSuggestions", "textual.widgets:OptionList"),
@@ -143,7 +143,7 @@ def _declared_hooks(path: str, class_name: str) -> set:
 @pytest.mark.parametrize(
     "module, class_name, base",
     [
-        ("src/chatinho/_chat_app.py",  "_Chat",              "textual.app:App"),
+        ("src/chatinho/chat_app.py",   "_Chat",              "textual.app:App"),
         ("src/chatinho/chat_log.py",   "ChatLog",            "textual.containers:Container"),
         ("src/chatinho/chat_input.py", "CommandInput",       "textual.widgets:Input"),
         ("src/chatinho/chat_input.py", "CommandSuggestions", "textual.widgets:OptionList"),
@@ -267,14 +267,14 @@ def test_the_declared_extras_are_the_ones_the_package_asks_for():
 # === The presentation is private ================================================
 
 
-def test_the_app_module_is_private():
-    """``chatinho.chat_app`` must not be an import path anybody can reach.
+def test_the_package_does_not_re_export_the_app():
+    """``create_chat`` is the door; the package must not hand out the class.
 
-    An underscore on the class is convention; a public module holding it is a
-    door. ``create_chat`` is the only way in, so the module it lives in carries
-    the underscore too.
+    The module stays public — ``chatinho.chat_app`` is where the presentation
+    lives and reads like it. What privacy there is comes from the underscore on
+    the class and from ``__init__`` refusing anything ``create_chat`` did not
+    build, which is the half an underscore could never do.
     """
-    importlib.import_module("chatinho._chat_app")          # it is there
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("chatinho.chat_app")       # but not under that name
+    importlib.import_module("chatinho.chat_app")
     assert not hasattr(chatinho, "_Chat"), "the package must not re-export the app"
+    assert "_Chat" not in chatinho.__all__

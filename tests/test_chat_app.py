@@ -326,10 +326,10 @@ def test_a_single_character_and_a_named_key_are_both_accepted():
 def test_the_app_cannot_be_built_without_create_chat():
     """The docstrings have always said to use create_chat; now it is enforced.
 
-    The class is private by name, by module, and by construction — reaching in
-    and instantiating it is the one thing an underscore could not stop.
+    Reaching in and instantiating it is the one thing an underscore could
+    never stop, so that is what this closes.
     """
-    from chatinho._chat_app import _Chat
+    from chatinho.chat_app import _Chat
 
     with pytest.raises(TypeError, match="create_chat"):
         _Chat()
