@@ -162,3 +162,42 @@ def test_we_never_shadow_a_textual_method(module, class_name, base):
         if inspect.isroutine(getattr(parent, name, None))
     )
     assert taken == [], "%s assigns %s, which is a method on %s" % (class_name, taken, attribute)
+
+
+# === The spec is a boundary too =================================================
+
+DOCS = pathlib.Path(__file__).resolve().parent.parent / "docs"
+
+
+def _spec_table():
+    """The hooks named in docs/SPEC.md's summary table, as {hook: (demands, grants)}."""
+    rows = {}
+    for line in (DOCS / "SPEC.md").read_text(encoding="utf-8").splitlines():
+        if not line.startswith("| [`Hook"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        name  = cells[0].split("`")[1]
+        rows[name] = (cells[1].strip("`"), cells[2].strip("`"))
+    return rows
+
+
+def test_the_spec_lists_every_hook_and_gets_each_one_right():
+    """A spec nothing checks is a spec that rots.
+
+    docs/SPEC.md is the reference for the hooks, so its summary table has to say
+    what the constants actually say: same set, same demanded method, same
+    grants. Adding a hook without documenting it fails here.
+    """
+    documented = _spec_table()
+    declared   = {
+        h.name: (h.method or "—", ", ".join(h.grants) or "—")
+        for h in (getattr(chatinho, n) for n in chatinho.__all__ if n.startswith("Hook") and n != "Hook")
+    }
+    assert documented == declared
+
+
+def test_the_spec_has_a_section_for_every_hook():
+    """Every hook in the table gets its own section, with an example."""
+    spec    = (DOCS / "SPEC.md").read_text(encoding="utf-8")
+    missing = [name for name in _spec_table() if "### %s\n" % name not in spec]
+    assert missing == [], "docs/SPEC.md has no section for %s" % missing

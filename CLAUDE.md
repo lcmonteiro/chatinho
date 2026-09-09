@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **125 pass** |
+| `pytest -q` | **127 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -171,6 +171,10 @@ log from inside a *synchronous* Textual paint.
 
 ## The ten hooks
 
+The reference is [`docs/SPEC.md`](docs/SPEC.md) — every hook with an example, what it costs, and
+the rules that hold across all of them. `examples/hooks.py` is that document executable: one peer
+per hook, in a chat with no terminal. This section is the summary.
+
 | hook | demands | grants |
 |---|---|---|
 | `HookSay` | — | `say` |
@@ -254,7 +258,9 @@ src/chatinho/
   connectors/      a2a.py, openai.py — plain classes, no base
   commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads
-examples/          demo.py (TUI), headless.py (stdin), agent_inbox.py (HTTP, inbound)
+docs/              SPEC.md — the ten hooks, with an example and a cost for each
+examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
+                   agent_inbox.py (HTTP, inbound)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_a2a_payload.py (no terminal)
@@ -272,7 +278,11 @@ is a boundary that rots. It parses the core modules and fails if:
 - anything but the presentation layer imports Textual;
 - the session imports the app;
 - **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
-  it assigns it, or is *granted* it.
+  it assigns it, or is *granted* it;
+- **`docs/SPEC.md` disagrees with the hook constants** — its summary table has to name the same
+  ten, with the same demanded method and the same grants, and each one has to have its own
+  section. A spec nothing checks is a spec that rots, so adding a hook without documenting it
+  fails the suite. Both halves were proved by breaking them.
 
 That last one has bitten twice. `id` is a validated property on `DOMNode` and at least raised.
 `_context` is `MessagePump`'s own context manager: shadowing it stopped the widget's message loop
@@ -298,7 +308,8 @@ presentation — `examples/headless.py` is exactly that, in about forty lines.
 
 `ChatSession`'s own public surface is six members: `attach`, `add_command`, `start`, `close`,
 `id_of`, `forget`.
-Everything about the conversation is reached by declaring a hook.
+Everything about the conversation is reached by declaring a hook — which is what
+[`docs/SPEC.md`](docs/SPEC.md) specifies, hook by hook.
 
 ---
 
