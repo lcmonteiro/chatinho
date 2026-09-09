@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **139 pass** |
+| `pytest -q` | **141 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -248,7 +248,7 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (437)
+  _chat_app.py     create_chat + the private _Chat app — Textual presentation only  (451)
   chat_session.py  ChatSession: peers, commands, queues, routing, context           (430)
   chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (409)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
@@ -279,6 +279,10 @@ is a boundary that rots. It parses the core modules and fails if:
 - the session imports the app;
 - **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
   it assigns it, or is *granted* it;
+- **the app stops being private** — `chatinho.chat_app` must not be an importable path, the
+  package must not re-export `_Chat`, and building one without `create_chat` must raise. An
+  underscore on a class is convention; a public module holding it is a door, and reaching in and
+  instantiating it is the one thing an underscore could never stop;
 - **`import chatinho` needs one of the batteries** — a subprocess imports it with `textual`,
   `openai`, `sqlalchemy` and `requests` all blocked, and each of the four lazy names has to report
   its own extra;
@@ -330,8 +334,14 @@ the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, 
 `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `HelpCommand`, `TestCommand`).
 
-There is no `Chat` or `ChatApp` export: the app class is private, so `create_chat` is the only way
-to build one. For a chat without a terminal, build a `ChatSession` and attach your own
+There is no `Chat` or `ChatApp` export, and the app is private three times over: the class name
+carries an underscore, it lives in `_chat_app.py` rather than an importable `chatinho.chat_app`,
+and its `__init__` refuses anything `create_chat` did not build. So `create_chat` is the only way
+to build one, and that is now enforced rather than asked for.
+
+One inconsistency left, stated rather than hidden: `chat_log.py` and `chat_input.py` are
+presentation too and are still public paths. Neither is exported from `chatinho`, but
+`chatinho.chat_log.ChatLog` resolves. For a chat without a terminal, build a `ChatSession` and attach your own
 presentation — `examples/headless.py` is exactly that, in about forty lines.
 
 `ChatSession`'s own public surface is six members: `attach`, `add_command`, `start`, `close`,

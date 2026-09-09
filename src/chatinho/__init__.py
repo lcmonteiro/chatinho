@@ -81,7 +81,7 @@ __version__ = "0.1.0"
 
 #: The names that live behind an extra: attribute -> (module, distribution).
 _BEHIND_AN_EXTRA = {
-    "create_chat"     : (".chat_app",   "tui",    "textual"),
+    "create_chat"     : ("._chat_app",  "tui",    "textual"),
     "OpenAIConnector" : (".connectors", "openai", "openai"),
     "A2AConnector"    : (".connectors", "a2a",    "requests"),
     "DatabaseBackend" : (".backends",   "sql",    "sqlalchemy"),

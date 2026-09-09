@@ -321,3 +321,15 @@ def test_a_quit_key_textual_could_never_receive_is_refused(bad):
 def test_a_single_character_and_a_named_key_are_both_accepted():
     assert _actions_for(create_chat(quit_key="q"), "q") == ["quit"]
     assert _actions_for(create_chat(quit_key="escape"), "escape") == ["quit"]
+
+
+def test_the_app_cannot_be_built_without_create_chat():
+    """The docstrings have always said to use create_chat; now it is enforced.
+
+    The class is private by name, by module, and by construction — reaching in
+    and instantiating it is the one thing an underscore could not stop.
+    """
+    from chatinho._chat_app import _Chat
+
+    with pytest.raises(TypeError, match="create_chat"):
+        _Chat()

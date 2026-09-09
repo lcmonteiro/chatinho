@@ -109,8 +109,15 @@ def create_chat(
         max_displayed   = max_displayed,
         style           = style,
         quit_key        = quit_key,
+        _built_by       = _FROM_CREATE_CHAT,
     )
 
+
+#: Handed to ``_Chat`` by :func:`create_chat`, and by nothing else. The class is
+#: private by name and now by construction: the docstrings have always said to
+#: build a chat with ``create_chat``, and this is what makes that true rather
+#: than merely asked for.
+_FROM_CREATE_CHAT = object()
 
 #: What Textual answers to, by name: every key it enumerates, plus its aliases.
 _KEY_NAMES = {key.value for key in Keys} | set(KEY_ALIASES)
@@ -199,7 +206,14 @@ class _Chat(App):
         max_displayed   : int = 100,
         style           : Optional[ChatStyle] = None,
         quit_key        : str = "ctrl+q",
+        _built_by       : Any = None,
     ) -> None:
+        if _built_by is not _FROM_CREATE_CHAT:
+            raise TypeError(
+                "_Chat is private; build a chat with create_chat(...) instead. "
+                "For a chat without a terminal, build a ChatSession and attach "
+                "your own presentation."
+            )
         super().__init__()
         self._rebind_quit(_validate_key(quit_key))
         if style is not None:
