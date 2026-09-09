@@ -13,16 +13,16 @@ There are three verbs and nothing else:
 
 and two ways of being told:
 
-    on_say(msg)   someone spoke to everyone
-    on_ask(msg)   someone asked *you*; return the answer, or answer() later
+    listen(msg)   someone spoke to everyone
+    answer(msg)   someone asked *you*; return the answer, or answer() later
 
 Everything is a coroutine and every peer has its own queue, so a slow
 subsystem holds up nobody but itself.
 
     @connector("weather")
-    @require(HookOnAsk)
+    @require(HookAnswer)
     class WeatherConnector:
-        async def on_ask(self, msg): return "sunny"
+        async def answer(self, msg): return "sunny"
 
 One hook per ``require``, stacked. Each declaration is its own line, so it has
 somewhere to carry options that belong to that hook alone:
@@ -58,23 +58,27 @@ class Ask(Protocol):
         ...
 
 
-class Answer(Protocol):
-    """Granted by ``HookOnAsk``: the reply an ask is waiting on.
-
-    Only needed when the answer is not ready inline — a connector that has to
-    reach a server returns None from ``on_ask`` and calls this once it knows.
-    """
-
-    async def __call__(self, msg: ChatMessage, text: str) -> str:
-        """Answers *msg* with *text* and returns the reply's id."""
-        ...
-
-
 class Peers(Protocol):
     """Granted by ``HookPeers``: who else is in the chat, by id."""
 
     def __call__(self) -> Dict[int, Any]:
         """Returns a copy of the roster, keyed by peer id."""
+        ...
+
+
+class Invoke(Protocol):
+    """Granted by ``HookInvoke``: invoking a command and getting its result back.
+
+    A command is not a peer — it has no id, no queue and receives nothing. It
+    runs, it may write into the conversation, and it answers whoever ran it.
+    """
+
+    async def __call__(self, name: str, args: str = "") -> Optional[str]:
+        """Runs the command called *name* and returns what it answered.
+
+        Returns None when there is no such command, or when the command chose
+        to write its output rather than answer with it.
+        """
         ...
 
 
@@ -121,6 +125,21 @@ class Hook:
 
 
 # === The three verbs ============================================================
+#
+# Each verb is a pair: the word you call, and the word the other side writes.
+#
+#     say     -> listen        a message for everyone
+#     ask     -> answer        a message for one peer, and its reply
+#     invoke  -> execute       a command run by name
+#
+# The pairs are not decoration, and no verb keeps an `on_` prefix. `say` is
+# something you do; `listen` is what the session calls on you when someone did.
+#
+# Everything below is either a grant (what you may do, set on you at attach) or
+# a demand (what you must write, called by the session) — never both, and no
+# hook is both. A grant arrives by setattr and would silently clobber a method
+# of the same name, which is why `answer` can be the demanded method only now
+# that it is not also a grant.
 
 HookSay = Hook(
     name="HookSay",
@@ -137,19 +156,48 @@ HookAsk = Hook(
     # peer, exactly one reply. ask(LOCAL, ...) asks the user.
 )
 
-HookOnSay = Hook(
-    name="HookOnSay",
-    method="on_say",
-    # Someone spoke to everyone. Nothing is owed back.
+HookListen = Hook(
+    name="HookListen",
+    method="listen",
+    # async listen(msg). Every message that crosses the session: a say, an ask,
+    # the answer to it, a command's invocation and what it answered. Whoever
+    # said it, whoever it was for. Nothing is owed back.
+    #
+    # There is one way to hear, not two. A peer that only wants what was said
+    # to the room checks msg.is_broadcast — which it must, or it will reply to
+    # a question that was never its own.
+    #
+    # You still never hear yourself. That is what stops a peer that listens and
+    # speaks from answering its own words forever.
 )
 
-HookOnAsk = Hook(
-    name="HookOnAsk",
-    method="on_ask",
-    grants=("answer",),
-    # Someone asked you. Return the answer to reply inline, or return None and
-    # call self.answer(msg, text) once you know it — which is why being
-    # askable is what grants the way to answer.
+HookAnswer = Hook(
+    name="HookAnswer",
+    method="answer",
+    # async answer(msg) -> str | None. Someone asked you; what you return is
+    # the reply, and the session posts it in your name.
+    #
+    # Return None when the answer is not yours to invent yet — a terminal
+    # waiting on a person, a connector waiting on a server. The ask stays
+    # waiting, and whatever you say later with reply_to=msg.id resolves it.
+    # That is the same door, not a second one: there is no separate grant for
+    # answering late, and there never needed to be.
+)
+
+HookInvoke = Hook(
+    name="HookInvoke",
+    grants=("invoke",),
+    # await run(name, args) -> the command's answer, or None. A peer that may
+    # invoke commands. The answer comes back to the peer that ran it; nothing
+    # about the invocation enters the conversation.
+)
+
+HookExecute = Hook(
+    name="HookExecute",
+    method="execute",
+    # async execute(args, **kwargs) -> str | None. What a command is. It is not
+    # a peer: no id, no queue, nothing addressed to it. Declare HookSay too and
+    # it can write as it works; return a string and that goes to whoever ran it.
 )
 
 HookContext = Hook(
@@ -168,18 +216,7 @@ HookPeers = Hook(
     # be written without a way to see past its own class.
 )
 
-# === Hearing everything, and holding it =========================================
-
-HookListen = Hook(
-    name="HookListen",
-    method="on_listen",
-    # async on_listen(msg). Every message that crosses the session, whoever said
-    # it and whoever it was for — not just the broadcasts on_say brings, nor
-    # only what was addressed to you. Nothing is owed back.
-    #
-    # You still never hear yourself. That is what stops a listener that speaks
-    # from answering its own words forever, and it is the same rule as say.
-)
+# === Holding the conversation ===================================================
 
 HookLoad = Hook(
     name="HookLoad",
@@ -197,12 +234,13 @@ HookForget = Hook(
 
 ALL_HOOKS: Tuple[Hook, ...] = (
     HookSay,
+    HookListen,
     HookAsk,
-    HookOnSay,
-    HookOnAsk,
+    HookAnswer,
+    HookInvoke,
+    HookExecute,
     HookContext,
     HookPeers,
-    HookListen,
     HookLoad,
     HookForget,
 )

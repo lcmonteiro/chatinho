@@ -4,13 +4,13 @@ import logging
 from typing import Any, Optional
 import openai
 
-from ..chat_hooks import HookOnAsk, connector, require
+from ..chat_hooks import HookAnswer, connector, require
 
 logger = logging.getLogger(__name__)
 
 
 @connector("openai")
-@require(HookOnAsk)
+@require(HookAnswer)
 class OpenAIConnector:
     """Connector for communicating with OpenAI API."""
     
@@ -44,7 +44,7 @@ class OpenAIConnector:
             logger.error(f"Failed to initialize OpenAI connector '{self.name}': {e}")
             raise
     
-    async def on_ask(self, msg: Any, **kwargs) -> Any:
+    async def answer(self, msg: Any, **kwargs) -> Any:
         """Ask the OpenAI model and return its reply.
         
         Args:

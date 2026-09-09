@@ -11,7 +11,7 @@ hands the capabilities over at :meth:`attach`.
 
 The conversation is protected: ``_say``, ``_ask``, ``_answer`` and
 ``_load_messages`` are never called directly. Declaring a hook is the only door
-in, and implementing ``on_say`` or ``on_ask`` is the only door out.
+in, and implementing ``listen`` or ``answer`` is the only door out.
 
 Every peer has its own queue and its own task draining it, so a
 subsystem that takes a second to answer holds up nobody but itself.
@@ -23,16 +23,16 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .chat_hooks import (
+    HookExecute,
     HookForget,
-    HookListen,
     HookLoad,
-    HookOnAsk,
-    HookOnSay,
+    HookAnswer,
+    HookListen,
     declares,
     hooks_of,
     name_of,
 )
-from .chat_message import ChatMessage, MessageStore
+from .chat_message import TOOL, ChatMessage, MessageStore
 
 logger = logging.getLogger(__name__)
 
@@ -45,19 +45,19 @@ class ChatSession:
     The five interfaces onto the conversation are reached only by declaring a
     hook — three the session grants, two it calls:
 
-    - ``HookSay``          grants ``say(text, reply_to=None)``.
-    - ``HookAsk``          grants ``ask(to, text)``, which awaits the answer.
-    - ``HookOnAsk``        demands ``on_ask(msg)`` and grants ``answer(msg, text)``.
-    - ``HookOnSay``        demands ``on_say(msg)``.
-    - ``HookContext``      grants ``context(since=, start=, limit=)``.
-    - ``HookListen``       demands ``on_listen(msg)`` — every message that crosses.
+    - ``HookSay``      grants  ``say(text, reply_to=None)``.
+    - ``HookAsk``      grants  ``ask(to, text)``, which awaits the answer.
+    - ``HookContext``  grants  ``context(since=, start=, limit=)``.
+    - ``HookListen``   demands ``listen(msg)`` — every message that crosses.
+    - ``HookAnswer``   demands ``answer(msg)`` — someone asked you.
     """
 
     def __init__(
         self,
-        peers : Optional[List[Any]] = None,
-        backend      : Optional[Any] = None,
-        recall       : int = 200,
+        connectors : Optional[List[Any]] = None,
+        commands   : Optional[List[Any]] = None,
+        backend    : Optional[Any] = None,
+        recall     : int = 200,
     ) -> None:
         #: Where the conversation goes when it is no longer recent.
         self.backend : Optional[Any] = backend
@@ -71,8 +71,14 @@ class ChatSession:
         self._pending  : Dict[str, "asyncio.Future[str]"] = {}
         self._next_id  : int = 1
 
-        for who in peers or []:
+        #: Commands are not peers: no id, no queue, nothing addressed to them.
+        #: They run when someone runs them, and answer whoever did.
+        self.commands : Dict[str, Any] = {}
+
+        for who in connectors or []:
             self.attach(who)
+        for cmd in commands or []:
+            self.add_command(cmd)
         if backend is not None:
             # A peer like any other: it gets an id and a queue, and it
             # hears the conversation rather than being pushed at. `backend` is
@@ -115,6 +121,72 @@ class ChatSession:
         self._start(who)
         return at
 
+    def add_command(self, cmd: Any) -> str:
+        """Registers a command under its declared name and returns it.
+
+        A command is not a peer. It has no id and no queue, nothing is
+        addressed to it, and it hears nothing — it runs when someone runs it.
+        What it may do to the conversation is whatever it declared: nothing at
+        all, or ``HookSay`` to write while it works.
+
+        Args:
+            cmd: A class declaring :data:`HookExecute`.
+
+        Returns:
+            str: The name it answers to.
+
+        Raises:
+            TypeError: If *cmd* does not declare HookExecute. A command that
+                cannot execute is not a command, and registering it silently
+                would only surface as a missing ``/name`` much later.
+        """
+        if not declares(cmd, HookExecute):
+            raise TypeError(
+                "%r does not declare %s: a command must @require(HookExecute)"
+                % (cmd, HookExecute))
+        name = name_of(cmd)
+        self.commands[name] = cmd
+        if hasattr(cmd, "commands"):
+            # /help lists its siblings; the roster is the session's, not its own.
+            cmd.commands = self.commands
+        # TOOL, not LOCAL: what a command writes is not the user speaking.
+        self._grant(cmd, TOOL)
+        self._start(cmd)
+        return name
+
+    def _invoke_for(self, frm: int):
+        """Builds the ``invoke`` granted to a peer, bound to that peer.
+
+        A command is not a peer, so it has no id: the invocation is addressed
+        to ``TOOL`` and what the command answered comes back from ``TOOL``,
+        replying to it. Both cross the session like anything else, so a listener
+        sees the whole of what happened — but the invocation is *addressed*, not
+        a broadcast, so a peer that answers what the room says does not answer
+        somebody else's ``/help``.
+        """
+        async def invoke(name: str, args: str = "") -> Optional[str]:
+            cmd = self.commands.get(name)
+            if cmd is None:
+                logger.info("No command named %r", name)
+                return None
+            asked = ChatMessage(
+                id=self._store.new_id(),
+                text="/%s %s" % (name, args) if args else "/%s" % name,
+                frm=frm, to=TOOL,
+            )
+            await self._post(asked)
+            try:
+                reply = await cmd.execute(args, by=frm)
+            except Exception:
+                logger.error("Command %r failed", name, exc_info=True)
+                raise
+            if reply is not None:
+                await self._post(ChatMessage(
+                    id=self._store.new_id(), text=reply, frm=TOOL, to=None, reply_to=asked.id,
+                ))
+            return reply
+        return invoke
+
     def id_of(self, name: str) -> Optional[int]:
         """Returns the id of the peer with that visible name, or None.
 
@@ -140,8 +212,8 @@ class ChatSession:
         grants = {
             "say"           : lambda: self._say_for(at),
             "ask"           : lambda: self._ask_for(at),
-            "answer"        : lambda: self._answer_for(at),
             "context"       : lambda: self._context,
+            "invoke"        : lambda: self._invoke_for(at),
             "peers"  : lambda: self._peers,
         }
         for hook in hooks_of(who):
@@ -179,33 +251,24 @@ class ChatSession:
             return await future
         return ask
 
-    def _answer_for(self, frm: int):
-        async def answer(msg: ChatMessage, text: str) -> str:
-            return await self._post(ChatMessage(
-                id=self._store.new_id(), text=text, frm=frm, to=msg.frm, reply_to=msg.id,
-            ))
-        return answer
-
     async def _post(self, msg: ChatMessage) -> str:
         """Keeps *msg* and puts it in the queue of everyone it is for.
 
-        An answer to an ask that is still waiting resolves that wait and goes
-        no further: the asker is already holding it.
+        An answer to an ask that is still waiting resolves that wait, and is
+        not delivered to the asker a second time — it is already holding it.
+        Everyone who listens still hears it: there is one conversation, and the
+        replies are part of it.
         """
         self._store.add(msg)
-        waiting = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
-        if waiting is not None and not waiting.done():
-            waiting.set_result(msg.text)
-            return msg.id
+        waiting  = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
+        resolved = waiting is not None and not waiting.done()
+        if resolved:
+            waiting.set_result(msg.text)          # type: ignore[union-attr]
 
-        # You never hear yourself, whichever way you were listening.
+        # You never hear yourself; that is the whole of the loop protection.
         listeners = {at for at, who in self._by_id.items()
                      if at != msg.frm and declares(who, HookListen)}
-        if msg.to is not None:
-            audience = {msg.to}
-        else:
-            audience = {at for at, who in self._by_id.items()
-                        if at != msg.frm and declares(who, HookOnSay)}
+        audience  = {msg.to} if msg.to is not None and not resolved else set()
         for at in listeners | audience:
             queue = self._queues.get(at)
             if queue is not None:
@@ -215,24 +278,29 @@ class ChatSession:
     async def _deliver(self, who: Any, msg: ChatMessage) -> None:
         """Hands one message to one peer, every way it declared to get it.
 
-        The three are not exclusive: something that listens *and* answers gets
+        The two are not exclusive: something that listens *and* answers gets
         both calls for the same message, because it asked for both.
+
+        What ``answer`` returns is posted in the peer's name. Returning None is
+        not a failure: the ask stays waiting, and whatever the peer says later
+        with ``reply_to`` set resolves it.
         """
         if declares(who, HookListen):
-            await who.on_listen(msg)
+            await who.listen(msg)
 
         if msg.is_broadcast:
-            if declares(who, HookOnSay):
-                await who.on_say(msg)
             return
-        if msg.to != getattr(who, "peer_id", None):
+        at = getattr(who, "peer_id", None)
+        if at is None or msg.to != at:
             return
-        if not declares(who, HookOnAsk):
-            logger.warning("%r was asked but does not declare %s", name_of(who), HookOnAsk)
+        if not declares(who, HookAnswer):
+            logger.warning("%r was asked but does not declare %s", name_of(who), HookAnswer)
             return
-        reply = await who.on_ask(msg)
+        reply = await who.answer(msg)
         if reply is not None:
-            await who.answer(msg, reply)
+            await self._post(ChatMessage(
+                id=self._store.new_id(), text=reply, frm=at, to=msg.frm, reply_to=msg.id,
+            ))
 
     async def _drain(self, at: int) -> None:
         """One peer's queue, one message at a time.
@@ -321,7 +389,7 @@ class ChatSession:
         for task in self._tasks.values():
             task.cancel()
         self._tasks.clear()
-        for who in list(self._by_id.values()):
+        for who in list(self._by_id.values()) + list(self.commands.values()):
             shutdown = getattr(who, "shutdown", None)
             if callable(shutdown):
                 try:

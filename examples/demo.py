@@ -12,8 +12,8 @@ import asyncio
 from chatinho import (
     ChatMessage,
     HelpCommand,
-    HookOnAsk,
-    HookOnSay,
+    HookExecute,
+    HookListen,
     HookSay,
     Say,
     connector,
@@ -24,25 +24,27 @@ from chatinho import (
 
 
 @connector("eco")
-@require(HookOnSay)
+@require(HookListen)
 @require(HookSay)
 class EchoConnector:
     """Answers whatever the user says — a transport stand-in that talks back.
 
-    ``HookOnSay`` is what tells it something was said; ``HookSay`` is what lets
+    ``HookListen`` is what tells it something was said; ``HookSay`` is what lets
     it reply. It never imports the session.
     """
 
     say : Say
 
     def __init__(self) -> None:
-        #: The welcome message is the app talking, and the app *is* peer
-        #: zero, so a connector cannot tell it from something the user typed.
-        #: Skipping the first broadcast is the honest way to say so.
+        #: The welcome message is the app talking, and the app *is* peer zero,
+        #: so a connector cannot tell it from something the user typed. What a
+        #: command writes it *can* tell apart — that is what TOOL is for.
         self._greeted = False
 
-    async def on_say(self, msg: ChatMessage) -> None:
+    async def listen(self, msg: ChatMessage) -> None:
         """Echoes the user, after a beat, without blocking the terminal."""
+        if not msg.is_broadcast or not msg.is_local:
+            return                      # a command wrote it, not the user
         if not self._greeted:
             self._greeted = True
             return
@@ -51,12 +53,17 @@ class EchoConnector:
 
 
 @tool("code", "Show a Python code block")
-@require(HookOnAsk)
+@require(HookExecute)
 class CodeCommand:
-    """Answers with a Python code block, syntax-highlighted by the log."""
+    """Writes a Python code block, syntax-highlighted by the log.
 
-    async def on_ask(self, msg: ChatMessage) -> str:
-        """Returns a Markdown code block."""
+    What it answers is what the user sees: the session posts it in ``TOOL``'s
+    name, replying to the invocation. It does not need ``HookSay`` for that —
+    that is for progress while it works, which this has none of.
+    """
+
+    async def execute(self, args: str = "", **kwargs) -> str:
+        """Answers with a Markdown code block."""
         return (
             "Here is an example with **syntax highlighting**:\n\n"
             "```python\n"
@@ -71,7 +78,7 @@ class CodeCommand:
 
 WELCOME = (
     "Welcome to **chatinho**! 👋\n\n"
-    "A command is a question put to a tool — type `/` to see who can be asked:\n"
+    "Type `/` to see the commands:\n"
     "- `/help` — lists the tools\n"
     "- `/code` — shows an example with syntax highlighting\n\n"
     "Everything you type is rendered as Markdown, and the echo connector replies to it."
@@ -81,7 +88,8 @@ WELCOME = (
 def main() -> None:
     """Builds the demo chat and runs it."""
     create_chat(
-        peers    = [HelpCommand(), CodeCommand(), EchoConnector()],
+        connectors      = [EchoConnector()],
+        commands        = [HelpCommand(), CodeCommand()],
         title           = "chatinho demo",
         welcome_message = WELCOME,
     ).run()

@@ -13,10 +13,11 @@ from textual.widgets import Input
 
 from chatinho import (
     LOCAL,
+    TOOL,
     Ask,
     HelpCommand,
     HookAsk,
-    HookOnAsk,
+    HookExecute,
     connector,
     create_chat,
     require,
@@ -25,10 +26,25 @@ from chatinho import (
 
 
 @tool("eco", "repete")
-@require(HookOnAsk)
+@require(HookExecute)
 class _Eco:
-    async def on_ask(self, msg) -> str:
-        return "eco: %s" % msg.text
+    """A command that answers; the session is what puts the answer in the log.
+
+    It does not also say it: what it answers is posted in TOOL's name, so
+    saying it too would put the same line in the conversation twice.
+    """
+
+    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+        return "eco: %s" % args
+
+
+@tool("mudo", "answers without writing")
+@require(HookExecute)
+class _Mudo:
+    """A command that only answers: nothing of it reaches the conversation."""
+
+    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+        return "só para quem correu"
 
 
 @connector("agente")
@@ -75,28 +91,46 @@ async def test_blank_input_says_nothing():
     assert app.messages == []
 
 
-# === Commands are asks ==========================================================
+# === Commands are run, and the running is recorded ==============================
 
 
-async def test_a_command_is_an_ask_and_its_answer_lands_in_the_log():
-    app = create_chat(peers=[_Eco()])
+async def test_running_a_command_is_recorded_whole():
+    """The invocation and the answer are both messages, in that order."""
+    app = create_chat(commands=[_Eco(), _Mudo()])
     async with app.run_test() as pilot:
         assert await app.command("eco", "ola") == "eco: ola"
+        assert await app.command("mudo") == "só para quem correu"
         await pilot.pause()
-    question, answer = app.messages
-    assert (question.frm, question.to, question.text) == (LOCAL, 1, "ola")
-    assert (answer.frm, answer.to, answer.text) == (1, LOCAL, "eco: ola")
-    assert answer.reply_to == question.id
+        assert [m.text for m in app.messages] == [
+            "/eco ola", "eco: ola", "/mudo", "só para quem correu",
+        ]
+
+
+async def test_what_a_command_writes_is_not_the_user_speaking():
+    """A connector answering the user must not answer /help's output.
+
+    Two things keep that true now that both cross the session: what the command
+    answered comes from TOOL, and the invocation is addressed to TOOL rather
+    than said to the room, so a peer that replies to broadcasts sees neither as
+    the user speaking.
+    """
+    app = create_chat(commands=[_Eco()])
+    async with app.run_test() as pilot:
+        await app.command("eco", "ola")
+        await pilot.pause()
+        invocacao, resposta = app.messages
+        assert invocacao.to == TOOL and invocacao.is_broadcast is False
+        assert resposta.frm == TOOL and resposta.is_local is False
 
 
 async def test_submitting_a_slash_runs_the_tool():
-    app = create_chat(peers=[_Eco()])
+    app = create_chat(commands=[_Eco()])
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         inp.value = "/eco bom dia"
         await pilot.press("enter")
         await pilot.pause()
-    assert [m.text for m in app.messages] == ["bom dia", "eco: bom dia"]
+        assert [m.text for m in app.messages] == ["/eco bom dia", "eco: bom dia"]
 
 
 async def test_an_unknown_command_says_so():
@@ -108,7 +142,7 @@ async def test_an_unknown_command_says_so():
 
 
 async def test_help_lists_the_tools_that_can_be_asked():
-    app = create_chat(peers=[HelpCommand(), _Eco()])
+    app = create_chat(commands=[HelpCommand(), _Eco()])
     async with app.run_test() as pilot:
         answer = await app.command("help")
         await pilot.pause()
@@ -121,7 +155,7 @@ async def test_help_lists_the_tools_that_can_be_asked():
 async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
     """The whole round trip, with no routing code in the presentation."""
     agente = _Agente()
-    app = create_chat(peers=[agente])
+    app = create_chat(connectors=[agente])
     async with app.run_test() as pilot:
         question = asyncio.create_task(agente.ask(LOCAL, "Autorizas?"))
         await pilot.pause()
@@ -158,13 +192,32 @@ async def test_a_message_from_another_thread_reaches_the_log():
 # === Rendering ==================================================================
 
 
+async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
+    """What a command answered quotes the invocation, and is headed Tool.
+
+    The invocation and the answer are both messages now, and the answer carries
+    ``reply_to``, so the log renders it the way it renders any reply.
+    """
+    app = create_chat(commands=[_Eco()])
+    async with app.run_test() as pilot:
+        await app.command("eco", "ola")
+        await pilot.pause()
+        log = app.query_one("#chat-log")
+        cabecalhos = [str(w.visual) for w in log.query(".message-header")]
+        citacoes   = [str(w.visual) for w in log.query(".message-quote")]
+        assert "You" in cabecalhos[0] and "↳ replying" not in cabecalhos[0]
+        assert "Tool" in cabecalhos[1] and "↳ replying" in cabecalhos[1]
+        assert citacoes == ["↳ %s: /eco ola…" % app.messages[0].id]
+
+
 async def test_the_log_renders_what_the_history_holds():
-    app = create_chat(peers=[_Eco()])
+    app = create_chat(commands=[_Eco()])
     async with app.run_test() as pilot:
         await app.say("uma")
         await app.command("eco", "duas")
         await pilot.pause()
         log = app.query_one("#chat-log")
+        # Three: what the user said, the invocation, and what it answered.
         assert len(log._msg_widgets) == len(app.messages) == 3
 
 

@@ -10,6 +10,9 @@ import importlib
 import inspect
 import pathlib
 
+import chatinho
+from chatinho import Hook
+
 import pytest
 
 SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "chatinho"
@@ -95,6 +98,43 @@ def _assigned_attributes(path: str, class_name: str) -> set:
                         and target.value.id == "self"):
                     names.add(target.attr)
     return names
+
+
+@pytest.mark.parametrize(
+    "module, class_name, base",
+    [
+        ("src/chatinho/chat_app.py",   "_Chat",              "textual.app:App"),
+        ("src/chatinho/chat_log.py",   "ChatLog",            "textual.containers:Container"),
+        ("src/chatinho/chat_input.py", "CommandInput",       "textual.widgets:Input"),
+        ("src/chatinho/chat_input.py", "CommandSuggestions", "textual.widgets:OptionList"),
+    ],
+)
+def test_a_grant_never_shadows_a_textual_method(module, class_name, base):
+    """A grant arrives by setattr, so the assignment check above cannot see it.
+
+    This is not hypothetical: `_Chat` was granted `run`, which is Textual's own
+    `App.run()` — the documented way to start the app. mypy caught that one
+    because the class annotates its grants; a class that did not annotate them
+    would have shipped it.
+    """
+    where, attribute = base.split(":")
+    parent = getattr(importlib.import_module(where), attribute)
+    granted = {name
+               for hook in _declared_hooks(module, class_name)
+               for name in getattr(chatinho, hook, Hook("?")).grants}
+    taken = sorted(n for n in granted if inspect.isroutine(getattr(parent, n, None)))
+    assert taken == [], "%s is granted %s, which is a method on %s" % (class_name, taken, attribute)
+
+
+def _declared_hooks(path: str, class_name: str) -> set:
+    """Returns the hook names a class declares with @require."""
+    tree = ast.parse(pathlib.Path(path).read_text())
+    cls  = next(n for n in ast.walk(tree)
+                if isinstance(n, ast.ClassDef) and n.name == class_name)
+    return {d.args[0].id
+            for d in cls.decorator_list
+            if isinstance(d, ast.Call) and getattr(d.func, "id", None) == "require"
+            and d.args and isinstance(d.args[0], ast.Name)}
 
 
 @pytest.mark.parametrize(

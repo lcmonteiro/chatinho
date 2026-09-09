@@ -15,14 +15,14 @@ import pytest
 from chatinho import (
     LOCAL,
     ChatMessage,
-    HookListen,
+    TOOL,
     HookForget,
     HookLoad,
-    Answer,
     Ask,
     HookAsk,
-    HookOnAsk,
-    HookOnSay,
+    HookAnswer,
+    HookExecute,
+    HookListen,
     HookSay,
     Say,
     backend,
@@ -34,34 +34,41 @@ from conftest import driven
 
 
 @tool("eco", "repete")
-@require(HookOnAsk)
+@require(HookExecute)
 class _Eco:
-    async def on_ask(self, msg) -> str:
-        return "eco: %s" % msg.text
+    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+        return "eco: %s" % args
 
 
-@tool("lento", "demora a responder")
-@require(HookOnAsk)
+@connector("lento")
+@require(HookAnswer)
 class _Lento:
-    async def on_ask(self, msg) -> str:
+    async def answer(self, msg) -> str:
         await asyncio.sleep(0.3)
         return "finalmente"
 
 
-@tool("rebenta", "falha sempre")
-@require(HookOnAsk)
+@connector("rebenta")
+@require(HookAnswer)
 class _Rebenta:
-    async def on_ask(self, msg):
+    async def answer(self, msg):
         raise RuntimeError("kaboom")
 
 
+@connector("rapido")
+@require(HookAnswer)
+class _Rapido:
+    async def answer(self, msg) -> str:
+        return "eco: %s" % msg.text
+
+
 @connector("ouvinte")
-@require(HookOnSay)
+@require(HookListen)
 class _Ouvinte:
     def __init__(self) -> None:
         self.heard: list = []
 
-    async def on_say(self, msg) -> None:
+    async def listen(self, msg) -> None:
         self.heard.append(msg.text)
 
 
@@ -79,7 +86,7 @@ class _Archive:
     def initialize(self) -> None:
         self.initialized = True
 
-    async def on_listen(self, msg) -> None:
+    async def listen(self, msg) -> None:
         self.kept.append(msg)
 
     async def load(self, since=None, limit=None):
@@ -98,13 +105,15 @@ class _Archive:
 # === Ids and names ==============================================================
 
 
-async def test_the_user_is_peer_zero_and_the_rest_are_numbered():
-    session, view = await driven(peers=[_Eco(), _Lento()])
+async def test_the_user_is_peer_zero_and_connectors_are_numbered():
+    """Commands are not among them: they have no id at all."""
+    session, view = await driven(connectors=[_Lento(), _Rapido()], commands=[_Eco()])
     assert view.peer_id == LOCAL
     assert sorted(view.peers()) == [0, 1, 2]
-    assert session.id_of("eco") == 1
-    assert session.id_of("lento") == 2
-    assert session.id_of("nao-existe") is None
+    assert session.id_of("lento") == 1
+    assert session.id_of("rapido") == 2
+    assert session.id_of("eco") is None, "a command must not be addressable"
+    assert list(session.commands) == ["eco"]
     await session.close()
 
 
@@ -117,9 +126,9 @@ async def test_a_taken_id_is_refused():
 
 async def test_renaming_does_not_change_the_address():
     """The id routes; the name is only what the chat shows."""
-    session, view = await driven(peers=[_Eco()])
-    eco = view.peers()[1]
-    eco.name = "outro-nome"
+    session, view = await driven(connectors=[_Rapido()])
+    peer = view.peers()[1]
+    peer.name = "outro-nome"
     assert await view.ask(1, "ola") == "eco: ola"
     assert session.id_of("outro-nome") == 1
     await session.close()
@@ -130,7 +139,7 @@ async def test_renaming_does_not_change_the_address():
 
 async def test_a_say_reaches_everyone_but_the_speaker():
     ouvinte = _Ouvinte()
-    session, view = await driven(peers=[ouvinte])
+    session, view = await driven(connectors=[ouvinte])
     await view.say("bom dia")
     await asyncio.sleep(0.02)
     assert ouvinte.heard == ["bom dia"]
@@ -139,7 +148,7 @@ async def test_a_say_reaches_everyone_but_the_speaker():
 
 
 async def test_a_reply_to_a_say_is_another_say():
-    session, view = await driven(peers=[_Ouvinte()])
+    session, view = await driven(connectors=[_Ouvinte()])
     first = await view.say("uma pergunta ao ar")
     await view.say("uma resposta", reply_to=first)
     assert [m.reply_to for m in view.context()] == [None, first]
@@ -150,18 +159,75 @@ async def test_a_reply_to_a_say_is_another_say():
 
 
 async def test_ask_returns_the_answer():
-    session, view = await driven(peers=[_Eco()])
+    session, view = await driven(connectors=[_Rapido()])
     assert await view.ask(1, "ola") == "eco: ola"
     await session.close()
 
 
-async def test_a_command_is_an_ask_to_a_tool():
-    session, view = await driven(peers=[_Eco()])
+async def test_running_a_command_answers_the_peer_that_ran_it():
+    """The answer goes back to whoever ran it, and the whole of it is recorded.
+
+    A command is still not a peer — it has no id and no queue — but there is
+    one conversation, so the invocation and what it answered cross the session
+    like anything else. The invocation is *addressed* to TOOL rather than said
+    to the room, which is what keeps a peer from answering somebody else's
+    command.
+    """
+    session, view = await driven(commands=[_Eco()])
     assert await view.command("eco", "ola") == "eco: ola"
-    history = view.context()
-    assert (history[0].frm, history[0].to) == (LOCAL, 1)
-    assert (history[1].frm, history[1].to) == (1, LOCAL)
-    assert history[1].reply_to == history[0].id
+    invocacao, resposta = view.context()
+    assert (invocacao.text, invocacao.frm, invocacao.to) == ("/eco ola", LOCAL, TOOL)
+    assert (resposta.text, resposta.frm, resposta.to) == ("eco: ola", TOOL, None)
+    assert resposta.reply_to == invocacao.id
+    await session.close()
+
+
+async def test_running_a_command_that_does_not_exist_answers_nothing():
+    session, view = await driven()
+    assert await view.command("nao-existe") is None
+    await session.close()
+
+
+async def test_a_command_that_says_writes_and_still_answers():
+    @tool("relata", "escreve enquanto trabalha")
+    @require(HookExecute)
+    @require(HookSay)
+    class Relata:
+        say : Say
+
+        async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+            await self.say("a trabalhar…")
+            return "pronto"
+
+    session, view = await driven(commands=[Relata()])
+    assert await view.command("relata") == "pronto"
+    assert view.texts() == ["/relata", "a trabalhar…", "pronto"]
+    await session.close()
+
+
+async def test_a_command_is_told_which_peer_ran_it():
+    seen: list = []
+
+    @tool("quem", "")
+    @require(HookExecute)
+    class Quem:
+        async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+            seen.append(by)
+            return "ok"
+
+    session, view = await driven(commands=[Quem()])
+    await view.command("quem")
+    assert seen == [LOCAL]
+    await session.close()
+
+
+async def test_registering_something_that_cannot_execute_is_refused():
+    class NotACommand:
+        name = "nope"
+
+    session, _ = await driven()
+    with pytest.raises(TypeError, match="HookExecute"):
+        session.add_command(NotACommand())
     await session.close()
 
 
@@ -174,7 +240,7 @@ async def test_asking_an_unknown_id_raises():
 
 async def test_a_slow_peer_holds_up_only_itself():
     """Each peer has its own queue: one second is not two."""
-    session, view = await driven(peers=[_Lento(), _Eco()])
+    session, view = await driven(connectors=[_Lento(), _Rapido()])
     started = time.perf_counter()
     slow, quick = await asyncio.gather(view.ask(1, "?"), view.ask(2, "ola"))
     elapsed = time.perf_counter() - started
@@ -184,7 +250,7 @@ async def test_a_slow_peer_holds_up_only_itself():
 
 
 async def test_a_peer_that_raises_does_not_take_the_chat_down():
-    session, view = await driven(peers=[_Rebenta(), _Eco()])
+    session, view = await driven(connectors=[_Rebenta(), _Rapido()])
     asyncio.create_task(view.ask(1, "?"))       # never answers
     await asyncio.sleep(0.05)
     assert await view.ask(2, "ola") == "eco: ola"
@@ -193,7 +259,7 @@ async def test_a_peer_that_raises_does_not_take_the_chat_down():
 
 async def test_a_peer_can_ask_the_user():
     """ask(LOCAL, ...) is what the old inbox was, with no extra concept."""
-    session, view = await driven(peers=[_Eco()])
+    session, view = await driven(commands=[_Eco()])
     view.answers.append("sim, autorizo")
 
     @connector("agente")
@@ -210,17 +276,24 @@ async def test_a_peer_can_ask_the_user():
 
 
 async def test_an_answer_given_later_still_resolves_the_ask():
-    """on_ask may return None and answer once it knows."""
+    """answer may return None; what is said later with reply_to resolves the ask.
+
+    There is no separate grant for answering late. A peer that cannot answer
+    inline — a terminal waiting on a person, a connector waiting on a server —
+    returns None and says the answer when it has it, and the session matches it
+    by ``reply_to``. That is the same door as any other say.
+    """
 
     @connector("adiado")
-    @require(HookOnAsk)
+    @require(HookAnswer)
+    @require(HookSay)
     class Adiado:
-        answer: Answer
+        say : Say
 
         def __init__(self) -> None:
             self.pendente = None
 
-        async def on_ask(self, msg):
+        async def answer(self, msg):
             self.pendente = msg
             return None
 
@@ -231,7 +304,7 @@ async def test_an_answer_given_later_still_resolves_the_ask():
 
     pergunta = asyncio.create_task(view.ask(at, "e depois?"))
     await asyncio.sleep(0.02)
-    await adiado.answer(adiado.pendente, "agora sim")
+    await adiado.say("agora sim", reply_to=adiado.pendente.id)
     assert await pergunta == "agora sim"
     await session.close()
 
@@ -256,7 +329,7 @@ async def test_a_peer_gets_only_what_it_declared():
 
 async def test_nobody_can_speak_in_another_name():
     """frm is bound at attach, not passed as an argument."""
-    session, view = await driven(peers=[_Ouvinte()])
+    session, view = await driven(connectors=[_Ouvinte()])
     await view.say("sou eu")
     assert view.context()[0].frm == LOCAL
     await session.close()
@@ -330,7 +403,7 @@ async def test_a_backend_that_only_listens_is_not_an_error():
         def __init__(self) -> None:
             self.kept: list = []
 
-        async def on_listen(self, msg) -> None:
+        async def listen(self, msg) -> None:
             self.kept.append(msg)
 
     store = WriteOnly()
@@ -345,7 +418,7 @@ async def test_a_listener_that_fails_does_not_lose_the_message():
     @backend("avariado")
     @require(HookListen)
     class Broken:
-        async def on_listen(self, msg) -> None:
+        async def listen(self, msg) -> None:
             raise RuntimeError("disco cheio")
 
     session, view = await driven(backend=Broken())

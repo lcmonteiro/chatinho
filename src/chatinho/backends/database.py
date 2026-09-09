@@ -105,7 +105,7 @@ class DatabaseBackend:
 
     # === The archive ================================================================
 
-    async def on_listen(self, msg: ChatMessage) -> None:
+    async def listen(self, msg: ChatMessage) -> None:
         """Keeps one message that crossed the session.
 
         Args:
@@ -158,7 +158,7 @@ class DatabaseBackend:
         return self.SessionLocal()
 
     def _write(self, messages: List[ChatMessage]) -> None:
-        """The synchronous half of :meth:`on_listen`."""
+        """The synchronous half of :meth:`listen`."""
         with self._session() as session:
             for msg in messages:
                 session.merge(ArchivedMessage(

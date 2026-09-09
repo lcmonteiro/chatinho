@@ -1,36 +1,49 @@
-"""The ``/help`` tool: lists what can be asked."""
+"""The ``/help`` command: lists what can be run."""
+
+from typing import Any, Optional
+
+from ..chat_hooks import HookExecute, HookPeers, HookSay, Peers, Say, require, tool
+from ..chat_message import LOCAL
 
 
-from ..chat_hooks import (HookOnAsk, HookPeers, Peers,
-                          declares, name_of, require, tool)
-from ..chat_message import LOCAL, ChatMessage
-
-
-@tool("help", "Lists the available tools")
-@require(HookOnAsk)
+@tool("help", "Lists the available commands")
+@require(HookExecute)
 @require(HookPeers)
+@require(HookSay)
 class HelpCommand:
-    """Answers with the tools registered in the chat it belongs to.
+    """Answers with the commands registered in the chat it belongs to.
 
-    A command is an ask addressed to a tool, so ``/help`` is this peer
-    being asked. ``HookPeers`` is what lets it
-    enumerate its siblings without ever seeing the session.
+    A command is not a peer: nothing is addressed to it and it hears nothing.
+    It runs, and it answers whoever ran it. ``HookPeers`` is only so the
+    listing can mention who else is connected.
     """
 
     peers : Peers
+    say   : Say
 
-    async def on_ask(self, msg: ChatMessage) -> str:
-        """Returns one line per tool that can be asked.
+    def __init__(self, commands: Optional[Any] = None) -> None:
+        #: Set by the session at registration, so /help can list its siblings.
+        self.commands = commands
+
+    async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> str:
+        """Answers with the listing.
+
+        It does not say it: what a command answers is posted by the session, in
+        ``TOOL``'s name, replying to the invocation. Saying it too would put it
+        in the conversation twice.
 
         Args:
-            msg: The question; its text is ignored.
+            args: Ignored.
+            by: The id of the peer that ran it.
+            **kwargs: Ignored.
 
         Returns:
-            str: The listing, or a note when there is nothing to list.
+            str: The listing.
         """
-        lines = [
-            "/%s - %s" % (name_of(who), getattr(who, "description", ""))
-            for at, who in sorted(self.peers().items())
-            if at != LOCAL and declares(who, HookOnAsk)
-        ]
-        return "Available tools:\n  " + "\n  ".join(lines) if lines else "No tools registered."
+        del args, by, kwargs
+        lines = ["/%s - %s" % (name, getattr(cmd, "description", ""))
+                 for name, cmd in sorted((self.commands or {}).items())]
+        listing = "Commands:\n  " + "\n  ".join(lines) if lines else "No commands registered."
+
+        others = sorted(getattr(w, "name", "?") for at, w in self.peers().items() if at != LOCAL)
+        return listing + ("\n\nConnected: %s" % ", ".join(others) if others else "")

@@ -22,9 +22,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
 
-#: The chat itself — the user's own id. Every other peer is a connector
-#: or a tool, numbered from one.
+#: The chat itself — the user's own id. Every connector is numbered from one.
 LOCAL : int = 0
+
+#: What a command speaks as. Commands are not peers and have no id of their
+#: own, but what they write must not look like the user typing it: a connector
+#: that answers what the user says would otherwise answer /help's output too.
+TOOL : int = -1
 
 
 @dataclass

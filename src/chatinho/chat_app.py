@@ -33,19 +33,19 @@ from textual.containers import Container, Vertical
 from textual.widgets import Input
 
 from .chat_hooks import (
-    Answer,
     Ask,
     HookAsk,
     HookContext,
-    HookOnAsk,
-    HookOnSay,
+    HookAnswer,
+    HookListen,
     HookPeers,
+    HookInvoke,
     HookSay,
     Context,
     Peers,
+    Invoke,
     Say,
     connector,
-    name_of,
     require,
 )
 from .chat_input import COMMAND_PREFIX, SUGGESTIONS_ID, CommandInput, CommandSuggestions
@@ -61,7 +61,8 @@ INPUT_ID    : str = "input-line"
 
 
 def create_chat(
-    peers    : Optional[List[Any]] = None,
+    connectors      : Optional[List[Any]] = None,
+    commands        : Optional[List[Any]] = None,
     backend         : Optional[Any] = None,
     title           : str = "Chatinho",
     welcome_message : str = "",
@@ -70,13 +71,18 @@ def create_chat(
 ) -> "_Chat":
     """Create a chat application from peers and a backend.
 
-    A peer is a connector or a tool: both are plain classes declaring
-    the hooks they need. For a chat without a terminal — a script, a bot, a
-    test — build a :class:`~chatinho.chat_session.ChatSession` directly and
-    attach your own presentation.
+    A **connector** is a peer: it has an id and a queue, and the conversation
+    reaches it. A **command** is not: it has neither, and it runs only when
+    someone runs it. They are separate parameters because they are separate
+    things.
+
+    For a chat without a terminal — a script, a bot, a test — build a
+    :class:`~chatinho.chat_session.ChatSession` directly and attach your own
+    presentation.
 
     Args:
-        peers: Connectors and tools to register, numbered from one.
+        connectors: Links to agents or APIs; peers, numbered from one.
+        commands: Things the user runs as ``/name``; not peers.
         backend: Backend used by ``save_data``/``load_data``.
         title: Title of the chat application.
         welcome_message: Message displayed on mount; empty means none.
@@ -87,7 +93,8 @@ def create_chat(
         _Chat: The configured application; call ``run()`` to start it.
     """
     return _Chat(
-        session         = ChatSession(peers=peers, backend=backend),
+        session         = ChatSession(connectors=connectors, commands=commands,
+                                      backend=backend),
         title           = title,
         welcome_message = welcome_message,
         max_displayed   = max_displayed,
@@ -98,10 +105,11 @@ def create_chat(
 @connector("chat")
 @require(HookSay)
 @require(HookAsk)
-@require(HookOnSay)
-@require(HookOnAsk)
+@require(HookListen)
+@require(HookAnswer)
 @require(HookContext)
 @require(HookPeers)
+@require(HookInvoke)
 class _Chat(App):
     """Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
 
@@ -118,9 +126,9 @@ class _Chat(App):
     # Granted by the session at attach; annotated so a type checker sees them.
     say           : Say
     ask           : Ask
-    answer        : Answer
     context : Context
     peers  : Peers
+    invoke        : Invoke
 
     def __init__(
         self,
@@ -137,9 +145,9 @@ class _Chat(App):
 
         self.session : ChatSession = session if session is not None else ChatSession()
         # Peer zero: the user. This is what grants say, ask, answer and
-        # context, and what subscribes on_say and on_ask below.
+        # context, and what subscribes listen and answer below.
         self.session.attach(self, at=LOCAL)
-        self._repaint_after("say", "ask", "answer")
+        self._repaint_after("say", "ask")
 
         self.title = title
         self.welcome_message = welcome_message
@@ -152,10 +160,11 @@ class _Chat(App):
         """Wraps the granted verbs so the terminal repaints when we speak.
 
         A sender does not hear its own broadcast — that is what stops a
-        connector answering its own answer forever — and an answer that
-        resolves a pending ask reaches nobody at all. Neither would repaint the
-        log, so the presentation, which is the thing that renders, wraps its
-        own grants rather than asking the session for an exception.
+        connector answering its own answer forever — so nothing would repaint
+        the log when the user speaks. The presentation, which is the thing that
+        renders, wraps its own grants rather than asking the session for an
+        exception. Only grants: ``answer`` is a method now, and it repaints
+        itself.
         """
         for verb in granted:
             def wrap(call: Any) -> Any:
@@ -176,7 +185,7 @@ class _Chat(App):
                 id=CHAT_LOG_ID,
             ),
             Vertical(
-                CommandSuggestions(self.peers, id=SUGGESTIONS_ID),
+                CommandSuggestions(self.session.commands, id=SUGGESTIONS_ID),
                 CommandInput(placeholder=self._input_placeholder, id=INPUT_ID),
                 id="input-area",
             ),
@@ -226,29 +235,30 @@ class _Chat(App):
     # === The conversation ===========================================================
 
     async def command(self, name: str, args: str = "") -> Optional[str]:
-        """Runs ``/name args``: an ask addressed to the tool of that name.
+        """Runs ``/name args`` and shows whatever it answered.
 
-        There is no command dispatch any more — a command is a question put to
-        a peer, and its answer arrives as an ordinary message.
+        Neither the invocation nor the answer is a message. A command that
+        should be seen declares ``HookSay`` and writes its own output; one that
+        only answers is answering whoever ran it, and that is the caller's to
+        do something with.
 
         Args:
-            name: The tool's visible name, without the prefix.
+            name: The command's name, without the prefix.
             args: The rest of the line.
 
         Returns:
-            Optional[str]: The tool's answer, or None when no such tool exists.
+            Optional[str]: What the command answered, if anything.
         """
-        at = next((i for i, w in self.peers().items() if name_of(w) == name), None)
-        if at is None or at == LOCAL:
+        if name not in self.session.commands:
             await self.say("Unknown command: %s%s" % (COMMAND_PREFIX, name))
             return None
-        return await self.ask(at, args)
+        return await self.invoke(name, args)
 
-    async def on_say(self, msg: ChatMessage, **kwargs) -> None:
+    async def listen(self, msg: ChatMessage, **kwargs) -> None:
         """Someone spoke to everyone: repaint."""
         self._repaint()
 
-    async def on_ask(self, msg: ChatMessage, **kwargs) -> Optional[str]:
+    async def answer(self, msg: ChatMessage, **kwargs) -> Optional[str]:
         """Someone asked the user something.
 
         Returns None on purpose: the answer is not ours to invent. The question

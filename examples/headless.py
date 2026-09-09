@@ -26,11 +26,14 @@ from chatinho import (
     HelpCommand,
     HookAsk,
     HookContext,
-    HookOnAsk,
-    HookOnSay,
+    HookExecute,
+    HookAnswer,
+    HookListen,
+    HookInvoke,
     HookPeers,
     HookSay,
     Context,
+    Invoke,
     Peers,
     Say,
     connector,
@@ -40,7 +43,7 @@ from chatinho import (
 
 
 @connector("eco")
-@require(HookOnSay)
+@require(HookListen)
 @require(HookSay)
 class EchoConnector:
     """Answers whatever is said to everyone, and never its own answers.
@@ -51,27 +54,38 @@ class EchoConnector:
 
     say : Say
 
-    async def on_say(self, msg: ChatMessage) -> None:
-        """Replies to the message that was just said."""
+    async def listen(self, msg: ChatMessage) -> None:
+        """Replies to what the user said — not to what a command wrote."""
+        if not msg.is_broadcast or not msg.is_local:
+            return
         await self.say("Received: %s" % msg.text, reply_to=msg.id)
 
 
 @tool("upper", "Upper-case the rest of the line")
-@require(HookOnAsk)
+@require(HookExecute)
 class UpperCommand:
-    """Shouts its arguments back."""
+    """Shouts its arguments back.
 
-    async def on_ask(self, msg: ChatMessage) -> str:
-        """Returns the question in upper case."""
-        return msg.text.upper() if msg.text else "Usage: /upper <text>"
+    A command is not a peer: it has no id, nothing is addressed to it, and it
+    runs only when someone runs it.
+    """
+
+    async def execute(self, args: str = "", **kwargs) -> str:
+        """Answers with the arguments in upper case.
+
+        Answering is what puts it in the conversation: saying it too would
+        write the same line twice.
+        """
+        return args.upper() if args else "Usage: /upper <text>"
 
 
 @require(HookSay)
 @require(HookAsk)
-@require(HookOnSay)
-@require(HookOnAsk)
+@require(HookListen)
+@require(HookAnswer)
 @require(HookContext)
 @require(HookPeers)
+@require(HookInvoke)
 class Terminal:
     """The presentation layer: prints what arrives, sends what is typed."""
 
@@ -79,28 +93,30 @@ class Terminal:
     say           : Say
     ask           : Ask
     context : Context
-    peers  : Peers
+    peers         : Peers
+    invoke        : Invoke
 
-    async def on_say(self, msg: ChatMessage) -> None:
+    async def listen(self, msg: ChatMessage) -> None:
         """Renders one broadcast on a plain terminal."""
         reply = " (replying to %s)" % msg.reply_to if msg.reply_to else ""
         print("< %s%s" % (msg.text, reply))
 
-    async def on_ask(self, msg: ChatMessage) -> Optional[str]:
+    async def answer(self, msg: ChatMessage) -> Optional[str]:
         """Shows a question put to the user; the reply is theirs to type."""
         print("? %s  — reply with  =<answer>" % msg.text)
         return None
 
     async def command(self, line: str) -> None:
-        """Runs ``/name args``: an ask addressed to the tool of that name."""
+        """Runs ``/name args``.
+
+        Nothing is printed here on success: a command that should be seen wrote
+        its own output, and ``listen`` rendered it like anything else. The
+        answer comes back for the caller, which here has no use for it.
+        """
         name, _, args = line.partition(" ")
-        at = next((i for i, w in self.peers().items()
-                   if i != LOCAL and getattr(w, "name", "") == name), None)
-        if at is None:
+        if await self.invoke(name, args.strip()) is None:
             print("? unknown command: /%s — try /help" % name)
-            return
-        print("> /%s %s" % (name, args))
-        print("< %s" % await self.ask(at, args.strip()))
+        await asyncio.sleep(0.05)
 
 
 async def read_lines() -> List[str]:
@@ -113,8 +129,8 @@ async def main() -> None:
     session = ChatSession()
     view = Terminal()
     session.attach(view, at=LOCAL)
-    session.attach(HelpCommand())
-    session.attach(UpperCommand())
+    session.add_command(HelpCommand())
+    session.add_command(UpperCommand())
     # Registered last on purpose: hooks fire in registration order, and the
     # echo answers re-entrantly, so listening first keeps the reply below the
     # message it answers.
