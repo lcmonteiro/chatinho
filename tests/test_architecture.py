@@ -9,6 +9,9 @@ import ast
 import importlib
 import inspect
 import pathlib
+import subprocess
+import sys
+import tomllib
 
 import chatinho
 from chatinho import Hook
@@ -201,3 +204,61 @@ def test_the_spec_has_a_section_for_every_hook():
     spec    = (DOCS / "SPEC.md").read_text(encoding="utf-8")
     missing = [name for name in _spec_table() if "### %s\n" % name not in spec]
     assert missing == [], "docs/SPEC.md has no section for %s" % missing
+
+
+# === Importable without the batteries ===========================================
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+_WITHOUT_THE_EXTRAS = """
+import builtins, sys
+real = builtins.__import__
+def blocked(name, *a, **k):
+    if name.split(".")[0] in {"textual", "openai", "sqlalchemy", "requests"}:
+        raise ImportError("No module named %r" % name)
+    return real(name, *a, **k)
+builtins.__import__ = blocked
+
+import chatinho
+from chatinho import ChatSession, HelpCommand, TestCommand, ChatMessage, require, HookListen
+print("core-ok")
+for name in ("create_chat", "OpenAIConnector", "A2AConnector", "DatabaseBackend"):
+    try:
+        getattr(chatinho, name)
+    except ImportError as exc:
+        print(name, "->", "chatinho[" in str(exc))
+"""
+
+
+def test_the_core_imports_with_none_of_the_batteries_installed():
+    """``import chatinho`` must not need a terminal, an HTTP client and an ORM.
+
+    A project that embeds the session in a service installs the package and
+    nothing else; the four names that need an extra are resolved on first use
+    (PEP 562) and report the extra by name when it is missing. Run in a fresh
+    interpreter, because the point is what happens at import.
+    """
+    done = subprocess.run(
+        [sys.executable, "-c", _WITHOUT_THE_EXTRAS],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    assert done.returncode == 0, done.stderr
+    lines = done.stdout.split()
+    assert "core-ok" in done.stdout, done.stdout
+    assert lines.count("True") == 4, "an extra is not named in its own error:\n%s" % done.stdout
+
+
+def test_the_declared_extras_are_the_ones_the_package_asks_for():
+    """pyproject's extras and the lazy table have to agree, or a name lies."""
+    declared = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert declared["project"]["dependencies"] == [], "the core must install nothing"
+
+    extras = declared["project"]["optional-dependencies"]
+    named  = {extra for _, extra, _ in chatinho._BEHIND_AN_EXTRA.values()}
+    assert named <= set(extras), "chatinho names extras that pyproject does not declare"
+
+    for _, extra, needs in chatinho._BEHIND_AN_EXTRA.values():
+        assert any(spec.startswith(needs) for spec in extras[extra]), \
+            "extra %r does not install %r" % (extra, needs)
+        assert any(spec.startswith(needs) for spec in extras["all"]), \
+            "chatinho[all] does not install %r" % needs

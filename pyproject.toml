@@ -1,7 +1,7 @@
 [project]
 name = "chatinho"
 version = "0.1.0"
-description = "A simple, extensible TUI chat client library built on Textual"
+description = "An extensible chat library: peers, three verbs, ten hooks — with an optional Textual TUI"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -23,19 +23,30 @@ classifiers = [
     "Topic :: Terminals",
     "Typing :: Typed",
 ]
-dependencies = [
-    "textual>=0.45.0",
-    "requests>=2.25.0",
-    "openai>=1.0.0",
-    "sqlalchemy>=2.0.0",
-]
+# The core — ChatSession, the hooks, the commands — imports nothing but the
+# standard library, and tests/test_architecture.py fails if that stops being
+# true. Each battery brings its own dependency, so a project that embeds the
+# session in a service does not install a terminal, and one that wants the
+# terminal does not install OpenAI's client.
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/lcmonteiro/chatinho"
 Repository = "https://github.com/lcmonteiro/chatinho"
 
 [project.optional-dependencies]
+# What most people want: the terminal app that create_chat builds.
+tui = ["textual>=0.45.0"]
+# One per battery, named after what it gives you.
+openai = ["openai>=1.0.0"]
+a2a    = ["requests>=2.25.0"]
+sql    = ["sqlalchemy>=2.0.0"]
+all    = ["textual>=0.45.0", "openai>=1.0.0", "requests>=2.25.0", "sqlalchemy>=2.0.0"]
 dev = [
+    "textual>=0.45.0",
+    "openai>=1.0.0",
+    "requests>=2.25.0",
+    "sqlalchemy>=2.0.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.6",

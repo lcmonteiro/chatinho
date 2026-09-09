@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **127 pass** |
+| `pytest -q` | **129 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -279,6 +279,9 @@ is a boundary that rots. It parses the core modules and fails if:
 - the session imports the app;
 - **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
   it assigns it, or is *granted* it;
+- **`import chatinho` needs one of the batteries** — a subprocess imports it with `textual`,
+  `openai`, `sqlalchemy` and `requests` all blocked, and each of the four lazy names has to report
+  its own extra;
 - **`docs/SPEC.md` disagrees with the hook constants** — its summary table has to name the same
   ten, with the same demanded method and the same grants, and each one has to have its own
   section. A spec nothing checks is a spec that rots, so adding a hook without documenting it
@@ -293,6 +296,30 @@ silent case.
 The grants half was added after a third near-miss: `_Chat` was granted `run`, which is Textual's
 own `App.run()` — the documented way to start the app. mypy caught it because the class annotates
 its grants; one that did not would have shipped it. The grant is called `invoke` now.
+
+## Packaging: the core installs nothing
+
+`dependencies = []`. `ChatSession`, the ten hooks, `HelpCommand` and `TestCommand` import nothing
+but the standard library — which the fitness tests already enforced, so the packaging now says it
+too. Four names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
+
+| name | extra | brings |
+|---|---|---|
+| `create_chat` | `chatinho[tui]` | `textual` |
+| `OpenAIConnector` | `chatinho[openai]` | `openai` |
+| `A2AConnector` | `chatinho[a2a]` | `requests` |
+| `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
+
+`chatinho[all]` is all four; `chatinho[dev]` is those plus pytest, ruff and mypy, which is what CI
+installs and what `setup.sh` syncs. A missing extra raises an `ImportError` that names it, rather
+than surfacing as somebody else's `ModuleNotFoundError`.
+
+`setup.sh` runs `uv sync --extra dev` explicitly: with no runtime dependencies left, whether a bare
+`uv sync` puts the test tools in `.venv` depends on which uv you have.
+
+**Not on PyPI** (checked: 404). Consumers install from git — `pip install "chatinho @
+git+https://github.com/lcmonteiro/chatinho.git@v0.1.0"` — which is what the README documents. The
+wheel ships `py.typed`, verified by building it and reading the archive.
 
 ## Public API
 
