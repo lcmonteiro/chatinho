@@ -164,6 +164,10 @@ create_chat(
 syntax-highlighted code blocks, command autocomplete and click-to-reply come with it, and
 `ChatStyle` is a dataclass — use `dataclasses.replace` to change a colour.
 
+`quit_key` moves the quit binding off Textual's `ctrl+q` — `create_chat(quit_key="ctrl+g")` — and a
+key Textual could never receive is refused there and then, rather than becoming a binding that
+silently never fires.
+
 ### With the batteries
 
 ```python

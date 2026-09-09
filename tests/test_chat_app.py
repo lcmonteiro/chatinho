@@ -9,6 +9,8 @@ model as the headless ones, with a terminal attached.
 import asyncio
 import threading
 
+import pytest
+from textual.binding import NoBinding
 from textual.widgets import Input
 
 from chatinho import (
@@ -259,3 +261,63 @@ async def test_send_pending_reply_does_nothing_without_a_target():
     async with app.run_test():
         assert await app.send_pending_reply("resposta") is None
         assert app.messages == []
+
+
+# === The quit key ===============================================================
+
+
+def _actions_for(app, key):
+    """The actions bound to *key*, or None when nothing is."""
+    try:
+        return [binding.action for binding in app._bindings.get_bindings_for_key(key)]
+    except NoBinding:
+        return None
+
+
+def test_the_quit_key_defaults_to_textuals_own():
+    app = create_chat()
+    assert _actions_for(app, "ctrl+q") == ["quit"]
+
+
+def test_a_given_quit_key_replaces_the_default_rather_than_joining_it():
+    """_Chat declares no BINDINGS: quit is inherited, and Textual *merges*.
+
+    Declaring a new binding in the subclass would leave ctrl+q quitting as
+    well, which is the bug this guards. The instance's own map is what moves.
+    """
+    app = create_chat(quit_key="ctrl+g")
+    assert _actions_for(app, "ctrl+g") == ["quit"]
+    assert _actions_for(app, "ctrl+q") is None
+
+
+async def test_the_quit_key_actually_quits_and_the_old_one_does_not():
+    """The map saying so is not the same as the app doing so."""
+    app = create_chat(quit_key="ctrl+g")
+    async with app.run_test() as pilot:
+        await pilot.press("ctrl+q")
+        await pilot.pause()
+        assert app.is_running, "ctrl+q should no longer quit"
+
+        await pilot.press("ctrl+g")
+        await pilot.pause()
+        assert not app.is_running
+
+
+def test_rebinding_quit_leaves_the_other_bindings_alone():
+    """ctrl+c is help_quit and ctrl+p is the command palette; neither moves."""
+    default = create_chat()
+    rebound = create_chat(quit_key="f10")
+    for key in ("ctrl+c", "ctrl+p"):
+        assert _actions_for(rebound, key) == _actions_for(default, key)
+
+
+@pytest.mark.parametrize("bad", ["", "   ", "not a key", "ctrl+", "hyperx+q"])
+def test_a_quit_key_textual_could_never_receive_is_refused(bad):
+    """Binding() accepts 'not a key' and then never fires — a silent no-op."""
+    with pytest.raises(ValueError, match="quit_key"):
+        create_chat(quit_key=bad)
+
+
+def test_a_single_character_and_a_named_key_are_both_accepted():
+    assert _actions_for(create_chat(quit_key="q"), "q") == ["quit"]
+    assert _actions_for(create_chat(quit_key="escape"), "escape") == ["quit"]
