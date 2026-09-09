@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **140 pass** |
+| `pytest -q` | **149 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -50,9 +50,11 @@ to is TOOL    → a command was run          (invoke)
 reply_to set  → it answers that message    (answer)
 ```
 
-**The presentation is peer zero.** `_Chat` declares the same hooks a connector does and is
-attached at `LOCAL`. There is no privileged path: a terminal reaches the conversation through
-exactly the doors a weather service does.
+**The presentation is peer zero, and says so itself.** `_Chat` is
+`@connector("chat", id=LOCAL)` — being the person is what it *is*, not a favour whoever attaches
+it does — and it declares the same hooks a connector does. There is no privileged path: a terminal
+reaches the conversation through exactly the doors a weather service does, and the session numbers
+everything else from one.
 
 ## Three verbs
 
@@ -227,10 +229,24 @@ instance may override with `self.name`. The session assigns the id at `attach`.
 `ChatSession.add_command(cmd)` registers a command: a name, its grants, `initialize()` — no id and
 no queue, because there is nothing to address or deliver.
 
-Lifecycle is deliberately **not** a hook: `initialize()` and `shutdown()` are called when present.
-A peer holding nothing needs neither, and making it declare that it holds nothing is
-ceremony. `close()` shuts down everything that has one, and the app's `on_unmount` calls it, so a
-connector holding a server thread does not outlive the chat.
+Lifecycle is deliberately **not** a hook: `initialize()`, `serve()` and `shutdown()` are called
+when present. A peer holding nothing needs none of them, and making it declare that it holds
+nothing is ceremony.
+
+| | when | |
+|---|---|---|
+| `initialize()` | at `attach` | **synchronous** — there is usually no loop yet. An `async def` one is refused with a `TypeError` rather than returning a coroutine nobody awaits |
+| `async serve()` | during `run()` | **runs until it is finished.** A terminal, a stdin reader, a server |
+| `shutdown()` | at `close` | synchronous; a connector holding a thread must not outlive the chat |
+
+**`ChatSession.run()` owns the loop**: `asyncio.run(...)` inside, `start()`, then every `serve()`
+as its own task, and `close()` on the way out. The **first** `serve()` to return ends the chat —
+quitting the terminal is the end of it even when a server is still listening — and the rest are
+cancelled. A session with nothing serving runs until it is interrupted, which is what a bot wants.
+Cancellation is not swallowed; `run()` turns the Ctrl-C case into a quiet exit itself.
+
+That is the inversion: the session drives, and the terminal is a peer it serves. `_Chat.serve()` is
+`await self.run_async()` — `run()` would try to start a second loop inside the session's own.
 
 Two costs, stated plainly:
 
@@ -248,9 +264,9 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (438)
-  chat_session.py  ChatSession: peers, commands, queues, routing, context           (430)
-  chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (409)
+  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (456)
+  chat_session.py  ChatSession: run, peers, commands, queues, routing, context      (511)
+  chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (439)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
   chat_log.py      ChatLog widget: renders through the granted context reader
   chat_input.py    CommandInput + CommandSuggestions (autocomplete over the commands)
@@ -327,9 +343,9 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 35 names: `create_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
+`__init__.py` exports 36 names: `create_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
 the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, `options_of`,
-`declares`, `name_of`, `Hook`); the ten `Hook*` constants; the grant protocols (`Say`, `Ask`,
+`declares`, `declared_id`, `name_of`, `Hook`); the ten `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `HelpCommand`, `TestCommand`).
 
@@ -356,8 +372,9 @@ consumer's mypy sees the whole surface — which is also why the `TYPE_CHECKING`
 For a chat without a terminal, build a `ChatSession` and attach your own presentation —
 `examples/headless.py` is exactly that, in about forty lines.
 
-`ChatSession`'s own public surface is six members: `attach`, `add_command`, `start`, `close`,
-`id_of`, `forget`.
+`ChatSession`'s own public surface is seven members: `run`, `attach`, `add_command`, `start`,
+`close`, `id_of`, `forget`. `run()` is the entry point for a program whose job *is* the chat;
+`start`/`close` are for driving it from inside a loop you already own.
 Everything about the conversation is reached by declaring a hook — which is what
 [`docs/SPEC.md`](docs/SPEC.md) specifies, hook by hook.
 

@@ -79,6 +79,7 @@ class UpperCommand:
         return args.upper() if args else "Usage: /upper <text>"
 
 
+@connector("terminal", id=LOCAL)
 @require(HookSay)
 @require(HookAsk)
 @require(HookListen)
@@ -106,6 +107,28 @@ class Terminal:
         print("? %s  — reply with  =<answer>" % msg.text)
         return None
 
+    async def serve(self) -> None:
+        """Reads stdin until it ends, and that is the end of the chat.
+
+        Lifecycle, not a hook: ``ChatSession.run()`` runs this and closes when
+        it returns. No ``asyncio.run`` here and no ``start``/``close`` — the
+        session owns all three.
+        """
+        print("Type a message, /help for commands, /quit to leave.")
+        for line in await read_lines():
+            text = line.strip()
+            if not text or text in ("/quit", "/exit"):
+                break
+            if text.startswith("/"):
+                await self.command(text[1:].strip())
+            else:
+                print("> %s" % text)
+                await self.say(text)
+                # Nothing blocks here: the echo answers on its own queue, so
+                # give the loop a moment before reading the next line.
+                await asyncio.sleep(0.05)
+        print("--- %d messages, no terminal UI ---" % len(self.context()))
+
     async def command(self, line: str) -> None:
         """Runs ``/name args``.
 
@@ -124,36 +147,18 @@ async def read_lines() -> List[str]:
     return await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readlines)
 
 
-async def main() -> None:
-    """Builds a headless chat and drives it from stdin."""
-    session = ChatSession()
-    view = Terminal()
-    session.attach(view, at=LOCAL)
-    session.add_command(HelpCommand())
-    session.add_command(UpperCommand())
-    # Registered last on purpose: hooks fire in registration order, and the
-    # echo answers re-entrantly, so listening first keeps the reply below the
-    # message it answers.
-    session.attach(EchoConnector())
-    await session.start()
-
-    print("Type a message, /help for commands, /quit to leave.")
-    for line in await read_lines():
-        text = line.strip()
-        if not text or text in ("/quit", "/exit"):
-            break
-        if text.startswith("/"):
-            await view.command(text[1:].strip())
-        else:
-            print("> %s" % text)
-            await view.say(text)
-            # Nothing blocks here: the echo answers on its own queue, so give
-            # the loop a moment to run it before reading the next line.
-            await asyncio.sleep(0.05)
-
-    await session.close()
-    print("--- %d messages, no terminal UI ---" % len(view.context()))
+def main() -> None:
+    """Builds a headless chat and lets the session run it."""
+    # The terminal is a connector like any other: it declares the id it can
+    # only be — LOCAL, because it speaks for the person — and the session
+    # numbers the rest. Registration order matters: hooks fire in it, and the
+    # echo answers re-entrantly, so the terminal listening first keeps the
+    # reply below the message it answers.
+    ChatSession(
+        connectors = [Terminal(), EchoConnector()],
+        commands   = [HelpCommand(), UpperCommand()],
+    ).run()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

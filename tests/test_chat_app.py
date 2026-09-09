@@ -13,18 +13,31 @@ import pytest
 from textual.binding import NoBinding
 from textual.widgets import Input
 
+from chatinho.chat_app import _Chat
 from chatinho import (
     LOCAL,
+    create_chat,
     TOOL,
     Ask,
     HelpCommand,
     HookAsk,
     HookExecute,
     connector,
-    create_chat,
+    ChatSession,
     require,
     tool,
 )
+
+
+def chat_app(connectors=None, commands=None, backend=None, **kwargs):
+    """The terminal peer, built and attached the way create_chat does it.
+
+    ``create_chat`` returns the *session* now — the terminal is one of its
+    peers, not its owner — so a test that drives the app builds it the same way
+    a caller would: an ordinary connector, attached to an ordinary session.
+    """
+    session = ChatSession(connectors=connectors, commands=commands, backend=backend)
+    return _Chat(session=session, **kwargs)
 
 
 @tool("eco", "repete")
@@ -59,7 +72,7 @@ class _Agente:
 
 
 async def test_say_returns_an_id_and_stores():
-    app = create_chat()
+    app = chat_app()
     async with app.run_test():
         assert await app.say("hello") == "msg-1"
         msg = app.messages[0]
@@ -68,13 +81,13 @@ async def test_say_returns_an_id_and_stores():
 
 
 async def test_the_welcome_message_is_the_app_saying_it():
-    app = create_chat(welcome_message="Bem-vindo")
+    app = chat_app(welcome_message="Bem-vindo")
     async with app.run_test():
         assert [m.text for m in app.messages] == ["Bem-vindo"]
 
 
 async def test_submitting_text_says_it():
-    app = create_chat()
+    app = chat_app()
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         inp.value = "  ola  "
@@ -85,7 +98,7 @@ async def test_submitting_text_says_it():
 
 
 async def test_blank_input_says_nothing():
-    app = create_chat()
+    app = chat_app()
     async with app.run_test() as pilot:
         app.query_one("#input-line", Input).value = "   "
         await pilot.press("enter")
@@ -98,7 +111,7 @@ async def test_blank_input_says_nothing():
 
 async def test_running_a_command_is_recorded_whole():
     """The invocation and the answer are both messages, in that order."""
-    app = create_chat(commands=[_Eco(), _Mudo()])
+    app = chat_app(commands=[_Eco(), _Mudo()])
     async with app.run_test() as pilot:
         assert await app.command("eco", "ola") == "eco: ola"
         assert await app.command("mudo") == "só para quem correu"
@@ -116,7 +129,7 @@ async def test_what_a_command_writes_is_not_the_user_speaking():
     than said to the room, so a peer that replies to broadcasts sees neither as
     the user speaking.
     """
-    app = create_chat(commands=[_Eco()])
+    app = chat_app(commands=[_Eco()])
     async with app.run_test() as pilot:
         await app.command("eco", "ola")
         await pilot.pause()
@@ -126,7 +139,7 @@ async def test_what_a_command_writes_is_not_the_user_speaking():
 
 
 async def test_submitting_a_slash_runs_the_tool():
-    app = create_chat(commands=[_Eco()])
+    app = chat_app(commands=[_Eco()])
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", Input)
         inp.value = "/eco bom dia"
@@ -136,7 +149,7 @@ async def test_submitting_a_slash_runs_the_tool():
 
 
 async def test_an_unknown_command_says_so():
-    app = create_chat()
+    app = chat_app()
     async with app.run_test() as pilot:
         assert await app.command("nope") is None
         await pilot.pause()
@@ -144,7 +157,7 @@ async def test_an_unknown_command_says_so():
 
 
 async def test_help_lists_the_tools_that_can_be_asked():
-    app = create_chat(commands=[HelpCommand(), _Eco()])
+    app = chat_app(commands=[HelpCommand(), _Eco()])
     async with app.run_test() as pilot:
         answer = await app.command("help")
         await pilot.pause()
@@ -157,7 +170,7 @@ async def test_help_lists_the_tools_that_can_be_asked():
 async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
     """The whole round trip, with no routing code in the presentation."""
     agente = _Agente()
-    app = create_chat(connectors=[agente])
+    app = chat_app(connectors=[agente])
     async with app.run_test() as pilot:
         question = asyncio.create_task(agente.ask(LOCAL, "Autorizas?"))
         await pilot.pause()
@@ -175,7 +188,7 @@ async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
 
 async def test_a_message_from_another_thread_reaches_the_log():
     """A connector with its own server thread must be able to speak."""
-    app = create_chat()
+    app = chat_app()
     async with app.run_test() as pilot:
         loop = asyncio.get_running_loop()
         done = threading.Event()
@@ -200,7 +213,7 @@ async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
     The invocation and the answer are both messages now, and the answer carries
     ``reply_to``, so the log renders it the way it renders any reply.
     """
-    app = create_chat(commands=[_Eco()])
+    app = chat_app(commands=[_Eco()])
     async with app.run_test() as pilot:
         await app.command("eco", "ola")
         await pilot.pause()
@@ -213,7 +226,7 @@ async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
 
 
 async def test_the_log_renders_what_the_history_holds():
-    app = create_chat(commands=[_Eco()])
+    app = chat_app(commands=[_Eco()])
     async with app.run_test() as pilot:
         await app.say("uma")
         await app.command("eco", "duas")
@@ -224,7 +237,7 @@ async def test_the_log_renders_what_the_history_holds():
 
 
 async def test_only_the_window_is_rendered():
-    app = create_chat(max_displayed=3)
+    app = chat_app(max_displayed=3)
     async with app.run_test() as pilot:
         for n in range(6):
             await app.say("m%d" % n)
@@ -237,7 +250,7 @@ async def test_only_the_window_is_rendered():
 
 
 async def test_get_replies_reads_the_thread_back():
-    app = create_chat()
+    app = chat_app()
     async with app.run_test():
         first = await app.say("original")
         reply = await app.say("resposta", reply_to=first)
@@ -246,7 +259,7 @@ async def test_get_replies_reads_the_thread_back():
 
 
 async def test_send_pending_reply_uses_the_clicked_target():
-    app = create_chat()
+    app = chat_app()
     async with app.run_test() as pilot:
         target = await app.say("alvo")
         await pilot.pause()
@@ -257,7 +270,7 @@ async def test_send_pending_reply_uses_the_clicked_target():
 
 
 async def test_send_pending_reply_does_nothing_without_a_target():
-    app = create_chat()
+    app = chat_app()
     async with app.run_test():
         assert await app.send_pending_reply("resposta") is None
         assert app.messages == []
@@ -275,7 +288,7 @@ def _actions_for(app, key):
 
 
 def test_the_quit_key_defaults_to_textuals_own():
-    app = create_chat()
+    app = chat_app()
     assert _actions_for(app, "ctrl+q") == ["quit"]
 
 
@@ -285,14 +298,14 @@ def test_a_given_quit_key_replaces_the_default_rather_than_joining_it():
     Declaring a new binding in the subclass would leave ctrl+q quitting as
     well, which is the bug this guards. The instance's own map is what moves.
     """
-    app = create_chat(quit_key="ctrl+g")
+    app = chat_app(quit_key="ctrl+g")
     assert _actions_for(app, "ctrl+g") == ["quit"]
     assert _actions_for(app, "ctrl+q") is None
 
 
 async def test_the_quit_key_actually_quits_and_the_old_one_does_not():
     """The map saying so is not the same as the app doing so."""
-    app = create_chat(quit_key="ctrl+g")
+    app = chat_app(quit_key="ctrl+g")
     async with app.run_test() as pilot:
         await pilot.press("ctrl+q")
         await pilot.pause()
@@ -305,8 +318,8 @@ async def test_the_quit_key_actually_quits_and_the_old_one_does_not():
 
 def test_rebinding_quit_leaves_the_other_bindings_alone():
     """ctrl+c is help_quit and ctrl+p is the command palette; neither moves."""
-    default = create_chat()
-    rebound = create_chat(quit_key="f10")
+    default = chat_app()
+    rebound = chat_app(quit_key="f10")
     for key in ("ctrl+c", "ctrl+p"):
         assert _actions_for(rebound, key) == _actions_for(default, key)
 
@@ -315,9 +328,32 @@ def test_rebinding_quit_leaves_the_other_bindings_alone():
 def test_a_quit_key_textual_could_never_receive_is_refused(bad):
     """Binding() accepts 'not a key' and then never fires — a silent no-op."""
     with pytest.raises(ValueError, match="quit_key"):
-        create_chat(quit_key=bad)
+        chat_app(quit_key=bad)
 
 
 def test_a_single_character_and_a_named_key_are_both_accepted():
-    assert _actions_for(create_chat(quit_key="q"), "q") == ["quit"]
-    assert _actions_for(create_chat(quit_key="escape"), "escape") == ["quit"]
+    assert _actions_for(chat_app(quit_key="q"), "q") == ["quit"]
+    assert _actions_for(chat_app(quit_key="escape"), "escape") == ["quit"]
+
+
+def test_create_chat_returns_the_session_with_the_terminal_attached():
+    """The session owns the loop; the terminal is one of the peers it serves."""
+    session = create_chat(commands=[_Eco()])
+
+    assert isinstance(session, ChatSession)
+    assert session.id_of("chat") == LOCAL, "the terminal declares id=LOCAL"
+    assert callable(getattr(session, "run", None))
+
+
+async def test_the_terminal_serves_until_the_user_quits():
+    """serve() is what ChatSession.run() runs, and it is run_async underneath.
+
+    ``run()`` would try to start a second event loop inside the session's own.
+    """
+    app = chat_app(quit_key="ctrl+g")
+    serving = asyncio.create_task(app.run_async(headless=True))
+    await asyncio.sleep(0.2)
+    assert not serving.done(), "still serving while the app is up"
+
+    app.exit()
+    await asyncio.wait_for(serving, timeout=5)

@@ -15,6 +15,7 @@ import pytest
 from chatinho import (
     LOCAL,
     ChatMessage,
+    ChatSession,
     TOOL,
     HookForget,
     HookLoad,
@@ -443,3 +444,129 @@ async def test_forget_reaches_the_one_that_holds():
     await session.close()
 
 
+
+
+# === The id a class declares ====================================================
+
+
+async def test_a_connector_can_pin_the_id_it_answers_to():
+    """Being peer zero is what the terminal *is*, not a favour at attach.
+
+    @connector(name, id=…) is for a connector that can only be one peer. The
+    session numbers everything else from one, in attachment order.
+    """
+
+    @connector("terminal", id=LOCAL)
+    @require(HookListen)
+    class Terminal:
+        async def listen(self, msg) -> None:
+            pass
+
+    session = ChatSession(connectors=[Terminal(), _Rapido()])
+    assert session.id_of("terminal") == LOCAL
+    assert session.id_of("rapido") == 1
+    await session.close()
+
+
+def test_the_caller_may_still_pin_a_different_id():
+    @connector("teimoso", id=LOCAL)
+    @require(HookListen)
+    class Teimoso:
+        async def listen(self, msg) -> None:
+            pass
+
+    session = ChatSession()
+    assert session.attach(Teimoso(), at=7) == 7
+
+
+def test_a_declared_id_may_not_be_TOOL_or_anything_but_an_int():
+    with pytest.raises(ValueError, match="TOOL"):
+        @connector("ladrao", id=TOOL)
+        class Ladrao:
+            pass
+
+    with pytest.raises(ValueError, match="int"):
+        @connector("torto", id="zero")
+        class Torto:
+            pass
+
+
+# === run(), and what serves ======================================================
+
+
+async def test_the_first_peer_to_finish_serving_ends_the_chat():
+    """serve() is lifecycle, not a hook: it runs until it is finished.
+
+    Quitting the terminal is the end of the chat even when a server is still
+    listening, so the session waits for the first and cancels the rest.
+    """
+    cancelled = []
+
+    @connector("curto")
+    @require(HookSay)
+    class Curto:
+        say : Say
+        async def serve(self) -> None:
+            await self.say("e pronto")
+
+    @connector("longo")
+    @require(HookListen)
+    class Longo:
+        async def listen(self, msg) -> None:
+            pass
+        async def serve(self) -> None:
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.append(True)
+                raise
+
+    session = ChatSession(connectors=[Curto(), Longo()])
+    await asyncio.wait_for(session._serve(), timeout=2)
+    assert cancelled == [True], "the one still serving should have been cancelled"
+    assert [m.text for m in session._context()] == ["e pronto"]
+
+
+async def test_a_session_with_nothing_serving_runs_until_it_is_stopped():
+    """A bot has no terminal to quit: it runs until something interrupts it."""
+    session = ChatSession(connectors=[_Rapido()])
+    running = asyncio.create_task(session._serve())
+    await asyncio.sleep(0.05)
+    assert not running.done()
+
+    running.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await running
+
+
+async def test_a_peer_that_fails_while_serving_is_not_swallowed():
+    @connector("avariado")
+    @require(HookListen)
+    class Avariado:
+        async def listen(self, msg) -> None:
+            pass
+        async def serve(self) -> None:
+            raise RuntimeError("o servidor caiu")
+
+    session = ChatSession(connectors=[Avariado()])
+    with pytest.raises(RuntimeError, match="caiu"):
+        await session._serve()
+
+
+def test_an_async_initialize_is_refused_rather_than_silently_skipped():
+    """attach() is synchronous, so it cannot await one — say so.
+
+    It used to return a coroutine nobody awaited, which did nothing at all and
+    explained itself only as a RuntimeWarning.
+    """
+
+    @connector("tarde")
+    @require(HookListen)
+    class Tarde:
+        async def initialize(self) -> None:
+            pass
+        async def listen(self, msg) -> None:
+            pass
+
+    with pytest.raises(TypeError, match="serve"):
+        ChatSession(connectors=[Tarde()])

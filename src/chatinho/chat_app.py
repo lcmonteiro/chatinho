@@ -70,7 +70,7 @@ def create_chat(
     max_displayed   : int = 100,
     style           : Optional[ChatStyle] = None,
     quit_key        : str = "ctrl+q",
-) -> "_Chat":
+) -> ChatSession:
     """Create a chat application from peers and a backend.
 
     A **connector** is a peer: it has an id and a queue, and the conversation
@@ -96,20 +96,23 @@ def create_chat(
             separate binding and is left alone.
 
     Returns:
-        _Chat: The configured application; call ``run()`` to start it.
+        ChatSession: The session, with the terminal attached at ``LOCAL``. Call
+        ``run()`` on it: the session owns the loop, and the terminal is one of
+        the peers it serves.
 
     Raises:
         ValueError: ``quit_key`` is not a key Textual could receive.
     """
-    return _Chat(
-        session         = ChatSession(connectors=connectors, commands=commands,
-                                      backend=backend),
+    session = ChatSession(connectors=connectors, commands=commands, backend=backend)
+    _Chat(
+        session         = session,
         title           = title,
         welcome_message = welcome_message,
         max_displayed   = max_displayed,
         style           = style,
         quit_key        = quit_key,
     )
+    return session
 
 
 #: What Textual answers to, by name: every key it enumerates, plus its aliases.
@@ -163,7 +166,7 @@ def _validate_key(key: str) -> str:
     return key
 
 
-@connector("chat")
+@connector("chat", id=LOCAL)
 @require(HookSay)
 @require(HookAsk)
 @require(HookListen)
@@ -207,9 +210,11 @@ class _Chat(App):
             self.CSS = style.to_css()  # type: ignore[misc]
 
         self.session : ChatSession = session if session is not None else ChatSession()
-        # Peer zero: the user. This is what grants say, ask, answer and
-        # context, and what subscribes listen and answer below.
-        self.session.attach(self, at=LOCAL)
+        # Peer zero: the user. The id comes from the class declaration —
+        # @connector("chat", id=LOCAL) — because being the person is what this
+        # *is*, not a favour whoever attaches it does. Attaching is what grants
+        # say, ask, context and invoke, and what subscribes listen and answer.
+        self.session.attach(self)
         self._repaint_after("say", "ask")
 
         self.title = title
@@ -218,6 +223,19 @@ class _Chat(App):
         self.max_displayed : int = max_displayed
         # Thread id of the app's main loop (set in on_mount)
         self._app_thread_id : Optional[int] = None
+
+    async def serve(self) -> None:
+        """Runs the terminal, and returns when the user quits.
+
+        Lifecycle, not a hook: :meth:`ChatSession.run` calls this on every peer
+        that has one and closes the session when the first returns. Quitting the
+        chat is the end of the chat, even if a connector is still listening on a
+        socket.
+
+        ``run_async`` rather than ``run``: there is already a loop — the
+        session's — and Textual's ``run()`` would try to start a second.
+        """
+        await self.run_async()
 
     def _rebind_quit(self, quit_key: str) -> None:
         """Moves the quit binding onto *quit_key*, and off whatever held it.

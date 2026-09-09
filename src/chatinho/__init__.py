@@ -64,6 +64,7 @@ from .chat_hooks import (
     hooks_of,
     options_of,
     declares,
+    declared_id,
     name_of,
     Hook,
     HookSay,
@@ -146,6 +147,7 @@ __all__ = [
     "hooks_of",
     "options_of",
     "declares",
+    "declared_id",
     "name_of",
     "Hook",
     # the three verbs, and hearing the whole conversation

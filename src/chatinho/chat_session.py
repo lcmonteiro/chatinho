@@ -30,6 +30,7 @@ from .chat_hooks import (
     HookListen,
     declares,
     hooks_of,
+    declared_id,
     name_of,
 )
 from .chat_message import TOOL, ChatMessage, MessageStore
@@ -70,6 +71,8 @@ class ChatSession:
         self._tasks    : Dict[int, asyncio.Task] = {}
         self._pending  : Dict[str, "asyncio.Future[str]"] = {}
         self._next_id  : int = 1
+        self._started  : bool = False
+        self._closed   : bool = False
 
         #: Commands are not peers: no id, no queue, nothing addressed to them.
         #: They run when someone runs them, and answer whoever did.
@@ -91,20 +94,25 @@ class ChatSession:
     def attach(self, who: Any, at: Optional[int] = None) -> int:
         """Registers *who*, hands over its grants and returns its id.
 
-        The whole plugin contract. An id is assigned unless the caller pins one
-        — the presentation pins :data:`LOCAL`, because the user is peer
-        zero by definition.
+        The whole plugin contract. The id comes from the first of three: what
+        the caller pins here, what the class declared with
+        ``@connector(name, id=…)``, or the next free number. The terminal
+        declares ``id=LOCAL`` rather than being attached specially, because
+        being peer zero is what it *is*, not a favour the caller does it.
 
         Args:
             who: Anything declaring hooks.
-            at: The id to register it under; assigned when omitted.
+            at: The id to register it under; the declared one, or the next
+                free number, when omitted.
 
         Returns:
             int: The id the peer now answers to.
 
         Raises:
-            ValueError: If *at* is already taken.
+            ValueError: If the id is already taken.
         """
+        if at is None:
+            at = declared_id(who)
         if at is None:
             at = self._next_id
             self._next_id += 1
@@ -226,10 +234,26 @@ class ChatSession:
 
     @staticmethod
     def _start(obj: Any) -> None:
-        """Calls ``initialize()`` when the object has one."""
+        """Calls ``initialize()`` when the object has one.
+
+        ``attach`` is synchronous — a session is usually built before there is
+        a loop — so ``initialize`` is too. An ``async def initialize`` would
+        return a coroutine nobody awaits and do nothing at all, which is
+        exactly what it looked like when one was written; say so instead of
+        leaving a RuntimeWarning to explain it.
+
+        A peer that needs the running loop wants ``serve()``, which the session
+        awaits and which is where a loop exists.
+        """
         init = getattr(obj, "initialize", None)
-        if callable(init):
-            init()
+        if not callable(init):
+            return
+        if asyncio.iscoroutinefunction(init):
+            raise TypeError(
+                "%r declares an async initialize(), which attach() cannot await. "
+                "Make it synchronous, or do the work in serve()." % name_of(obj)
+            )
+        init()
 
     # === The three verbs, bound to one speaker ======================================
 
@@ -361,13 +385,66 @@ class ChatSession:
 
     # === Lifecycle ==================================================================
 
+    def run(self) -> None:
+        """Runs the whole chat, and returns when it is over.
+
+        The entry point for a program whose job *is* the chat: it owns the
+        event loop, so there must not be one running already. From inside a
+        loop, drive :meth:`start` and :meth:`close` yourself.
+
+        A peer that runs until it is finished — a terminal, a server, a stdin
+        reader — writes ``serve()``, and the session runs those and closes when
+        the first of them returns. A session with none of them runs until it is
+        interrupted, which is what a bot wants.
+
+        Raises:
+            RuntimeError: There is already an event loop on this thread.
+        """
+        try:
+            asyncio.run(self._serve())
+        except KeyboardInterrupt:
+            pass          # Ctrl-C is how a chat with no terminal ends
+
+    async def _serve(self) -> None:
+        """Starts everything, waits for it to be over, and closes."""
+        await self.start()
+        serving = {
+            asyncio.create_task(who.serve(), name=name_of(who))
+            for who in self._by_id.values()
+            if callable(getattr(who, "serve", None))
+        }
+        try:
+            if serving:
+                # The first to finish ends the chat: quitting the terminal is
+                # the end of it, even when a server is still listening.
+                done, pending = await asyncio.wait(serving, return_when=asyncio.FIRST_COMPLETED)
+                for task in pending:
+                    task.cancel()
+                for task in done:
+                    task.result()            # let a peer's failure be seen
+            else:
+                await asyncio.Event().wait()  # nothing serves: until interrupted
+        finally:
+            # Closes on the way out however that happens — a peer finishing, a
+            # peer raising, or this being cancelled. Cancellation is not
+            # swallowed: whoever cancelled is owed the CancelledError, and
+            # ``run`` turns the Ctrl-C case into a quiet exit itself.
+            await self.close()
+
     async def start(self) -> None:
         """Starts one drain task per peer.
 
         Separate from construction because the tasks need a running loop, and a
-        session is usually built before there is one.
+        session is usually built before there is one. Calling it twice is a
+        no-op *for the archive*: :meth:`run` starts the session, and a
+        presentation that also starts it when it mounts must not load the older
+        context on top of itself. The drain tasks are another matter — calling
+        it again picks up whatever was attached since, which is how a peer
+        added after the session started ever runs at all.
         """
-        await self._recall()
+        if not self._started:
+            self._started = True
+            await self._recall()
         for at in self._queues:
             if at not in self._tasks or self._tasks[at].done():
                 self._tasks[at] = asyncio.create_task(self._drain(at))
@@ -376,8 +453,12 @@ class ChatSession:
         """Stops the drain tasks and shuts every peer down.
 
         A peer holding a server or a thread would otherwise outlive the
-        chat it was serving.
+        chat it was serving. Calling it twice is a no-op, for the same reason
+        :meth:`start` is.
         """
+        if self._closed:
+            return
+        self._closed = True
         # Drain before cancelling: a message still in a queue is a message a
         # listener has not held yet, and cancelling first made "the
         # conversation survives" true only sometimes.

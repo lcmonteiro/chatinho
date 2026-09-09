@@ -160,7 +160,10 @@ create_chat(
 ).run()
 ```
 
-`create_chat` is the only entry point: the application class itself is private. Markdown rendering,
+`create_chat` returns the **session**, with the terminal attached at `LOCAL` as an ordinary
+connector that declares `@connector("chat", id=LOCAL)`. The session owns the loop: `run()` starts
+everything, runs every peer's `serve()`, and closes when the first of them returns — quitting the
+terminal is the end of the chat. Markdown rendering,
 syntax-highlighted code blocks, command autocomplete and click-to-reply come with it, and
 `ChatStyle` is a dataclass — use `dataclasses.replace` to change a colour.
 

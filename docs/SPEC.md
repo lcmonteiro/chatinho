@@ -19,10 +19,11 @@ A chat is **peers** exchanging **messages**. Each peer has an integer id. Two ar
 
 | id | name | who |
 |---|---|---|
-| `0` | `LOCAL` | the user — the presentation is attached here, and is a peer like any other |
+| `0` | `LOCAL` | the user — the presentation declares `@connector("chat", id=LOCAL)`, and is a peer like any other |
 | `-1` | `TOOL` | not a peer: the name a command's messages carry |
 
-Connectors are numbered from one, in the order they are attached.
+Connectors are numbered from one, in the order they are attached — unless the class pins its own
+with `@connector(name, id=…)`, which is for a connector that can only ever be one peer.
 
 A message says where it came from and where it is going, and that is the whole of the routing:
 
@@ -344,6 +345,7 @@ hook, not by calling the session.
 
 | | |
 |---|---|
+| `run()` | owns the loop: `start()`, every peer's `serve()`, then `close()` |
 | `attach(who, at=None) -> int` | registers a peer: an id, a queue, its grants, `initialize()` |
 | `add_command(cmd) -> str` | registers a command: a name, its grants, `initialize()` |
 | `await start()` | loads the older context, then starts one task per peer |
@@ -355,8 +357,14 @@ A peer carries an **id** and a **visible name**, and they are deliberately diffe
 routes, the name is what the chat displays and what the user types after `/`. An older design
 routed on the display name, so renaming a connector broke the replies already in flight.
 
-**Lifecycle is deliberately not a hook.** `initialize()` and `shutdown()` are called when present.
-A peer holding nothing needs neither, and making it declare that it holds nothing is ceremony.
+**Lifecycle is deliberately not a hook.** `initialize()` (synchronous, at `attach`), `async
+serve()` (during `run()`, and it *runs until it is finished*) and `shutdown()` (at `close`) are
+called when present. A peer holding nothing needs none of them, and making it declare that it
+holds nothing is ceremony.
+
+`run()` waits for the **first** `serve()` to return and cancels the rest: quitting the terminal is
+the end of the chat even when a server is still listening. A session with nothing serving runs
+until it is interrupted.
 
 ---
 

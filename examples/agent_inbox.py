@@ -70,7 +70,15 @@ class AgentConnector:
         self._loop   : Optional[asyncio.AbstractEventLoop] = None
 
     async def serve(self) -> None:
-        """Starts the listener, remembering the loop the chat runs on."""
+        """Starts the listener and keeps it up until the chat ends.
+
+        ``serve`` means *runs until it is finished*, and this one never
+        finishes on its own: it waits, and the session cancels it when the
+        terminal's own ``serve`` returns. Then ``shutdown`` stops the thread.
+
+        It cannot be ``initialize``: that is called at ``attach``, where there
+        is no running loop to hand the handler thread.
+        """
         self._loop = asyncio.get_running_loop()
         agent = self
 
@@ -88,6 +96,8 @@ class AgentConnector:
         self._server = ThreadingHTTPServer((self.host, self.port), Handler)
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
+
+        await asyncio.Event().wait()        # until the session cancels us
 
     def put(self, text: str) -> None:
         """Asks the user, from the server thread, and prints the answer.
@@ -116,6 +126,7 @@ class AgentConnector:
             self._thread = None
 
 
+@connector("terminal", id=LOCAL)
 @require(HookSay)
 @require(HookListen)
 @require(HookAnswer)
@@ -135,42 +146,38 @@ class Terminal:
         print("\n< %s   [%s asks]" % (msg.text, msg.frm))
         return None
 
+    async def serve(self) -> None:
+        """Answers from stdin until it ends, and that ends the chat.
+
+        The inbox keeps listening on its own thread meanwhile; when this
+        returns, the session closes and the connector's ``shutdown`` stops it.
+        """
+        print("Listening on http://%s:%d/ask — the agent asks, you answer." % (HOST, PORT))
+        print('  curl -XPOST %s:%d/ask -d \'{"text": "Deploy?"}\'' % (HOST, PORT))
+        print("Type your answer to whatever it asks.   /quit to leave.\n")
+        for line in await read_lines():
+            text = line.strip()
+            if not text or text == "/quit":
+                break
+            unanswered = next(
+                (m for m in reversed(self.context())
+                 if m.to == LOCAL and not any(r.reply_to == m.id for r in self.context())),
+                None,
+            )
+            await self.say(text, reply_to=unanswered.id if unanswered else None)
+            await asyncio.sleep(0.05)
+        print("--- listener stopped ---")
+
 
 async def read_lines() -> List[str]:
     """Reads stdin off the event loop, so the listener keeps serving."""
     return await asyncio.get_running_loop().run_in_executor(None, sys.stdin.readlines)
 
 
-async def main() -> None:
+def main() -> None:
     """Runs a headless chat with an agent-facing inbox."""
-    session = ChatSession()
-    view = Terminal()
-    session.attach(view, at=LOCAL)
-    agent = AgentConnector()
-    session.attach(agent)
-    await session.start()
-    await agent.serve()
-
-    print("Listening on http://%s:%d/ask — the agent asks, you answer." % (HOST, PORT))
-    print('  curl -XPOST %s:%d/ask -d \'{"text": "Deploy?"}\'' % (HOST, PORT))
-    print("Type your answer to whatever it asks.   /quit to leave.\n")
-
-    try:
-        for line in await read_lines():
-            text = line.strip()
-            if not text or text == "/quit":
-                break
-            unanswered = next(
-                (m for m in reversed(view.context())
-                 if m.to == LOCAL and not any(r.reply_to == m.id for r in view.context())),
-                None,
-            )
-            await view.say(text, reply_to=unanswered.id if unanswered else None)
-            await asyncio.sleep(0.05)
-    finally:
-        await session.close()
-        print("--- listener stopped ---")
+    ChatSession(connectors=[Terminal(), AgentConnector()]).run()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
