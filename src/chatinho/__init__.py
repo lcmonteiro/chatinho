@@ -1,34 +1,51 @@
-"""Chatinho: an extensible chat client library.
+"""Chatinho: an extensible chat library.
 
-Everyone in a chat is a **peer** with an integer id. ``LOCAL`` — zero —
-is the user; connectors and tools are numbered from one. A peer is a
-plain class that declares what it can do, and there are only three verbs:
+Everyone in a chat is a **peer** with an integer id. ``LOCAL`` — zero — is the
+user; connectors are numbered from one. ``TOOL`` — minus one — is the name a
+command's messages carry, because a command is not a peer.
 
-    say(text)          a message for everyone
-    ask(to, text)      a message for one peer, awaiting its reply
-    answer(msg, text)  the reply that ask is waiting on
+A peer is a plain class that declares what it can do. There are three verbs, and
+each is a pair: the word you call, and the word the other side writes.
 
-A command is an ask addressed to a tool: typing ``/help`` asks the peer
-named "help". Everything is a coroutine and every peer has its own
-queue, so a slow subsystem holds up nobody but itself.
+    say(text, reply_to=)   ->  listen(msg)          for everyone but the speaker
+    ask(to, text)          ->  answer(msg)          one peer, awaiting its reply
+    invoke(name, args)     ->  execute(args, by)    a command run by name
 
-Example:
-    >>> from chatinho import create_chat, HelpCommand
-    >>> from chatinho.connectors import OpenAIConnector
-    >>> from chatinho.backends import DatabaseBackend
+Everything is a coroutine and every peer has its own queue, so a slow subsystem
+holds up nobody but itself. ``docs/SPEC.md`` is the reference for all ten hooks,
+and ``examples/hooks.py`` is that document executable.
+
+Headless — no terminal, and nothing to install beyond this package::
+
+    >>> from chatinho import ChatSession, HelpCommand, require, HookListen
     >>>
-    >>> chat = create_chat(
-    ...     peers = [OpenAIConnector(name="gpt", api_key="***"), HelpCommand()],
-    ...     backend      = DatabaseBackend("sqlite:///my_database.db"),
-    ... )
-    >>> chat.run()
+    >>> @require(HookListen)
+    ... class Printer:
+    ...     async def listen(self, msg): print(msg.text)
+    >>>
+    >>> session = ChatSession(commands=[HelpCommand()])
+    >>> at = session.attach(Printer())          # doctest: +SKIP
 
-The application class itself is private: build one with ``create_chat``. For a
-chat without a terminal — a script, a bot, a test — use ``ChatSession``
-directly and attach your own presentation; it imports no UI framework.
+With a terminal, which needs ``pip install chatinho[tui]``::
+
+    >>> from chatinho import create_chat       # doctest: +SKIP
+    >>> create_chat(commands=[HelpCommand()]).run()
+
+The application class itself is private: ``create_chat`` builds one.
+
+Four names need an extra, and say so if it is missing:
+
+    create_chat        chatinho[tui]      textual
+    OpenAIConnector    chatinho[openai]   openai
+    A2AConnector       chatinho[a2a]      requests
+    DatabaseBackend    chatinho[sql]      sqlalchemy
+
+Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand`` —
+imports nothing but the standard library.
 """
 
-from .chat_app import create_chat
+from typing import Any
+
 from .chat_session import ChatSession
 from .chat_message import LOCAL, TOOL, ChatMessage
 from .chat_hooks import (
@@ -58,11 +75,53 @@ from .chat_hooks import (
     Peers,
 )
 from .chat_style import ChatStyle
-from .connectors import A2AConnector, OpenAIConnector
-from .backends import DatabaseBackend
 from .commands import HelpCommand, TestCommand
 
 __version__ = "0.1.0"
+
+#: The names that live behind an extra: attribute -> (module, distribution).
+_BEHIND_AN_EXTRA = {
+    "create_chat"     : (".chat_app",   "tui",    "textual"),
+    "OpenAIConnector" : (".connectors", "openai", "openai"),
+    "A2AConnector"    : (".connectors", "a2a",    "requests"),
+    "DatabaseBackend" : (".backends",   "sql",    "sqlalchemy"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Imports the batteries only when one is asked for (PEP 562).
+
+    ``import chatinho`` must not drag in a terminal, an HTTP client and an ORM
+    for a script that wanted a ``ChatSession``. These four are resolved on first
+    use instead, and a missing extra is reported as itself rather than as
+    somebody else's ``ModuleNotFoundError``.
+
+    Args:
+        name: The attribute being read off the package.
+
+    Returns:
+        Any: The requested name.
+
+    Raises:
+        AttributeError: The package has no such name.
+        ImportError: It has, but the extra that carries it is not installed.
+    """
+    if name not in _BEHIND_AN_EXTRA:
+        raise AttributeError("module %r has no attribute %r" % (__name__, name))
+    where, extra, needs = _BEHIND_AN_EXTRA[name]
+    from importlib import import_module
+    try:
+        return getattr(import_module(where, __name__), name)
+    except ImportError as exc:
+        raise ImportError(
+            "%s needs %r, which chatinho does not install by default. "
+            "Install it with:  pip install 'chatinho[%s]'" % (name, needs, extra)
+        ) from exc
+
+
+def __dir__() -> Any:
+    """Keeps tab-completion and ``dir()`` honest about the lazy names."""
+    return sorted(__all__)
 
 __all__ = [
     "create_chat",

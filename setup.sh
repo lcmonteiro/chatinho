@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # setup.sh — chatinho package setup (pyproject.toml)
-# Creates the .venv and installs ALL dependencies.
+# Creates the .venv and installs ALL dependencies, extras included.
 # If uv is not installed, installs it automatically.
 set -euo pipefail
 
@@ -65,7 +65,10 @@ else
     echo "🔄 .venv exists — updating dependencies..."
 fi
 
-# Always sync dependencies (installs new ones, updates changed ones, removes unused)
-echo "📦 Installing/updating all dependencies..."
-"$UV" sync
+# Always sync dependencies (installs new ones, updates changed ones, removes unused).
+# --extra dev is explicit on purpose: the package itself installs nothing, and the
+# batteries live behind extras, so a bare `uv sync` would depend on which uv you
+# have for whether the test tools land in .venv at all.
+echo "📦 Installing/updating all dependencies (including the extras)..."
+"$UV" sync --extra dev
 echo "✅ Setup complete — run: ./run.sh  (or .venv/bin/python demo.py)"
