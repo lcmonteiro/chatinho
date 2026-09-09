@@ -338,12 +338,13 @@ class _Chat(App):
     # === The conversation ===========================================================
 
     async def command(self, name: str, args: str = "") -> Optional[str]:
-        """Runs ``/name args`` and shows whatever it answered.
+        """Runs ``/name args`` and returns whatever it answered.
 
-        Neither the invocation nor the answer is a message. A command that
-        should be seen declares ``HookSay`` and writes its own output; one that
-        only answers is answering whoever ran it, and that is the caller's to
-        do something with.
+        Both the invocation and the answer *are* messages: the session posts
+        the invocation addressed to ``TOOL``, and what ``execute`` returned in
+        ``TOOL``'s name, replying to it. So the log shows the whole exchange
+        without this having to write anything, and the return value is for the
+        caller.
 
         Args:
             name: The command's name, without the prefix.

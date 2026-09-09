@@ -341,8 +341,10 @@ to build one, and that is now enforced rather than asked for.
 
 One inconsistency left, stated rather than hidden: `chat_log.py` and `chat_input.py` are
 presentation too and are still public paths. Neither is exported from `chatinho`, but
-`chatinho.chat_log.ChatLog` resolves. For a chat without a terminal, build a `ChatSession` and attach your own
-presentation — `examples/headless.py` is exactly that, in about forty lines.
+`chatinho.chat_log.ChatLog` resolves.
+
+For a chat without a terminal, build a `ChatSession` and attach your own presentation —
+`examples/headless.py` is exactly that, in about forty lines.
 
 `ChatSession`'s own public surface is six members: `attach`, `add_command`, `start`, `close`,
 `id_of`, `forget`.
