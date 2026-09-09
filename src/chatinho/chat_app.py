@@ -29,6 +29,7 @@ from typing import Any, List, Optional
 
 from textual.app import App, ComposeResult
 from textual.css.query import NoMatches
+from textual.keys import KEY_ALIASES, Keys
 from textual.containers import Container, Vertical
 from textual.widgets import Input
 
@@ -68,6 +69,7 @@ def create_chat(
     welcome_message : str = "",
     max_displayed   : int = 100,
     style           : Optional[ChatStyle] = None,
+    quit_key        : str = "ctrl+q",
 ) -> "_Chat":
     """Create a chat application from peers and a backend.
 
@@ -88,9 +90,16 @@ def create_chat(
         welcome_message: Message displayed on mount; empty means none.
         max_displayed: How many messages are rendered at once (sliding window).
         style: Colour scheme; defaults to :class:`~chatinho.chat_style.ChatStyle`.
+        quit_key: The key that quits, as Textual writes them — ``"ctrl+g"``,
+            ``"f10"``, ``"escape"``. Defaults to Textual's own ``"ctrl+q"``,
+            which stops quitting when another key is given. ``ctrl+c`` is a
+            separate binding and is left alone.
 
     Returns:
         _Chat: The configured application; call ``run()`` to start it.
+
+    Raises:
+        ValueError: ``quit_key`` is not a key Textual could receive.
     """
     return _Chat(
         session         = ChatSession(connectors=connectors, commands=commands,
@@ -99,7 +108,59 @@ def create_chat(
         welcome_message = welcome_message,
         max_displayed   = max_displayed,
         style           = style,
+        quit_key        = quit_key,
     )
+
+
+#: What Textual answers to, by name: every key it enumerates, plus its aliases.
+_KEY_NAMES = {key.value for key in Keys} | set(KEY_ALIASES)
+
+#: Prefixes a key may carry. Textual only enumerates ctrl and shift, but a
+#: terminal that reports the others passes them through unchanged.
+_MODIFIERS = frozenset({"ctrl", "shift", "alt", "meta", "super", "hyper"})
+
+
+def _validate_key(key: str) -> str:
+    """Returns *key* if Textual could ever receive it, and raises if not.
+
+    ``Binding`` itself only rejects the empty string — ``Binding("not a key",
+    "quit")`` is built happily and then never fires, which is a keybinding that
+    silently does nothing. Checking here turns that into an error at
+    :func:`create_chat` rather than a mystery at runtime.
+
+    Args:
+        key: A key or key-combination, as Textual writes them: ``"ctrl+q"``,
+            ``"f5"``, ``"escape"``, ``"q"``. Comma-separated alternatives are
+            allowed, because ``Binding`` expands them.
+
+    Returns:
+        str: The key, unchanged.
+
+    Raises:
+        ValueError: The key is empty, carries an unknown modifier, or names
+            something Textual has no key for.
+    """
+    for part in key.split(","):
+        part = part.strip()
+        if not part:
+            raise ValueError(
+                "quit_key must be a Textual key, not %r: a part of it is empty" % key
+            )
+        if part in _KEY_NAMES:
+            continue
+        *modifiers, base = part.split("+")
+        unknown = [m for m in modifiers if m not in _MODIFIERS]
+        if unknown:
+            raise ValueError(
+                "quit_key %r has an unknown modifier %r; Textual knows %s"
+                % (key, unknown[0], ", ".join(sorted(_MODIFIERS)))
+            )
+        if not base or (len(base) > 1 and base not in _KEY_NAMES):
+            raise ValueError(
+                "quit_key %r is not a Textual key; try one of 'ctrl+q', 'f5', "
+                "'escape', or a single character" % key
+            )
+    return key
 
 
 @connector("chat")
@@ -137,8 +198,10 @@ class _Chat(App):
         welcome_message : str = "",
         max_displayed   : int = 100,
         style           : Optional[ChatStyle] = None,
+        quit_key        : str = "ctrl+q",
     ) -> None:
         super().__init__()
+        self._rebind_quit(_validate_key(quit_key))
         if style is not None:
             # Instance-level override: Textual reads ``self.CSS`` at mount.
             self.CSS = style.to_css()  # type: ignore[misc]
@@ -155,6 +218,32 @@ class _Chat(App):
         self.max_displayed : int = max_displayed
         # Thread id of the app's main loop (set in on_mount)
         self._app_thread_id : Optional[int] = None
+
+    def _rebind_quit(self, quit_key: str) -> None:
+        """Moves the quit binding onto *quit_key*, and off whatever held it.
+
+        ``_Chat`` declares no ``BINDINGS`` of its own: quit is inherited from
+        ``App``, and Textual *merges* a subclass's bindings with its parent's
+        rather than replacing them — so declaring a new one would leave
+        ``ctrl+q`` quitting as well. The instance's own map is what has to
+        change, and it is already a private copy: ``DOMNode.__init__`` builds it
+        with ``self._merged_bindings.copy()``, so this cannot leak into another
+        chat or into ``App`` itself.
+
+        Only bindings whose action is ``quit`` move. ``ctrl+c`` is a different
+        action (``help_quit``) and ``ctrl+p`` opens the command palette; both are
+        left exactly as they were.
+
+        Args:
+            quit_key: An already-validated key or key-combination.
+        """
+        bindings = self._bindings
+        bindings.key_to_bindings = {
+            key: kept
+            for key, held in bindings.key_to_bindings.items()
+            if (kept := [b for b in held if b.action != "quit"])
+        }
+        bindings.bind(quit_key, "quit", description="Quit", show=False, priority=True)
 
     def _repaint_after(self, *granted: str) -> None:
         """Wraps the granted verbs so the terminal repaints when we speak.

@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **129 pass** |
+| `pytest -q` | **139 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -248,7 +248,7 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (348)
+  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (437)
   chat_session.py  ChatSession: peers, commands, queues, routing, context           (430)
   chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (409)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
