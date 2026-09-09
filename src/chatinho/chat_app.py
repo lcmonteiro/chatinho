@@ -70,7 +70,7 @@ def create_chat(
     max_displayed   : int = 100,
     style           : Optional[ChatStyle] = None,
     quit_key        : str = "ctrl+q",
-) -> App:
+) -> "_Chat":
     """Create a chat application from peers and a backend.
 
     A **connector** is a peer: it has an id and a queue, and the conversation
@@ -96,287 +96,11 @@ def create_chat(
             separate binding and is left alone.
 
     Returns:
-        App: The configured application; call ``run()`` to start it.
+        _Chat: The configured application; call ``run()`` to start it.
 
     Raises:
         ValueError: ``quit_key`` is not a key Textual could receive.
     """
-    _validate_key(quit_key)
-
-    @connector("chat")
-    @require(HookSay)
-    @require(HookAsk)
-    @require(HookListen)
-    @require(HookAnswer)
-    @require(HookContext)
-    @require(HookPeers)
-    @require(HookInvoke)
-    class _Chat(App):
-        """Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
-
-        Build instances with :func:`create_chat` rather than directly.
-
-        ``max_displayed`` limits how many messages are rendered in the terminal
-        (sliding window). The full history is always kept — older messages only
-        leave the screen, not memory.
-        """
-
-        # Default stylesheet, rendered from ChatStyle() at class definition time.
-        CSS = ChatStyle().to_css()
-
-        # Granted by the session at attach; annotated so a type checker sees them.
-        say           : Say
-        ask           : Ask
-        context : Context
-        peers  : Peers
-        invoke        : Invoke
-
-        def __init__(
-            self,
-            session         : Optional[ChatSession] = None,
-            title           : str = "Chatinho",
-            welcome_message : str = "",
-            max_displayed   : int = 100,
-            style           : Optional[ChatStyle] = None,
-            quit_key        : str = "ctrl+q",
-        ) -> None:
-            super().__init__()
-            self._rebind_quit(_validate_key(quit_key))
-            if style is not None:
-                # Instance-level override: Textual reads ``self.CSS`` at mount.
-                self.CSS = style.to_css()  # type: ignore[misc]
-
-            self.session : ChatSession = session if session is not None else ChatSession()
-            # Peer zero: the user. This is what grants say, ask, answer and
-            # context, and what subscribes listen and answer below.
-            self.session.attach(self, at=LOCAL)
-            self._repaint_after("say", "ask")
-
-            self.title = title
-            self.welcome_message = welcome_message
-            self._input_placeholder = "Type a message or /command"
-            self.max_displayed : int = max_displayed
-            # Thread id of the app's main loop (set in on_mount)
-            self._app_thread_id : Optional[int] = None
-
-        def _rebind_quit(self, quit_key: str) -> None:
-            """Moves the quit binding onto *quit_key*, and off whatever held it.
-
-            ``_Chat`` declares no ``BINDINGS`` of its own: quit is inherited from
-            ``App``, and Textual *merges* a subclass's bindings with its parent's
-            rather than replacing them — so declaring a new one would leave
-            ``ctrl+q`` quitting as well. The instance's own map is what has to
-            change, and it is already a private copy: ``DOMNode.__init__`` builds it
-            with ``self._merged_bindings.copy()``, so this cannot leak into another
-            chat or into ``App`` itself.
-
-            Only bindings whose action is ``quit`` move. ``ctrl+c`` is a different
-            action (``help_quit``) and ``ctrl+p`` opens the command palette; both are
-            left exactly as they were.
-
-            Args:
-                quit_key: An already-validated key or key-combination.
-            """
-            bindings = self._bindings
-            bindings.key_to_bindings = {
-                key: kept
-                for key, held in bindings.key_to_bindings.items()
-                if (kept := [b for b in held if b.action != "quit"])
-            }
-            bindings.bind(quit_key, "quit", description="Quit", show=False, priority=True)
-
-        def _repaint_after(self, *granted: str) -> None:
-            """Wraps the granted verbs so the terminal repaints when we speak.
-
-            A sender does not hear its own broadcast — that is what stops a
-            connector answering its own answer forever — so nothing would repaint
-            the log when the user speaks. The presentation, which is the thing that
-            renders, wraps its own grants rather than asking the session for an
-            exception. Only grants: ``answer`` is a method now, and it repaints
-            itself.
-            """
-            for verb in granted:
-                def wrap(call: Any) -> Any:
-                    async def spoken(*args, **kwargs) -> Any:
-                        result = await call(*args, **kwargs)
-                        self._repaint()
-                        return result
-                    return spoken
-                setattr(self, verb, wrap(getattr(self, verb)))
-
-        def compose(self) -> ComposeResult:
-            """Create child widgets."""
-            yield Container(
-                ChatLog(
-                    self.context,
-                    max_displayed=self.max_displayed,
-                    on_reply_target_change=self._on_reply_target_change,
-                    id=CHAT_LOG_ID,
-                ),
-                Vertical(
-                    CommandSuggestions(self.session.commands, id=SUGGESTIONS_ID),
-                    CommandInput(placeholder=self._input_placeholder, id=INPUT_ID),
-                    id="input-area",
-                ),
-            )
-
-        async def on_mount(self) -> None:
-            """Start the queues, focus the input and show the welcome message."""
-            self._app_thread_id = threading.get_ident()
-            await self.session.start()
-            self.query_one("#%s" % INPUT_ID, Input).focus()
-            if self.context():
-                self._chat_log.sync()
-                self._chat_log.scroll_to_bottom()
-            if self.welcome_message:
-                await self.say(self.welcome_message)
-
-        async def on_unmount(self) -> None:
-            """Shut the session's peers down when the app closes.
-
-            A connector that owns a server or a thread would otherwise outlive the
-            terminal it was serving.
-            """
-            await self.session.close()
-
-        async def on_input_submitted(self, message: Input.Submitted) -> None:
-            """Handle the user pressing Enter."""
-            del message
-            inp = self.query_one("#%s" % INPUT_ID, Input)
-            text = inp.value.strip()
-            if not text:
-                return
-            inp.value = ""
-            if text.startswith(COMMAND_PREFIX):
-                name, _, args = text[1:].strip().partition(" ")
-                await self.command(name, args)
-            else:
-                target = self._reply_target
-                self._clear_reply_target()
-                await self.say(text, reply_to=target)
-
-        def on_input_changed(self, message: Input.Changed) -> None:
-            """Update the command-suggestion popup as the user types."""
-            if message.input.id != INPUT_ID:
-                return
-            self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).update_for(message.value)
-
-        # === The conversation ===========================================================
-
-        async def command(self, name: str, args: str = "") -> Optional[str]:
-            """Runs ``/name args`` and returns whatever it answered.
-
-            Both the invocation and the answer *are* messages: the session posts
-            the invocation addressed to ``TOOL``, and what ``execute`` returned in
-            ``TOOL``'s name, replying to it. So the log shows the whole exchange
-            without this having to write anything, and the return value is for the
-            caller.
-
-            Args:
-                name: The command's name, without the prefix.
-                args: The rest of the line.
-
-            Returns:
-                Optional[str]: What the command answered, if anything.
-            """
-            if name not in self.session.commands:
-                await self.say("Unknown command: %s%s" % (COMMAND_PREFIX, name))
-                return None
-            return await self.invoke(name, args)
-
-        async def listen(self, msg: ChatMessage, **kwargs) -> None:
-            """Someone spoke to everyone: repaint."""
-            self._repaint()
-
-        async def answer(self, msg: ChatMessage, **kwargs) -> Optional[str]:
-            """Someone asked the user something.
-
-            Returns None on purpose: the answer is not ours to invent. The question
-            is already in the history, so the user sees it and replies to it, and
-            that reply resolves the wait — the session matches it by ``reply_to``.
-            """
-            self._repaint()
-            return None
-
-        @property
-        def messages(self) -> List[ChatMessage]:
-            """The full message history, oldest first."""
-            return self.context()
-
-        def get_replies(self, msg_id: str) -> List[str]:
-            """Returns the ids of the messages that answer *msg_id*."""
-            return [m.id for m in self.context() if m.reply_to == msg_id]
-
-        # === Presentation-owned behaviour ===============================================
-
-        async def send_pending_reply(self, text: str) -> Optional[str]:
-            """Says *text* as a reply to the selected message, if there is one.
-
-            The reply target is a UI concept — it comes from a click — so this
-            lives here rather than in the session.
-            """
-            target = self._reply_target
-            if target is None:
-                return None
-            self._clear_reply_target()
-            return await self.say(text, reply_to=target)
-
-        def has_command_suggestions(self) -> bool:
-            """Whether the command-suggestion popup currently has entries."""
-            return self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).has_suggestions
-
-        # === Internals ==================================================================
-
-        @property
-        def _chat_log(self) -> ChatLog:
-            """The log widget that renders the history."""
-            return self.query_one("#%s" % CHAT_LOG_ID, ChatLog)
-
-        def _repaint(self) -> None:
-            """Schedules a render on the app's own message pump.
-
-            Always through ``call_later``, never straight: a peer may speak
-            from a coroutine the app did not start — one handed to
-            ``run_coroutine_threadsafe`` by its own server thread — and querying
-            the widget tree from there finds no active app. Going through the pump
-            puts the work back where the context is.
-
-            Before ``on_mount`` there is no widget tree yet: the messages stay in
-            the session and are painted when the app mounts.
-            """
-            if self._app_thread_id is None:
-                return
-            self.call_later(self._sync_log)
-
-        def _sync_log(self) -> None:
-            """Brings the log in line with the history, if it is still mounted."""
-            try:
-                self._chat_log.sync()
-            except NoMatches:
-                pass
-
-        def _on_reply_target_change(self, msg_id: Optional[str]) -> None:
-            """Keeps the input placeholder in step with the log's reply target."""
-            inp = self.query_one("#%s" % INPUT_ID, Input)
-            inp.placeholder = self._input_placeholder if msg_id is None else "Reply to %s…" % msg_id
-
-        def _find_message(self, msg_id: str) -> Optional[ChatMessage]:
-            return next((m for m in self.context() if m.id == msg_id), None)
-
-        @property
-        def _reply_target(self) -> Optional[str]:
-            return self._chat_log.reply_target
-
-        @property
-        def _rendered_msg_ids(self) -> List[str]:
-            return self._chat_log._rendered_msg_ids
-
-        def _set_reply_target(self, msg_id: str) -> None:
-            self._chat_log.set_reply_target(msg_id)
-
-        def _clear_reply_target(self) -> None:
-            self._chat_log.clear_reply_target()
-
     return _Chat(
         session         = ChatSession(connectors=connectors, commands=commands,
                                       backend=backend),
@@ -386,6 +110,8 @@ def create_chat(
         style           = style,
         quit_key        = quit_key,
     )
+
+
 #: What Textual answers to, by name: every key it enumerates, plus its aliases.
 _KEY_NAMES = {key.value for key in Keys} | set(KEY_ALIASES)
 
@@ -437,3 +163,276 @@ def _validate_key(key: str) -> str:
     return key
 
 
+@connector("chat")
+@require(HookSay)
+@require(HookAsk)
+@require(HookListen)
+@require(HookAnswer)
+@require(HookContext)
+@require(HookPeers)
+@require(HookInvoke)
+class _Chat(App):
+    """Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
+
+    Build instances with :func:`create_chat` rather than directly.
+
+    ``max_displayed`` limits how many messages are rendered in the terminal
+    (sliding window). The full history is always kept — older messages only
+    leave the screen, not memory.
+    """
+
+    # Default stylesheet, rendered from ChatStyle() at class definition time.
+    CSS = ChatStyle().to_css()
+
+    # Granted by the session at attach; annotated so a type checker sees them.
+    say           : Say
+    ask           : Ask
+    context : Context
+    peers  : Peers
+    invoke        : Invoke
+
+    def __init__(
+        self,
+        session         : Optional[ChatSession] = None,
+        title           : str = "Chatinho",
+        welcome_message : str = "",
+        max_displayed   : int = 100,
+        style           : Optional[ChatStyle] = None,
+        quit_key        : str = "ctrl+q",
+    ) -> None:
+        super().__init__()
+        self._rebind_quit(_validate_key(quit_key))
+        if style is not None:
+            # Instance-level override: Textual reads ``self.CSS`` at mount.
+            self.CSS = style.to_css()  # type: ignore[misc]
+
+        self.session : ChatSession = session if session is not None else ChatSession()
+        # Peer zero: the user. This is what grants say, ask, answer and
+        # context, and what subscribes listen and answer below.
+        self.session.attach(self, at=LOCAL)
+        self._repaint_after("say", "ask")
+
+        self.title = title
+        self.welcome_message = welcome_message
+        self._input_placeholder = "Type a message or /command"
+        self.max_displayed : int = max_displayed
+        # Thread id of the app's main loop (set in on_mount)
+        self._app_thread_id : Optional[int] = None
+
+    def _rebind_quit(self, quit_key: str) -> None:
+        """Moves the quit binding onto *quit_key*, and off whatever held it.
+
+        ``_Chat`` declares no ``BINDINGS`` of its own: quit is inherited from
+        ``App``, and Textual *merges* a subclass's bindings with its parent's
+        rather than replacing them — so declaring a new one would leave
+        ``ctrl+q`` quitting as well. The instance's own map is what has to
+        change, and it is already a private copy: ``DOMNode.__init__`` builds it
+        with ``self._merged_bindings.copy()``, so this cannot leak into another
+        chat or into ``App`` itself.
+
+        Only bindings whose action is ``quit`` move. ``ctrl+c`` is a different
+        action (``help_quit``) and ``ctrl+p`` opens the command palette; both are
+        left exactly as they were.
+
+        Args:
+            quit_key: An already-validated key or key-combination.
+        """
+        bindings = self._bindings
+        bindings.key_to_bindings = {
+            key: kept
+            for key, held in bindings.key_to_bindings.items()
+            if (kept := [b for b in held if b.action != "quit"])
+        }
+        bindings.bind(quit_key, "quit", description="Quit", show=False, priority=True)
+
+    def _repaint_after(self, *granted: str) -> None:
+        """Wraps the granted verbs so the terminal repaints when we speak.
+
+        A sender does not hear its own broadcast — that is what stops a
+        connector answering its own answer forever — so nothing would repaint
+        the log when the user speaks. The presentation, which is the thing that
+        renders, wraps its own grants rather than asking the session for an
+        exception. Only grants: ``answer`` is a method now, and it repaints
+        itself.
+        """
+        for verb in granted:
+            def wrap(call: Any) -> Any:
+                async def spoken(*args, **kwargs) -> Any:
+                    result = await call(*args, **kwargs)
+                    self._repaint()
+                    return result
+                return spoken
+            setattr(self, verb, wrap(getattr(self, verb)))
+
+    def compose(self) -> ComposeResult:
+        """Create child widgets."""
+        yield Container(
+            ChatLog(
+                self.context,
+                max_displayed=self.max_displayed,
+                on_reply_target_change=self._on_reply_target_change,
+                id=CHAT_LOG_ID,
+            ),
+            Vertical(
+                CommandSuggestions(self.session.commands, id=SUGGESTIONS_ID),
+                CommandInput(placeholder=self._input_placeholder, id=INPUT_ID),
+                id="input-area",
+            ),
+        )
+
+    async def on_mount(self) -> None:
+        """Start the queues, focus the input and show the welcome message."""
+        self._app_thread_id = threading.get_ident()
+        await self.session.start()
+        self.query_one("#%s" % INPUT_ID, Input).focus()
+        if self.context():
+            self._chat_log.sync()
+            self._chat_log.scroll_to_bottom()
+        if self.welcome_message:
+            await self.say(self.welcome_message)
+
+    async def on_unmount(self) -> None:
+        """Shut the session's peers down when the app closes.
+
+        A connector that owns a server or a thread would otherwise outlive the
+        terminal it was serving.
+        """
+        await self.session.close()
+
+    async def on_input_submitted(self, message: Input.Submitted) -> None:
+        """Handle the user pressing Enter."""
+        del message
+        inp = self.query_one("#%s" % INPUT_ID, Input)
+        text = inp.value.strip()
+        if not text:
+            return
+        inp.value = ""
+        if text.startswith(COMMAND_PREFIX):
+            name, _, args = text[1:].strip().partition(" ")
+            await self.command(name, args)
+        else:
+            target = self._reply_target
+            self._clear_reply_target()
+            await self.say(text, reply_to=target)
+
+    def on_input_changed(self, message: Input.Changed) -> None:
+        """Update the command-suggestion popup as the user types."""
+        if message.input.id != INPUT_ID:
+            return
+        self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).update_for(message.value)
+
+    # === The conversation ===========================================================
+
+    async def command(self, name: str, args: str = "") -> Optional[str]:
+        """Runs ``/name args`` and returns whatever it answered.
+
+        Both the invocation and the answer *are* messages: the session posts
+        the invocation addressed to ``TOOL``, and what ``execute`` returned in
+        ``TOOL``'s name, replying to it. So the log shows the whole exchange
+        without this having to write anything, and the return value is for the
+        caller.
+
+        Args:
+            name: The command's name, without the prefix.
+            args: The rest of the line.
+
+        Returns:
+            Optional[str]: What the command answered, if anything.
+        """
+        if name not in self.session.commands:
+            await self.say("Unknown command: %s%s" % (COMMAND_PREFIX, name))
+            return None
+        return await self.invoke(name, args)
+
+    async def listen(self, msg: ChatMessage, **kwargs) -> None:
+        """Someone spoke to everyone: repaint."""
+        self._repaint()
+
+    async def answer(self, msg: ChatMessage, **kwargs) -> Optional[str]:
+        """Someone asked the user something.
+
+        Returns None on purpose: the answer is not ours to invent. The question
+        is already in the history, so the user sees it and replies to it, and
+        that reply resolves the wait — the session matches it by ``reply_to``.
+        """
+        self._repaint()
+        return None
+
+    @property
+    def messages(self) -> List[ChatMessage]:
+        """The full message history, oldest first."""
+        return self.context()
+
+    def get_replies(self, msg_id: str) -> List[str]:
+        """Returns the ids of the messages that answer *msg_id*."""
+        return [m.id for m in self.context() if m.reply_to == msg_id]
+
+    # === Presentation-owned behaviour ===============================================
+
+    async def send_pending_reply(self, text: str) -> Optional[str]:
+        """Says *text* as a reply to the selected message, if there is one.
+
+        The reply target is a UI concept — it comes from a click — so this
+        lives here rather than in the session.
+        """
+        target = self._reply_target
+        if target is None:
+            return None
+        self._clear_reply_target()
+        return await self.say(text, reply_to=target)
+
+    def has_command_suggestions(self) -> bool:
+        """Whether the command-suggestion popup currently has entries."""
+        return self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).has_suggestions
+
+    # === Internals ==================================================================
+
+    @property
+    def _chat_log(self) -> ChatLog:
+        """The log widget that renders the history."""
+        return self.query_one("#%s" % CHAT_LOG_ID, ChatLog)
+
+    def _repaint(self) -> None:
+        """Schedules a render on the app's own message pump.
+
+        Always through ``call_later``, never straight: a peer may speak
+        from a coroutine the app did not start — one handed to
+        ``run_coroutine_threadsafe`` by its own server thread — and querying
+        the widget tree from there finds no active app. Going through the pump
+        puts the work back where the context is.
+
+        Before ``on_mount`` there is no widget tree yet: the messages stay in
+        the session and are painted when the app mounts.
+        """
+        if self._app_thread_id is None:
+            return
+        self.call_later(self._sync_log)
+
+    def _sync_log(self) -> None:
+        """Brings the log in line with the history, if it is still mounted."""
+        try:
+            self._chat_log.sync()
+        except NoMatches:
+            pass
+
+    def _on_reply_target_change(self, msg_id: Optional[str]) -> None:
+        """Keeps the input placeholder in step with the log's reply target."""
+        inp = self.query_one("#%s" % INPUT_ID, Input)
+        inp.placeholder = self._input_placeholder if msg_id is None else "Reply to %s…" % msg_id
+
+    def _find_message(self, msg_id: str) -> Optional[ChatMessage]:
+        return next((m for m in self.context() if m.id == msg_id), None)
+
+    @property
+    def _reply_target(self) -> Optional[str]:
+        return self._chat_log.reply_target
+
+    @property
+    def _rendered_msg_ids(self) -> List[str]:
+        return self._chat_log._rendered_msg_ids
+
+    def _set_reply_target(self, msg_id: str) -> None:
+        self._chat_log.set_reply_target(msg_id)
+
+    def _clear_reply_target(self) -> None:
+        self._chat_log.clear_reply_target()

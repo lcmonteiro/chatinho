@@ -264,21 +264,6 @@ def test_the_declared_extras_are_the_ones_the_package_asks_for():
             "chatinho[all] does not install %r" % needs
 
 
-# === The presentation is private ================================================
-
-
-def test_the_package_does_not_re_export_the_app():
-    """``create_chat`` is the door; the package must not hand out the class.
-
-    The module stays public — ``chatinho.chat_app`` is where the presentation
-    lives and reads like it. What privacy there is comes from the underscore on
-    the class and from ``__init__`` refusing anything ``create_chat`` did not
-    build, which is the half an underscore could never do.
-    """
-    importlib.import_module("chatinho.chat_app")
-    assert not hasattr(chatinho, "_Chat"), "the package must not re-export the app"
-    assert "_Chat" not in chatinho.__all__
-
 
 def test_the_lazy_names_are_visible_to_a_type_checker():
     """PEP 562 hands a type checker ``Any``; the TYPE_CHECKING block undoes it.

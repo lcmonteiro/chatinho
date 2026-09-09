@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **142 pass** |
+| `pytest -q` | **140 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -248,7 +248,7 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat, with the _Chat app defined inside it — Textual only    (439)
+  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (438)
   chat_session.py  ChatSession: peers, commands, queues, routing, context           (430)
   chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (409)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
@@ -279,8 +279,6 @@ is a boundary that rots. It parses the core modules and fails if:
 - the session imports the app;
 - **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
   it assigns it, or is *granted* it;
-- **the app class becomes reachable** — `chatinho.chat_app` must not have a `_Chat` attribute and
-  the package must not export one. It lives inside `create_chat`, so there is no name to import;
 - **a lazily resolved name loses its type** — every entry in `_BEHIND_AN_EXTRA` needs a matching
   import under `if TYPE_CHECKING`, or PEP 562 hands a consumer's mypy `Any` and the `py.typed` this
   package ships means nothing for it;
@@ -335,21 +333,25 @@ the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, 
 `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `HelpCommand`, `TestCommand`).
 
-There is no `Chat` or `ChatApp` export, and no class to export: **`_Chat` is defined inside
-`create_chat`**, so `type(app).__qualname__` is `create_chat.<locals>._Chat` and there is no name
-anywhere a caller can import. An underscore is a request and a guard in `__init__` is a refusal;
-a class in the factory's own scope is neither, because the name does not exist.
+There is no `Chat` or `ChatApp` export: `create_chat` is the way to build one, and `_Chat` carries
+an underscore to say so. **Nothing enforces it** — `chat_app.py` is a public module, the class is
+reachable from it, and `_Chat()` works. That is deliberate: three ways of making it stick were
+tried and all three were reverted, and this section records them so nobody spends the afternoon
+again.
 
-Two weaker attempts came first and are recorded so nobody repeats them. Renaming the module to
-`_chat_app.py` made `chatinho.chat_log` and `chatinho.chat_input` visibly inconsistent for no real
-gain. **A leading double underscore buys nothing at all**: `from chatinho.chat_app import __Chat`
-resolves exactly like `_Chat`, because mangling only happens inside a class body — where it would
-turn a legitimate reference into a lookup for `_Whatever__Chat`. Both measured, not assumed.
+- **`_chat_app.py`** — a private module. Made `chatinho.chat_log` and `chatinho.chat_input`
+  visibly inconsistent, since those are presentation too.
+- **`__Chat`** — buys *nothing*. `from chatinho.chat_app import __Chat` resolves exactly like
+  `_Chat`, because mangling only happens inside a class body — where it turns a legitimate
+  reference into a lookup for `_Whatever__Chat`. Measured, not assumed.
+- **The class defined inside `create_chat`** — this one *works*: there is no name to import, and
+  it costs only half a millisecond per chat. It was reverted for what it does to the return type:
+  `create_chat` can then only promise `App`, so a consumer's checker sees `run()` but not
+  `messages`, `command()` or the grants.
 
-What it costs, stated plainly: `create_chat` now returns `App`, so a consumer's type checker sees
-`run()` but not `messages`, `command()` or the grants. They are all there at run time. Typing them
-would mean a public Protocol for a class nobody can name, which is a thing to add when somebody
-wants it.
+The last one is the trade the underscore is buying out of. `create_chat` returns `_Chat`, so a
+consumer's mypy sees the whole surface — which is also why the `TYPE_CHECKING` block in
+`__init__.py` matters: without it the lazy `__getattr__` hands them `Any` instead.
 
 For a chat without a terminal, build a `ChatSession` and attach your own presentation —
 `examples/headless.py` is exactly that, in about forty lines.

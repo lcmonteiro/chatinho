@@ -321,21 +321,3 @@ def test_a_quit_key_textual_could_never_receive_is_refused(bad):
 def test_a_single_character_and_a_named_key_are_both_accepted():
     assert _actions_for(create_chat(quit_key="q"), "q") == ["quit"]
     assert _actions_for(create_chat(quit_key="escape"), "escape") == ["quit"]
-
-
-def test_there_is_no_app_class_to_reach():
-    """The class lives inside create_chat, so there is nothing to import.
-
-    An underscore is a request; a guard in __init__ is a refusal; a class
-    defined in the factory's own scope is neither, because the name does not
-    exist anywhere a caller can name it. That is what makes create_chat the
-    only way in.
-    """
-    import chatinho.chat_app as module
-
-    assert not hasattr(module, "_Chat")
-    with pytest.raises(ImportError):
-        from chatinho.chat_app import _Chat  # noqa: F401
-
-    app = create_chat()
-    assert type(app).__qualname__ == "create_chat.<locals>._Chat"
