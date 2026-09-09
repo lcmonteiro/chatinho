@@ -317,9 +317,10 @@ than surfacing as somebody else's `ModuleNotFoundError`.
 `setup.sh` runs `uv sync --extra dev` explicitly: with no runtime dependencies left, whether a bare
 `uv sync` puts the test tools in `.venv` depends on which uv you have.
 
-**Not on PyPI** (checked: 404). Consumers install from git — `pip install "chatinho @
-git+https://github.com/lcmonteiro/chatinho.git@v0.1.0"` — which is what the README documents. The
-wheel ships `py.typed`, verified by building it and reading the archive.
+**Not on PyPI** (checked: 404), and **there are no release tags**. Consumers install from git —
+`pip install "chatinho @ git+https://github.com/lcmonteiro/chatinho.git"` — pinning a commit sha,
+which is what the README documents because a `@v0.1.0` would not resolve. The wheel ships
+`py.typed`, verified by building it and reading the archive.
 
 ## Public API
 
