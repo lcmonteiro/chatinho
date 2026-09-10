@@ -1,8 +1,9 @@
 """Textual presentation layer for a :class:`~chatinho.chat_session.ChatSession`.
 
-The public entry point is :func:`create_chat`, which returns a ready-to-run
-application. The class itself (``_Chat``) is private on purpose: build one
-through the factory rather than instantiating it directly.
+The class here, :class:`ChatApp`, is built and attached to a session by
+:func:`~chatinho.chat_builder.build_chat`, the public entry point — it takes
+no session of its own, because it is a normal connector like any other, wired
+up by whoever builds the chat rather than by its own constructor.
 
 The presentation is a peer like any other — it is registered at
 :data:`~chatinho.chat_message.LOCAL`, because the user is peer zero by
@@ -21,6 +22,7 @@ The parts live next door:
 - :mod:`chatinho.chat_hooks`   — the hook constants, decorator and registry.
 - :mod:`chatinho.chat_log`     — the scrollable log widget and its bubbles.
 - :mod:`chatinho.chat_input`   — the input line and its autocomplete popup.
+- :mod:`chatinho.chat_builder` — :func:`build_chat`, which wires this to a session.
 """
 
 import logging
@@ -40,10 +42,12 @@ from .chat_hooks import (
     HookAnswer,
     HookListen,
     HookPeers,
+    HookCommands,
     HookInvoke,
     HookSay,
     Context,
     Peers,
+    Commands,
     Invoke,
     Say,
     connector,
@@ -52,67 +56,12 @@ from .chat_hooks import (
 from .chat_input import COMMAND_PREFIX, SUGGESTIONS_ID, CommandInput, CommandSuggestions
 from .chat_log import ChatLog
 from .chat_message import LOCAL, ChatMessage
-from .chat_session import ChatSession
 from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
 
 CHAT_LOG_ID : str = "chat-log"
 INPUT_ID    : str = "input-line"
-
-
-def create_chat(
-    connectors      : Optional[List[Any]] = None,
-    commands        : Optional[List[Any]] = None,
-    backend         : Optional[Any] = None,
-    title           : str = "Chatinho",
-    welcome_message : str = "",
-    max_displayed   : int = 100,
-    style           : Optional[ChatStyle] = None,
-    quit_key        : str = "ctrl+q",
-) -> ChatSession:
-    """Create a chat application from peers and a backend.
-
-    A **connector** is a peer: it has an id and a queue, and the conversation
-    reaches it. A **command** is not: it has neither, and it runs only when
-    someone runs it. They are separate parameters because they are separate
-    things.
-
-    For a chat without a terminal — a script, a bot, a test — build a
-    :class:`~chatinho.chat_session.ChatSession` directly and attach your own
-    presentation.
-
-    Args:
-        connectors: Links to agents or APIs; peers, numbered from one.
-        commands: Things the user runs as ``/name``; not peers.
-        backend: Backend used by ``save_data``/``load_data``.
-        title: Title of the chat application.
-        welcome_message: Message displayed on mount; empty means none.
-        max_displayed: How many messages are rendered at once (sliding window).
-        style: Colour scheme; defaults to :class:`~chatinho.chat_style.ChatStyle`.
-        quit_key: The key that quits, as Textual writes them — ``"ctrl+g"``,
-            ``"f10"``, ``"escape"``. Defaults to Textual's own ``"ctrl+q"``,
-            which stops quitting when another key is given. ``ctrl+c`` is a
-            separate binding and is left alone.
-
-    Returns:
-        ChatSession: The session, with the terminal attached at ``LOCAL``. Call
-        ``run()`` on it: the session owns the loop, and the terminal is one of
-        the peers it serves.
-
-    Raises:
-        ValueError: ``quit_key`` is not a key Textual could receive.
-    """
-    session = ChatSession(connectors=connectors, commands=commands, backend=backend)
-    _Chat(
-        session         = session,
-        title           = title,
-        welcome_message = welcome_message,
-        max_displayed   = max_displayed,
-        style           = style,
-        quit_key        = quit_key,
-    )
-    return session
 
 
 #: What Textual answers to, by name: every key it enumerates, plus its aliases.
@@ -129,7 +78,7 @@ def _validate_key(key: str) -> str:
     ``Binding`` itself only rejects the empty string — ``Binding("not a key",
     "quit")`` is built happily and then never fires, which is a keybinding that
     silently does nothing. Checking here turns that into an error at
-    :func:`create_chat` rather than a mystery at runtime.
+    construction rather than a mystery at runtime.
 
     Args:
         key: A key or key-combination, as Textual writes them: ``"ctrl+q"``,
@@ -173,11 +122,19 @@ def _validate_key(key: str) -> str:
 @require(HookAnswer)
 @require(HookContext)
 @require(HookPeers)
+@require(HookCommands)
 @require(HookInvoke)
-class _Chat(App):
-    """Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
+class ChatApp(App):
+    """
+    Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
 
-    Build instances with :func:`create_chat` rather than directly.
+    Build instances with :func:`~chatinho.chat_builder.build_chat` rather than
+    directly. It takes no session: it is a normal connector, and it is
+    :meth:`~chatinho.chat_session.ChatSession.add_connector` that grants it
+    ``say``, ``ask``, ``context``, ``peers``, ``commands`` and ``invoke``, and
+    subscribes ``listen`` and ``answer`` — the same as any other peer. A
+    connector does not hold the session; whatever it needs of it is granted,
+    the same way ``HelpCommand`` is granted its own ``commands``.
 
     ``max_displayed`` limits how many messages are rendered in the terminal
     (sliding window). The full history is always kept — older messages only
@@ -188,15 +145,15 @@ class _Chat(App):
     CSS = ChatStyle().to_css()
 
     # Granted by the session at attach; annotated so a type checker sees them.
-    say           : Say
-    ask           : Ask
+    say     : Say
+    ask     : Ask
     context : Context
-    peers  : Peers
-    invoke        : Invoke
+    peers   : Peers
+    commands: Commands
+    invoke  : Invoke
 
     def __init__(
         self,
-        session         : Optional[ChatSession] = None,
         title           : str = "Chatinho",
         welcome_message : str = "",
         max_displayed   : int = 100,
@@ -209,14 +166,6 @@ class _Chat(App):
             # Instance-level override: Textual reads ``self.CSS`` at mount.
             self.CSS = style.to_css()  # type: ignore[misc]
 
-        self.session : ChatSession = session if session is not None else ChatSession()
-        # Peer zero: the user. The id comes from the class declaration —
-        # @connector("chat", id=LOCAL) — because being the person is what this
-        # *is*, not a favour whoever attaches it does. Attaching is what grants
-        # say, ask, context and invoke, and what subscribes listen and answer.
-        self.session.attach(self)
-        self._repaint_after("say", "ask")
-
         self.title = title
         self.welcome_message = welcome_message
         self._input_placeholder = "Type a message or /command"
@@ -224,23 +173,32 @@ class _Chat(App):
         # Thread id of the app's main loop (set in on_mount)
         self._app_thread_id : Optional[int] = None
 
+    def initialize(self) -> None:
+        """
+        Wraps ``say``/``ask`` to repaint, once ``add_connector`` grants them.
+
+        Lifecycle, not a hook: the session calls this from ``start()``, which
+        ``on_mount`` awaits before doing anything with ``say``/``context`` of
+        its own.
+        """
+        self._repaint_after("say", "ask")
+
     async def serve(self) -> None:
-        """Runs the terminal, and returns when the user quits.
+        """
+        Runs the terminal, and returns when the user quits.
 
         Lifecycle, not a hook: :meth:`ChatSession.run` calls this on every peer
         that has one and closes the session when the first returns. Quitting the
         chat is the end of the chat, even if a connector is still listening on a
         socket.
-
-        ``run_async`` rather than ``run``: there is already a loop — the
-        session's — and Textual's ``run()`` would try to start a second.
         """
         await self.run_async()
 
     def _rebind_quit(self, quit_key: str) -> None:
-        """Moves the quit binding onto *quit_key*, and off whatever held it.
+        """
+        Moves the quit binding onto *quit_key*, and off whatever held it.
 
-        ``_Chat`` declares no ``BINDINGS`` of its own: quit is inherited from
+        ``ChatApp`` declares no ``BINDINGS`` of its own: quit is inherited from
         ``App``, and Textual *merges* a subclass's bindings with its parent's
         rather than replacing them — so declaring a new one would leave
         ``ctrl+q`` quitting as well. The instance's own map is what has to
@@ -264,7 +222,8 @@ class _Chat(App):
         bindings.bind(quit_key, "quit", description="Quit", show=False, priority=True)
 
     def _repaint_after(self, *granted: str) -> None:
-        """Wraps the granted verbs so the terminal repaints when we speak.
+        """
+        Wraps the granted verbs so the terminal repaints when we speak.
 
         A sender does not hear its own broadcast — that is what stops a
         connector answering its own answer forever — so nothing would repaint
@@ -292,30 +251,26 @@ class _Chat(App):
                 id=CHAT_LOG_ID,
             ),
             Vertical(
-                CommandSuggestions(self.session.commands, id=SUGGESTIONS_ID),
+                CommandSuggestions(self.commands, id=SUGGESTIONS_ID),
                 CommandInput(placeholder=self._input_placeholder, id=INPUT_ID),
                 id="input-area",
             ),
         )
 
     async def on_mount(self) -> None:
-        """Start the queues, focus the input and show the welcome message."""
+        """
+        Focus the input, and show the history and welcome message.
+
+        Whoever starts the session — ``run()``, or a test that mounts this app
+        directly — starts it before the queues can deliver anything here.
+        """
         self._app_thread_id = threading.get_ident()
-        await self.session.start()
         self.query_one("#%s" % INPUT_ID, Input).focus()
         if self.context():
             self._chat_log.sync()
             self._chat_log.scroll_to_bottom()
         if self.welcome_message:
             await self.say(self.welcome_message)
-
-    async def on_unmount(self) -> None:
-        """Shut the session's peers down when the app closes.
-
-        A connector that owns a server or a thread would otherwise outlive the
-        terminal it was serving.
-        """
-        await self.session.close()
 
     async def on_input_submitted(self, message: Input.Submitted) -> None:
         """Handle the user pressing Enter."""
@@ -342,7 +297,8 @@ class _Chat(App):
     # === The conversation ===========================================================
 
     async def command(self, name: str, args: str = "") -> Optional[str]:
-        """Runs ``/name args`` and returns whatever it answered.
+        """
+        Runs ``/name args`` and returns whatever it answered.
 
         Both the invocation and the answer *are* messages: the session posts
         the invocation addressed to ``TOOL``, and what ``execute`` returned in
@@ -357,7 +313,7 @@ class _Chat(App):
         Returns:
             Optional[str]: What the command answered, if anything.
         """
-        if name not in self.session.commands:
+        if name not in self.commands():
             await self.say("Unknown command: %s%s" % (COMMAND_PREFIX, name))
             return None
         return await self.invoke(name, args)
@@ -367,7 +323,8 @@ class _Chat(App):
         self._repaint()
 
     async def answer(self, msg: ChatMessage, **kwargs) -> Optional[str]:
-        """Someone asked the user something.
+        """
+        Someone asked the user something.
 
         Returns None on purpose: the answer is not ours to invent. The question
         is already in the history, so the user sees it and replies to it, and
@@ -388,7 +345,8 @@ class _Chat(App):
     # === Presentation-owned behaviour ===============================================
 
     async def send_pending_reply(self, text: str) -> Optional[str]:
-        """Says *text* as a reply to the selected message, if there is one.
+        """
+        Says *text* as a reply to the selected message, if there is one.
 
         The reply target is a UI concept — it comes from a click — so this
         lives here rather than in the session.
@@ -411,7 +369,8 @@ class _Chat(App):
         return self.query_one("#%s" % CHAT_LOG_ID, ChatLog)
 
     def _repaint(self) -> None:
-        """Schedules a render on the app's own message pump.
+        """
+        Schedules a render on the app's own message pump.
 
         Always through ``call_later``, never straight: a peer may speak
         from a coroutine the app did not start — one handed to

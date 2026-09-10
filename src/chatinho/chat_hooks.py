@@ -66,6 +66,14 @@ class Peers(Protocol):
         ...
 
 
+class Commands(Protocol):
+    """Granted by ``HookCommands``: the commands registered in the chat, by name."""
+
+    def __call__(self) -> Dict[str, Any]:
+        """Returns a copy of the roster, keyed by command name."""
+        ...
+
+
 class Invoke(Protocol):
     """Granted by ``HookInvoke``: invoking a command and getting its result back.
 
@@ -216,6 +224,13 @@ HookPeers = Hook(
     # be written without a way to see past its own class.
 )
 
+HookCommands = Hook(
+    name="HookCommands",
+    grants=("commands",),
+    # commands() -> the registry, by name. /help lists it and the autocomplete
+    # popup matches against it, the same way HookPeers lets both see the roster.
+)
+
 # === Holding the conversation ===================================================
 
 HookLoad = Hook(
@@ -241,6 +256,7 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookExecute,
     HookContext,
     HookPeers,
+    HookCommands,
     HookLoad,
     HookForget,
 )

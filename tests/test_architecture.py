@@ -106,7 +106,7 @@ def _assigned_attributes(path: str, class_name: str) -> set:
 @pytest.mark.parametrize(
     "module, class_name, base",
     [
-        ("src/chatinho/chat_app.py",   "_Chat",              "textual.app:App"),
+        ("src/chatinho/chat_app.py",   "ChatApp",            "textual.app:App"),
         ("src/chatinho/chat_log.py",   "ChatLog",            "textual.containers:Container"),
         ("src/chatinho/chat_input.py", "CommandInput",       "textual.widgets:Input"),
         ("src/chatinho/chat_input.py", "CommandSuggestions", "textual.widgets:OptionList"),
@@ -115,7 +115,7 @@ def _assigned_attributes(path: str, class_name: str) -> set:
 def test_a_grant_never_shadows_a_textual_method(module, class_name, base):
     """A grant arrives by setattr, so the assignment check above cannot see it.
 
-    This is not hypothetical: `_Chat` was granted `run`, which is Textual's own
+    This is not hypothetical: `ChatApp` was granted `run`, which is Textual's own
     `App.run()` — the documented way to start the app. mypy caught that one
     because the class annotates its grants; a class that did not annotate them
     would have shipped it.
@@ -143,7 +143,7 @@ def _declared_hooks(path: str, class_name: str) -> set:
 @pytest.mark.parametrize(
     "module, class_name, base",
     [
-        ("src/chatinho/chat_app.py",   "_Chat",              "textual.app:App"),
+        ("src/chatinho/chat_app.py",   "ChatApp",            "textual.app:App"),
         ("src/chatinho/chat_log.py",   "ChatLog",            "textual.containers:Container"),
         ("src/chatinho/chat_input.py", "CommandInput",       "textual.widgets:Input"),
         ("src/chatinho/chat_input.py", "CommandSuggestions", "textual.widgets:OptionList"),
@@ -222,7 +222,7 @@ builtins.__import__ = blocked
 import chatinho
 from chatinho import ChatSession, HelpCommand, TestCommand, ChatMessage, require, HookListen
 print("core-ok")
-for name in ("create_chat", "OpenAIConnector", "A2AConnector", "DatabaseBackend"):
+for name in ("build_chat", "OpenAIConnector", "A2AConnector", "DatabaseBackend"):
     try:
         getattr(chatinho, name)
     except ImportError as exc:

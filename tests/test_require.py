@@ -118,7 +118,7 @@ async def test_an_undeclared_hook_is_never_dispatched_to():
 
     session, view = await driven()
     quiet = Quiet()
-    session.attach(quiet)
+    session.add_connector(quiet)
     await session.start()
     await view.say("ola")
     assert quiet.heard == []

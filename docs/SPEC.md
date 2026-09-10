@@ -1,7 +1,7 @@
 # chatinho — the hook specification
 
-Everything a peer can do, and everything it can be asked to do, is one of **ten hooks**. This
-document is the reference for all ten: what each one demands, what it grants, and what actually
+Everything a peer can do, and everything it can be asked to do, is one of **eleven hooks**. This
+document is the reference for all eleven: what each one demands, what it grants, and what actually
 arrives at its door.
 
 Every claim here is executable. `examples/hooks.py` declares one peer per hook and runs a short
@@ -65,7 +65,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 
 ---
 
-## 2. The ten hooks at a glance
+## 2. The eleven hooks at a glance
 
 | hook | demands | grants | declared by |
 |---|---|---|---|
@@ -77,6 +77,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 | [`HookExecute`](#hookexecute) | `execute` | — | a command; this is what one *is* |
 | [`HookContext`](#hookcontext) | — | `context` | a log widget, a connector that needs history |
 | [`HookPeers`](#hookpeers) | — | `peers` | `/help`, the autocomplete popup |
+| [`HookCommands`](#hookcommands) | — | `commands` | `/help`, the autocomplete popup |
 | [`HookLoad`](#hookload) | `load` | — | a backend |
 | [`HookForget`](#hookforget) | `forget` | — | a backend |
 
@@ -178,6 +179,19 @@ others = [name_of(w) for at, w in self.peers().items() if at != LOCAL]
 `/help` lists them and the autocomplete popup matches against them; neither could be written
 without a way to see past its own class.
 
+### HookCommands
+
+> **grants** `commands() -> Dict[str, Any]`
+
+Every command registered, by name.
+
+```python
+lines = ["/%s - %s" % (name, cmd.description) for name, cmd in self.commands().items()]
+```
+
+`/help` lists them and the autocomplete popup matches against them — the roster's counterpart to
+`HookPeers`, for commands rather than peers.
+
 ---
 
 ## 4. The demands — what a peer must write
@@ -254,7 +268,7 @@ class UpperCommand:
 ```
 
 A command is **not a peer**: no id, no queue, nothing addressed to it. It is registered with
-`add_command`, not `attach`, and it is a separate parameter to `create_chat` for that reason.
+`add_command`, not `add_connector`, and it is a separate parameter to `build_chat` for that reason.
 
 Running one is two messages:
 
@@ -328,7 +342,7 @@ privileged path: it reaches the conversation through exactly the doors a weather
 @require(HookListen) @require(HookAnswer)
 class Terminal: ...
 
-session.attach(terminal, at=LOCAL)
+session.add_connector(terminal, at=LOCAL)
 ```
 
 ### Demands are not exclusive
@@ -346,9 +360,9 @@ hook, not by calling the session.
 | | |
 |---|---|
 | `run()` | owns the loop: `start()`, every peer's `serve()`, then `close()` |
-| `attach(who, at=None) -> int` | registers a peer: an id, a queue, its grants, `initialize()` |
-| `add_command(cmd) -> str` | registers a command: a name, its grants, `initialize()` |
-| `await start()` | loads the older context, then starts one task per peer |
+| `add_connector(connector, at=None) -> int` | registers a peer: an id, a queue, its grants |
+| `add_command(cmd) -> str` | registers a command: a name, its grants |
+| `await start()` | initializes every peer/command, loads the older context, then starts one task per peer |
 | `await close()` | drains every queue (5s, then a warning), then shuts everything down |
 | `id_of(name) -> Optional[int]` | the id of the peer with that visible name |
 | `await forget(before=None) -> int` | asks the backend to drop what it held |
@@ -357,10 +371,10 @@ A peer carries an **id** and a **visible name**, and they are deliberately diffe
 routes, the name is what the chat displays and what the user types after `/`. An older design
 routed on the display name, so renaming a connector broke the replies already in flight.
 
-**Lifecycle is deliberately not a hook.** `initialize()` (synchronous, at `attach`), `async
-serve()` (during `run()`, and it *runs until it is finished*) and `shutdown()` (at `close`) are
-called when present. A peer holding nothing needs none of them, and making it declare that it
-holds nothing is ceremony.
+**Lifecycle is deliberately not a hook.** `initialize()` (at `start()`, and may be `async def` since
+there is a loop to await it by then), `async serve()` (during `run()`, and it *runs until it is
+finished*) and `shutdown()` (at `close`) are called when present. A peer holding nothing needs none
+of them, and making it declare that it holds nothing is ceremony.
 
 `run()` waits for the **first** `serve()` to return and cancels the rest: quitting the terminal is
 the end of the chat even when a server is still listening. A session with nothing serving runs
@@ -389,7 +403,7 @@ Stated rather than hidden, because each one is a real trade:
 | | |
 |---|---|
 | `examples/hooks.py` | this document, executable — one peer per hook |
-| `examples/demo.py` | the full TUI, built with `create_chat` |
+| `examples/demo.py` | the full TUI, built with `build_chat` |
 | `examples/headless.py` | the same chat with no terminal, in about forty lines |
 | `examples/agent_inbox.py` | the inbound direction: an agent asks over HTTP, you answer |
 | `CLAUDE.md` | why the design is this shape, and what it was before |

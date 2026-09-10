@@ -2,9 +2,9 @@
 
 The conversation is protected: nothing calls ``session._say``. A peer
 declares the hooks it needs and the session hands the capabilities over at
-``attach``. :class:`Driver` is the presentation with the terminal taken out —
-the same declarations ``_Chat`` makes — so a test drives a chat exactly the way
-the TUI does.
+``add_connector``. :class:`Driver` is the presentation with the terminal taken
+out — the same declarations ``ChatApp`` makes — so a test drives a chat exactly
+the way the TUI does.
 """
 
 from typing import Any, List, Optional
@@ -90,7 +90,7 @@ async def driven(**kwargs) -> tuple:
     """
     session = ChatSession(**kwargs)
     view    = Driver()
-    session.attach(view, at=LOCAL)
+    session.add_connector(view, at=LOCAL)
     await session.start()
     return session, view
 

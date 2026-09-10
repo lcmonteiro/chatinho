@@ -1,7 +1,7 @@
 [project]
 name = "chatinho"
 version = "0.1.0"
-description = "An extensible chat library: peers, three verbs, ten hooks — with an optional Textual TUI"
+description = "An extensible chat library: peers, three verbs, eleven hooks — with an optional Textual TUI"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -35,7 +35,7 @@ Homepage = "https://github.com/lcmonteiro/chatinho"
 Repository = "https://github.com/lcmonteiro/chatinho"
 
 [project.optional-dependencies]
-# What most people want: the terminal app that create_chat builds.
+# What most people want: the terminal app that build_chat builds.
 tui = ["textual>=0.45.0"]
 # One per battery, named after what it gives you.
 openai = ["openai>=1.0.0"]

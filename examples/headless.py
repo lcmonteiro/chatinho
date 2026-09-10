@@ -3,7 +3,7 @@
 ``ChatSession`` routes messages between peers and imports no UI
 framework. The conversation is protected: nothing here calls the session.
 ``Terminal`` below declares the hooks it needs and is registered at ``LOCAL``,
-because the user is peer zero — exactly what ``_Chat`` does, with the
+because the user is peer zero — exactly what ``ChatApp`` does, with the
 terminal taken out.
 
 Note that ``import chatinho`` still loads Textual today, because the package's

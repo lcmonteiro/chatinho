@@ -2,7 +2,7 @@
 
 Everyone is a peer with an id, LOCAL is the user, and there are three
 verbs. Every test here reaches the conversation the way the TUI does: through
-a Driver that declared the hooks and was handed the capabilities at attach.
+a Driver that declared the hooks and was handed the capabilities at add_connector.
 """
 
 import asyncio
@@ -121,7 +121,7 @@ async def test_the_user_is_peer_zero_and_connectors_are_numbered():
 async def test_a_taken_id_is_refused():
     session, _ = await driven()
     with pytest.raises(ValueError, match="already taken"):
-        session.attach(_Eco(), at=LOCAL)
+        session.add_connector(_Eco(), at=LOCAL)
     await session.close()
 
 
@@ -269,7 +269,7 @@ async def test_a_peer_can_ask_the_user():
         ask: Ask
 
     agente = Agente()
-    session.attach(agente)
+    session.add_connector(agente)
     await session.start()
     assert await agente.ask(LOCAL, "Autorizas?") == "sim, autorizo"
     assert [m.text for m in view.asked] == ["Autorizas?"]
@@ -300,7 +300,7 @@ async def test_an_answer_given_later_still_resolves_the_ask():
 
     session, view = await driven()
     adiado = Adiado()
-    at = session.attach(adiado)
+    at = session.add_connector(adiado)
     await session.start()
 
     pergunta = asyncio.create_task(view.ask(at, "e depois?"))
@@ -321,7 +321,7 @@ async def test_a_peer_gets_only_what_it_declared():
 
     session, _ = await driven()
     mudo = Mudo()
-    session.attach(mudo)
+    session.add_connector(mudo)
     assert hasattr(mudo, "say")
     assert not hasattr(mudo, "ask")
     assert not hasattr(mudo, "context")
@@ -329,7 +329,7 @@ async def test_a_peer_gets_only_what_it_declared():
 
 
 async def test_nobody_can_speak_in_another_name():
-    """frm is bound at attach, not passed as an argument."""
+    """frm is bound at add_connector, not passed as an argument."""
     session, view = await driven(connectors=[_Ouvinte()])
     await view.say("sou eu")
     assert view.context()[0].frm == LOCAL
@@ -450,7 +450,7 @@ async def test_forget_reaches_the_one_that_holds():
 
 
 async def test_a_connector_can_pin_the_id_it_answers_to():
-    """Being peer zero is what the terminal *is*, not a favour at attach.
+    """Being peer zero is what the terminal *is*, not a favour at add_connector.
 
     @connector(name, id=…) is for a connector that can only be one peer. The
     session numbers everything else from one, in attachment order.
@@ -476,7 +476,7 @@ def test_the_caller_may_still_pin_a_different_id():
             pass
 
     session = ChatSession()
-    assert session.attach(Teimoso(), at=7) == 7
+    assert session.add_connector(Teimoso(), at=7) == 7
 
 
 def test_a_declared_id_may_not_be_TOOL_or_anything_but_an_int():
@@ -553,20 +553,29 @@ async def test_a_peer_that_fails_while_serving_is_not_swallowed():
         await session._serve()
 
 
-def test_an_async_initialize_is_refused_rather_than_silently_skipped():
-    """attach() is synchronous, so it cannot await one — say so.
+async def test_an_async_initialize_is_awaited_by_start():
+    """initialize() runs from start(), where a loop exists — so it may be async.
 
-    It used to return a coroutine nobody awaited, which did nothing at all and
-    explained itself only as a RuntimeWarning.
+    It used to run synchronously at add_connector(), before there was
+    necessarily a loop to await one; now that it runs from start(), that
+    restriction is gone.
     """
 
     @connector("tarde")
     @require(HookListen)
     class Tarde:
+        def __init__(self) -> None:
+            self.initialized = False
+
         async def initialize(self) -> None:
-            pass
+            self.initialized = True
+
         async def listen(self, msg) -> None:
             pass
 
-    with pytest.raises(TypeError, match="serve"):
-        ChatSession(connectors=[Tarde()])
+    tarde = Tarde()
+    session = ChatSession(connectors=[tarde])
+    assert tarde.initialized is False
+    await session.start()
+    assert tarde.initialized is True
+    await session.close()

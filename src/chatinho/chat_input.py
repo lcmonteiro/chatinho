@@ -6,7 +6,7 @@ reaching up into the application.
 """
 
 import logging
-from typing import Any, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from textual.app import ScreenStackError
 from textual.binding import Binding
@@ -26,9 +26,9 @@ SUGGESTIONS_ID : str = "command-suggestions"
 class CommandSuggestions(OptionList):
     """Popup listing the commands whose name matches the "/token" being typed."""
 
-    def __init__(self, commands: Any, **kwargs) -> None:
+    def __init__(self, commands: Callable[[], Dict[str, Any]], **kwargs) -> None:
         super().__init__(**kwargs)
-        # Held by reference: the application owns the dict and keeps it current.
+        # Granted by HookCommands: called fresh each time, never held as a dict.
         self._commands = commands
 
     @property
@@ -82,11 +82,11 @@ class CommandSuggestions(OptionList):
 
     def _names(self) -> List[str]:
         """The names of the registered commands."""
-        return list(self._commands)
+        return list(self._commands())
 
     def _tool(self, name: str) -> Any:
         """The command with that name, or None."""
-        return self._commands.get(name)
+        return self._commands().get(name)
 
     def _label(self, name: str) -> str:
         """Returns the popup label for the command registered as *name*."""
