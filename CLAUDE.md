@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **140 pass** |
+| `pytest -q` | **149 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -29,7 +29,7 @@ giving `answer` to things that only execute; they are separate parameters becaus
 things:
 
 ```python
-create_chat(
+build_chat(
     connectors = [A2AConnector(url="…", api_key="…")],   # peers: id, queue, conversation
     commands   = [HelpCommand(), TestCommand()],         # not peers: they just run
     backend    = DatabaseBackend("sqlite:///chat.db"),   # a peer that listens
@@ -50,9 +50,13 @@ to is TOOL    → a command was run          (invoke)
 reply_to set  → it answers that message    (answer)
 ```
 
-**The presentation is peer zero.** `_Chat` declares the same hooks a connector does and is
-attached at `LOCAL`. There is no privileged path: a terminal reaches the conversation through
-exactly the doors a weather service does.
+**The presentation is peer zero, and says so itself.** `ChatApp` is
+`@connector("chat", id=LOCAL)` — being the person is what it *is*, not a favour whoever attaches
+it does — and it declares the same hooks a connector does. There is no privileged path: a terminal
+reaches the conversation through exactly the doors a weather service does, and the session numbers
+everything else from one. `ChatApp` no longer attaches itself, either: it takes no session in its
+constructor, and `chat_builder.build_chat` hands it to `ChatSession.add_connector` the same way it
+would hand over any other connector.
 
 ## Three verbs
 
@@ -169,7 +173,7 @@ whatever `ChatSession(recall=…)` pulled back.** Asking for older than that ret
 than reaching down again. Making it reach would make it a coroutine, and the terminal renders its
 log from inside a *synchronous* Textual paint.
 
-## The ten hooks
+## The eleven hooks
 
 The reference is [`docs/SPEC.md`](docs/SPEC.md) — every hook with an example, what it costs, and
 the rules that hold across all of them. `examples/hooks.py` is that document executable: one peer
@@ -185,6 +189,7 @@ per hook, in a chat with no terminal. This section is the summary.
 | `HookExecute` | `execute` | — |
 | `HookContext` | — | `context` |
 | `HookPeers` | — | `peers` |
+| `HookCommands` | — | `commands` |
 | `HookLoad` | `load` | — |
 | `HookForget` | `forget` | — |
 
@@ -223,14 +228,28 @@ misspelled is an import error rather than a hook that silently never fires.
 `@connector(name)`, `@tool(name, description)` and `@backend(name)` only name the class; an
 instance may override with `self.name`. The session assigns the id at `attach`.
 
-`ChatSession.attach(obj)` registers a peer: an id, a queue, its grants, `initialize()`.
-`ChatSession.add_command(cmd)` registers a command: a name, its grants, `initialize()` — no id and
-no queue, because there is nothing to address or deliver.
+`ChatSession.add_connector(obj)` registers a peer: an id, a queue, its grants. `ChatSession.add_command(cmd)`
+registers a command: a name, its grants — no id and no queue, because there is nothing to address
+or deliver. Neither calls `initialize()`; `start()` does, for both, once each has a loop to use.
 
-Lifecycle is deliberately **not** a hook: `initialize()` and `shutdown()` are called when present.
-A peer holding nothing needs neither, and making it declare that it holds nothing is
-ceremony. `close()` shuts down everything that has one, and the app's `on_unmount` calls it, so a
-connector holding a server thread does not outlive the chat.
+Lifecycle is deliberately **not** a hook: `initialize()`, `serve()` and `shutdown()` are called
+when present. A peer holding nothing needs none of them, and making it declare that it holds
+nothing is ceremony.
+
+| | when | |
+|---|---|---|
+| `initialize()` | at `start()` | may be `async def` — `start()` awaits it when it is, and just calls it when it isn't |
+| `async serve()` | during `run()` | **runs until it is finished.** A terminal, a stdin reader, a server |
+| `shutdown()` | at `close` | synchronous; a connector holding a thread must not outlive the chat |
+
+**`ChatSession.run()` owns the loop**: `asyncio.run(...)` inside, `start()`, then every `serve()`
+as its own task, and `close()` on the way out. The **first** `serve()` to return ends the chat —
+quitting the terminal is the end of it even when a server is still listening — and the rest are
+cancelled. A session with nothing serving runs until it is interrupted, which is what a bot wants.
+Cancellation is not swallowed; `run()` turns the Ctrl-C case into a quiet exit itself.
+
+That is the inversion: the session drives, and the terminal is a peer it serves. `ChatApp.serve()` is
+`await self.run_async()` — `run()` would try to start a second loop inside the session's own.
 
 Two costs, stated plainly:
 
@@ -248,9 +267,10 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      create_chat + the private _Chat app — Textual presentation only  (438)
-  chat_session.py  ChatSession: peers, commands, queues, routing, context           (430)
-  chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (409)
+  chat_app.py      ChatApp — Textual presentation only, no session of its own
+  chat_builder.py  build_chat — builds a ChatSession and ChatApp, wires the two
+  chat_session.py  ChatSession: run, peers, commands, queues, routing, context      (511)
+  chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (439)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
   chat_log.py      ChatLog widget: renders through the granted context reader
   chat_input.py    CommandInput + CommandSuggestions (autocomplete over the commands)
@@ -258,7 +278,7 @@ src/chatinho/
   connectors/      a2a.py, openai.py — plain classes, no base
   commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads
-docs/              SPEC.md — the ten hooks, with an example and a cost for each
+docs/              SPEC.md — the eleven hooks, with an example and a cost for each
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
                    agent_inbox.py (HTTP, inbound)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
@@ -286,7 +306,7 @@ is a boundary that rots. It parses the core modules and fails if:
   `openai`, `sqlalchemy` and `requests` all blocked, and each of the four lazy names has to report
   its own extra;
 - **`docs/SPEC.md` disagrees with the hook constants** — its summary table has to name the same
-  ten, with the same demanded method and the same grants, and each one has to have its own
+  eleven, with the same demanded method and the same grants, and each one has to have its own
   section. A spec nothing checks is a spec that rots, so adding a hook without documenting it
   fails the suite. Both halves were proved by breaking them.
 
@@ -296,19 +316,19 @@ with no error at all, and the only symptom was the suite going from six seconds 
 Setting `self.title` or `self.value` is ordinary use, so properties are not flagged — only the
 silent case.
 
-The grants half was added after a third near-miss: `_Chat` was granted `run`, which is Textual's
+The grants half was added after a third near-miss: `ChatApp` was granted `run`, which is Textual's
 own `App.run()` — the documented way to start the app. mypy caught it because the class annotates
 its grants; one that did not would have shipped it. The grant is called `invoke` now.
 
 ## Packaging: the core installs nothing
 
-`dependencies = []`. `ChatSession`, the ten hooks, `HelpCommand` and `TestCommand` import nothing
+`dependencies = []`. `ChatSession`, the eleven hooks, `HelpCommand` and `TestCommand` import nothing
 but the standard library — which the fitness tests already enforced, so the packaging now says it
 too. Four names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
 | name | extra | brings |
 |---|---|---|
-| `create_chat` | `chatinho[tui]` | `textual` |
+| `build_chat` | `chatinho[tui]` | `textual` |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
@@ -327,37 +347,31 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 35 names: `create_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
+`__init__.py` exports 36 names: `build_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
 the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, `options_of`,
-`declares`, `name_of`, `Hook`); the ten `Hook*` constants; the grant protocols (`Say`, `Ask`,
+`declares`, `declared_id`, `name_of`, `Hook`); the ten `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `HelpCommand`, `TestCommand`).
 
-There is no `Chat` or `ChatApp` export: `create_chat` is the way to build one, and `_Chat` carries
-an underscore to say so. **Nothing enforces it** — `chat_app.py` is a public module, the class is
-reachable from it, and `_Chat()` works. That is deliberate: three ways of making it stick were
-tried and all three were reverted, and this section records them so nobody spends the afternoon
-again.
+`ChatApp` is not exported, even though it no longer carries the underscore that used to say so:
+`build_chat` is the way to build one, in `chat_builder.py`, and the class itself lives in
+`chat_app.py` — a public module, reachable from it, with nothing enforcing that a caller goes
+through the factory instead. The underscore was dropped once the class stopped attaching itself in
+its own constructor: it takes no session, and `build_chat` hands it to
+`ChatSession.add_connector` the same way it would hand over any other connector, so there is no
+longer anything privileged about instantiating it directly — only the missing `session` attribute
+a caller would then have to wire up by hand, which `build_chat` still does more conveniently.
 
-- **`_chat_app.py`** — a private module. Made `chatinho.chat_log` and `chatinho.chat_input`
-  visibly inconsistent, since those are presentation too.
-- **`__Chat`** — buys *nothing*. `from chatinho.chat_app import __Chat` resolves exactly like
-  `_Chat`, because mangling only happens inside a class body — where it turns a legitimate
-  reference into a lookup for `_Whatever__Chat`. Measured, not assumed.
-- **The class defined inside `create_chat`** — this one *works*: there is no name to import, and
-  it costs only half a millisecond per chat. It was reverted for what it does to the return type:
-  `create_chat` can then only promise `App`, so a consumer's checker sees `run()` but not
-  `messages`, `command()` or the grants.
-
-The last one is the trade the underscore is buying out of. `create_chat` returns `_Chat`, so a
-consumer's mypy sees the whole surface — which is also why the `TYPE_CHECKING` block in
-`__init__.py` matters: without it the lazy `__getattr__` hands them `Any` instead.
+`build_chat` returns a `ChatSession`, so a consumer's mypy sees the whole surface `ChatSession`
+promises — which is also why the `TYPE_CHECKING` block in `__init__.py` matters: without it the
+lazy `__getattr__` hands them `Any` instead.
 
 For a chat without a terminal, build a `ChatSession` and attach your own presentation —
 `examples/headless.py` is exactly that, in about forty lines.
 
-`ChatSession`'s own public surface is six members: `attach`, `add_command`, `start`, `close`,
-`id_of`, `forget`.
+`ChatSession`'s own public surface is seven members: `run`, `attach`, `add_command`, `start`,
+`close`, `id_of`, `forget`. `run()` is the entry point for a program whose job *is* the chat;
+`start`/`close` are for driving it from inside a loop you already own.
 Everything about the conversation is reached by declaring a hook — which is what
 [`docs/SPEC.md`](docs/SPEC.md) specifies, hook by hook.
 

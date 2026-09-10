@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The ten hooks, one example each, in a chat with no terminal.
+"""The eleven hooks, one example each, in a chat with no terminal.
 
 Every other example shows a chat. This one shows the *declarations* — what each
 hook demands, what it grants, and what actually arrives at each door — by
@@ -34,9 +34,11 @@ from chatinho import (
     HookListen,
     HookLoad,
     HookPeers,
+    HookCommands,
     HookSay,
     Invoke,
     Peers,
+    Commands,
     Say,
     backend,
     connector,
@@ -62,6 +64,7 @@ def note(hook: str, what: str) -> None:
 @require(HookInvoke)    # await invoke(name, args) -> what the command answered
 @require(HookContext)   # context(since=, start=, limit=) -> the conversation
 @require(HookPeers)     # peers() -> {id: peer}
+@require(HookCommands)  # commands() -> {name: command}
 class Screen:
     """The presentation, attached at ``LOCAL``: peer zero, and nothing special.
 
@@ -69,11 +72,12 @@ class Screen:
     with ``setattr`` at ``attach``, so nothing in the class body declares them.
     """
 
-    say     : Say
-    ask     : Ask
-    invoke  : Invoke
-    context : Context
-    peers   : Peers
+    say      : Say
+    ask      : Ask
+    invoke   : Invoke
+    context  : Context
+    peers    : Peers
+    commands : Commands
 
 
 # === The demands: what a peer must write ========================================
@@ -212,7 +216,7 @@ async def main() -> None:
         backend    = ListArchive(seeded),
     )
     screen = Screen()
-    session.attach(screen, at=LOCAL)        # the presentation is peer zero
+    session.add_connector(screen, at=LOCAL)        # the presentation is peer zero
 
     print("\n-- start(): HookLoad runs before anyone can ask for context --")
     await session.start()
@@ -238,6 +242,9 @@ async def main() -> None:
     print("\n-- peers: who is here, by id --")
     print("   →", {at: getattr(who, "name", type(who).__name__)
                    for at, who in screen.peers().items()})
+
+    print("\n-- commands: what can be run, by name --")
+    print("   →", list(screen.commands()))
 
     print("\n-- context: one window over both tiers --")
     for msg in screen.context():

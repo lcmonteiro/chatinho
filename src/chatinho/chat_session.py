@@ -7,7 +7,7 @@ terminal.
 Everyone in a chat is a **peer** with an integer id. :data:`LOCAL` —
 zero — is the user; every connector and every tool is numbered from one. A
 peer is a plain class that declares what it can do, and the session
-hands the capabilities over at :meth:`attach`.
+hands the capabilities over at :meth:`add_connector`.
 
 The conversation is protected: ``_say``, ``_ask``, ``_answer`` and
 ``_load_messages`` are never called directly. Declaring a hook is the only door
@@ -20,6 +20,7 @@ subsystem that takes a second to answer holds up nobody but itself.
 import asyncio
 import logging
 from datetime import datetime
+from inspect import isawaitable
 from typing import Any, Dict, List, Optional
 
 from .chat_hooks import (
@@ -30,6 +31,7 @@ from .chat_hooks import (
     HookListen,
     declares,
     hooks_of,
+    declared_id,
     name_of,
 )
 from .chat_message import TOOL, ChatMessage, MessageStore
@@ -65,18 +67,22 @@ class ChatSession:
         self.recall  : int = recall
 
         self._store    : MessageStore = MessageStore()
-        self._by_id    : Dict[int, Any] = {}
+        self._connectors    : Dict[int, Any] = {}
         self._queues   : Dict[int, "asyncio.Queue[ChatMessage]"] = {}
         self._tasks    : Dict[int, asyncio.Task] = {}
         self._pending  : Dict[str, "asyncio.Future[str]"] = {}
         self._next_id  : int = 1
+        self._started  : bool = False
+        self._closed   : bool = False
+        #: ids of peers/commands whose initialize() has already run.
+        self._initialized : set = set()
 
         #: Commands are not peers: no id, no queue, nothing addressed to them.
         #: They run when someone runs them, and answer whoever did.
         self.commands : Dict[str, Any] = {}
 
         for who in connectors or []:
-            self.attach(who)
+            self.add_connector(who)
         for cmd in commands or []:
             self.add_command(cmd)
         if backend is not None:
@@ -84,41 +90,46 @@ class ChatSession:
             # hears the conversation rather than being pushed at. `backend` is
             # only sugar for the role — the session finds what it needs by what
             # the thing declared, not by which parameter it arrived in.
-            self.attach(backend)
+            self.add_connector(backend)
 
     # === Peers ===============================================================
 
-    def attach(self, who: Any, at: Optional[int] = None) -> int:
-        """Registers *who*, hands over its grants and returns its id.
+    def add_connector(self, connector: Any, at: Optional[int] = None) -> int:
+        """
+        Registers *connector*, hands over its grants and returns its id.
 
-        The whole plugin contract. An id is assigned unless the caller pins one
-        — the presentation pins :data:`LOCAL`, because the user is peer
-        zero by definition.
+        The whole plugin contract. The id comes from the first of three: what
+        the caller pins here, what the class declared with
+        ``@connector(name, id=…)``, or the next free number. The terminal
+        declares ``id=LOCAL`` rather than being attached specially, because
+        being peer zero is what it *is*, not a favour the caller does it.
 
         Args:
-            who: Anything declaring hooks.
-            at: The id to register it under; assigned when omitted.
+            connector: Anything declaring hooks.
+            at: The id to register it under; the declared one, or the next
+                free number, when omitted.
 
         Returns:
             int: The id the peer now answers to.
 
         Raises:
-            ValueError: If *at* is already taken.
+            ValueError: If the id is already taken.
         """
+        if at is None:
+            at = declared_id(connector)
         if at is None:
             at = self._next_id
             self._next_id += 1
-        elif at in self._by_id:
-            raise ValueError("Id %d is already taken by %r" % (at, name_of(self._by_id[at])))
+        elif at in self._connectors:
+            raise ValueError("Id %d is already taken by %r" % (at, name_of(self._connectors[at])))
 
         # peer_id, not id: Textual's DOMNode already owns `id` and validates it
         # as a string. A peer rarely needs its own number anyway — the
         # grants bind `frm` for it — but knowing it costs nothing.
-        who.peer_id = at
-        self._by_id[at] = who
+        connector.peer_id = at
+        self._connectors[at] = connector
         self._queues[at] = asyncio.Queue()
-        self._grant(who, at)
-        self._start(who)
+        self._grant(connector, at)
         return at
 
     def add_command(self, cmd: Any) -> str:
@@ -146,12 +157,8 @@ class ChatSession:
                 % (cmd, HookExecute))
         name = name_of(cmd)
         self.commands[name] = cmd
-        if hasattr(cmd, "commands"):
-            # /help lists its siblings; the roster is the session's, not its own.
-            cmd.commands = self.commands
         # TOOL, not LOCAL: what a command writes is not the user speaking.
         self._grant(cmd, TOOL)
-        self._start(cmd)
         return name
 
     def _invoke_for(self, frm: int):
@@ -188,20 +195,25 @@ class ChatSession:
         return invoke
 
     def id_of(self, name: str) -> Optional[int]:
-        """Returns the id of the peer with that visible name, or None.
+        """
+        Returns the id of the peer with that visible name, or None.
 
         The name is what the chat displays and what the user types after ``/``;
         the id is what messages are addressed to. Keeping them apart is what
         lets a peer be renamed without breaking replies in flight.
         """
-        for at, who in self._by_id.items():
+        for at, who in self._connectors.items():
             if name_of(who) == name:
                 return at
         return None
 
     def _peers(self) -> Dict[int, Any]:
         """Everyone registered, by id. Granted by ``HookPeers``."""
-        return dict(self._by_id)
+        return dict(self._connectors)
+
+    def _commands(self) -> Dict[str, Any]:
+        """Every command registered, by name. Granted by ``HookCommands``."""
+        return dict(self.commands)
 
     def _grant(self, who: Any, at: int) -> None:
         """Sets the attributes *who*'s declared hooks ask for.
@@ -209,13 +221,14 @@ class ChatSession:
         Each grant is bound to the peer's own id, so nobody can speak in
         another's name: the ``frm`` of a message is not an argument.
         """
-        grants = {
-            "say"           : lambda: self._say_for(at),
-            "ask"           : lambda: self._ask_for(at),
-            "context"       : lambda: self._context,
-            "invoke"        : lambda: self._invoke_for(at),
-            "peers"  : lambda: self._peers,
-        }
+        grants = dict(
+            say     = lambda: self._say_for(at),
+            ask     = lambda: self._ask_for(at),
+            context = lambda: self._context,
+            invoke  = lambda: self._invoke_for(at),
+            peers   = lambda: self._peers,
+            commands= lambda: self._commands,
+        )
         for hook in hooks_of(who):
             for granted in hook.grants:
                 build = grants.get(granted)
@@ -224,12 +237,20 @@ class ChatSession:
                     continue
                 setattr(who, granted, build())
 
-    @staticmethod
-    def _start(obj: Any) -> None:
-        """Calls ``initialize()`` when the object has one."""
+    async def _initialize(self, obj: Any) -> None:
+        """
+        Calls ``initialize()`` when the object has one, from :meth:`start`.
+
+        ``start`` has a running loop, unlike ``add_connector``/``add_command``,
+        so ``initialize`` may be a coroutine function: it is awaited when it
+        returns one, and simply called when it does not.
+        """
         init = getattr(obj, "initialize", None)
-        if callable(init):
-            init()
+        if not callable(init):
+            return
+        result = init()
+        if isawaitable(result):
+            await result
 
     # === The three verbs, bound to one speaker ======================================
 
@@ -242,7 +263,7 @@ class ChatSession:
 
     def _ask_for(self, frm: int):
         async def ask(to: int, text: str) -> str:
-            if to not in self._by_id:
+            if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
             future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
@@ -252,7 +273,8 @@ class ChatSession:
         return ask
 
     async def _post(self, msg: ChatMessage) -> str:
-        """Keeps *msg* and puts it in the queue of everyone it is for.
+        """
+        Keeps *msg* and puts it in the queue of everyone it is for.
 
         An answer to an ask that is still waiting resolves that wait, and is
         not delivered to the asker a second time — it is already holding it.
@@ -266,7 +288,7 @@ class ChatSession:
             waiting.set_result(msg.text)          # type: ignore[union-attr]
 
         # You never hear yourself; that is the whole of the loop protection.
-        listeners = {at for at, who in self._by_id.items()
+        listeners = {at for at, who in self._connectors.items()
                      if at != msg.frm and declares(who, HookListen)}
         audience  = {msg.to} if msg.to is not None and not resolved else set()
         for at in listeners | audience:
@@ -276,7 +298,8 @@ class ChatSession:
         return msg.id
 
     async def _deliver(self, who: Any, msg: ChatMessage) -> None:
-        """Hands one message to one peer, every way it declared to get it.
+        """
+        Hands one message to one peer, every way it declared to get it.
 
         The two are not exclusive: something that listens *and* answers gets
         both calls for the same message, because it asked for both.
@@ -303,7 +326,8 @@ class ChatSession:
             ))
 
     async def _drain(self, at: int) -> None:
-        """One peer's queue, one message at a time.
+        """
+        One peer's queue, one message at a time.
 
         A peer that raises is logged and its queue carries on: one bad
         subsystem must not take the chat down, nor stall its own backlog.
@@ -312,7 +336,7 @@ class ChatSession:
         while True:
             msg = await queue.get()
             try:
-                await self._deliver(self._by_id[at], msg)
+                await self._deliver(self._connectors[at], msg)
             except Exception:
                 logger.error("Peer %d failed on %s", at, msg.id, exc_info=True)
             finally:
@@ -327,7 +351,8 @@ class ChatSession:
         start : Optional[int] = None,
         limit : Optional[int] = None,
     ) -> List[ChatMessage]:
-        """The conversation so far, by time or by index. Granted by ``HookContext``.
+        """
+        The conversation so far, by time or by index. Granted by ``HookContext``.
 
         One interface over two tiers: what was said this session, and what
         :meth:`start` recalled from the archive. Whoever asks never learns
@@ -361,35 +386,107 @@ class ChatSession:
 
     # === Lifecycle ==================================================================
 
-    async def start(self) -> None:
-        """Starts one drain task per peer.
-
-        Separate from construction because the tasks need a running loop, and a
-        session is usually built before there is one.
+    def run(self) -> None:
         """
-        await self._recall()
+        Runs the whole chat, and returns when it is over.
+
+        The entry point for a program whose job *is* the chat: it owns the
+        event loop, so there must not be one running already. From inside a
+        loop, drive :meth:`start` and :meth:`close` yourself.
+
+        A peer that runs until it is finished — a terminal, a server, a stdin
+        reader — writes ``serve()``, and the session runs those and closes when
+        the first of them returns. A session with none of them runs until it is
+        interrupted, which is what a bot wants.
+
+        Raises:
+            RuntimeError: There is already an event loop on this thread.
+        """
+        try:
+            asyncio.run(self._serve())
+        except KeyboardInterrupt:
+            pass
+
+    async def _serve(self) -> None:
+        """Starts everything, waits for it to be over, and closes."""
+        await self.start()
+        serving = {
+            asyncio.create_task(who.serve(), name=name_of(who))
+            for who in self._connectors.values()
+            if callable(getattr(who, "serve", None))
+        }
+        try:
+            if serving:
+                # The first to finish ends the chat: quitting the terminal is
+                # the end of it, even when a server is still listening.
+                done, pending = await asyncio.wait(serving, return_when=asyncio.FIRST_COMPLETED)
+                for task in pending:
+                    task.cancel()
+                for task in done:
+                    task.result()            # let a peer's failure be seen
+            else:
+                await asyncio.Event().wait()  # nothing serves: until interrupted
+        finally:
+            # Closes on the way out however that happens — a peer finishing, a
+            # peer raising, or this being cancelled. Cancellation is not
+            # swallowed: whoever cancelled is owed the CancelledError, and
+            # ``run`` turns the Ctrl-C case into a quiet exit itself.
+            await self.close()
+
+    async def start(self) -> None:
+        """
+        Initializes every peer and command, then starts one drain task per peer.
+
+        Separate from construction because both need a running loop, and a
+        session is usually built before there is one — ``initialize()`` runs
+        here rather than at ``add_connector``/``add_command`` for the same
+        reason, which is also why it may now be a coroutine function.
+        Initializing runs before the archive is recalled, since a backend's own
+        ``initialize()`` is usually what makes it able to ``load()`` at all.
+
+        Calling it twice is a no-op *for the archive*: :meth:`run` starts the
+        session, and a presentation that also starts it when it mounts must not
+        load the older context on top of itself. Initializing and the drain
+        tasks are another matter — calling it again picks up whatever was
+        attached since, which is how a peer added after the session started
+        ever runs, or is initialized, at all.
+        """
+        for who in list(self._connectors.values()) + list(self.commands.values()):
+            if id(who) not in self._initialized:
+                self._initialized.add(id(who))
+                await self._initialize(who)
+        if not self._started:
+            self._started = True
+            await self._recall()
         for at in self._queues:
             if at not in self._tasks or self._tasks[at].done():
                 self._tasks[at] = asyncio.create_task(self._drain(at))
 
     async def close(self) -> None:
-        """Stops the drain tasks and shuts every peer down.
+        """
+        Stops the drain tasks and shuts every peer down.
 
         A peer holding a server or a thread would otherwise outlive the
-        chat it was serving.
+        chat it was serving. Calling it twice is a no-op, for the same reason
+        :meth:`start` is.
         """
+        if self._closed:
+            return
+        self._closed = True
         # Drain before cancelling: a message still in a queue is a message a
         # listener has not held yet, and cancelling first made "the
         # conversation survives" true only sometimes.
         try:
             await asyncio.wait_for(
-                asyncio.gather(*(q.join() for q in self._queues.values())), timeout=5.0)
+                asyncio.gather(*(q.join() for q in self._queues.values())),
+                timeout=5.0,
+            )
         except asyncio.TimeoutError:
             logger.warning("Gave up waiting for the queues to drain")
         for task in self._tasks.values():
             task.cancel()
         self._tasks.clear()
-        for who in list(self._by_id.values()) + list(self.commands.values()):
+        for who in list(self._connectors.values()) + list(self.commands.values()):
             shutdown = getattr(who, "shutdown", None)
             if callable(shutdown):
                 try:
@@ -400,13 +497,14 @@ class ChatSession:
     # === The older tier =============================================================
 
     async def _recall(self) -> None:
-        """Pulls the tail of the archive back into the session.
+        """
+        Pulls the tail of the archive back into the session.
 
         Called once by :meth:`start`, before anyone can ask for context, so a
         chat reopens where it left off. A backend that cannot recall is not an
         error: it simply has nothing to give back.
         """
-        holder = next((w for w in self._by_id.values() if declares(w, HookLoad)), None)
+        holder = next((w for w in self._connectors.values() if declares(w, HookLoad)), None)
         if holder is None:
             return
         try:
@@ -416,7 +514,8 @@ class ChatSession:
             logger.error("Loading the older context failed; starting empty", exc_info=True)
 
     async def forget(self, before: Optional[datetime] = None) -> int:
-        """Drops archived messages older than *before*, or all of them.
+        """
+        Drops archived messages older than *before*, or all of them.
 
         Args:
             before: Keep everything from this moment on; None forgets the lot.
@@ -424,7 +523,7 @@ class ChatSession:
         Returns:
             int: How many the backend dropped, or zero when it cannot forget.
         """
-        holder = next((w for w in self._by_id.values() if declares(w, HookForget)), None)
+        holder = next((w for w in self._connectors.values() if declares(w, HookForget)), None)
         if holder is None:
             return 0
         return await holder.forget(before=before)

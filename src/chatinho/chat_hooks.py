@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Tuple
 
-from .chat_message import ChatMessage
+from .chat_message import TOOL, ChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,14 @@ class Peers(Protocol):
 
     def __call__(self) -> Dict[int, Any]:
         """Returns a copy of the roster, keyed by peer id."""
+        ...
+
+
+class Commands(Protocol):
+    """Granted by ``HookCommands``: the commands registered in the chat, by name."""
+
+    def __call__(self) -> Dict[str, Any]:
+        """Returns a copy of the roster, keyed by command name."""
         ...
 
 
@@ -216,6 +224,13 @@ HookPeers = Hook(
     # be written without a way to see past its own class.
 )
 
+HookCommands = Hook(
+    name="HookCommands",
+    grants=("commands",),
+    # commands() -> the registry, by name. /help lists it and the autocomplete
+    # popup matches against it, the same way HookPeers lets both see the roster.
+)
+
 # === Holding the conversation ===================================================
 
 HookLoad = Hook(
@@ -241,6 +256,7 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookExecute,
     HookContext,
     HookPeers,
+    HookCommands,
     HookLoad,
     HookForget,
 )
@@ -250,29 +266,59 @@ ALL_HOOKS: Tuple[Hook, ...] = (
 # declare that it holds nothing is ceremony.
 
 
-def connector(name: str) -> Callable[[type], type]:
-    """Names a connector class.
+def connector(name: str, id: Optional[int] = None) -> Callable[[type], type]:
+    """Names a connector class, and optionally pins the id it answers to.
 
-    The name is how the chat addresses it — ``ask_connector("weather", ...)`` —
-    and what a message carries as its ``origin``. An instance may override it by
-    setting ``self.name``, for two links of the same kind to different agents.
+    The name is what the chat displays and what the user types after ``/``; an
+    instance may override it by setting ``self.name``, for two links of the same
+    kind to different agents.
+
+    ``id`` is for a connector that can only be one peer. The terminal declares
+    ``@connector("chat", id=LOCAL)`` because the presentation *is* peer zero —
+    it speaks for the person — and that is a property of what it is, not of how
+    somebody attaches it. Leave it out and the session numbers the peer from
+    one, in the order they were attached.
 
     Args:
         name: The connector's name; must be a non-empty string.
+        id: The id it must answer to, when it can only be one peer. ``TOOL`` is
+            refused: a command is not a peer, and nothing may take its name.
 
     Returns:
         Callable: The class decorator.
 
     Raises:
-        ValueError: If *name* is empty or not a string.
+        ValueError: If *name* is empty, or *id* is not an int, or *id* is TOOL.
     """
     if not isinstance(name, str) or not name.strip():
         raise ValueError("A connector name must be a non-empty string, got %r" % (name,))
+    if id is not None:
+        if isinstance(id, bool) or not isinstance(id, int):
+            raise ValueError("A connector id must be an int, got %r" % (id,))
+        if id == TOOL:
+            raise ValueError("Id %d is TOOL's: a command is not a peer" % TOOL)
 
     def decorator(cls: type) -> type:
         cls.name = name  # type: ignore[attr-defined]
+        if id is not None:
+            # Not ``cls.id``: Textual's DOMNode owns that name and validates it
+            # as a string, which is a TypeError at attach and was one once.
+            cls._declared_id = id  # type: ignore[attr-defined]
         return cls
     return decorator
+
+
+def declared_id(obj: Any) -> Optional[int]:
+    """Returns the id a peer's declaration pins, or None if it takes any.
+
+    Args:
+        obj: A peer, or its class.
+
+    Returns:
+        Optional[int]: The declared id, when ``@connector(..., id=…)`` set one.
+    """
+    declared = getattr(obj, "_declared_id", None)
+    return declared if isinstance(declared, int) else None
 
 
 def tool(name: str, description: str = "") -> Callable[[type], type]:

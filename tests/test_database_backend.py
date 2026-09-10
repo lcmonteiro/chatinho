@@ -113,14 +113,14 @@ async def test_a_conversation_survives_the_session_that_had_it(tmp_path):
 
     first = ChatSession(backend=store)
     view = Driver()
-    first.attach(view, at=LOCAL)
+    first.add_connector(view, at=LOCAL)
     await first.start()
     await view.say("lembra-te disto")
     await first.close()
 
     second = ChatSession(backend=store)
     again = Driver()
-    second.attach(again, at=LOCAL)
+    second.add_connector(again, at=LOCAL)
     await second.start()
     assert [m.text for m in again.context()] == ["lembra-te disto"]
     await second.close()
@@ -129,7 +129,7 @@ async def test_a_conversation_survives_the_session_that_had_it(tmp_path):
 async def test_a_session_without_a_backend_simply_has_no_older_tier():
     session = ChatSession()
     view = Driver()
-    session.attach(view, at=LOCAL)
+    session.add_connector(view, at=LOCAL)
     await session.start()
     await view.say("só em memória")
     assert [m.text for m in view.context()] == ["só em memória"]
@@ -142,7 +142,7 @@ async def test_load_is_bounded_by_what_the_session_asks_for(tmp_path):
     store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
     first = ChatSession(backend=store)
     view = Driver()
-    first.attach(view, at=LOCAL)
+    first.add_connector(view, at=LOCAL)
     await first.start()
     for n in range(5):
         await view.say("m%d" % n)
@@ -150,7 +150,7 @@ async def test_load_is_bounded_by_what_the_session_asks_for(tmp_path):
 
     second = ChatSession(backend=store, recall=2)
     again = Driver()
-    second.attach(again, at=LOCAL)
+    second.add_connector(again, at=LOCAL)
     await second.start()
     assert [m.text for m in again.context()] == ["m3", "m4"]
     await second.close()

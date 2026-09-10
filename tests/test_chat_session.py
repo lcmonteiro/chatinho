@@ -2,7 +2,7 @@
 
 Everyone is a peer with an id, LOCAL is the user, and there are three
 verbs. Every test here reaches the conversation the way the TUI does: through
-a Driver that declared the hooks and was handed the capabilities at attach.
+a Driver that declared the hooks and was handed the capabilities at add_connector.
 """
 
 import asyncio
@@ -15,6 +15,7 @@ import pytest
 from chatinho import (
     LOCAL,
     ChatMessage,
+    ChatSession,
     TOOL,
     HookForget,
     HookLoad,
@@ -120,7 +121,7 @@ async def test_the_user_is_peer_zero_and_connectors_are_numbered():
 async def test_a_taken_id_is_refused():
     session, _ = await driven()
     with pytest.raises(ValueError, match="already taken"):
-        session.attach(_Eco(), at=LOCAL)
+        session.add_connector(_Eco(), at=LOCAL)
     await session.close()
 
 
@@ -268,7 +269,7 @@ async def test_a_peer_can_ask_the_user():
         ask: Ask
 
     agente = Agente()
-    session.attach(agente)
+    session.add_connector(agente)
     await session.start()
     assert await agente.ask(LOCAL, "Autorizas?") == "sim, autorizo"
     assert [m.text for m in view.asked] == ["Autorizas?"]
@@ -299,7 +300,7 @@ async def test_an_answer_given_later_still_resolves_the_ask():
 
     session, view = await driven()
     adiado = Adiado()
-    at = session.attach(adiado)
+    at = session.add_connector(adiado)
     await session.start()
 
     pergunta = asyncio.create_task(view.ask(at, "e depois?"))
@@ -320,7 +321,7 @@ async def test_a_peer_gets_only_what_it_declared():
 
     session, _ = await driven()
     mudo = Mudo()
-    session.attach(mudo)
+    session.add_connector(mudo)
     assert hasattr(mudo, "say")
     assert not hasattr(mudo, "ask")
     assert not hasattr(mudo, "context")
@@ -328,7 +329,7 @@ async def test_a_peer_gets_only_what_it_declared():
 
 
 async def test_nobody_can_speak_in_another_name():
-    """frm is bound at attach, not passed as an argument."""
+    """frm is bound at add_connector, not passed as an argument."""
     session, view = await driven(connectors=[_Ouvinte()])
     await view.say("sou eu")
     assert view.context()[0].frm == LOCAL
@@ -443,3 +444,138 @@ async def test_forget_reaches_the_one_that_holds():
     await session.close()
 
 
+
+
+# === The id a class declares ====================================================
+
+
+async def test_a_connector_can_pin_the_id_it_answers_to():
+    """Being peer zero is what the terminal *is*, not a favour at add_connector.
+
+    @connector(name, id=…) is for a connector that can only be one peer. The
+    session numbers everything else from one, in attachment order.
+    """
+
+    @connector("terminal", id=LOCAL)
+    @require(HookListen)
+    class Terminal:
+        async def listen(self, msg) -> None:
+            pass
+
+    session = ChatSession(connectors=[Terminal(), _Rapido()])
+    assert session.id_of("terminal") == LOCAL
+    assert session.id_of("rapido") == 1
+    await session.close()
+
+
+def test_the_caller_may_still_pin_a_different_id():
+    @connector("teimoso", id=LOCAL)
+    @require(HookListen)
+    class Teimoso:
+        async def listen(self, msg) -> None:
+            pass
+
+    session = ChatSession()
+    assert session.add_connector(Teimoso(), at=7) == 7
+
+
+def test_a_declared_id_may_not_be_TOOL_or_anything_but_an_int():
+    with pytest.raises(ValueError, match="TOOL"):
+        @connector("ladrao", id=TOOL)
+        class Ladrao:
+            pass
+
+    with pytest.raises(ValueError, match="int"):
+        @connector("torto", id="zero")
+        class Torto:
+            pass
+
+
+# === run(), and what serves ======================================================
+
+
+async def test_the_first_peer_to_finish_serving_ends_the_chat():
+    """serve() is lifecycle, not a hook: it runs until it is finished.
+
+    Quitting the terminal is the end of the chat even when a server is still
+    listening, so the session waits for the first and cancels the rest.
+    """
+    cancelled = []
+
+    @connector("curto")
+    @require(HookSay)
+    class Curto:
+        say : Say
+        async def serve(self) -> None:
+            await self.say("e pronto")
+
+    @connector("longo")
+    @require(HookListen)
+    class Longo:
+        async def listen(self, msg) -> None:
+            pass
+        async def serve(self) -> None:
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.append(True)
+                raise
+
+    session = ChatSession(connectors=[Curto(), Longo()])
+    await asyncio.wait_for(session._serve(), timeout=2)
+    assert cancelled == [True], "the one still serving should have been cancelled"
+    assert [m.text for m in session._context()] == ["e pronto"]
+
+
+async def test_a_session_with_nothing_serving_runs_until_it_is_stopped():
+    """A bot has no terminal to quit: it runs until something interrupts it."""
+    session = ChatSession(connectors=[_Rapido()])
+    running = asyncio.create_task(session._serve())
+    await asyncio.sleep(0.05)
+    assert not running.done()
+
+    running.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await running
+
+
+async def test_a_peer_that_fails_while_serving_is_not_swallowed():
+    @connector("avariado")
+    @require(HookListen)
+    class Avariado:
+        async def listen(self, msg) -> None:
+            pass
+        async def serve(self) -> None:
+            raise RuntimeError("o servidor caiu")
+
+    session = ChatSession(connectors=[Avariado()])
+    with pytest.raises(RuntimeError, match="caiu"):
+        await session._serve()
+
+
+async def test_an_async_initialize_is_awaited_by_start():
+    """initialize() runs from start(), where a loop exists — so it may be async.
+
+    It used to run synchronously at add_connector(), before there was
+    necessarily a loop to await one; now that it runs from start(), that
+    restriction is gone.
+    """
+
+    @connector("tarde")
+    @require(HookListen)
+    class Tarde:
+        def __init__(self) -> None:
+            self.initialized = False
+
+        async def initialize(self) -> None:
+            self.initialized = True
+
+        async def listen(self, msg) -> None:
+            pass
+
+    tarde = Tarde()
+    session = ChatSession(connectors=[tarde])
+    assert tarde.initialized is False
+    await session.start()
+    assert tarde.initialized is True
+    await session.close()

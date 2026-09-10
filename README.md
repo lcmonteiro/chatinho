@@ -61,7 +61,7 @@ true. Four names live behind an extra:
 
 | you want | install | it brings |
 |---|---|---|
-| `create_chat` — the terminal app | `chatinho[tui]` | `textual` |
+| `build_chat` — the terminal app | `chatinho[tui]` | `textual` |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
@@ -71,8 +71,8 @@ They are resolved on first use, so `import chatinho` never drags in a terminal f
 wanted a session. A missing extra reports itself:
 
 ```
->>> chatinho.create_chat
-ImportError: create_chat needs 'textual', which chatinho does not install by default.
+>>> chatinho.build_chat
+ImportError: build_chat needs 'textual', which chatinho does not install by default.
              Install it with:  pip install 'chatinho[tui]'
 ```
 
@@ -104,7 +104,7 @@ Four rules hold everywhere: **you never hear yourself**; **nothing blocks** (one
 per peer); **hearing is queued**, so a listener sees a message shortly after it was said; and
 **everything that crosses is in the context**.
 
-[`docs/SPEC.md`](docs/SPEC.md) is the reference for all ten hooks — what each demands, what it
+[`docs/SPEC.md`](docs/SPEC.md) is the reference for all eleven hooks — what each demands, what it
 grants, an example, and what it costs. [`examples/hooks.py`](examples/hooks.py) is that document
 executable.
 
@@ -135,7 +135,7 @@ class Printer:
 async def main():
     session = ChatSession(commands=[HelpCommand()])
     screen  = Printer()
-    session.attach(screen, at=LOCAL)
+    session.add_connector(screen, at=LOCAL)
     await session.start()
 
     await screen.say("good morning")    # not printed: you never hear yourself
@@ -151,29 +151,32 @@ asyncio.run(main())
 ### With the terminal — `pip install 'chatinho[tui]'`
 
 ```python
-from chatinho import create_chat, HelpCommand, TestCommand
+from chatinho import build_chat, HelpCommand, TestCommand
 
-create_chat(
+build_chat(
     connectors = [],                                # peers: id, queue, conversation
     commands   = [HelpCommand(), TestCommand()],    # not peers: they just run
     backend    = None,                              # a peer that listens
 ).run()
 ```
 
-`create_chat` is the only entry point: the application class itself is private. Markdown rendering,
+`build_chat` returns the **session**, with the terminal attached at `LOCAL` as an ordinary
+connector that declares `@connector("chat", id=LOCAL)`. The session owns the loop: `run()` starts
+everything, runs every peer's `serve()`, and closes when the first of them returns — quitting the
+terminal is the end of the chat. Markdown rendering,
 syntax-highlighted code blocks, command autocomplete and click-to-reply come with it, and
 `ChatStyle` is a dataclass — use `dataclasses.replace` to change a colour.
 
-`quit_key` moves the quit binding off Textual's `ctrl+q` — `create_chat(quit_key="ctrl+g")` — and a
+`quit_key` moves the quit binding off Textual's `ctrl+q` — `build_chat(quit_key="ctrl+g")` — and a
 key Textual could never receive is refused there and then, rather than becoming a binding that
 silently never fires.
 
 ### With the batteries
 
 ```python
-from chatinho import create_chat, A2AConnector, OpenAIConnector, DatabaseBackend, HelpCommand
+from chatinho import build_chat, A2AConnector, OpenAIConnector, DatabaseBackend, HelpCommand
 
-create_chat(
+build_chat(
     connectors = [
         A2AConnector(name="agent", url="https://api.example.com", api_key="***"),
         OpenAIConnector(name="gpt", api_key="***"),
@@ -216,7 +219,7 @@ class Archive:
 
 | | |
 |---|---|
-| [`examples/hooks.py`](examples/hooks.py) | **start here** — one peer per hook, all ten, no terminal |
+| [`examples/hooks.py`](examples/hooks.py) | **start here** — one peer per hook, all eleven, no terminal |
 | [`examples/demo.py`](examples/demo.py) | the full TUI: Markdown, code blocks, autocomplete, replies |
 | [`examples/headless.py`](examples/headless.py) | the same chat wired to stdin/stdout |
 | [`examples/agent_inbox.py`](examples/agent_inbox.py) | inbound: an agent asks over HTTP, you answer |
