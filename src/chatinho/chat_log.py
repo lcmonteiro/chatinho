@@ -17,6 +17,10 @@ from .chat_message import TOOL, ChatMessage
 
 logger = logging.getLogger(__name__)
 
+#: What a bubble costs around its text: `padding: 1 2` either side,
+#: plus the two cells its `border: round` draws in.
+_BUBBLE_CHROME : int = 6
+
 
 class TouchScrollableContainer(ScrollableContainer):
     """Scrollable container that supports mouse/touch drag scrolling."""
@@ -151,17 +155,22 @@ class ChatLog(TouchScrollableContainer):
         parts: List[Widget] = [header]
 
         # Quote of the original message when this is a reply
+        quote = None
         if msg.reply_to is not None:
             original = self._find(msg.reply_to)
             if original is not None:
                 preview = " ".join(original.text.split())[:60]
-                parts.append(
-                    Static(f"↳ {original.id}: {preview}…", classes="message-quote")
-                )
+                quote = f"↳ {original.id}: {preview}…"
+                parts.append(Static(quote, classes="message-quote"))
 
         parts.append(Markdown(msg.text, classes="message-body"))
 
         bubble = Vertical(*parts, classes="message-bubble")
+        # A bubble is as wide as its widest line and no wider, up to the
+        # max-width the stylesheet sets, which Textual clamps this against.
+        # It has to be measured here: `width: auto` collapses to nothing,
+        # because Markdown reports no content width of its own.
+        bubble.styles.width = self._bubble_width(prefix, msg.text, quote)
 
         # Clickable container — aligns left/right and selects the reply target
         container = _MessageContainer(
@@ -177,6 +186,26 @@ class ChatLog(TouchScrollableContainer):
 
         self._msg_widgets[msg.id] = container
         return container
+
+    @staticmethod
+    def _bubble_width(prefix: str, text: str, quote: Optional[str] = None) -> int:
+        """How wide this bubble wants to be, in cells.
+
+        The widest line it has to show — the header, the quote, or a line of
+        the body — plus the bubble's own padding and border. The stylesheet's
+        ``max-width`` is what stops it growing past the window; this only says
+        how little it may take.
+
+        Args:
+            prefix: The header line.
+            text: What the message says.
+            quote: The reply preview, when this message answers another.
+
+        Returns:
+            int: The width to set, borders and padding included.
+        """
+        lines = [prefix] + text.splitlines() + ([quote] if quote else [])
+        return max(len(line) for line in lines) + _BUBBLE_CHROME
 
     # === Reply target (click) ======================================================
 

@@ -4,7 +4,7 @@ Build the chat UI theme in Python instead of editing raw CSS:
 
     from chatinho import ChatStyle, build_chat
 
-    style = ChatStyle(accent="#ff5733", sent_bubble_bg="#1a4d3a")
+    style = ChatStyle(accent="#ff5733", sent_bubble_border="#ff5733")
     chat = build_chat(style=style)
 
 Use ``dataclasses.replace`` to tweak a base style without touching the rest:
@@ -13,6 +13,11 @@ Use ``dataclasses.replace`` to tweak a base style without touching the rest:
 
     dark = ChatStyle()
     green = replace(dark, accent="#00ff88")
+
+**A bubble is drawn as an outline, not as a fill.** The border carries the
+colour and the chat background shows through, so the two ``*_bubble_bg``
+fields are the tint a bubble takes *only* while it is the reply target —
+selection is the one thing a filled background means.
 """
 
 from dataclasses import asdict, dataclass
@@ -55,8 +60,10 @@ Screen {
     display: block;
 }
 #input-line {
-    height: 3;
-    background: $input_bg;
+    height: auto;
+    max-height: $input_max_height;
+    padding: 0 1;
+    background: transparent;
     border: round $input_border;
     color: $input_color;
 }
@@ -68,34 +75,34 @@ Screen {
     width: 100%;
     padding: 0 0 1 0;
     height: auto;
-}
-.message-container.reply-target .message-bubble {
-    outline: thick $accent;
-}
-.message-container.sent {
-    align: right top;
-}
-.message-container.received {
     align: left top;
 }
 .message-bubble {
     layout: vertical;
-    max-width: 90%;
+    width: auto;
+    max-width: $bubble_max_width;
     padding: 1 2;
     border: round $received_bubble_border;
-    background: $received_bubble_bg;
+    background: transparent;
     color: $received_text;
     height: auto;
 }
 .message-container.sent .message-bubble {
-    background: $sent_bubble_bg;
     border: round $sent_bubble_border;
     color: $sent_text;
 }
 .message-container.received .message-bubble {
-    background: $received_bubble_bg;
     border: round $received_bubble_border;
     color: $received_text;
+}
+.message-container.reply-target .message-bubble {
+    outline: thick $accent;
+}
+.message-container.sent.reply-target .message-bubble {
+    background: $sent_bubble_bg;
+}
+.message-container.received.reply-target .message-bubble {
+    background: $received_bubble_bg;
 }
 .message-header {
     color: $received_header;
@@ -123,9 +130,9 @@ Screen {
 class ChatStyle:
     """Theme colours for the chat UI.
 
-    Every field is a hex colour string; defaults reproduce the classic
-    chatlib look. ``to_css()`` turns the values into a Textual stylesheet
-    by rendering the module-level ``_CSS_TEMPLATE``.
+    Every colour field is a hex string; the two size fields are Textual
+    lengths (cells, or a percentage). ``to_css()`` turns the values into a
+    Textual stylesheet by rendering the module-level ``_CSS_TEMPLATE``.
     """
 
     # Screen / layout
@@ -138,24 +145,28 @@ class ChatStyle:
     scrollbar_hover_bg: str = "#2a3942"
     scrollbar_hover_color: str = "#e9edef"
 
-    # Input line
+    # Input line — drawn as an outline; it grows with the text up to this many rows
     input_bg: str = "#202c33"
     input_border: str = "#2a3942"
     input_color: str = "#e9edef"
     input_focus_border: str = "#00a884"
+    input_max_height: str = "8"
 
     # Accent (reply outline + quote border)
     accent: str = "#00a884"
 
-    # Sent bubbles
+    # How wide a bubble may grow before its text wraps
+    bubble_max_width: str = "72"
+
+    # Sent bubbles — the border is what is drawn; the bg is the reply-target tint
     sent_bubble_bg: str = "#005c4b"
-    sent_bubble_border: str = "#005c4b"
+    sent_bubble_border: str = "#00a884"
     sent_text: str = "#e9edef"
     sent_header: str = "#8fd6b4"
 
-    # Received bubbles
+    # Received bubbles — the border is what is drawn; the bg is the reply-target tint
     received_bubble_bg: str = "#202c33"
-    received_bubble_border: str = "#202c33"
+    received_bubble_border: str = "#3b4a54"
     received_text: str = "#e9edef"
     received_header: str = "#7de0a3"
 

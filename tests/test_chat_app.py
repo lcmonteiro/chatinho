@@ -11,15 +11,16 @@ import threading
 
 import pytest
 from textual.binding import NoBinding
-from textual.widgets import Input
 
 from chatinho.chat_app import ChatApp
+from chatinho.chat_input import CommandInput
 from chatinho import (
     LOCAL,
     build_chat,
     TOOL,
     Ask,
     HelpCommand,
+    HookAnswer,
     HookAsk,
     HookExecute,
     connector,
@@ -94,18 +95,18 @@ async def test_the_welcome_message_is_the_app_saying_it():
 async def test_submitting_text_says_it():
     app = await chat_app()
     async with app.run_test() as pilot:
-        inp = app.query_one("#input-line", Input)
-        inp.value = "  ola  "
+        inp = app.query_one("#input-line", CommandInput)
+        inp.text = "  ola  "
         await pilot.press("enter")
         await pilot.pause()
         assert [m.text for m in app.messages] == ["ola"]
-        assert app.query_one("#input-line", Input).value == ""
+        assert app.query_one("#input-line", CommandInput).text == ""
 
 
 async def test_blank_input_says_nothing():
     app = await chat_app()
     async with app.run_test() as pilot:
-        app.query_one("#input-line", Input).value = "   "
+        app.query_one("#input-line", CommandInput).text = "   "
         await pilot.press("enter")
         await pilot.pause()
     assert app.messages == []
@@ -146,8 +147,8 @@ async def test_what_a_command_writes_is_not_the_user_speaking():
 async def test_submitting_a_slash_runs_the_tool():
     app = await chat_app(commands=[_Eco()])
     async with app.run_test() as pilot:
-        inp = app.query_one("#input-line", Input)
-        inp.value = "/eco bom dia"
+        inp = app.query_one("#input-line", CommandInput)
+        inp.text = "/eco bom dia"
         await pilot.press("enter")
         await pilot.pause()
         assert [m.text for m in app.messages] == ["/eco bom dia", "eco: bom dia"]
@@ -362,3 +363,122 @@ async def test_the_terminal_serves_until_the_user_quits():
 
     app.exit()
     await asyncio.wait_for(serving, timeout=5)
+
+
+# === How a bubble is drawn ======================================================
+#
+# A bubble is an outline, not a fill: the border carries the colour and the chat
+# background shows through. The one background in the log is the message the
+# user has selected to reply to.
+
+
+@connector("outro")
+@require(HookAnswer)
+class _Outro:
+    """Someone other than the user, so a received bubble exists to measure."""
+
+    async def answer(self, msg) -> str:
+        return "recebida"
+
+
+def _bubbles(app):
+    """The bubble widgets currently in the log, oldest first."""
+    return list(app.query(".message-bubble"))
+
+
+async def test_a_bubble_is_as_wide_as_its_widest_line():
+    """Dynamic, not 90% of the window — and never past the maximum."""
+    app = await chat_app()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await app.say("oi")
+        await app.say("palavra " * 40)
+        await pilot.pause()
+
+        short, long = _bubbles(app)
+        assert short.outer_size.width < 40, "a short message takes a short bubble"
+        assert long.outer_size.width == 72, "a long one stops at bubble_max_width"
+
+
+async def test_a_bubble_has_no_background_until_it_is_the_reply_target():
+    """The fill is what selection means; nothing else in the log has one."""
+    app = await chat_app()
+    async with app.run_test() as pilot:
+        await app.say("oi")
+        await pilot.pause()
+
+        bubble = _bubbles(app)[0]
+        assert bubble.styles.background.a == 0, "drawn as an outline only"
+
+        app._chat_log.set_reply_target(app.messages[0].id)
+        await pilot.pause()
+        assert bubble.styles.background.a > 0, "selected: now it is filled"
+
+        app._chat_log.clear_reply_target()
+        await pilot.pause()
+        assert bubble.styles.background.a == 0, "deselected: back to an outline"
+
+
+async def test_every_message_is_aligned_left():
+    """Sent and received start at the same column; nothing is pushed right."""
+    app = await chat_app(connectors=[_Outro()])
+    async with app.run_test(size=(100, 30)) as pilot:
+        outro = next(at for at, who in app.peers().items()
+                     if getattr(who, "name", None) == "outro")
+        await app.say("eu")
+        await app.ask(outro, "e tu?")
+        await pilot.pause()
+
+        containers = list(app.query(".message-container"))
+        assert {"sent", "received"} <= {c for w in containers for c in w.classes}, \
+            "both kinds are in the log"
+        assert len({w.children[0].region.x for w in containers}) == 1, \
+            "one column, whoever spoke"
+
+
+# === The input takes more than one line =========================================
+
+
+async def test_shift_enter_opens_a_line_and_enter_sends_both():
+    """Input is single-line by construction; this is why it became a TextArea."""
+    app = await chat_app()
+    async with app.run_test() as pilot:
+        await pilot.press("a")
+        await pilot.press("shift+enter")
+        await pilot.press("b")
+        assert app.query_one("#input-line", CommandInput).text == "a\nb"
+
+        await pilot.press("enter")
+        await pilot.pause()
+        assert [m.text for m in app.messages] == ["a\nb"]
+        assert app.query_one("#input-line", CommandInput).text == ""
+
+
+async def test_the_input_grows_with_the_lines_up_to_its_maximum():
+    """It starts one row tall and stops at input_max_height, borders included."""
+    app = await chat_app()
+    async with app.run_test(size=(100, 30)) as pilot:
+        inp = app.query_one("#input-line", CommandInput)
+        assert inp.outer_size.height == 3, "one row of text, plus its border"
+
+        inp.insert("um\ndois\ntres")
+        await pilot.pause()
+        assert inp.outer_size.height == 5, "grew with the lines"
+
+        inp.insert("\nx" * 20)
+        await pilot.pause()
+        assert inp.outer_size.height == 8, "and stops at the maximum"
+
+
+async def test_up_moves_the_cursor_when_no_suggestion_is_open():
+    """Up and Down belong to the popup only while it has something to move."""
+    app = await chat_app(commands=[_Eco()])
+    async with app.run_test() as pilot:
+        inp = app.query_one("#input-line", CommandInput)
+        inp.insert("um\ndois")
+        inp.focus()
+        await pilot.pause()
+        assert inp.cursor_location == (1, 4)
+
+        await pilot.press("up")
+        await pilot.pause()
+        assert inp.cursor_location[0] == 0, "moved a line up, not through a popup"

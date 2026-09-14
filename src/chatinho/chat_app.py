@@ -33,7 +33,7 @@ from textual.app import App, ComposeResult
 from textual.css.query import NoMatches
 from textual.keys import KEY_ALIASES, Keys
 from textual.containers import Container, Vertical
-from textual.widgets import Input
+from textual.widgets import TextArea
 
 from .chat_hooks import (
     Ask,
@@ -265,21 +265,21 @@ class ChatApp(App):
         directly — starts it before the queues can deliver anything here.
         """
         self._app_thread_id = threading.get_ident()
-        self.query_one("#%s" % INPUT_ID, Input).focus()
+        self.query_one("#%s" % INPUT_ID, CommandInput).focus()
         if self.context():
             self._chat_log.sync()
             self._chat_log.scroll_to_bottom()
         if self.welcome_message:
             await self.say(self.welcome_message)
 
-    async def on_input_submitted(self, message: Input.Submitted) -> None:
-        """Handle the user pressing Enter."""
-        del message
-        inp = self.query_one("#%s" % INPUT_ID, Input)
-        text = inp.value.strip()
-        if not text:
-            return
-        inp.value = ""
+    async def on_command_input_submitted(self, message: CommandInput.Submitted) -> None:
+        """Handle the user sending what they typed.
+
+        The text arrives on the message already stripped, and a blank input
+        sends nothing at all, so there is nothing to check here.
+        """
+        text = message.text
+        message.input.clear()
         if text.startswith(COMMAND_PREFIX):
             name, _, args = text[1:].strip().partition(" ")
             await self.command(name, args)
@@ -288,11 +288,13 @@ class ChatApp(App):
             self._clear_reply_target()
             await self.say(text, reply_to=target)
 
-    def on_input_changed(self, message: Input.Changed) -> None:
+    def on_text_area_changed(self, message: TextArea.Changed) -> None:
         """Update the command-suggestion popup as the user types."""
-        if message.input.id != INPUT_ID:
+        if message.text_area.id != INPUT_ID:
             return
-        self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).update_for(message.value)
+        self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).update_for(
+            message.text_area.text
+        )
 
     # === The conversation ===========================================================
 
@@ -394,7 +396,7 @@ class ChatApp(App):
 
     def _on_reply_target_change(self, msg_id: Optional[str]) -> None:
         """Keeps the input placeholder in step with the log's reply target."""
-        inp = self.query_one("#%s" % INPUT_ID, Input)
+        inp = self.query_one("#%s" % INPUT_ID, CommandInput)
         inp.placeholder = self._input_placeholder if msg_id is None else "Reply to %s…" % msg_id
 
     def _find_message(self, msg_id: str) -> Optional[ChatMessage]:

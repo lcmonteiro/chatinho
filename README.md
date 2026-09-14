@@ -164,8 +164,10 @@ build_chat(
 connector that declares `@connector("chat", id=LOCAL)`. The session owns the loop: `run()` starts
 everything, runs every peer's `serve()`, and closes when the first of them returns — quitting the
 terminal is the end of the chat. Markdown rendering,
-syntax-highlighted code blocks, command autocomplete and click-to-reply come with it, and
-`ChatStyle` is a dataclass — use `dataclasses.replace` to change a colour.
+syntax-highlighted code blocks, command autocomplete and click-to-reply come with it. The input
+takes more than one line — **Enter sends, Shift+Enter opens a line** — bubbles are drawn as
+outlines that grow with their text, and the one filled bubble is the message you selected to reply
+to. `ChatStyle` is a dataclass — use `dataclasses.replace` to change a colour.
 
 `quit_key` moves the quit binding off Textual's `ctrl+q` — `build_chat(quit_key="ctrl+g")` — and a
 key Textual could never receive is refused there and then, rather than becoming a binding that

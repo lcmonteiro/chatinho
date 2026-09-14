@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **149 pass** |
+| `pytest -q` | **155 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -273,7 +273,7 @@ src/chatinho/
   chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (439)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
   chat_log.py      ChatLog widget: renders through the granted context reader
-  chat_input.py    CommandInput + CommandSuggestions (autocomplete over the commands)
+  chat_input.py    CommandInput (a multi-line TextArea) + CommandSuggestions
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      a2a.py, openai.py — plain classes, no base
   commands/        help.py, test.py — commands: they run, they are not peers
@@ -288,6 +288,32 @@ tests/             test_chat_app.py, test_command_suggestions.py (mounted)
 
 The split follows one rule: **anything that does not need Textual moves out**, because that is
 what makes it testable without a terminal.
+
+## The chat is drawn as outlines
+
+A bubble is a **border and nothing else** — the chat background shows through it. The one filled
+thing in the log is the message you have selected to reply to, which is what the two `*_bubble_bg`
+fields in `ChatStyle` now mean. Everything is aligned left, whoever spoke: the sender is already in
+the header and in the border colour, and a right-hand column bought a second way of saying it at
+the cost of half the width.
+
+Two things this cost, both found by measuring rather than by reading:
+
+- **`width: auto` collapses a bubble to four cells.** `Markdown` reports no content width of its
+  own, so a container that sizes to its children sizes to nothing. The width is measured in
+  `ChatLog._bubble_width` instead — the widest of the header, the body's lines and the quote, plus
+  the six cells the padding and border take — and the stylesheet's `max-width` clamps it. A bubble
+  is genuinely dynamic now (25, 38, 54, 72 in the demo), which `width: 90%` never was.
+- **The input had to stop being an `Input`.** It is single-line by construction, so there was
+  nowhere to put a second line. `CommandInput` is a `TextArea`: **Enter sends, Shift+Enter or
+  Alt+Enter opens a line**, and the box grows with the text up to `input_max_height`. Enter is
+  claimed in `_on_key` rather than by a `Binding`, because `TextArea` inserts its newline from
+  inside its own key handler and a binding is never reached. Up and Down move the suggestion
+  highlight while the popup is open and the cursor between lines when it is not — a multi-line
+  input needs them for both, so they delegate rather than relying on a binding falling through.
+
+Which terminals can report `shift+enter` at all varies; `alt+enter` is there as the second way, and
+pasting multi-line text works regardless.
 
 ## The boundaries something checks
 
