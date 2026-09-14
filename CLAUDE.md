@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **172 pass** |
+| `pytest -q` | **174 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -302,10 +302,18 @@ cost of half the width.
 palette indexed by the peer's id — slot zero is the user — and it wraps round when there are more
 peers than colours. `to_css()` renders two rules per entry, plus `.peer-tool` because a command has
 no id of its own: the header's `color` and the bubble's `border`. The header is a *sibling* of the
-bubble rather than a child, so the bubble holds only what was said — which is also why a two-word
-message now gets a two-word bubble instead of one stretched to the width of a timestamp. The hues
+bubble rather than a child, so the bubble holds only what was said — but it still sets the bubble's
+**minimum** width, because a bubble narrower than the header sitting on it reads as two things
+rather than one. The hues
 are spread apart deliberately: the common chat is the user and one connector, so slots 0 and 1 have
 to be told apart at a glance, and the two greens they started as could not be.
+
+**The header names the peer**: `21:15 @meteo · msg-3`. `ChatLog` reads the roster through the
+`peers` grant, the same way it reads the conversation through `context`, and calls it fresh rather
+than holding it — a peer may be registered after the widget was built. `TOOL` is named outright
+because a command is in no roster, and a peer that has since gone falls back to its number: history
+outlives connectors, since a backend reloads what a peer once said. `You`/`Other` told you nothing
+once two connectors were in the room.
 
 **Holding a message copies it; tapping it selects it to reply to.** Both are decided in
 `on_mouse_up`, not in `on_click`, because a click carries no duration — Textual synthesises it from

@@ -215,7 +215,7 @@ async def test_a_message_from_another_thread_reaches_the_log():
 
 
 async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
-    """What a command answered quotes the invocation, and is headed Tool.
+    """What a command answered quotes the invocation, and is headed @tool.
 
     The invocation and the answer are both messages now, and the answer carries
     ``reply_to``, so the log renders it the way it renders any reply.
@@ -227,8 +227,8 @@ async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
         log = app.query_one("#chat-log")
         cabecalhos = [str(w.visual) for w in log.query(".message-header")]
         citacoes   = [str(w.visual) for w in log.query(".message-quote")]
-        assert "You" in cabecalhos[0] and "↳ replying" not in cabecalhos[0]
-        assert "Tool" in cabecalhos[1] and "↳ replying" in cabecalhos[1]
+        assert "@chat" in cabecalhos[0] and "↳ replying" not in cabecalhos[0]
+        assert "@tool" in cabecalhos[1] and "↳ replying" in cabecalhos[1]
         assert citacoes == ["↳ %s: /eco ola…" % app.messages[0].id]
 
 
@@ -615,17 +615,23 @@ async def test_the_bubble_border_is_the_headers_colour():
         assert len(pairs) > 1, "and the two peers are not the same colour"
 
 
-async def test_a_bubble_is_not_stretched_to_the_width_of_its_header():
-    """The header left the bubble, so it no longer sets a floor for one."""
+async def test_a_bubble_is_never_narrower_than_the_header_above_it():
+    """The header sits on top of the bubble, so the bubble has to reach it.
+
+    A two-word message would otherwise get a bubble far narrower than its own
+    header, which reads as two things rather than one.
+    """
     app = await chat_app()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("oi")
+        await app.say("uma mensagem bem mais comprida do que o seu cabeçalho, para variar")
         await pilot.pause()
 
-        container = app._chat_log._msg_widgets[app.messages[0].id]
-        header = container.query_one(".message-header")
-        bubble = container.query_one(".message-bubble")
-        assert bubble.region.width < header.region.width, "two words, a two-word bubble"
+        for container in app._chat_log._msg_widgets.values():
+            header = container.query_one(".message-header")
+            bubble = container.query_one(".message-bubble")
+            assert bubble.region.width >= header.region.width, \
+                "the bubble covers its header, whatever it says"
 
 
 # === A key the terminal swallows is refused =====================================
@@ -710,3 +716,36 @@ async def test_dragging_across_a_message_scrolls_rather_than_selecting_it():
         await pilot.pause()
 
         assert app._chat_log.reply_target is None, "a drag selects nothing"
+
+
+# === The header names who spoke =================================================
+
+
+async def test_the_header_names_the_peer_with_an_at_and_no_brackets():
+    """`Other` told you nothing when two connectors were in the room."""
+    app = await chat_app(connectors=[_Outro()], commands=[_Eco()])
+    async with app.run_test(size=(90, 24)) as pilot:
+        at = {getattr(who, "name", None): i for i, who in app.peers().items()}
+        await app.say("eu")
+        await app.ask(at["outro"], "e tu?")
+        await app.command("eco", "ola")
+        await pilot.pause()
+
+        by_id = {m.id: m for m in app.messages}
+        named = {}
+        for msg_id, container in app._chat_log._msg_widgets.items():
+            named[by_id[msg_id].frm] = str(container.query_one(".message-header").render())
+
+        assert named[LOCAL].startswith(app.messages[0].timestamp.strftime("%H:%M")), \
+            "the time leads, without its brackets"
+        assert "[" not in named[LOCAL] and "]" not in named[LOCAL]
+        assert "@chat" in named[LOCAL], "the terminal's own name"
+        assert "@outro" in named[at["outro"]], "and the connector's"
+        assert "@tool" in named[TOOL], "a command is named outright: it is in no roster"
+
+
+async def test_a_peer_that_is_gone_is_named_by_its_number():
+    """History outlives connectors: a backend reloads what a peer once said."""
+    app = await chat_app()
+    async with app.run_test(size=(90, 24)):
+        assert app._chat_log._name_of_peer(41) == "41", "still true, still distinct"

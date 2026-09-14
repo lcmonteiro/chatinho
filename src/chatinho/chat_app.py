@@ -288,6 +288,7 @@ class ChatApp(App):
         yield Container(
             ChatLog(
                 self.context,
+                peers=self.peers,
                 max_displayed=self.max_displayed,
                 style=self._style,
                 on_reply_target_change=self._on_reply_target_change,

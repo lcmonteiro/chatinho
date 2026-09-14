@@ -14,6 +14,7 @@ from textual.containers import ScrollableContainer, Vertical
 from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
+from .chat_hooks import name_of
 from .chat_message import TOOL, ChatMessage
 from .chat_style import ChatStyle
 
@@ -30,6 +31,9 @@ _LONG_PRESS : float = 0.5
 #: How far a press may wander and still count as a press rather than a drag.
 #: One row of slack: a finger on a phone screen is never perfectly still.
 _A_DRAG : int = 1
+
+#: The header's own `margin-left`, which a bubble has to cover to sit under it.
+_HEADER_INDENT : int = 1
 
 
 class TouchScrollableContainer(ScrollableContainer):
@@ -125,6 +129,7 @@ class ChatLog(TouchScrollableContainer):
     def __init__(
         self,
         context : Callable[..., List[ChatMessage]],
+        peers : Optional[Callable[[], Dict[int, object]]] = None,
         max_displayed : int = 100,
         style : Optional[ChatStyle] = None,
         on_reply_target_change : Optional[Callable[[Optional[str]], None]] = None,
@@ -138,6 +143,9 @@ class ChatLog(TouchScrollableContainer):
         # Not `_context`: Textual's MessagePump owns that name as a context
         # manager, and shadowing it hangs the widget's message loop.
         self._read_context = context
+        # Granted by HookPeers: called fresh each time, never held as a dict —
+        # a peer may be registered after this widget was built.
+        self._read_peers = peers
         self.max_displayed : int = max_displayed
         self._on_reply_target_change = on_reply_target_change
         self._msg_widgets : Dict[str, Widget] = {}
@@ -188,13 +196,31 @@ class ChatLog(TouchScrollableContainer):
         """Scrolls the log to the newest message."""
         self.scroll_end(animate=False)
 
+    def _name_of_peer(self, frm: int) -> str:
+        """What to call whoever said it, as the header writes it.
+
+        A command is not a peer and is in no roster, so ``TOOL`` is named
+        outright. A peer that has since gone — history reloaded from a backend
+        outlives the connectors that filled it — falls back to its number,
+        which is still true and still tells two of them apart.
+
+        Args:
+            frm: The id of whoever said it.
+
+        Returns:
+            str: The name, without the ``@``.
+        """
+        if frm == TOOL:
+            return "tool"
+        here = self._read_peers() if self._read_peers is not None else {}
+        who  = here.get(frm)
+        return name_of(who) if who is not None else str(frm)
+
     def _render_message(self, msg: ChatMessage) -> Widget:
         """Render a message as a clickable container with header and body."""
-        # A command is not a peer, so it is not "Other": what it answered is
-        # posted in TOOL's name, and the header says so.
-        sender = "You" if msg.is_local else ("Tool" if msg.frm == TOOL else "Other")
-        time_str = msg.timestamp.strftime("%H:%M")
-        prefix = f"[{time_str}] {sender} · {msg.id}"
+        prefix = "%s @%s · %s" % (
+            msg.timestamp.strftime("%H:%M"), self._name_of_peer(msg.frm), msg.id,
+        )
         if msg.reply_to is not None:
             prefix += " ↳ replying"
 
@@ -217,7 +243,7 @@ class ChatLog(TouchScrollableContainer):
         # max-width the stylesheet sets, which Textual clamps this against.
         # It has to be measured here: `width: auto` collapses to nothing,
         # because Markdown reports no content width of its own.
-        bubble.styles.width = self._bubble_width(msg.text, quote)
+        bubble.styles.width = self._bubble_width(msg.text, quote, floor=len(prefix))
 
 
         # The header sits above the bubble rather than inside it, and the peer
@@ -238,28 +264,28 @@ class ChatLog(TouchScrollableContainer):
         self._msg_widgets[msg.id] = container
         return container
 
-    def _bubble_width(self, text: str, quote: Optional[str] = None) -> int:
+    def _bubble_width(self, text: str, quote: Optional[str] = None, floor: int = 0) -> int:
         """How wide this bubble wants to be, in cells.
 
         The widest line it has to show — the quote, or a line of the body —
-        plus the bubble's own padding and border, capped at
-        ``bubble_max_width``. The stylesheet's ``max-width: 100%`` is what
-        keeps it inside a window narrower than that cap.
-
-        The header is not counted: it sits above the bubble, not in it, so a
-        two-word message gets a two-word bubble rather than one stretched to
-        the width of a timestamp.
+        plus the bubble's own padding and border, and never narrower than the
+        header above it. The whole thing is capped at ``bubble_max_width``,
+        and the stylesheet's ``max-width: 100%`` is what keeps it inside a
+        window narrower than that cap.
 
         Args:
             text: What the message says.
             quote: The reply preview, when this message answers another.
+            floor: How wide the header is. The bubble is drawn under it, and a
+                bubble narrower than its own header reads as two things rather
+                than one.
 
         Returns:
             int: The width to set, borders and padding included.
         """
-        lines = text.splitlines() + ([quote] if quote else [])
+        lines  = text.splitlines() + ([quote] if quote else [])
         widest = max([len(line) for line in lines] + [0]) + _BUBBLE_CHROME
-        return min(widest, self.style.bubble_max_width)
+        return min(max(widest, floor + _HEADER_INDENT), self.style.bubble_max_width)
 
     def _copy_message(self, msg_id: str) -> None:
         """Puts the message's text on the clipboard, and says so.
