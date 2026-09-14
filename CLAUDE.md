@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **178 pass** |
+| `pytest -q` | **183 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -303,8 +303,8 @@ palette indexed by the peer's id — slot zero is the user — and it wraps roun
 peers than colours. `to_css()` renders two rules per entry, plus `.peer-tool` because a command has
 no id of its own: the header's `color` and the bubble's `border`. The header is a *sibling* of the
 bubble rather than a child, so the bubble holds only what was said — but it still sets the bubble's
-**minimum** width, because a bubble narrower than the header sitting on it reads as two things
-rather than one. The hues
+**minimum** width — the header's own indent plus one space, so the two do not end flush — because a
+bubble narrower than the header sitting on it reads as two things rather than one. The hues
 are spread apart deliberately: the common chat is the user and one connector, so slots 0 and 1 have
 to be told apart at a glance, and the two greens they started as could not be.
 
@@ -343,6 +343,13 @@ Three things this cost, all found by measuring rather than by reading:
   gap between the bubble and the scrollbar, and it needs its own assertion: without it a bubble
   still clears the scrollbar by the log's own padding, so an edge test passes either way and guards
   nothing. That was found by breaking it.
+- **`Markdown` pads and margins inside what the bubble already measured.** It carries
+  `padding: 0 2 0 2` of its own, four cells the bubble's width never counted, so a line measured to
+  fit wrapped anyway; and every `MarkdownParagraph` carries `margin: 0 0 1 0`, which put a second
+  blank row under the text on top of the bubble's own padding. The stylesheet zeroes the padding —
+  fixing the cause rather than adding four to `_BUBBLE_CHROME` — and drops the trailing margin with
+  `.message-body > *:last-child`, which Textual supports, so paragraphs are still separated from
+  *each other*. A bubble holding one word is five rows now, not seven.
 - **The input had to stop being an `Input`.** It is single-line by construction, so there was
   nowhere to put a second line. `CommandInput` is a `TextArea`: **Enter sends, Shift+Enter or
   Alt+Enter opens a line**, and the box grows with the text up to `input_max_height`. Enter is

@@ -793,3 +793,75 @@ def test_naming_an_instance_works_only_because_the_decorator_shadows_the_propert
         Plain().name = "me"
 
     assert ChatApp.__dict__.get("name") == "chat", "the decorator wrote it onto the class"
+
+
+# === What the bubble costs around its text ======================================
+
+
+async def test_the_bubble_clears_its_header_by_a_space():
+    """Flush with the header reads as one block; a space apart reads as two."""
+    app = await chat_app()
+    async with app.run_test(size=(90, 24)) as pilot:
+        await app.say("oi")
+        await pilot.pause()
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        header = container.query_one(".message-header")
+        bubble = container.query_one(".message-bubble")
+        assert bubble.region.width == header.region.width + 2, \
+            "the header's own indent, plus one space after it"
+
+
+async def test_a_line_measured_to_fit_does_not_wrap():
+    """Markdown carries `padding: 0 2 0 2` of its own, inside what we measured.
+
+    Four cells the bubble's width never counted, so a line sized to fit wrapped
+    anyway. The stylesheet zeroes it rather than the measurement adding four.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(100, 24)) as pilot:
+        one_line = "abcdefghij " * 3 + "fim"
+        await app.say(one_line)
+        await pilot.pause()
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        body = container.query_one(".message-body")
+        assert body.region.height == 1, "one line of text takes one row"
+        assert body.styles.padding.right == 0, "and Markdown adds no padding of its own"
+
+
+async def test_there_is_one_blank_row_under_the_text_not_two():
+    """The bubble pads by one; MarkdownParagraph added a second underneath."""
+    app = await chat_app()
+    async with app.run_test(size=(90, 24)) as pilot:
+        await app.say("oi")
+        await pilot.pause()
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        bubble = container.query_one(".message-bubble")
+        # border(2) + padding(1 above, 1 below) + one row of text
+        assert bubble.region.height == 5
+
+
+async def test_paragraphs_are_still_separated_from_each_other():
+    """Only the *trailing* margin goes: `:last-child`, not every paragraph."""
+    app = await chat_app()
+    async with app.run_test(size=(90, 40)) as pilot:
+        await app.say("um\n\ndois\n\ntres")
+        await pilot.pause()
+
+        body = app._chat_log._msg_widgets[app.messages[0].id].query_one(".message-body")
+        margins = [block.styles.margin.bottom for block in body.children]
+        assert margins == [1, 1, 0], "separated, but nothing trailing the last"
+
+
+async def test_one_blank_row_separates_one_message_from_the_next():
+    app = await chat_app()
+    async with app.run_test(size=(90, 40)) as pilot:
+        await app.say("primeira")
+        await app.say("segunda")
+        await pilot.pause()
+
+        first, second = list(app._chat_log._msg_widgets.values())
+        below = first.query_one(".message-bubble").region
+        assert second.region.y - (below.y + below.height) == 1

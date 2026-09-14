@@ -20,8 +20,10 @@ from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
 
-#: What a bubble costs around its text: `padding: 1 2` either side,
-#: plus the two cells its `border: round` draws in.
+#: What a bubble costs around its text: `padding: 1 2` either side, plus the
+#: two cells its `border: round` draws in. The stylesheet zeroes `Markdown`'s
+#: own `padding: 0 2 0 2` so it is not four more that this does not count —
+#: a line measured to fit would otherwise wrap.
 _BUBBLE_CHROME : int = 6
 
 #: How long a press has to be held before it copies rather than selects.
@@ -32,8 +34,9 @@ _LONG_PRESS : float = 0.5
 #: One row of slack: a finger on a phone screen is never perfectly still.
 _A_DRAG : int = 1
 
-#: The header's own `margin-left`, which a bubble has to cover to sit under it.
-_HEADER_INDENT : int = 1
+#: What a bubble adds to its header's width to sit under it: the header's own
+#: `margin-left`, plus one space so the two do not end flush.
+_HEADER_SLACK : int = 2
 
 
 class TouchScrollableContainer(ScrollableContainer):
@@ -278,14 +281,15 @@ class ChatLog(TouchScrollableContainer):
             quote: The reply preview, when this message answers another.
             floor: How wide the header is. The bubble is drawn under it, and a
                 bubble narrower than its own header reads as two things rather
-                than one.
+                than one; it takes ``_HEADER_SLACK`` more, so the two do not
+                end flush.
 
         Returns:
             int: The width to set, borders and padding included.
         """
         lines  = text.splitlines() + ([quote] if quote else [])
         widest = max([len(line) for line in lines] + [0]) + _BUBBLE_CHROME
-        return min(max(widest, floor + _HEADER_INDENT), self.style.bubble_max_width)
+        return min(max(widest, floor + _HEADER_SLACK), self.style.bubble_max_width)
 
     def _copy_message(self, msg_id: str) -> None:
         """Puts the message's text on the clipboard, and says so.

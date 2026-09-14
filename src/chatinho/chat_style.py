@@ -110,6 +110,10 @@ Screen {
 $peer_header_rules
 .message-body {
     margin: 0;
+    padding: 0;
+}
+.message-body > *:last-child {
+    margin-bottom: 0;
 }
 .message-quote {
     color: $quote_color;
