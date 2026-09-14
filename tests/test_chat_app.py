@@ -865,3 +865,59 @@ async def test_one_blank_row_separates_one_message_from_the_next():
         first, second = list(app._chat_log._msg_widgets.values())
         below = first.query_one(".message-bubble").region
         assert second.region.y - (below.y + below.height) == 1
+
+
+# === Copying without the gesture ================================================
+
+
+async def test_the_copy_key_copies_the_selected_message():
+    """A phone terminal may take the long press for its own menu."""
+    app = await chat_app()
+    async with app.run_test(size=(90, 24)) as pilot:
+        await app.say("para copiar")
+        await pilot.pause()
+
+        copied = []
+        app.copy_to_clipboard = copied.append
+
+        app._chat_log.set_reply_target(app.messages[0].id)
+        await pilot.press("ctrl+y")
+        await pilot.pause()
+
+        assert copied == ["para copiar"]
+
+
+async def test_the_copy_key_says_what_to_do_when_nothing_is_selected():
+    app = await chat_app()
+    async with app.run_test(size=(90, 24)) as pilot:
+        await app.say("nada selecionado")
+        await pilot.pause()
+
+        copied = []
+        app.copy_to_clipboard = copied.append
+        told = []
+        app.notify = lambda message, **kw: told.append(message)
+
+        await pilot.press("ctrl+y")
+        await pilot.pause()
+
+        assert copied == []
+        assert told and "Select a message first" in told[0]
+
+
+async def test_the_copy_key_can_be_moved_and_is_validated_like_the_quit_key():
+    app = await chat_app(copy_key="f8")
+    async with app.run_test(size=(90, 24)) as pilot:
+        await app.say("noutra tecla")
+        await pilot.pause()
+
+        copied = []
+        app.copy_to_clipboard = copied.append
+        app._chat_log.set_reply_target(app.messages[0].id)
+        await pilot.press("f8")
+        await pilot.pause()
+
+        assert copied == ["noutra tecla"]
+
+    with pytest.raises(ValueError, match="backspace"):
+        await chat_app(copy_key="ctrl+h")

@@ -256,7 +256,7 @@ class ChatLog(TouchScrollableContainer):
             bubble,
             msg_id=msg.id,
             on_select=self._on_message_clicked,
-            on_copy=self._copy_message,
+            on_copy=self.copy_message,
             classes="message-container %s" % self.style.header_class(msg.frm),
         )
         if msg.is_local:
@@ -291,7 +291,7 @@ class ChatLog(TouchScrollableContainer):
         widest = max([len(line) for line in lines] + [0]) + _BUBBLE_CHROME
         return min(max(widest, floor + _HEADER_SLACK), self.style.bubble_max_width)
 
-    def _copy_message(self, msg_id: str) -> None:
+    def copy_message(self, msg_id: str) -> None:
         """Puts the message's text on the clipboard, and says so.
 
         Whether it arrives depends on the terminal: this is OSC 52, which a

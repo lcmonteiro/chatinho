@@ -198,6 +198,7 @@ class ChatApp(App):
         max_displayed   : int = 100,
         style           : Optional[ChatStyle] = None,
         quit_key        : str = "ctrl+q",
+        copy_key        : str = "ctrl+y",
         name            : Optional[str] = None,
     ) -> None:
         super().__init__()
@@ -211,6 +212,10 @@ class ChatApp(App):
             # attribute the decorator put in front of it.
             self.name = name  # type: ignore[misc]
         self._rebind_quit(_validate_key(quit_key))
+        self._bindings.bind(
+            _validate_key(copy_key), "copy_selected",
+            description="Copy the selected message", show=False, priority=True,
+        )
         # Held, not just rendered: the log reads the bubble's maximum width and
         # the header palette from the same object the stylesheet came from.
         self._style : ChatStyle = style or ChatStyle()
@@ -272,6 +277,19 @@ class ChatApp(App):
             if (kept := [b for b in held if b.action != "quit"])
         }
         bindings.bind(quit_key, "quit", description="Quit", show=False, priority=True)
+
+    def action_copy_selected(self) -> None:
+        """Copies the message selected as the reply target.
+
+        The keyboard way in, because the long press is not always reachable: a
+        phone terminal may take the gesture for its own menu before the
+        application sees any of it. Tap a message, then press the key.
+        """
+        target = self._reply_target
+        if target is None:
+            self.notify("Select a message first, then copy it", timeout=3)
+            return
+        self._chat_log.copy_message(target)
 
     def _repaint_after(self, *granted: str) -> None:
         """

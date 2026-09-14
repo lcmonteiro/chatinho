@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **183 pass** |
+| `pytest -q` | **186 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -326,9 +326,15 @@ narrow `type: ignore` explaining itself.
 `on_mouse_up`, not in `on_click`, because a click carries no duration — Textual synthesises it from
 the press and the release, and by then how long it took is gone. The press also records where it
 landed: a release more than a row away was the log being scrolled, and selects nothing. None of the
-three stops the event, or the drag-to-scroll underneath would have nothing left to read. What the
-clipboard does with it is the terminal's business — this is OSC 52, which a terminal may simply
-refuse.
+three stops the event, or the drag-to-scroll underneath would have nothing left to read.
+
+**The gesture is not always reachable, so there is a key as well.** A phone terminal may take a
+long press for its own selection menu before the application sees any of it, which is what Termux
+does — pressing on the rendered text works in a mounted test, so what fails there is the gesture
+arriving, not the handling. `copy_key` (default `ctrl+y`, validated like `quit_key`) copies the
+message selected as the reply target: tap, then press. And what the clipboard does with it is still
+the terminal's business — this is OSC 52, which a terminal may simply refuse, so the notification
+says what was attempted rather than that it landed.
 
 Three things this cost, all found by measuring rather than by reading:
 
