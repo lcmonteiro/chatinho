@@ -14,6 +14,7 @@ from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
 from .chat_message import TOOL, ChatMessage
+from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +85,15 @@ class ChatLog(TouchScrollableContainer):
         self,
         context : Callable[..., List[ChatMessage]],
         max_displayed : int = 100,
+        style : Optional[ChatStyle] = None,
         on_reply_target_change : Optional[Callable[[Optional[str]], None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
+        # The same style the stylesheet was rendered from: the header colours
+        # are CSS, but the widest a bubble may grow is applied here, because
+        # only this knows how wide the text actually is.
+        self.style : ChatStyle = style or ChatStyle()
         # Not `_context`: Textual's MessagePump owns that name as a context
         # manager, and shadowing it hangs the widget's message loop.
         self._read_context = context
@@ -151,7 +157,7 @@ class ChatLog(TouchScrollableContainer):
         if msg.reply_to is not None:
             prefix += " ↳ replying"
 
-        header = Static(prefix, classes="message-header")
+        header = Static(prefix, classes="message-header %s" % self.style.header_class(msg.frm))
         parts: List[Widget] = [header]
 
         # Quote of the original message when this is a reply
@@ -172,6 +178,7 @@ class ChatLog(TouchScrollableContainer):
         # because Markdown reports no content width of its own.
         bubble.styles.width = self._bubble_width(prefix, msg.text, quote)
 
+
         # Clickable container — aligns left/right and selects the reply target
         container = _MessageContainer(
             bubble,
@@ -187,14 +194,13 @@ class ChatLog(TouchScrollableContainer):
         self._msg_widgets[msg.id] = container
         return container
 
-    @staticmethod
-    def _bubble_width(prefix: str, text: str, quote: Optional[str] = None) -> int:
+    def _bubble_width(self, prefix: str, text: str, quote: Optional[str] = None) -> int:
         """How wide this bubble wants to be, in cells.
 
         The widest line it has to show — the header, the quote, or a line of
-        the body — plus the bubble's own padding and border. The stylesheet's
-        ``max-width`` is what stops it growing past the window; this only says
-        how little it may take.
+        the body — plus the bubble's own padding and border, capped at
+        ``bubble_max_width``. The stylesheet's ``max-width: 100%`` is what
+        keeps it inside a window narrower than that cap.
 
         Args:
             prefix: The header line.
@@ -205,7 +211,8 @@ class ChatLog(TouchScrollableContainer):
             int: The width to set, borders and padding included.
         """
         lines = [prefix] + text.splitlines() + ([quote] if quote else [])
-        return max(len(line) for line in lines) + _BUBBLE_CHROME
+        widest = max(len(line) for line in lines) + _BUBBLE_CHROME
+        return min(widest, self.style.bubble_max_width)
 
     # === Reply target (click) ======================================================
 

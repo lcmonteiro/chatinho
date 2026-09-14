@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **155 pass** |
+| `pytest -q` | **161 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -293,17 +293,31 @@ what makes it testable without a terminal.
 
 A bubble is a **border and nothing else** — the chat background shows through it. The one filled
 thing in the log is the message you have selected to reply to, which is what the two `*_bubble_bg`
-fields in `ChatStyle` now mean. Everything is aligned left, whoever spoke: the sender is already in
-the header and in the border colour, and a right-hand column bought a second way of saying it at
-the cost of half the width.
+fields in `ChatStyle` now mean, and the fill is the *whole* of the selection: there is no second
+outline on top of it. Everything is aligned left, whoever spoke: the sender is already in the
+header and in the border colour, and a right-hand column bought a second way of saying it at the
+cost of half the width.
 
-Two things this cost, both found by measuring rather than by reading:
+**The header is coloured by who spoke.** `ChatStyle.peer_headers` is a palette indexed by the
+peer's id — slot zero is the user — and it wraps round when there are more peers than colours.
+`to_css()` renders one `.message-header.peer-N` rule per entry, plus `.peer-tool`, because a
+command has no id of its own. The hues are spread apart deliberately: the common chat is the user
+and one connector, so slots 0 and 1 have to be told apart at a glance, and the two greens they
+started as could not be.
+
+Three things this cost, all found by measuring rather than by reading:
 
 - **`width: auto` collapses a bubble to four cells.** `Markdown` reports no content width of its
   own, so a container that sizes to its children sizes to nothing. The width is measured in
   `ChatLog._bubble_width` instead — the widest of the header, the body's lines and the quote, plus
-  the six cells the padding and border take — and the stylesheet's `max-width` clamps it. A bubble
-  is genuinely dynamic now (25, 38, 54, 72 in the demo), which `width: 90%` never was.
+  the six cells the padding and border take, capped at `bubble_max_width`. A bubble is genuinely
+  dynamic now (25, 38, 54, 72 in the demo), which `width: 90%` never was.
+- **A cap in cells is not a width.** `max-width: 72` let a bubble reach x=74 in a 60-column window —
+  past the scrollbar and past the window itself. What keeps a bubble inside is `max-width: 100%`;
+  the 72 is applied in Python, where the text is measured. `bubble_margin_right` is the separate
+  gap between the bubble and the scrollbar, and it needs its own assertion: without it a bubble
+  still clears the scrollbar by the log's own padding, so an edge test passes either way and guards
+  nothing. That was found by breaking it.
 - **The input had to stop being an `Input`.** It is single-line by construction, so there was
   nowhere to put a second line. `CommandInput` is a `TextArea`: **Enter sends, Shift+Enter or
   Alt+Enter opens a line**, and the box grows with the text up to `input_max_height`. Enter is

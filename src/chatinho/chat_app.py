@@ -162,6 +162,9 @@ class ChatApp(App):
     ) -> None:
         super().__init__()
         self._rebind_quit(_validate_key(quit_key))
+        # Held, not just rendered: the log reads the bubble's maximum width and
+        # the header palette from the same object the stylesheet came from.
+        self._style : ChatStyle = style or ChatStyle()
         if style is not None:
             # Instance-level override: Textual reads ``self.CSS`` at mount.
             self.CSS = style.to_css()  # type: ignore[misc]
@@ -247,6 +250,7 @@ class ChatApp(App):
             ChatLog(
                 self.context,
                 max_displayed=self.max_displayed,
+                style=self._style,
                 on_reply_target_change=self._on_reply_target_change,
                 id=CHAT_LOG_ID,
             ),

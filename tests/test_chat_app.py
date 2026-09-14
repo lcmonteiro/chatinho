@@ -25,6 +25,7 @@ from chatinho import (
     HookExecute,
     connector,
     ChatSession,
+    ChatStyle,
     require,
     tool,
 )
@@ -482,3 +483,95 @@ async def test_up_moves_the_cursor_when_no_suggestion_is_open():
         await pilot.press("up")
         await pilot.pause()
         assert inp.cursor_location[0] == 0, "moved a line up, not through a popup"
+
+
+# === Who spoke, in colour ========================================================
+
+
+@connector("segundo")
+@require(HookAnswer)
+class _Segundo:
+    async def answer(self, msg) -> str:
+        return "sou o segundo"
+
+
+async def test_each_peer_gets_its_own_header_colour():
+    """The header carries who spoke and the message id, so it is what is tinted."""
+    app = await chat_app(connectors=[_Outro(), _Segundo()])
+    async with app.run_test(size=(100, 30)) as pilot:
+        at = {getattr(who, "name", None): i for i, who in app.peers().items()}
+        await app.say("eu")
+        await app.ask(at["outro"], "e tu?")
+        await app.ask(at["segundo"], "e tu?")
+        await pilot.pause()
+
+        colours = {}
+        for msg in app.messages:
+            container = app._chat_log._msg_widgets.get(msg.id)
+            if container is not None:
+                colours[msg.frm] = str(container.children[0].children[0].styles.color)
+
+        assert len(colours) >= 3, "the user and both connectors are in the log"
+        assert len(set(colours.values())) == len(colours), "no two peers share a colour"
+
+
+def test_a_command_is_not_given_a_peer_slot():
+    """TOOL has no id of its own, so it gets a name rather than a number."""
+    style = ChatStyle()
+    assert style.header_class(TOOL) == "peer-tool"
+    assert style.header_class(LOCAL) == "peer-0"
+
+
+def test_the_palette_wraps_round_rather_than_running_out():
+    """More peers than colours is ordinary; running out of them would not be."""
+    style = ChatStyle()
+    width = len(style.peer_headers)
+    assert style.header_class(width) == style.header_class(0)
+    assert style.header_class(width + 1) == style.header_class(1)
+
+
+def test_a_palette_with_no_colours_is_refused():
+    with pytest.raises(ValueError, match="peer_headers"):
+        ChatStyle(peer_headers=())
+
+
+# === A bubble stays inside the window ============================================
+
+
+async def test_a_bubble_never_runs_past_the_window_or_under_the_scrollbar():
+    """bubble_max_width is a cap, not a width: a narrow window wins over it."""
+    app = await chat_app()
+    async with app.run_test(size=(60, 14)) as pilot:
+        for i in range(6):
+            await app.say("mensagem %d, comprida o suficiente para encher a linha toda" % i)
+        await pilot.pause()
+
+        log = app._chat_log
+        assert log.show_vertical_scrollbar, "narrow and full: the scrollbar is up"
+
+        edges = [w.region.x + w.region.width for w in app.query(".message-bubble")]
+        assert max(edges) <= 60 - log.scrollbar_size_vertical, \
+            "a bubble stops at the scrollbar rather than running under it"
+
+        # Measured on the widget, not inferred from a coordinate: without the
+        # rule the bubble still clears the scrollbar by the log's own padding,
+        # so an edge test passes either way and guards nothing.
+        margin = int(ChatStyle().bubble_margin_right)
+        assert all(c.styles.margin.right == margin
+                   for c in app.query(".message-container")), \
+            "and keeps a margin between the two"
+
+
+async def test_selecting_a_bubble_fills_it_and_nothing_else():
+    """The fill is the whole of the selection; there is no second outline."""
+    app = await chat_app()
+    async with app.run_test() as pilot:
+        await app.say("oi")
+        await pilot.pause()
+
+        bubble = _bubbles(app)[0]
+        app._chat_log.set_reply_target(app.messages[0].id)
+        await pilot.pause()
+
+        assert bubble.styles.background.a > 0, "filled"
+        assert not bubble.styles.outline.spacing, "and not also outlined"

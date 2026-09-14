@@ -22,6 +22,9 @@ selection is the one thing a filled background means.
 
 from dataclasses import asdict, dataclass
 from string import Template
+from typing import Tuple
+
+from .chat_message import TOOL
 
 # Template first: the stylesheet with $placeholders for every ChatStyle field.
 _CSS_TEMPLATE = Template(
@@ -74,13 +77,14 @@ Screen {
     layout: horizontal;
     width: 100%;
     padding: 0 0 1 0;
+    margin: 0 $bubble_margin_right 0 0;
     height: auto;
     align: left top;
 }
 .message-bubble {
     layout: vertical;
     width: auto;
-    max-width: $bubble_max_width;
+    max-width: 100%;
     padding: 1 2;
     border: round $received_bubble_border;
     background: transparent;
@@ -95,9 +99,6 @@ Screen {
     border: round $received_bubble_border;
     color: $received_text;
 }
-.message-container.reply-target .message-bubble {
-    outline: thick $accent;
-}
 .message-container.sent.reply-target .message-bubble {
     background: $sent_bubble_bg;
 }
@@ -105,13 +106,10 @@ Screen {
     background: $received_bubble_bg;
 }
 .message-header {
-    color: $received_header;
     text-style: bold;
     margin: 0;
 }
-.message-container.sent .message-header {
-    color: $sent_header;
-}
+$peer_header_rules
 .message-body {
     margin: 0;
 }
@@ -152,28 +150,76 @@ class ChatStyle:
     input_focus_border: str = "#00a884"
     input_max_height: str = "8"
 
-    # Accent (reply outline + quote border)
+    # Accent (quote border)
     accent: str = "#00a884"
 
-    # How wide a bubble may grow before its text wraps
-    bubble_max_width: str = "72"
+    # How wide a bubble may grow before its text wraps, and how far its right
+    # edge stays clear of the scrollbar. The width is applied in Python, by
+    # ChatLog, because only it knows how wide the text actually is.
+    bubble_max_width: int = 72
+    bubble_margin_right: str = "2"
+
+    # One colour per peer for the header — who spoke, and the message id.
+    # Indexed by the peer's id, and wrapped round when there are more peers
+    # than colours; slot zero is the user, and a command speaks as TOOL.
+    peer_headers: Tuple[str, ...] = (
+        "#8fd6b4",       # 0 — LOCAL, the user
+        "#f6c177",       # the hues are spread apart on purpose: the common
+        "#9ccfd8",       # chat is the user and one connector, so slots 0 and
+        "#c4a7e7",       # 1 have to be told apart at a glance — two greens
+        "#eb6f92",       # were not
+        "#7de0a3",
+    )
+    tool_header: str = "#b8a1e3"
 
     # Sent bubbles — the border is what is drawn; the bg is the reply-target tint
     sent_bubble_bg: str = "#005c4b"
     sent_bubble_border: str = "#00a884"
     sent_text: str = "#e9edef"
-    sent_header: str = "#8fd6b4"
 
     # Received bubbles — the border is what is drawn; the bg is the reply-target tint
     received_bubble_bg: str = "#202c33"
     received_bubble_border: str = "#3b4a54"
     received_text: str = "#e9edef"
-    received_header: str = "#7de0a3"
 
     # Quote (reply preview)
     quote_color: str = "#8696a0"
     quote_bg: str = "#111b21"
 
+    def __post_init__(self) -> None:
+        """Refuses a palette with nothing in it.
+
+        Raises:
+            ValueError: ``peer_headers`` is empty, which would leave the
+                header with no colour and the modulo with no divisor.
+        """
+        if not self.peer_headers:
+            raise ValueError("peer_headers needs at least one colour")
+
+    def header_class(self, frm: int) -> str:
+        """The header class carrying *frm*'s colour.
+
+        A command is not a peer and has no id of its own, so ``TOOL`` gets a
+        name rather than a slot. Every other id wraps round the palette.
+
+        Args:
+            frm: The id of whoever said it.
+
+        Returns:
+            str: The class name, matching a rule ``to_css()`` wrote.
+        """
+        if frm == TOOL:
+            return "peer-tool"
+        return "peer-%d" % (frm % len(self.peer_headers))
+
     def to_css(self) -> str:
         """Render this style as a Textual CSS string."""
-        return _CSS_TEMPLATE.substitute(**asdict(self))
+        rules = [
+            ".message-header.peer-%d {\n    color: %s;\n}" % (at, colour)
+            for at, colour in enumerate(self.peer_headers)
+        ]
+        rules.append(".message-header.peer-tool {\n    color: %s;\n}" % self.tool_header)
+        return _CSS_TEMPLATE.substitute(
+            peer_header_rules="\n".join(rules),
+            **asdict(self),
+        )
