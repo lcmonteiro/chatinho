@@ -23,6 +23,7 @@ def build_chat(
     max_displayed   : int = 100,
     style           : Optional[ChatStyle] = None,
     quit_key        : str = "ctrl+q",
+    name            : Optional[str] = None,
 ) -> ChatSession:
     """Builds a chat application from peers and a backend.
 
@@ -43,6 +44,9 @@ def build_chat(
         welcome_message: Message displayed on mount; empty means none.
         max_displayed: How many messages are rendered at once (sliding window).
         style: Colour scheme; defaults to :class:`~chatinho.chat_style.ChatStyle`.
+        name: What the terminal is called in the log, shown as ``@name`` on
+            every message the user sends. Defaults to the ``chat`` the class
+            declares; ``"me"`` reads better in a chat you are in.
         quit_key: The key that quits, as Textual writes them — ``"ctrl+g"``,
             ``"f10"``, ``"escape"``. Defaults to Textual's own ``"ctrl+q"``,
             which stops quitting when another key is given. ``ctrl+c`` is a
@@ -62,6 +66,7 @@ def build_chat(
         max_displayed   = max_displayed,
         style           = style,
         quit_key        = quit_key,
+        name            = name,
     )
     return ChatSession(
         connectors=[chat_connector, *(connectors or [])], 

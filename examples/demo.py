@@ -93,6 +93,7 @@ def main() -> None:
         title           = "chatinho demo",
         welcome_message = WELCOME,
         quit_key        = "ctrl+g",
+        name            = "me",
     ).run()
 
 

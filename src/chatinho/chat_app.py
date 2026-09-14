@@ -198,8 +198,18 @@ class ChatApp(App):
         max_displayed   : int = 100,
         style           : Optional[ChatStyle] = None,
         quit_key        : str = "ctrl+q",
+        name            : Optional[str] = None,
     ) -> None:
         super().__init__()
+        if name is not None:
+            # Only works because @connector wrote `name` onto the class:
+            # DOMNode.name is a read-only property, so on a plain App this
+            # same line raises. The decorator's class attribute shadows it.
+            if not name.strip():
+                raise ValueError("name must not be blank: it is shown as @name in the log")
+            # mypy only sees DOMNode's read-only property, not the class
+            # attribute the decorator put in front of it.
+            self.name = name  # type: ignore[misc]
         self._rebind_quit(_validate_key(quit_key))
         # Held, not just rendered: the log reads the bubble's maximum width and
         # the header palette from the same object the stylesheet came from.

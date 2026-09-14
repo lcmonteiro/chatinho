@@ -749,3 +749,47 @@ async def test_a_peer_that_is_gone_is_named_by_its_number():
     app = await chat_app()
     async with app.run_test(size=(90, 24)):
         assert app._chat_log._name_of_peer(41) == "41", "still true, still distinct"
+
+
+async def test_the_terminal_can_be_named_something_you_would_call_yourself():
+    """`@chat` is the class's own name; `@me` is what a person types."""
+    app = await chat_app(name="me")
+    async with app.run_test(size=(90, 24)) as pilot:
+        await app.say("eu")
+        await pilot.pause()
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        assert "@me" in str(container.query_one(".message-header").render())
+
+
+async def test_naming_the_terminal_is_optional_and_defaults_to_the_class():
+    app = await chat_app()
+    async with app.run_test(size=(90, 24)) as pilot:
+        await app.say("eu")
+        await pilot.pause()
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        assert "@chat" in str(container.query_one(".message-header").render())
+
+
+async def test_a_blank_terminal_name_is_refused():
+    """It is shown as `@name`: a blank one renders a lone `@`."""
+    with pytest.raises(ValueError, match="blank"):
+        await chat_app(name="   ")
+
+
+def test_naming_an_instance_works_only_because_the_decorator_shadows_the_property():
+    """DOMNode.name is read-only; @connector's class attribute is what allows this.
+
+    Worth a test of its own: the same assignment on a plain App raises, so
+    dropping the decorator's `cls.name` would break naming with no other sign.
+    """
+    from textual.app import App
+
+    class Plain(App):
+        pass
+
+    with pytest.raises(AttributeError):
+        Plain().name = "me"
+
+    assert ChatApp.__dict__.get("name") == "chat", "the decorator wrote it onto the class"

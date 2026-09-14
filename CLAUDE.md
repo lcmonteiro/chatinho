@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **174 pass** |
+| `pytest -q` | **178 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -314,6 +314,13 @@ than holding it — a peer may be registered after the widget was built. `TOOL` 
 because a command is in no roster, and a peer that has since gone falls back to its number: history
 outlives connectors, since a backend reloads what a peer once said. `You`/`Other` told you nothing
 once two connectors were in the room.
+
+The terminal's own name is `chat`, which is a poor thing to call yourself, so `build_chat(name=…)`
+overrides it — the demo is `@me`. **That assignment works only because `@connector` wrote `name`
+onto the class**: `DOMNode.name` is a read-only property, and the same line on a plain `App` raises
+`AttributeError`. The shadowing the fitness tests hunt for is load-bearing here, which is why
+there is a test that says so; mypy sees only the property underneath, so the assignment carries a
+narrow `type: ignore` explaining itself.
 
 **Holding a message copies it; tapping it selects it to reply to.** Both are decided in
 `on_mouse_up`, not in `on_click`, because a click carries no duration — Textual synthesises it from
