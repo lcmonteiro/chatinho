@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **161 pass** |
+| `pytest -q` | **172 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -298,12 +298,22 @@ outline on top of it. Everything is aligned left, whoever spoke: the sender is a
 header and in the border colour, and a right-hand column bought a second way of saying it at the
 cost of half the width.
 
-**The header is coloured by who spoke.** `ChatStyle.peer_headers` is a palette indexed by the
-peer's id — slot zero is the user — and it wraps round when there are more peers than colours.
-`to_css()` renders one `.message-header.peer-N` rule per entry, plus `.peer-tool`, because a
-command has no id of its own. The hues are spread apart deliberately: the common chat is the user
-and one connector, so slots 0 and 1 have to be told apart at a glance, and the two greens they
-started as could not be.
+**A peer is one colour, and the header wears it above the bubble.** `ChatStyle.peer_headers` is a
+palette indexed by the peer's id — slot zero is the user — and it wraps round when there are more
+peers than colours. `to_css()` renders two rules per entry, plus `.peer-tool` because a command has
+no id of its own: the header's `color` and the bubble's `border`. The header is a *sibling* of the
+bubble rather than a child, so the bubble holds only what was said — which is also why a two-word
+message now gets a two-word bubble instead of one stretched to the width of a timestamp. The hues
+are spread apart deliberately: the common chat is the user and one connector, so slots 0 and 1 have
+to be told apart at a glance, and the two greens they started as could not be.
+
+**Holding a message copies it; tapping it selects it to reply to.** Both are decided in
+`on_mouse_up`, not in `on_click`, because a click carries no duration — Textual synthesises it from
+the press and the release, and by then how long it took is gone. The press also records where it
+landed: a release more than a row away was the log being scrolled, and selects nothing. None of the
+three stops the event, or the drag-to-scroll underneath would have nothing left to read. What the
+clipboard does with it is the terminal's business — this is OSC 52, which a terminal may simply
+refuse.
 
 Three things this cost, all found by measuring rather than by reading:
 
@@ -328,6 +338,14 @@ Three things this cost, all found by measuring rather than by reading:
 
 Which terminals can report `shift+enter` at all varies; `alt+enter` is there as the second way, and
 pasting multi-line text works regardless.
+
+**Four `ctrl` combos are not keys at all**, and `_validate_key` now refuses them. A terminal sends
+one byte for `ctrl+h` and for Backspace alike, so Textual reports `backspace` and a `ctrl+h`
+binding never fires — which is exactly the silent nothing that validator exists to prevent, and it
+was shipped as the demo's own quit key until Termux proved it. The same holds for `ctrl+i`/Tab,
+`ctrl+m`/Enter and `ctrl+[`/Escape. The list is *derived* from Textual's `ANSI_SEQUENCES_KEYS`
+rather than written out here, so it cannot drift from what Textual actually does; the demo quits
+with `ctrl+g` now.
 
 ## The boundaries something checks
 

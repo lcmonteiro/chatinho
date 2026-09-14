@@ -432,7 +432,7 @@ async def test_every_message_is_aligned_left():
         containers = list(app.query(".message-container"))
         assert {"sent", "received"} <= {c for w in containers for c in w.classes}, \
             "both kinds are in the log"
-        assert len({w.children[0].region.x for w in containers}) == 1, \
+        assert len({w.query_one(".message-bubble").region.x for w in containers}) == 1, \
             "one column, whoever spoke"
 
 
@@ -509,7 +509,7 @@ async def test_each_peer_gets_its_own_header_colour():
         for msg in app.messages:
             container = app._chat_log._msg_widgets.get(msg.id)
             if container is not None:
-                colours[msg.frm] = str(container.children[0].children[0].styles.color)
+                colours[msg.frm] = str(container.query_one(".message-header").styles.color)
 
         assert len(colours) >= 3, "the user and both connectors are in the log"
         assert len(set(colours.values())) == len(colours), "no two peers share a colour"
@@ -575,3 +575,138 @@ async def test_selecting_a_bubble_fills_it_and_nothing_else():
 
         assert bubble.styles.background.a > 0, "filled"
         assert not bubble.styles.outline.spacing, "and not also outlined"
+
+
+# === The header sits above the bubble, in the peer's colour =====================
+
+
+async def test_the_header_is_above_the_bubble_and_outside_it():
+    """It is a sibling of the bubble, not a child: the bubble holds only text."""
+    app = await chat_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.say("oi")
+        await pilot.pause()
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        header = container.query_one(".message-header")
+        bubble = container.query_one(".message-bubble")
+
+        assert header.parent is container, "a sibling of the bubble"
+        assert header not in bubble.children, "and not inside it"
+        assert header.region.y < bubble.region.y, "drawn above it"
+
+
+async def test_the_bubble_border_is_the_headers_colour():
+    """One colour per peer, not one for the name and another for the box."""
+    app = await chat_app(connectors=[_Outro()])
+    async with app.run_test(size=(80, 24)) as pilot:
+        at = {getattr(who, "name", None): i for i, who in app.peers().items()}
+        await app.say("eu")
+        await app.ask(at["outro"], "e tu?")
+        await pilot.pause()
+
+        pairs = set()
+        for container in app._chat_log._msg_widgets.values():
+            header = container.query_one(".message-header")
+            border = container.query_one(".message-bubble").styles.border.top
+            assert str(header.styles.color) == str(border[1]), "border matches the header"
+            pairs.add(str(header.styles.color))
+
+        assert len(pairs) > 1, "and the two peers are not the same colour"
+
+
+async def test_a_bubble_is_not_stretched_to_the_width_of_its_header():
+    """The header left the bubble, so it no longer sets a floor for one."""
+    app = await chat_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.say("oi")
+        await pilot.pause()
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        header = container.query_one(".message-header")
+        bubble = container.query_one(".message-bubble")
+        assert bubble.region.width < header.region.width, "two words, a two-word bubble"
+
+
+# === A key the terminal swallows is refused =====================================
+
+
+@pytest.mark.parametrize("combo, arrives", [
+    ("ctrl+h", "backspace"),        # what made ctrl+h fail on Termux
+    ("ctrl+i", "tab"),
+    ("ctrl+m", "enter"),
+    ("ctrl+[", "escape"),
+])
+async def test_a_quit_key_the_terminal_cannot_send_is_refused(combo, arrives):
+    """A terminal sends one byte for these and for the key they alias.
+
+    Textual reports the alias, so the binding never fires — which is the same
+    silent nothing `_validate_key` already existed to prevent.
+    """
+    with pytest.raises(ValueError, match=arrives):
+        await chat_app(quit_key=combo)
+
+
+def test_the_swallowed_keys_are_read_from_textual_not_listed_here():
+    """Derived, so it cannot drift from what Textual actually does."""
+    from chatinho.chat_app import _SWALLOWED, _swallowed_keys
+
+    assert _swallowed_keys() == _SWALLOWED
+    assert _SWALLOWED["ctrl+h"] == "backspace"
+    assert "ctrl+g" not in _SWALLOWED, "still a usable quit key"
+
+
+# === Holding a message copies it ================================================
+
+
+async def test_a_long_press_copies_the_message_instead_of_selecting_it():
+    app = await chat_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.say("para copiar")
+        await pilot.pause()
+
+        copied = []
+        app.copy_to_clipboard = copied.append
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        await pilot.mouse_down(container)
+        container._pressed_at -= 1.0            # held, without sleeping for it
+        await pilot.mouse_up(container)
+        await pilot.pause()
+
+        assert copied == ["para copiar"]
+        assert app._chat_log.reply_target is None, "copying does not also select"
+
+
+async def test_a_tap_still_selects_the_reply_target():
+    app = await chat_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.say("para responder")
+        await pilot.pause()
+
+        copied = []
+        app.copy_to_clipboard = copied.append
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        await pilot.mouse_down(container)
+        await pilot.mouse_up(container)
+        await pilot.pause()
+
+        assert copied == [], "a tap copies nothing"
+        assert app._chat_log.reply_target == app.messages[0].id
+
+
+async def test_dragging_across_a_message_scrolls_rather_than_selecting_it():
+    """The log scrolls by dragging, and it drags across messages."""
+    app = await chat_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.say("nem copiar nem responder")
+        await pilot.pause()
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        await pilot.mouse_down(container)
+        container._pressed_y -= 10              # the finger travelled
+        await pilot.mouse_up(container)
+        await pilot.pause()
+
+        assert app._chat_log.reply_target is None, "a drag selects nothing"

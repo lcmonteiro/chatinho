@@ -6,10 +6,11 @@ only tells it when the history changed.
 """
 
 import logging
+import time
 from typing import Callable, Dict, List, Optional
 
 from textual import events
-from textual.containers import Horizontal, ScrollableContainer, Vertical
+from textual.containers import ScrollableContainer, Vertical
 from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
@@ -21,6 +22,14 @@ logger = logging.getLogger(__name__)
 #: What a bubble costs around its text: `padding: 1 2` either side,
 #: plus the two cells its `border: round` draws in.
 _BUBBLE_CHROME : int = 6
+
+#: How long a press has to be held before it copies rather than selects.
+#: Long enough not to fire on a tap, short enough not to feel stuck.
+_LONG_PRESS : float = 0.5
+
+#: How far a press may wander and still count as a press rather than a drag.
+#: One row of slack: a finger on a phone screen is never perfectly still.
+_A_DRAG : int = 1
 
 
 class TouchScrollableContainer(ScrollableContainer):
@@ -54,23 +63,55 @@ class TouchScrollableContainer(ScrollableContainer):
         event.stop()
 
 
-class _MessageContainer(Horizontal):
-    """Clickable message container — selects the msg as a reply target."""
+class _MessageContainer(Vertical):
+    """One message: its header, the bubble under it, and what a press means.
+
+    A short press selects the message as the reply target; a press held for
+    :data:`_LONG_PRESS` copies its text instead.
+    """
 
     def __init__(
         self,
         *children: Widget,
         msg_id: str,
         on_select: Callable[[str], None],
+        on_copy: Callable[[str], None],
         **kwargs,
     ) -> None:
         super().__init__(*children, **kwargs)
         self.msg_id = msg_id
         self._on_select = on_select
+        self._on_copy = on_copy
+        self._pressed_at : Optional[float] = None
+        self._pressed_y  : int = 0
 
-    def on_click(self, event: events.Click) -> None:
-        self._on_select(self.msg_id)
-        event.stop()
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        """Starts the clock, and remembers where the press landed.
+
+        Deliberately does not stop the event: the log scrolls by dragging, and
+        that reads the same mouse events, so a message that swallowed them
+        would be a message you could not scroll past.
+        """
+        self._pressed_at = time.monotonic()
+        self._pressed_y  = event.screen_y
+
+    def on_mouse_up(self, event: events.MouseUp) -> None:
+        """Copies a press that was held, selects a tap, and ignores a drag.
+
+        Decided here rather than in ``on_click`` because a click carries no
+        duration: Textual synthesises it from the press and the release, and
+        by then how long it took is gone.
+        """
+        pressed_at, pressed_y = self._pressed_at, self._pressed_y
+        self._pressed_at = None
+        if pressed_at is None:
+            return                      # the press began somewhere else
+        if abs(event.screen_y - pressed_y) > _A_DRAG:
+            return                      # the log was being scrolled, not tapped
+        if time.monotonic() - pressed_at >= _LONG_PRESS:
+            self._on_copy(self.msg_id)
+        else:
+            self._on_select(self.msg_id)
 
 
 class ChatLog(TouchScrollableContainer):
@@ -157,8 +198,8 @@ class ChatLog(TouchScrollableContainer):
         if msg.reply_to is not None:
             prefix += " ↳ replying"
 
-        header = Static(prefix, classes="message-header %s" % self.style.header_class(msg.frm))
-        parts: List[Widget] = [header]
+        header = Static(prefix, classes="message-header")
+        parts: List[Widget] = []
 
         # Quote of the original message when this is a reply
         quote = None
@@ -176,15 +217,18 @@ class ChatLog(TouchScrollableContainer):
         # max-width the stylesheet sets, which Textual clamps this against.
         # It has to be measured here: `width: auto` collapses to nothing,
         # because Markdown reports no content width of its own.
-        bubble.styles.width = self._bubble_width(prefix, msg.text, quote)
+        bubble.styles.width = self._bubble_width(msg.text, quote)
 
 
-        # Clickable container — aligns left/right and selects the reply target
+        # The header sits above the bubble rather than inside it, and the peer
+        # class is on the container so one colour reaches both.
         container = _MessageContainer(
+            header,
             bubble,
             msg_id=msg.id,
             on_select=self._on_message_clicked,
-            classes="message-container",
+            on_copy=self._copy_message,
+            classes="message-container %s" % self.style.header_class(msg.frm),
         )
         if msg.is_local:
             container.add_class("sent")
@@ -194,25 +238,41 @@ class ChatLog(TouchScrollableContainer):
         self._msg_widgets[msg.id] = container
         return container
 
-    def _bubble_width(self, prefix: str, text: str, quote: Optional[str] = None) -> int:
+    def _bubble_width(self, text: str, quote: Optional[str] = None) -> int:
         """How wide this bubble wants to be, in cells.
 
-        The widest line it has to show — the header, the quote, or a line of
-        the body — plus the bubble's own padding and border, capped at
+        The widest line it has to show — the quote, or a line of the body —
+        plus the bubble's own padding and border, capped at
         ``bubble_max_width``. The stylesheet's ``max-width: 100%`` is what
         keeps it inside a window narrower than that cap.
 
+        The header is not counted: it sits above the bubble, not in it, so a
+        two-word message gets a two-word bubble rather than one stretched to
+        the width of a timestamp.
+
         Args:
-            prefix: The header line.
             text: What the message says.
             quote: The reply preview, when this message answers another.
 
         Returns:
             int: The width to set, borders and padding included.
         """
-        lines = [prefix] + text.splitlines() + ([quote] if quote else [])
-        widest = max(len(line) for line in lines) + _BUBBLE_CHROME
+        lines = text.splitlines() + ([quote] if quote else [])
+        widest = max([len(line) for line in lines] + [0]) + _BUBBLE_CHROME
         return min(widest, self.style.bubble_max_width)
+
+    def _copy_message(self, msg_id: str) -> None:
+        """Puts the message's text on the clipboard, and says so.
+
+        Whether it arrives depends on the terminal: this is OSC 52, which a
+        terminal may refuse or not implement. The notification says what was
+        attempted, not that it landed.
+        """
+        msg = self._find(msg_id)
+        if msg is None:
+            return
+        self.app.copy_to_clipboard(msg.text)
+        self.notify("Copied %s" % msg.id, timeout=2)
 
     # === Reply target (click) ======================================================
 

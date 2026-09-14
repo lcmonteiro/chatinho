@@ -27,10 +27,11 @@ The parts live next door:
 
 import logging
 import threading
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from textual.app import App, ComposeResult
 from textual.css.query import NoMatches
+from textual._ansi_sequences import ANSI_SEQUENCES_KEYS
 from textual.keys import KEY_ALIASES, Keys
 from textual.containers import Container, Vertical
 from textual.widgets import TextArea
@@ -72,6 +73,36 @@ _KEY_NAMES = {key.value for key in Keys} | set(KEY_ALIASES)
 _MODIFIERS = frozenset({"ctrl", "shift", "alt", "meta", "super", "hyper"})
 
 
+def _swallowed_keys() -> Dict[str, str]:
+    """The ctrl combos a terminal never delivers as themselves.
+
+    A terminal sends one control byte for ``ctrl+h`` and for Backspace alike,
+    so Textual reports ``backspace`` for both and a ``ctrl+h`` binding can
+    never fire. The same holds for ``ctrl+i``/Tab, ``ctrl+m``/Enter and
+    ``ctrl+[``/Escape. This is derived from Textual's own sequence table
+    rather than listed by hand, so it cannot drift from what Textual does.
+
+    Returns:
+        Dict[str, str]: Each unusable combo, mapped to what arrives instead.
+    """
+    swallowed : Dict[str, str] = {}
+    for code in list(range(1, 27)) + [27]:
+        combo    = "ctrl+%s" % chr(ord("a") + code - 1) if code < 27 else "ctrl+["
+        arriving = ANSI_SEQUENCES_KEYS.get(chr(code))
+        # The table's values are a tuple of keys for the sequences that name
+        # one; anything else is not a key this could collide with.
+        if not isinstance(arriving, tuple) or not arriving:
+            continue
+        delivered = str(getattr(arriving[0], "value", arriving[0]))
+        if delivered != combo:
+            swallowed[combo] = delivered
+    return swallowed
+
+
+#: Combos that look like keys and are not — see :func:`_swallowed_keys`.
+_SWALLOWED : Dict[str, str] = _swallowed_keys()
+
+
 def _validate_key(key: str) -> str:
     """Returns *key* if Textual could ever receive it, and raises if not.
 
@@ -89,14 +120,22 @@ def _validate_key(key: str) -> str:
         str: The key, unchanged.
 
     Raises:
-        ValueError: The key is empty, carries an unknown modifier, or names
-            something Textual has no key for.
+        ValueError: The key is empty, carries an unknown modifier, names
+            something Textual has no key for, or is a combo the terminal
+            delivers as a different key entirely.
     """
     for part in key.split(","):
         part = part.strip()
         if not part:
             raise ValueError(
                 "quit_key must be a Textual key, not %r: a part of it is empty" % key
+            )
+        if part in _SWALLOWED:
+            raise ValueError(
+                "quit_key %r cannot work: a terminal sends the same byte for %s "
+                "as for %s, so Textual reports %r and the binding never fires. "
+                "Try 'ctrl+g' or 'f10'."
+                % (key, part, _SWALLOWED[part], _SWALLOWED[part])
             )
         if part in _KEY_NAMES:
             continue

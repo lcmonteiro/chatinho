@@ -74,7 +74,7 @@ Screen {
     border: round $input_focus_border;
 }
 .message-container {
-    layout: horizontal;
+    layout: vertical;
     width: 100%;
     padding: 0 0 1 0;
     margin: 0 $bubble_margin_right 0 0;
@@ -86,17 +86,14 @@ Screen {
     width: auto;
     max-width: 100%;
     padding: 1 2;
-    border: round $received_bubble_border;
     background: transparent;
     color: $received_text;
     height: auto;
 }
 .message-container.sent .message-bubble {
-    border: round $sent_bubble_border;
     color: $sent_text;
 }
 .message-container.received .message-bubble {
-    border: round $received_bubble_border;
     color: $received_text;
 }
 .message-container.sent.reply-target .message-bubble {
@@ -106,8 +103,9 @@ Screen {
     background: $received_bubble_bg;
 }
 .message-header {
+    width: auto;
     text-style: bold;
-    margin: 0;
+    margin: 0 0 0 1;
 }
 $peer_header_rules
 .message-body {
@@ -159,7 +157,8 @@ class ChatStyle:
     bubble_max_width: int = 72
     bubble_margin_right: str = "2"
 
-    # One colour per peer for the header — who spoke, and the message id.
+    # One colour per peer: the header — who spoke, and the message id — and
+    # the bubble's border beneath it, so a peer is one colour and not two.
     # Indexed by the peer's id, and wrapped round when there are more peers
     # than colours; slot zero is the user, and a command speaks as TOOL.
     peer_headers: Tuple[str, ...] = (
@@ -174,12 +173,10 @@ class ChatStyle:
 
     # Sent bubbles — the border is what is drawn; the bg is the reply-target tint
     sent_bubble_bg: str = "#005c4b"
-    sent_bubble_border: str = "#00a884"
     sent_text: str = "#e9edef"
 
     # Received bubbles — the border is what is drawn; the bg is the reply-target tint
     received_bubble_bg: str = "#202c33"
-    received_bubble_border: str = "#3b4a54"
     received_text: str = "#e9edef"
 
     # Quote (reply preview)
@@ -214,11 +211,13 @@ class ChatStyle:
 
     def to_css(self) -> str:
         """Render this style as a Textual CSS string."""
-        rules = [
-            ".message-header.peer-%d {\n    color: %s;\n}" % (at, colour)
-            for at, colour in enumerate(self.peer_headers)
-        ]
-        rules.append(".message-header.peer-tool {\n    color: %s;\n}" % self.tool_header)
+        rules = []
+        for slot, colour in list(enumerate(self.peer_headers)) + [("tool", self.tool_header)]:
+            at = "peer-%s" % slot
+            rules.append(".message-container.%s .message-header {\n    color: %s;\n}" % (at, colour))
+            rules.append(
+                ".message-container.%s .message-bubble {\n    border: round %s;\n}" % (at, colour)
+            )
         return _CSS_TEMPLATE.substitute(
             peer_header_rules="\n".join(rules),
             **asdict(self),
