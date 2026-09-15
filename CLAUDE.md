@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **194 pass** |
+| `pytest -q` | **200 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -277,7 +277,7 @@ src/chatinho/
   chat_clipboard.py  OSC 52's second route: a clipboard helper, if the system has one
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      a2a.py, openai.py — plain classes, no base
-  commands/        help.py, test.py — commands: they run, they are not peers
+  commands/        help.py, test.py, copy.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads
 docs/              SPEC.md — the eleven hooks, with an example and a cost for each
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
@@ -347,6 +347,17 @@ for. The notification **names the routes that ran** (`Copied msg-3 (OSC 52 + ter
 rather than claiming the text arrived; whether it did is the terminal's business, and saying which
 route was taken is what makes a silent failure diagnosable. `chat_clipboard` imports nothing but
 the standard library, so it is tested without mounting anything.
+
+**And a third way, for when neither of those reports anything: `/copy`.** A long press may be taken
+by the terminal, a key may never arrive, and a notification may not be visible — three mechanisms,
+each with its own way of failing silently, which is how a phone ends up with no way to copy and no
+way to tell why. A *command* reports the one way a chat is guaranteed to manage: what it answers is
+posted in `TOOL`'s name, **in the conversation**, where being readable is the whole point. `/copy`
+takes a message id or the last thing said, skipping what a command wrote so it never copies its own
+invocation, and when there is no helper it answers with what to install — on Termux that is both
+`pkg install termux-api` *and* the Termux:API app, two halves that fail silently without each
+other. It reaches the clipboard through the helper alone: OSC 52 is the presentation's to send, and
+a command is not the presentation.
 
 Three things this cost, all found by measuring rather than by reading:
 
@@ -445,11 +456,11 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 36 names: `build_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
+`__init__.py` exports 39 names: `build_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
 the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, `options_of`,
 `declares`, `declared_id`, `name_of`, `Hook`); the ten `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
-`DatabaseBackend`, `HelpCommand`, `TestCommand`).
+`DatabaseBackend`, `CopyCommand`, `HelpCommand`, `TestCommand`).
 
 `ChatApp` is not exported, even though it no longer carries the underscore that used to say so:
 `build_chat` is the way to build one, in `chat_builder.py`, and the class itself lives in
