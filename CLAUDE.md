@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **204 pass** |
+| `pytest -q` | **206 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -362,6 +362,14 @@ rather than claiming the text arrived; whether it did is the terminal's business
 route was taken is what makes a silent failure diagnosable. `chat_clipboard` imports nothing but
 the standard library, so it is tested without mounting anything.
 
+**Two of those tests run the helper for real**, with a working one put on `PATH`, because every
+other test in the file replaces `chat_clipboard.put` with a double. Those prove the callers do the
+right thing and prove nothing about the thing itself — and the wiring from `copy_message` through a
+worker, an executor and `subprocess.run` is exactly where a copy can be connected wrongly and still
+pass a suite full of doubles. That gap was found while chasing a report of copying not working on a
+phone: the environment turned out to be healthy and the whole path sound, which nothing in the
+suite had ever actually shown.
+
 **And a third way, for when neither of those reports anything: `/copy`.** A long press may be taken
 by the terminal, a key may never arrive, and a notification may not be visible — three mechanisms,
 each with its own way of failing silently, which is how a phone ends up with no way to copy and no
@@ -505,7 +513,12 @@ Everything about the conversation is reached by declaring a hook — which is wh
 ```bash
 ./setup.sh    # idempotent; auto-installs uv (handles Termux via pkg), creates .venv, uv sync
 ./run.sh      # runs examples/demo.py (calls setup.sh first if .venv is missing)
+./diagnose.sh # what this terminal can do: commit, Python, TERM, clipboard helpers
 ```
+
+`diagnose.sh` exists because copying depends on the terminal more than on the code, and fails
+silently in several different ways. Three rounds of guessing from "it does not work" produced three
+mechanisms without establishing which one was broken; asking the machine settled it in one.
 
 Both scripts resolve paths relative to their own location, so they work from any cwd.
 

@@ -4,6 +4,7 @@ Textual copies with OSC 52, which a terminal is free to ignore; Termux does.
 These cover the second route: a helper program the system already has.
 """
 
+import os
 import subprocess
 
 import pytest
@@ -147,3 +148,39 @@ async def test_copy_says_so_when_there_is_nothing_to_copy(monkeypatch):
     _, view = await a_chat_with_copy(monkeypatch)
 
     assert "empty" in await view.command("copy")
+
+
+# === The real subprocess, not a stand-in ========================================
+#
+# Every test above replaces `chat_clipboard.put`, which proves the callers do the
+# right thing and proves nothing about the thing itself. These run a helper that
+# is really on PATH and really executed, because the wiring from copy_message
+# through a worker, an executor and subprocess.run is exactly where a copy can
+# be wired up wrongly and still pass a suite full of doubles.
+
+
+@pytest.fixture
+def a_helper_on_path(tmp_path, monkeypatch):
+    """Puts a working `termux-clipboard-set` on PATH, writing to a file."""
+    written = tmp_path / "clipboard.txt"
+    helper  = tmp_path / "termux-clipboard-set"
+    helper.write_text("#!/usr/bin/env bash\ncat > %s\n" % written)
+    helper.chmod(0o755)
+    monkeypatch.setenv("PATH", "%s:%s" % (tmp_path, os.environ["PATH"]))
+    return written
+
+
+def test_put_really_runs_the_helper(a_helper_on_path):
+    assert chat_clipboard.put("texto a sério") == "termux-clipboard-set"
+    assert a_helper_on_path.read_text() == "texto a sério"
+
+
+async def test_slash_copy_really_reaches_the_clipboard(a_helper_on_path):
+    """End to end, with nothing stubbed: the command, and the clipboard."""
+    _, view = await driven(commands=[CopyCommand()])
+
+    await view.say("o que vai para o clipboard")
+    answer = await view.command("copy")
+
+    assert a_helper_on_path.read_text() == "o que vai para o clipboard"
+    assert "termux-clipboard-set" in answer
