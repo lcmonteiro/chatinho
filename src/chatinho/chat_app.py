@@ -27,13 +27,14 @@ The parts live next door:
 
 import logging
 import threading
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from textual.app import App, ComposeResult
 from textual.css.query import NoMatches
+from textual._ansi_sequences import ANSI_SEQUENCES_KEYS
 from textual.keys import KEY_ALIASES, Keys
 from textual.containers import Container, Vertical
-from textual.widgets import Input
+from textual.widgets import TextArea
 
 from .chat_hooks import (
     Ask,
@@ -72,6 +73,36 @@ _KEY_NAMES = {key.value for key in Keys} | set(KEY_ALIASES)
 _MODIFIERS = frozenset({"ctrl", "shift", "alt", "meta", "super", "hyper"})
 
 
+def _swallowed_keys() -> Dict[str, str]:
+    """The ctrl combos a terminal never delivers as themselves.
+
+    A terminal sends one control byte for ``ctrl+h`` and for Backspace alike,
+    so Textual reports ``backspace`` for both and a ``ctrl+h`` binding can
+    never fire. The same holds for ``ctrl+i``/Tab, ``ctrl+m``/Enter and
+    ``ctrl+[``/Escape. This is derived from Textual's own sequence table
+    rather than listed by hand, so it cannot drift from what Textual does.
+
+    Returns:
+        Dict[str, str]: Each unusable combo, mapped to what arrives instead.
+    """
+    swallowed : Dict[str, str] = {}
+    for code in list(range(1, 27)) + [27]:
+        combo    = "ctrl+%s" % chr(ord("a") + code - 1) if code < 27 else "ctrl+["
+        arriving = ANSI_SEQUENCES_KEYS.get(chr(code))
+        # The table's values are a tuple of keys for the sequences that name
+        # one; anything else is not a key this could collide with.
+        if not isinstance(arriving, tuple) or not arriving:
+            continue
+        delivered = str(getattr(arriving[0], "value", arriving[0]))
+        if delivered != combo:
+            swallowed[combo] = delivered
+    return swallowed
+
+
+#: Combos that look like keys and are not — see :func:`_swallowed_keys`.
+_SWALLOWED : Dict[str, str] = _swallowed_keys()
+
+
 def _validate_key(key: str) -> str:
     """Returns *key* if Textual could ever receive it, and raises if not.
 
@@ -89,14 +120,22 @@ def _validate_key(key: str) -> str:
         str: The key, unchanged.
 
     Raises:
-        ValueError: The key is empty, carries an unknown modifier, or names
-            something Textual has no key for.
+        ValueError: The key is empty, carries an unknown modifier, names
+            something Textual has no key for, or is a combo the terminal
+            delivers as a different key entirely.
     """
     for part in key.split(","):
         part = part.strip()
         if not part:
             raise ValueError(
                 "quit_key must be a Textual key, not %r: a part of it is empty" % key
+            )
+        if part in _SWALLOWED:
+            raise ValueError(
+                "quit_key %r cannot work: a terminal sends the same byte for %s "
+                "as for %s, so Textual reports %r and the binding never fires. "
+                "Try 'ctrl+g' or 'f10'."
+                % (key, part, _SWALLOWED[part], _SWALLOWED[part])
             )
         if part in _KEY_NAMES:
             continue
@@ -159,9 +198,27 @@ class ChatApp(App):
         max_displayed   : int = 100,
         style           : Optional[ChatStyle] = None,
         quit_key        : str = "ctrl+q",
+        copy_key        : str = "ctrl+y",
+        name            : Optional[str] = None,
     ) -> None:
         super().__init__()
+        if name is not None:
+            # Only works because @connector wrote `name` onto the class:
+            # DOMNode.name is a read-only property, so on a plain App this
+            # same line raises. The decorator's class attribute shadows it.
+            if not name.strip():
+                raise ValueError("name must not be blank: it is shown as @name in the log")
+            # mypy only sees DOMNode's read-only property, not the class
+            # attribute the decorator put in front of it.
+            self.name = name  # type: ignore[misc]
         self._rebind_quit(_validate_key(quit_key))
+        self._bindings.bind(
+            _validate_key(copy_key), "copy_selected",
+            description="Copy the selected message", show=False, priority=True,
+        )
+        # Held, not just rendered: the log reads the bubble's maximum width and
+        # the header palette from the same object the stylesheet came from.
+        self._style : ChatStyle = style or ChatStyle()
         if style is not None:
             # Instance-level override: Textual reads ``self.CSS`` at mount.
             self.CSS = style.to_css()  # type: ignore[misc]
@@ -221,6 +278,19 @@ class ChatApp(App):
         }
         bindings.bind(quit_key, "quit", description="Quit", show=False, priority=True)
 
+    def action_copy_selected(self) -> None:
+        """Copies the message selected as the reply target.
+
+        The keyboard way in, because the long press is not always reachable: a
+        phone terminal may take the gesture for its own menu before the
+        application sees any of it. Tap a message, then press the key.
+        """
+        target = self._reply_target
+        if target is None:
+            self.notify("Select a message first, then copy it", timeout=3)
+            return
+        self._chat_log.copy_message(target)
+
     def _repaint_after(self, *granted: str) -> None:
         """
         Wraps the granted verbs so the terminal repaints when we speak.
@@ -246,7 +316,9 @@ class ChatApp(App):
         yield Container(
             ChatLog(
                 self.context,
+                peers=self.peers,
                 max_displayed=self.max_displayed,
+                style=self._style,
                 on_reply_target_change=self._on_reply_target_change,
                 id=CHAT_LOG_ID,
             ),
@@ -265,21 +337,21 @@ class ChatApp(App):
         directly — starts it before the queues can deliver anything here.
         """
         self._app_thread_id = threading.get_ident()
-        self.query_one("#%s" % INPUT_ID, Input).focus()
+        self.query_one("#%s" % INPUT_ID, CommandInput).focus()
         if self.context():
             self._chat_log.sync()
             self._chat_log.scroll_to_bottom()
         if self.welcome_message:
             await self.say(self.welcome_message)
 
-    async def on_input_submitted(self, message: Input.Submitted) -> None:
-        """Handle the user pressing Enter."""
-        del message
-        inp = self.query_one("#%s" % INPUT_ID, Input)
-        text = inp.value.strip()
-        if not text:
-            return
-        inp.value = ""
+    async def on_command_input_submitted(self, message: CommandInput.Submitted) -> None:
+        """Handle the user sending what they typed.
+
+        The text arrives on the message already stripped, and a blank input
+        sends nothing at all, so there is nothing to check here.
+        """
+        text = message.text
+        message.input.clear()
         if text.startswith(COMMAND_PREFIX):
             name, _, args = text[1:].strip().partition(" ")
             await self.command(name, args)
@@ -288,11 +360,13 @@ class ChatApp(App):
             self._clear_reply_target()
             await self.say(text, reply_to=target)
 
-    def on_input_changed(self, message: Input.Changed) -> None:
+    def on_text_area_changed(self, message: TextArea.Changed) -> None:
         """Update the command-suggestion popup as the user types."""
-        if message.input.id != INPUT_ID:
+        if message.text_area.id != INPUT_ID:
             return
-        self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).update_for(message.value)
+        self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).update_for(
+            message.text_area.text
+        )
 
     # === The conversation ===========================================================
 
@@ -394,7 +468,7 @@ class ChatApp(App):
 
     def _on_reply_target_change(self, msg_id: Optional[str]) -> None:
         """Keeps the input placeholder in step with the log's reply target."""
-        inp = self.query_one("#%s" % INPUT_ID, Input)
+        inp = self.query_one("#%s" % INPUT_ID, CommandInput)
         inp.placeholder = self._input_placeholder if msg_id is None else "Reply to %s…" % msg_id
 
     def _find_message(self, msg_id: str) -> Optional[ChatMessage]:

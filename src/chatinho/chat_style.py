@@ -4,7 +4,7 @@ Build the chat UI theme in Python instead of editing raw CSS:
 
     from chatinho import ChatStyle, build_chat
 
-    style = ChatStyle(accent="#ff5733", sent_bubble_bg="#1a4d3a")
+    style = ChatStyle(accent="#ff5733", sent_bubble_border="#ff5733")
     chat = build_chat(style=style)
 
 Use ``dataclasses.replace`` to tweak a base style without touching the rest:
@@ -13,10 +13,18 @@ Use ``dataclasses.replace`` to tweak a base style without touching the rest:
 
     dark = ChatStyle()
     green = replace(dark, accent="#00ff88")
+
+**A bubble is drawn as an outline, not as a fill.** The border carries the
+colour and the chat background shows through, so the two ``*_bubble_bg``
+fields are the tint a bubble takes *only* while it is the reply target —
+selection is the one thing a filled background means.
 """
 
 from dataclasses import asdict, dataclass
 from string import Template
+from typing import Tuple
+
+from .chat_message import TOOL
 
 # Template first: the stylesheet with $placeholders for every ChatStyle field.
 _CSS_TEMPLATE = Template(
@@ -55,8 +63,10 @@ Screen {
     display: block;
 }
 #input-line {
-    height: 3;
-    background: $input_bg;
+    height: auto;
+    max-height: $input_max_height;
+    padding: 0 1;
+    background: transparent;
     border: round $input_border;
     color: $input_color;
 }
@@ -64,49 +74,46 @@ Screen {
     border: round $input_focus_border;
 }
 .message-container {
-    layout: horizontal;
+    layout: vertical;
     width: 100%;
     padding: 0 0 1 0;
+    margin: 0 $bubble_margin_right 0 0;
     height: auto;
-}
-.message-container.reply-target .message-bubble {
-    outline: thick $accent;
-}
-.message-container.sent {
-    align: right top;
-}
-.message-container.received {
     align: left top;
 }
 .message-bubble {
     layout: vertical;
-    max-width: 90%;
+    width: auto;
+    max-width: 100%;
     padding: 1 2;
-    border: round $received_bubble_border;
-    background: $received_bubble_bg;
+    background: transparent;
     color: $received_text;
     height: auto;
 }
 .message-container.sent .message-bubble {
-    background: $sent_bubble_bg;
-    border: round $sent_bubble_border;
     color: $sent_text;
 }
 .message-container.received .message-bubble {
-    background: $received_bubble_bg;
-    border: round $received_bubble_border;
     color: $received_text;
 }
+.message-container.sent.reply-target .message-bubble {
+    background: $sent_bubble_bg;
+}
+.message-container.received.reply-target .message-bubble {
+    background: $received_bubble_bg;
+}
 .message-header {
-    color: $received_header;
+    width: auto;
     text-style: bold;
-    margin: 0;
+    margin: 0 0 0 1;
 }
-.message-container.sent .message-header {
-    color: $sent_header;
-}
+$peer_header_rules
 .message-body {
     margin: 0;
+    padding: 0;
+}
+.message-body > *:last-child {
+    margin-bottom: 0;
 }
 .message-quote {
     color: $quote_color;
@@ -123,9 +130,9 @@ Screen {
 class ChatStyle:
     """Theme colours for the chat UI.
 
-    Every field is a hex colour string; defaults reproduce the classic
-    chatlib look. ``to_css()`` turns the values into a Textual stylesheet
-    by rendering the module-level ``_CSS_TEMPLATE``.
+    Every colour field is a hex string; the two size fields are Textual
+    lengths (cells, or a percentage). ``to_css()`` turns the values into a
+    Textual stylesheet by rendering the module-level ``_CSS_TEMPLATE``.
     """
 
     # Screen / layout
@@ -138,31 +145,84 @@ class ChatStyle:
     scrollbar_hover_bg: str = "#2a3942"
     scrollbar_hover_color: str = "#e9edef"
 
-    # Input line
+    # Input line — drawn as an outline; it grows with the text up to this many rows
     input_bg: str = "#202c33"
     input_border: str = "#2a3942"
     input_color: str = "#e9edef"
     input_focus_border: str = "#00a884"
+    input_max_height: str = "8"
 
-    # Accent (reply outline + quote border)
+    # Accent (quote border)
     accent: str = "#00a884"
 
-    # Sent bubbles
-    sent_bubble_bg: str = "#005c4b"
-    sent_bubble_border: str = "#005c4b"
-    sent_text: str = "#e9edef"
-    sent_header: str = "#8fd6b4"
+    # How wide a bubble may grow before its text wraps, and how far its right
+    # edge stays clear of the scrollbar. The width is applied in Python, by
+    # ChatLog, because only it knows how wide the text actually is.
+    bubble_max_width: int = 72
+    bubble_margin_right: str = "2"
 
-    # Received bubbles
+    # One colour per peer: the header — who spoke, and the message id — and
+    # the bubble's border beneath it, so a peer is one colour and not two.
+    # Indexed by the peer's id, and wrapped round when there are more peers
+    # than colours; slot zero is the user, and a command speaks as TOOL.
+    peer_headers: Tuple[str, ...] = (
+        "#8fd6b4",       # 0 — LOCAL, the user
+        "#f6c177",       # the hues are spread apart on purpose: the common
+        "#9ccfd8",       # chat is the user and one connector, so slots 0 and
+        "#c4a7e7",       # 1 have to be told apart at a glance — two greens
+        "#eb6f92",       # were not
+        "#7de0a3",
+    )
+    tool_header: str = "#b8a1e3"
+
+    # Sent bubbles — the border is what is drawn; the bg is the reply-target tint
+    sent_bubble_bg: str = "#005c4b"
+    sent_text: str = "#e9edef"
+
+    # Received bubbles — the border is what is drawn; the bg is the reply-target tint
     received_bubble_bg: str = "#202c33"
-    received_bubble_border: str = "#202c33"
     received_text: str = "#e9edef"
-    received_header: str = "#7de0a3"
 
     # Quote (reply preview)
     quote_color: str = "#8696a0"
     quote_bg: str = "#111b21"
 
+    def __post_init__(self) -> None:
+        """Refuses a palette with nothing in it.
+
+        Raises:
+            ValueError: ``peer_headers`` is empty, which would leave the
+                header with no colour and the modulo with no divisor.
+        """
+        if not self.peer_headers:
+            raise ValueError("peer_headers needs at least one colour")
+
+    def header_class(self, frm: int) -> str:
+        """The header class carrying *frm*'s colour.
+
+        A command is not a peer and has no id of its own, so ``TOOL`` gets a
+        name rather than a slot. Every other id wraps round the palette.
+
+        Args:
+            frm: The id of whoever said it.
+
+        Returns:
+            str: The class name, matching a rule ``to_css()`` wrote.
+        """
+        if frm == TOOL:
+            return "peer-tool"
+        return "peer-%d" % (frm % len(self.peer_headers))
+
     def to_css(self) -> str:
         """Render this style as a Textual CSS string."""
-        return _CSS_TEMPLATE.substitute(**asdict(self))
+        rules = []
+        for slot, colour in list(enumerate(self.peer_headers)) + [("tool", self.tool_header)]:
+            at = "peer-%s" % slot
+            rules.append(".message-container.%s .message-header {\n    color: %s;\n}" % (at, colour))
+            rules.append(
+                ".message-container.%s .message-bubble {\n    border: round %s;\n}" % (at, colour)
+            )
+        return _CSS_TEMPLATE.substitute(
+            peer_header_rules="\n".join(rules),
+            **asdict(self),
+        )

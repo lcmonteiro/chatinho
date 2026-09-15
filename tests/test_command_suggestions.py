@@ -6,10 +6,11 @@ drive it without stealing focus from the input.
 """
 
 import pytest
-from textual.widgets import Input, OptionList
+from textual.widgets import OptionList
 
 from chatinho import ChatSession, HookExecute, require, tool
 from chatinho.chat_app import ChatApp
+from chatinho.chat_input import CommandInput
 
 
 async def chat_app(connectors=None, commands=None, backend=None, **kwargs):
@@ -99,12 +100,12 @@ async def test_space_after_token_hides_suggestions():
 async def test_tab_completes_highlighted_suggestion():
     app = await chat_app(commands=COMMANDS)
     async with app.run_test() as pilot:
-        inp = app.query_one("#input-line", Input)
+        inp = app.query_one("#input-line", CommandInput)
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/", "h", "e")
         # "hello" sorts before "help" — first match is highlighted by default.
         await pilot.press("tab")
-        assert inp.value == "/hello "
+        assert inp.text == "/hello "
         assert not suggestions.has_class("-visible")
 
 
@@ -112,7 +113,7 @@ async def test_tab_completes_highlighted_suggestion():
 async def test_down_moves_highlight_then_tab_completes_it():
     app = await chat_app(commands=COMMANDS)
     async with app.run_test() as pilot:
-        inp = app.query_one("#input-line", Input)
+        inp = app.query_one("#input-line", CommandInput)
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/", "h", "e")
         first = suggestions.highlighted_option.id
@@ -120,17 +121,17 @@ async def test_down_moves_highlight_then_tab_completes_it():
         second = suggestions.highlighted_option.id
         assert second != first
         await pilot.press("tab")
-        assert inp.value == f"/{second} "
+        assert inp.text == f"/{second} "
 
 
 @pytest.mark.asyncio
 async def test_enter_accepts_suggestion_instead_of_submitting():
     app = await chat_app(commands=COMMANDS)
     async with app.run_test() as pilot:
-        inp = app.query_one("#input-line", Input)
+        inp = app.query_one("#input-line", CommandInput)
         await pilot.press("/", "h", "e")
         await pilot.press("enter")
-        assert inp.value == "/hello "
+        assert inp.text == "/hello "
         assert len(app.messages) == 0  # not submitted yet
 
 
@@ -138,12 +139,12 @@ async def test_enter_accepts_suggestion_instead_of_submitting():
 async def test_escape_hides_suggestions_without_changing_input():
     app = await chat_app(commands=COMMANDS)
     async with app.run_test() as pilot:
-        inp = app.query_one("#input-line", Input)
+        inp = app.query_one("#input-line", CommandInput)
         suggestions = app.query_one("#command-suggestions", OptionList)
         await pilot.press("/", "h")
         await pilot.press("escape")
         assert not suggestions.has_class("-visible")
-        assert inp.value == "/h"
+        assert inp.text == "/h"
 
 
 @pytest.mark.asyncio
@@ -162,8 +163,8 @@ async def test_an_unknown_command_says_so_instead_of_vanishing():
     """There is no dispatch to fall through: an unknown name has no id."""
     app = await chat_app(commands=COMMANDS)
     async with app.run_test() as pilot:
-        inp = app.query_one("#input-line", Input)
-        inp.value = "/nao-existe"
+        inp = app.query_one("#input-line", CommandInput)
+        inp.text = "/nao-existe"
         await pilot.press("enter")
         await pilot.pause()
     assert app.messages[-1].text == "Unknown command: /nao-existe"
