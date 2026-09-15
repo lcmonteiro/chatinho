@@ -28,14 +28,19 @@ logger = logging.getLogger(__name__)
 #: a line measured to fit would otherwise wrap.
 _BUBBLE_CHROME : int = 6
 
-#: How long a press has to be held before it copies rather than selects.
-#: Two seconds, not half of one: a tap on a phone is slower than a click, and
-#: a threshold close to one copies when a reply was meant.
-_LONG_PRESS : float = 2.0
+#: How long after a tap a second one still counts as a double.
+#: Textual's own `CLICK_CHAIN_TIME_THRESHOLD` is half a second; this is a
+#: little longer, because two taps with a thumb are further apart than two
+#: with a mouse.
+_A_DOUBLE : float = 0.7
 
-#: How far a press may wander and still count as a press rather than a drag.
-#: Two rows, because a finger held for two seconds drifts further than one held
-#: for half of one — and a scroll travels much further than either.
+#: How far the second tap may land from the first and still be a double.
+#: Textual's `Click.chain` demands the *exact same cell*, which a finger will
+#: not reproduce — that is why the chain count is not used here.
+_A_WOBBLE : int = 1
+
+#: How far a press may wander between landing and lifting and still be a tap
+#: rather than the log being scrolled.
 _A_DRAG : int = 2
 
 #: How long the copy confirmation stays up. Long enough to read on a phone,
@@ -97,10 +102,9 @@ class TouchScrollableContainer(ScrollableContainer):
 
 
 class _MessageContainer(Vertical):
-    """One message: its header, the bubble under it, and what a press means.
+    """One message: its header, the bubble under it, and what a tap means.
 
-    A short press selects the message as the reply target; a press held for
-    :data:`_LONG_PRESS` copies its text instead.
+    One tap selects the message as the reply target; **two copy its text**.
     """
 
     def __init__(
@@ -115,36 +119,44 @@ class _MessageContainer(Vertical):
         self.msg_id = msg_id
         self._on_select = on_select
         self._on_copy = on_copy
-        self._pressed_at : Optional[float] = None
-        self._pressed_y  : int = 0
+        self._pressed_y   : Optional[int] = None
+        self._last_tap_at : float = 0.0
+        self._last_tap_y  : int = 0
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
-        """Starts the clock, and remembers where the press landed.
+        """Remembers where the press landed, to tell a tap from a scroll.
 
         Deliberately does not stop the event: the log scrolls by dragging, and
         that reads the same mouse events, so a message that swallowed them
         would be a message you could not scroll past.
         """
-        self._pressed_at = time.monotonic()
-        self._pressed_y  = event.screen_y
+        self._pressed_y = event.screen_y
 
-    def on_mouse_up(self, event: events.MouseUp) -> None:
-        """Copies a press that was held, selects a tap, and ignores a drag.
+    def on_click(self, event: events.Click) -> None:
+        """Selects on one tap and copies on two, ignoring a scroll.
 
-        Decided here rather than in ``on_click`` because a click carries no
-        duration: Textual synthesises it from the press and the release, and
-        by then how long it took is gone.
+        ``event.chain`` is deliberately not used. Textual counts a double
+        click only when both land on the *exact same cell*, which is right for
+        a mouse and wrong for a thumb; this allows the second tap a cell of
+        wobble, and a little longer to arrive.
         """
-        pressed_at, pressed_y = self._pressed_at, self._pressed_y
-        self._pressed_at = None
-        if pressed_at is None:
-            return                      # the press began somewhere else
-        if abs(event.screen_y - pressed_y) > _A_DRAG:
+        pressed_y, self._pressed_y = self._pressed_y, None
+        if pressed_y is not None and abs(event.screen_y - pressed_y) > _A_DRAG:
             return                      # the log was being scrolled, not tapped
-        if time.monotonic() - pressed_at >= _LONG_PRESS:
+
+        now = time.monotonic()
+        doubled = (now - self._last_tap_at <= _A_DOUBLE
+                   and abs(event.screen_y - self._last_tap_y) <= _A_WOBBLE)
+        self._last_tap_at, self._last_tap_y = now, event.screen_y
+
+        # Selecting is a toggle, and the first tap of the pair already did it.
+        # Doing it again puts the reply target back where it was, so a double
+        # tap only copies — which is what the long press it replaces did.
+        self._on_select(self.msg_id)
+        if doubled:
+            self._last_tap_at = 0.0     # a third tap starts a new pair
             self._on_copy(self.msg_id)
-        else:
-            self._on_select(self.msg_id)
+        event.stop()
 
 
 class ChatLog(TouchScrollableContainer):

@@ -7,15 +7,16 @@ model as the headless ones, with a terminal attached.
 """
 
 import asyncio
+import inspect
 import threading
-import time
 
 import pytest
+from textual import events
 from textual.binding import NoBinding
 
 from chatinho.chat_app import ChatApp
 from chatinho.chat_input import CommandInput
-from chatinho.chat_log import _LONG_PRESS, preview_of
+from chatinho.chat_log import preview_of
 from chatinho import (
     LOCAL,
     build_chat,
@@ -667,7 +668,7 @@ def test_the_swallowed_keys_are_read_from_textual_not_listed_here():
 # === Holding a message copies it ================================================
 
 
-async def test_a_long_press_copies_the_message_instead_of_selecting_it():
+async def test_two_taps_copy_the_message():
     app = await chat_app()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("para copiar")
@@ -677,16 +678,16 @@ async def test_a_long_press_copies_the_message_instead_of_selecting_it():
         app.copy_to_clipboard = copied.append
 
         container = app._chat_log._msg_widgets[app.messages[0].id]
-        await pilot.mouse_down(container)
-        container._pressed_at -= _LONG_PRESS     # held, without sleeping for it
-        await pilot.mouse_up(container)
+        await pilot.click(container)
+        await pilot.click(container)
         await pilot.pause()
 
         assert copied == ["para copiar"]
-        assert app._chat_log.reply_target is None, "copying does not also select"
+        assert app._chat_log.reply_target is None, \
+            "the second tap puts the selection back: a double tap only copies"
 
 
-async def test_a_tap_still_selects_the_reply_target():
+async def test_one_tap_still_selects_the_reply_target():
     app = await chat_app()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("para responder")
@@ -696,12 +697,31 @@ async def test_a_tap_still_selects_the_reply_target():
         app.copy_to_clipboard = copied.append
 
         container = app._chat_log._msg_widgets[app.messages[0].id]
-        await pilot.mouse_down(container)
-        await pilot.mouse_up(container)
+        await pilot.click(container)
         await pilot.pause()
 
-        assert copied == [], "a tap copies nothing"
+        assert copied == [], "one tap copies nothing"
         assert app._chat_log.reply_target == app.messages[0].id
+
+
+def _press_at(widget, screen_y):
+    """A MouseDown on *widget*, landing at *screen_y*."""
+    return events.MouseDown(widget, 0, 0, 0, 0, 1, False, False, False,
+                            screen_x=widget.region.x, screen_y=screen_y)
+
+
+def _click_at(widget, screen_y):
+    """The Click Textual synthesises when the release lands at *screen_y*.
+
+    Built by hand because ``pilot.mouse_down``/``mouse_up`` do not produce one
+    — Textual synthesises a Click in the app, from a release on the widget the
+    press landed on — and ``pilot.click`` presses and releases in one spot, so
+    neither can express a press that travelled. A drag test driven by the
+    pilot passed with the guard removed, because nothing was reaching the
+    handler at all.
+    """
+    return events.Click(widget, 0, 0, 0, 0, 1, False, False, False,
+                        screen_x=widget.region.x, screen_y=screen_y)
 
 
 async def test_dragging_across_a_message_scrolls_rather_than_selecting_it():
@@ -712,12 +732,28 @@ async def test_dragging_across_a_message_scrolls_rather_than_selecting_it():
         await pilot.pause()
 
         container = app._chat_log._msg_widgets[app.messages[0].id]
-        await pilot.mouse_down(container)
-        container._pressed_y -= 10              # the finger travelled
-        await pilot.mouse_up(container)
+        here = container.region.y
+        container.on_mouse_down(_press_at(container, here + 10))   # landed low
+        container.on_click(_click_at(container, here))             # lifted high
         await pilot.pause()
 
         assert app._chat_log.reply_target is None, "a drag selects nothing"
+
+
+async def test_a_tap_that_barely_moves_is_still_a_tap():
+    """A finger is never perfectly still; only a real travel is a scroll."""
+    app = await chat_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.say("ainda e um toque")
+        await pilot.pause()
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        here = container.region.y
+        container.on_mouse_down(_press_at(container, here + 1))
+        container.on_click(_click_at(container, here))
+        await pilot.pause()
+
+        assert app._chat_log.reply_target == app.messages[0].id
 
 
 # === The header names who spoke =================================================
@@ -978,8 +1014,8 @@ async def test_with_no_helper_the_notification_says_only_osc_52(monkeypatch):
         assert told and told[0].endswith("Sent by OSC 52.")
 
 
-async def test_a_press_shorter_than_the_threshold_still_only_selects():
-    """Two seconds, not half of one — a tap is still a tap."""
+async def test_two_taps_far_apart_in_time_are_two_taps():
+    """The pair has to be quick, or every second reply-select would copy."""
     app = await chat_app()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("nem copiar")
@@ -989,17 +1025,15 @@ async def test_a_press_shorter_than_the_threshold_still_only_selects():
         app.copy_to_clipboard = copied.append
 
         container = app._chat_log._msg_widgets[app.messages[0].id]
-        await pilot.mouse_down(container)
-        # The clock is reset rather than wound back to just under the
-        # threshold: leaving 0.2s of margin made this a race, and a slow
-        # runner spent it getting from here to the release. Now the press is
-        # as short as a press can be, and the margin is the whole two seconds.
-        container._pressed_at = time.monotonic()
-        await pilot.mouse_up(container)
+        await pilot.click(container)
+        # Wound back past any plausible threshold rather than by a multiple of
+        # the constant: a test measured against the value it guards holds at
+        # every value, and notices none of them changing.
+        container._last_tap_at -= 3600
+        await pilot.click(container)
         await pilot.pause()
 
-        assert copied == [], "a short press does not copy"
-        assert app._chat_log.reply_target == app.messages[0].id, "it selects"
+        assert copied == [], "two separate taps copy nothing"
 
 
 async def test_the_confirmation_is_a_popup_that_actually_appears(monkeypatch):
@@ -1043,13 +1077,21 @@ def test_the_confirmation_shows_what_was_copied_on_one_line():
     assert len(shown) == 60 and shown.endswith("…")
 
 
-def test_the_long_press_is_two_seconds():
-    """The value is the requirement, so the value is what is pinned.
+def test_the_double_tap_does_not_use_textuals_chain_count():
+    """Textual counts a double click only on the *exact same cell*.
 
-    The behavioural test above measures against ``_LONG_PRESS`` itself, so it
-    holds at any threshold and cannot notice this one changing — which it
-    did not when the constant was put back to half a second. Asking for two
-    seconds is a decision about how a phone feels under the thumb, and a
-    decision nothing checks is a decision that drifts.
+    That is right for a mouse and wrong for a thumb, which is the whole reason
+    this was asked for — so the tolerance is ours, and wider than Textual's in
+    both time and position. A test says so, because reaching for `event.chain`
+    later would look like a simplification and would quietly stop working on
+    the device this exists for.
     """
-    assert _LONG_PRESS == 2.0
+    from textual.app import App
+
+    import chatinho.chat_log as log
+
+    assert "chain" not in inspect.getsource(log._MessageContainer.on_click).replace(
+        "``event.chain``", ""
+    ).replace("chain count", ""), "the chain count is not what decides"
+    assert log._A_DOUBLE > App.CLICK_CHAIN_TIME_THRESHOLD, "longer than a mouse's"
+    assert log._A_WOBBLE >= 1, "and a cell of slack, which Textual allows none of"

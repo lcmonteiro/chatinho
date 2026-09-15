@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **206 pass** |
+| `pytest -q` | **207 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -324,19 +324,27 @@ onto the class**: `DOMNode.name` is a read-only property, and the same line on a
 there is a test that says so; mypy sees only the property underneath, so the assignment carries a
 narrow `type: ignore` explaining itself.
 
-**Holding a message for two seconds copies it; tapping it selects it to reply to.** Both are
-decided in `on_mouse_up`, not in `on_click`, because a click carries no duration — Textual
-synthesises it from the press and the release, and by then how long it took is gone. The press also
-records where it landed: a release more than two rows away was the log being scrolled, and selects
-nothing. None of the three stops the event, or the drag-to-scroll underneath would have nothing
-left to read.
+**One tap selects a message to reply to; two copy it.** It was a two-second hold before, and a
+phone terminal takes a long press for its own menu before the application sees any of it — two taps
+are a gesture nothing else is competing for.
 
-Two seconds and two rows go together: a tap on a phone is slower than a click, half a second was
-close enough to one to copy when a reply was meant, and a finger held twice as long drifts twice as
-far. **The value itself is pinned by a test**, because the behavioural one measures against
-`_LONG_PRESS` and so holds at any threshold — it did not notice the constant being put back to half
-a second, which is how that gap was found. A decision about how something feels under the thumb is
-a decision, and a decision nothing checks is one that drifts.
+**`event.chain` is deliberately not what decides.** Textual counts a double click only when both
+land on the *exact same cell* and within half a second, which is right for a mouse and wrong for a
+thumb — reaching for it would repeat the class of failure that made the long press useless here.
+`_A_DOUBLE` allows 0.7s and `_A_WOBBLE` a cell of travel, and a test says so, because using the
+chain count later would look like a simplification and would quietly stop working on the device
+this exists for.
+
+Selecting is a toggle, so the second tap of a pair calls it again and puts the reply target back
+where it was: a double tap only copies, which is what the hold it replaced did. The press position
+is still recorded in `on_mouse_down`, because a release more than `_A_DRAG` rows from the landing
+was the log being scrolled and selects nothing; neither handler stops its event, or the
+drag-to-scroll underneath would have nothing left to read.
+
+**The drag test was empty for a while.** It drove `pilot.mouse_down`/`mouse_up`, which do not
+synthesise a `Click` — the app does that, from a release on the widget the press landed on — so
+nothing reached the handler and the assertion held for the wrong reason. It builds the events by
+hand now, and fails when the guard goes. Found by removing the guard and watching it pass.
 
 The copy is confirmed by a **popup**, and it shows the text back rather than only saying a copy
 happened: on a phone the clipboard cannot be checked without leaving the chat, so seeing the words
