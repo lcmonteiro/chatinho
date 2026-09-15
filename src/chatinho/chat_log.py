@@ -5,6 +5,7 @@ their widgets, and which one is selected as the reply target. The application
 only tells it when the history changed.
 """
 
+import asyncio
 import logging
 import time
 from typing import Callable, Dict, List, Optional
@@ -14,6 +15,7 @@ from textual.containers import ScrollableContainer, Vertical
 from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
+from . import chat_clipboard
 from .chat_hooks import name_of
 from .chat_message import TOOL, ChatMessage
 from .chat_style import ChatStyle
@@ -292,17 +294,30 @@ class ChatLog(TouchScrollableContainer):
         return min(max(widest, floor + _HEADER_SLACK), self.style.bubble_max_width)
 
     def copy_message(self, msg_id: str) -> None:
-        """Puts the message's text on the clipboard, and says so.
+        """Puts the message's text on the clipboard, by both routes at once.
 
-        Whether it arrives depends on the terminal: this is OSC 52, which a
-        terminal may refuse or not implement. The notification says what was
-        attempted, not that it landed.
+        OSC 52 goes out immediately — it is one escape sequence — and a
+        clipboard helper, if the system has one, runs in a worker because it
+        is a subprocess and a chat must not stop for it. Neither route is
+        enough alone: a terminal may drop OSC 52, and over SSH a helper writes
+        a clipboard nobody is looking at.
+
+        The notification names the routes that ran, rather than claiming the
+        text arrived: whether it did is the terminal's business, and saying so
+        plainly is what makes a silent failure diagnosable.
         """
         msg = self._find(msg_id)
         if msg is None:
             return
         self.app.copy_to_clipboard(msg.text)
-        self.notify("Copied %s" % msg.id, timeout=2)
+        self.run_worker(self._copy_with_a_helper(msg.id, msg.text), exclusive=False)
+
+    async def _copy_with_a_helper(self, msg_id: str, text: str) -> None:
+        """Runs the clipboard helper off the event loop, then reports both routes."""
+        loop  = asyncio.get_running_loop()
+        route = await loop.run_in_executor(None, chat_clipboard.put, text)
+        routes = "OSC 52" if route is None else "OSC 52 + %s" % route
+        self.notify("Copied %s (%s)" % (msg_id, routes), timeout=3)
 
     # === Reply target (click) ======================================================
 

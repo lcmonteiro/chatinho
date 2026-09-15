@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **186 pass** |
+| `pytest -q` | **194 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -274,6 +274,7 @@ src/chatinho/
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
   chat_log.py      ChatLog widget: renders through the granted context reader
   chat_input.py    CommandInput (a multi-line TextArea) + CommandSuggestions
+  chat_clipboard.py  OSC 52's second route: a clipboard helper, if the system has one
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      a2a.py, openai.py — plain classes, no base
   commands/        help.py, test.py — commands: they run, they are not peers
@@ -283,7 +284,8 @@ examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (std
                    agent_inbox.py (HTTP, inbound)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
-                   test_require.py, test_architecture.py, test_a2a_payload.py (no terminal)
+                   test_require.py, test_architecture.py, test_a2a_payload.py,
+                   test_clipboard.py (no terminal)
 ```
 
 The split follows one rule: **anything that does not need Textual moves out**, because that is
@@ -332,9 +334,19 @@ three stops the event, or the drag-to-scroll underneath would have nothing left 
 long press for its own selection menu before the application sees any of it, which is what Termux
 does — pressing on the rendered text works in a mounted test, so what fails there is the gesture
 arriving, not the handling. `copy_key` (default `ctrl+y`, validated like `quit_key`) copies the
-message selected as the reply target: tap, then press. And what the clipboard does with it is still
-the terminal's business — this is OSC 52, which a terminal may simply refuse, so the notification
-says what was attempted rather than that it landed.
+message selected as the reply target: tap, then press.
+
+**Copying takes two routes, because neither is enough alone.** Textual's own `copy_to_clipboard` is
+OSC 52, an escape sequence a terminal is free to drop — Termux drops it — so `chat_clipboard` also
+runs a **helper**: `termux-clipboard-set`, `wl-copy`, `xclip`, `xsel` or `pbcopy`, whichever the
+system has. Both run every time: over SSH a helper writes the *server's* clipboard, which nobody
+is looking at, and OSC 52 is what reaches the person at the keyboard. The helper is a subprocess,
+so it runs in a worker rather than stopping the chat, and a failure is logged rather than raised —
+the other route has already been taken, and a clipboard is never worth interrupting a conversation
+for. The notification **names the routes that ran** (`Copied msg-3 (OSC 52 + termux-clipboard-set)`)
+rather than claiming the text arrived; whether it did is the terminal's business, and saying which
+route was taken is what makes a silent failure diagnosable. `chat_clipboard` imports nothing but
+the standard library, so it is tested without mounting anything.
 
 Three things this cost, all found by measuring rather than by reading:
 

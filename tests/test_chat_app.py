@@ -921,3 +921,55 @@ async def test_the_copy_key_can_be_moved_and_is_validated_like_the_quit_key():
 
     with pytest.raises(ValueError, match="backspace"):
         await chat_app(copy_key="ctrl+h")
+
+
+async def test_copying_takes_both_routes_and_names_them(monkeypatch):
+    """OSC 52 goes out regardless; a helper runs too when the system has one."""
+    from chatinho import chat_clipboard
+
+    monkeypatch.setattr(chat_clipboard, "put", lambda text: "termux-clipboard-set")
+
+    app = await chat_app()
+    async with app.run_test(size=(90, 24)) as pilot:
+        await app.say("para copiar")
+        await pilot.pause()
+
+        osc52 = []
+        app.copy_to_clipboard = osc52.append
+        told = []
+        app.notify = lambda message, **kw: told.append(message)
+
+        app._chat_log.set_reply_target(app.messages[0].id)
+        await pilot.press("ctrl+y")
+        for _ in range(10):
+            await pilot.pause()
+            if told:
+                break
+
+        assert osc52 == ["para copiar"], "the escape sequence went out"
+        assert told and "OSC 52 + termux-clipboard-set" in told[0], "and both are named"
+
+
+async def test_with_no_helper_the_notification_says_only_osc_52(monkeypatch):
+    """Naming the route is what makes a silent failure diagnosable."""
+    from chatinho import chat_clipboard
+
+    monkeypatch.setattr(chat_clipboard, "put", lambda text: None)
+
+    app = await chat_app()
+    async with app.run_test(size=(90, 24)) as pilot:
+        await app.say("sem helper")
+        await pilot.pause()
+
+        app.copy_to_clipboard = lambda text: None
+        told = []
+        app.notify = lambda message, **kw: told.append(message)
+
+        app._chat_log.set_reply_target(app.messages[0].id)
+        await pilot.press("ctrl+y")
+        for _ in range(10):
+            await pilot.pause()
+            if told:
+                break
+
+        assert told and told[0].endswith("(OSC 52)")
