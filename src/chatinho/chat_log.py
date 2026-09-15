@@ -29,16 +29,40 @@ logger = logging.getLogger(__name__)
 _BUBBLE_CHROME : int = 6
 
 #: How long a press has to be held before it copies rather than selects.
-#: Long enough not to fire on a tap, short enough not to feel stuck.
-_LONG_PRESS : float = 0.5
+#: Two seconds, not half of one: a tap on a phone is slower than a click, and
+#: a threshold close to one copies when a reply was meant.
+_LONG_PRESS : float = 2.0
 
 #: How far a press may wander and still count as a press rather than a drag.
-#: One row of slack: a finger on a phone screen is never perfectly still.
-_A_DRAG : int = 1
+#: Two rows, because a finger held for two seconds drifts further than one held
+#: for half of one — and a scroll travels much further than either.
+_A_DRAG : int = 2
+
+#: How long the copy confirmation stays up. Long enough to read on a phone,
+#: which is where a copy is hardest to be sure of.
+_CONFIRMATION : float = 5.0
 
 #: What a bubble adds to its header's width to sit under it: the header's own
 #: `margin-left`, plus one space so the two do not end flush.
 _HEADER_SLACK : int = 2
+
+
+def preview_of(text: str, width: int = 60) -> str:
+    """A single line of *text*, short enough to sit in a popup.
+
+    The confirmation shows what was copied rather than only that something
+    was: on a phone, where the clipboard cannot be checked without leaving
+    the chat, seeing the words back is the confirmation.
+
+    Args:
+        text: What was copied.
+        width: How much of it to show before trailing off.
+
+    Returns:
+        str: The text collapsed onto one line, cut to *width*.
+    """
+    flat = " ".join(text.split())
+    return flat if len(flat) <= width else flat[:width - 1] + "…"
 
 
 class TouchScrollableContainer(ScrollableContainer):
@@ -317,7 +341,11 @@ class ChatLog(TouchScrollableContainer):
         loop  = asyncio.get_running_loop()
         route = await loop.run_in_executor(None, chat_clipboard.put, text)
         routes = "OSC 52" if route is None else "OSC 52 + %s" % route
-        self.notify("Copied %s (%s)" % (msg_id, routes), timeout=3)
+        self.notify(
+            "%s\n\nSent by %s." % (preview_of(text), routes),
+            title   = "Copied %s" % msg_id,
+            timeout = _CONFIRMATION,
+        )
 
     # === Reply target (click) ======================================================
 

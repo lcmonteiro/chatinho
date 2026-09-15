@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **200 pass** |
+| `pytest -q` | **204 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -324,11 +324,25 @@ onto the class**: `DOMNode.name` is a read-only property, and the same line on a
 there is a test that says so; mypy sees only the property underneath, so the assignment carries a
 narrow `type: ignore` explaining itself.
 
-**Holding a message copies it; tapping it selects it to reply to.** Both are decided in
-`on_mouse_up`, not in `on_click`, because a click carries no duration — Textual synthesises it from
-the press and the release, and by then how long it took is gone. The press also records where it
-landed: a release more than a row away was the log being scrolled, and selects nothing. None of the
-three stops the event, or the drag-to-scroll underneath would have nothing left to read.
+**Holding a message for two seconds copies it; tapping it selects it to reply to.** Both are
+decided in `on_mouse_up`, not in `on_click`, because a click carries no duration — Textual
+synthesises it from the press and the release, and by then how long it took is gone. The press also
+records where it landed: a release more than two rows away was the log being scrolled, and selects
+nothing. None of the three stops the event, or the drag-to-scroll underneath would have nothing
+left to read.
+
+Two seconds and two rows go together: a tap on a phone is slower than a click, half a second was
+close enough to one to copy when a reply was meant, and a finger held twice as long drifts twice as
+far. **The value itself is pinned by a test**, because the behavioural one measures against
+`_LONG_PRESS` and so holds at any threshold — it did not notice the constant being put back to half
+a second, which is how that gap was found. A decision about how something feels under the thumb is
+a decision, and a decision nothing checks is one that drifts.
+
+The copy is confirmed by a **popup**, and it shows the text back rather than only saying a copy
+happened: on a phone the clipboard cannot be checked without leaving the chat, so seeing the words
+is the confirmation. `run_test` disables notifications by default, so every test that asserts on
+`notify` proves only that it was *called* — there is now one that turns them on and looks for the
+`Toast` on screen, because "it was called" is not "the user saw it".
 
 **The gesture is not always reachable, so there is a key as well.** A phone terminal may take a
 long press for its own selection menu before the application sees any of it, which is what Termux

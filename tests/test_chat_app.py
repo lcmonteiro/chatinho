@@ -14,6 +14,7 @@ from textual.binding import NoBinding
 
 from chatinho.chat_app import ChatApp
 from chatinho.chat_input import CommandInput
+from chatinho.chat_log import _LONG_PRESS, preview_of
 from chatinho import (
     LOCAL,
     build_chat,
@@ -676,7 +677,7 @@ async def test_a_long_press_copies_the_message_instead_of_selecting_it():
 
         container = app._chat_log._msg_widgets[app.messages[0].id]
         await pilot.mouse_down(container)
-        container._pressed_at -= 1.0            # held, without sleeping for it
+        container._pressed_at -= _LONG_PRESS     # held, without sleeping for it
         await pilot.mouse_up(container)
         await pilot.pause()
 
@@ -948,6 +949,7 @@ async def test_copying_takes_both_routes_and_names_them(monkeypatch):
 
         assert osc52 == ["para copiar"], "the escape sequence went out"
         assert told and "OSC 52 + termux-clipboard-set" in told[0], "and both are named"
+        assert "para copiar" in told[0], "and the confirmation shows what was copied"
 
 
 async def test_with_no_helper_the_notification_says_only_osc_52(monkeypatch):
@@ -972,4 +974,77 @@ async def test_with_no_helper_the_notification_says_only_osc_52(monkeypatch):
             if told:
                 break
 
-        assert told and told[0].endswith("(OSC 52)")
+        assert told and told[0].endswith("Sent by OSC 52.")
+
+
+async def test_a_press_shorter_than_the_threshold_still_only_selects():
+    """Two seconds, not half of one — a slow tap is still a tap."""
+    app = await chat_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.say("nem copiar")
+        await pilot.pause()
+
+        copied = []
+        app.copy_to_clipboard = copied.append
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        await pilot.mouse_down(container)
+        container._pressed_at -= (_LONG_PRESS - 0.2)     # held, but not long enough
+        await pilot.mouse_up(container)
+        await pilot.pause()
+
+        assert copied == [], "a slow tap does not copy"
+        assert app._chat_log.reply_target == app.messages[0].id, "it selects"
+
+
+async def test_the_confirmation_is_a_popup_that_actually_appears(monkeypatch):
+    """The one that matters, and the one nothing was checking.
+
+    ``run_test`` disables notifications by default, so every other test here
+    asserts on ``notify`` being *called*. This one turns them on and looks for
+    the widget, because "it was called" is not "the user saw it".
+    """
+    from textual.widgets._toast import Toast
+
+    from chatinho import chat_clipboard
+    monkeypatch.setattr(chat_clipboard, "put", lambda text: "termux-clipboard-set")
+
+    app = await chat_app()
+    async with app.run_test(size=(80, 24), notifications=True) as pilot:
+        await app.say("para copiar")
+        await pilot.pause()
+
+        app._chat_log.set_reply_target(app.messages[0].id)
+        await pilot.press("ctrl+y")
+
+        toasts = []
+        for _ in range(20):
+            await pilot.pause()
+            toasts = list(app.screen.query(Toast))
+            if toasts:
+                break
+
+        assert toasts, "a toast is mounted on the screen"
+        assert toasts[0].region.width > 0 and toasts[0].display, "and it is drawn"
+
+
+def test_the_confirmation_shows_what_was_copied_on_one_line():
+    """A phone cannot check the clipboard without leaving the chat."""
+    assert preview_of("uma linha") == "uma linha"
+    assert preview_of("com\nquebras\ne   espaços") == "com quebras e espaços"
+
+    long = "palavra " * 40
+    shown = preview_of(long)
+    assert len(shown) == 60 and shown.endswith("…")
+
+
+def test_the_long_press_is_two_seconds():
+    """The value is the requirement, so the value is what is pinned.
+
+    The behavioural test above measures against ``_LONG_PRESS`` itself, so it
+    holds at any threshold and cannot notice this one changing — which it
+    did not when the constant was put back to half a second. Asking for two
+    seconds is a decision about how a phone feels under the thumb, and a
+    decision nothing checks is a decision that drifts.
+    """
+    assert _LONG_PRESS == 2.0
