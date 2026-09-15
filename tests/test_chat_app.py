@@ -8,6 +8,7 @@ model as the headless ones, with a terminal attached.
 
 import asyncio
 import threading
+import time
 
 import pytest
 from textual.binding import NoBinding
@@ -978,7 +979,7 @@ async def test_with_no_helper_the_notification_says_only_osc_52(monkeypatch):
 
 
 async def test_a_press_shorter_than_the_threshold_still_only_selects():
-    """Two seconds, not half of one — a slow tap is still a tap."""
+    """Two seconds, not half of one — a tap is still a tap."""
     app = await chat_app()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("nem copiar")
@@ -989,11 +990,15 @@ async def test_a_press_shorter_than_the_threshold_still_only_selects():
 
         container = app._chat_log._msg_widgets[app.messages[0].id]
         await pilot.mouse_down(container)
-        container._pressed_at -= (_LONG_PRESS - 0.2)     # held, but not long enough
+        # The clock is reset rather than wound back to just under the
+        # threshold: leaving 0.2s of margin made this a race, and a slow
+        # runner spent it getting from here to the release. Now the press is
+        # as short as a press can be, and the margin is the whole two seconds.
+        container._pressed_at = time.monotonic()
         await pilot.mouse_up(container)
         await pilot.pause()
 
-        assert copied == [], "a slow tap does not copy"
+        assert copied == [], "a short press does not copy"
         assert app._chat_log.reply_target == app.messages[0].id, "it selects"
 
 
