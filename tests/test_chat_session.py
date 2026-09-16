@@ -28,6 +28,7 @@ from chatinho import (
     Say,
     backend,
     connector,
+    frontend,
     require,
     tool,
 )
@@ -465,6 +466,66 @@ async def test_a_connector_can_pin_the_id_it_answers_to():
     session = ChatSession(connectors=[Terminal(), _Rapido()])
     assert session.id_of("terminal") == LOCAL
     assert session.id_of("rapido") == 1
+    await session.close()
+
+
+async def test_the_frontend_is_the_peer_that_speaks_for_the_person():
+    """``frontend`` is a role, like ``backend``, and the role is an id."""
+
+    @frontend("terminal")
+    @require(HookListen)
+    class Terminal:
+        async def listen(self, msg) -> None:
+            pass
+
+    session = ChatSession(frontend=Terminal(), connectors=[_Rapido()])
+    assert (session.id_of("terminal"), session.id_of("rapido")) == (LOCAL, 1)
+    await session.close()
+
+
+async def test_the_frontend_parameter_pins_peer_zero_on_its_own():
+    """Which is the one place ``frontend`` and ``backend`` differ.
+
+    A backend has no id of its own, so that parameter is pure sugar for the
+    role. A frontend *is* an id — something that never declared ``@frontend``
+    would land at one, leaving the chat with nobody at zero and nothing saying
+    so, which is the silent kind of wrong.
+    """
+
+    @connector("terminal")
+    @require(HookListen)
+    class Terminal:
+        async def listen(self, msg) -> None:
+            pass
+
+    session = ChatSession(frontend=Terminal())
+    assert session.id_of("terminal") == LOCAL
+    await session.close()
+
+
+def test_a_chat_has_one_frontend():
+    """LOCAL is a single id, so a second is refused like any id already taken."""
+
+    @frontend("terminal")
+    @require(HookListen)
+    class Terminal:
+        async def listen(self, msg) -> None:
+            pass
+
+    with pytest.raises(ValueError, match="already taken"):
+        ChatSession(frontend=Terminal(), connectors=[Terminal()])
+
+
+async def test_the_frontend_is_registered_before_everyone_it_talks_to():
+    """Attachment order is hook order, and the roster reports it.
+
+    It is not cosmetic: hooks fire in registration order and a connector may
+    answer re-entrantly, so the presentation hearing first is what keeps a
+    reply below the message it answers. Attaching the frontend after the
+    connectors leaves the roster reading ``[1, 2, 0]`` and this red.
+    """
+    session, view = await driven(connectors=[_Rapido(), _Lento()])
+    assert list(view.peers()) == [LOCAL, 1, 2]
     await session.close()
 
 

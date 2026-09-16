@@ -352,7 +352,7 @@ def test_build_chat_returns_the_session_with_the_terminal_attached():
     session = build_chat(commands=[_Eco()])
 
     assert isinstance(session, ChatSession)
-    assert session.id_of("chat") == LOCAL, "the terminal declares id=LOCAL"
+    assert session.id_of("chat") == LOCAL, "the terminal is the session's frontend"
     assert callable(getattr(session, "run", None))
 
 
@@ -818,7 +818,7 @@ async def test_a_blank_terminal_name_is_refused():
 
 
 def test_naming_an_instance_works_only_because_the_decorator_shadows_the_property():
-    """DOMNode.name is read-only; @connector's class attribute is what allows this.
+    """DOMNode.name is read-only; @frontend's class attribute is what allows this.
 
     Worth a test of its own: the same assignment on a plain App raises, so
     dropping the decorator's `cls.name` would break naming with no other sign.

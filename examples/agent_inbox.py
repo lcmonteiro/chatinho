@@ -43,6 +43,7 @@ from chatinho import (
     Context,
     Say,
     connector,
+    frontend,
     require,
 )
 
@@ -126,7 +127,7 @@ class AgentConnector:
             self._thread = None
 
 
-@connector("terminal", id=LOCAL)
+@frontend("terminal")
 @require(HookSay)
 @require(HookListen)
 @require(HookAnswer)
@@ -176,7 +177,7 @@ async def read_lines() -> List[str]:
 
 def main() -> None:
     """Runs a headless chat with an agent-facing inbox."""
-    ChatSession(connectors=[Terminal(), AgentConnector()]).run()
+    ChatSession(frontend=Terminal(), connectors=[AgentConnector()]).run()
 
 
 if __name__ == "__main__":

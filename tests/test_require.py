@@ -1,4 +1,4 @@
-"""Tests for @require, @connector, @tool and @backend.
+"""Tests for @require, @connector, @frontend, @tool and @backend.
 
 A peer is a plain class. ``require`` checks at class-definition time
 that it implements what it declared, so a missing or misspelled method is an
@@ -8,6 +8,7 @@ import error rather than a hook that silently never fires.
 import pytest
 
 from chatinho import (
+    LOCAL,
     HookAsk,
     HookContext,
     HookAnswer,
@@ -15,7 +16,9 @@ from chatinho import (
     HookSay,
     backend,
     connector,
+    declared_id,
     declares,
+    frontend,
     hooks_of,
     name_of,
     options_of,
@@ -190,6 +193,37 @@ def test_connector_names_the_class_and_an_instance_may_override_it():
     assert name_of(other) == "weather-eu"
 
 
+def test_frontend_is_a_connector_that_already_knows_it_is_peer_zero():
+    """Which is the whole of what it adds: ``@connector(name, id=LOCAL)``,
+    with the invariant spelled once here instead of by every presentation."""
+
+    @frontend("terminal")
+    class Terminal:
+        pass
+
+    assert (name_of(Terminal()), declared_id(Terminal())) == ("terminal", LOCAL)
+
+
+def test_a_frontend_that_does_not_name_itself_is_called_chat():
+    """``build_chat(name="me")`` is how a chat you are in reads better."""
+
+    @frontend()
+    class Anonymous:
+        pass
+
+    assert name_of(Anonymous()) == "chat"
+
+
+def test_frontend_without_its_parentheses_is_refused():
+    """The class arrives where the name belongs, and nothing is decorated —
+    which is worth an error, since the class would otherwise be handed back
+    undecorated and land at the next free id instead of at zero."""
+    with pytest.raises(ValueError, match="frontend name"):
+        @frontend
+        class Terminal:
+            pass
+
+
 def test_a_tool_carries_the_text_the_popup_shows():
     @tool("deploy", "Ship it")
     class Deploy:
@@ -205,7 +239,7 @@ def test_an_undecorated_class_falls_back_to_its_class_name():
     assert name_of(Anonymous()) == "Anonymous"
 
 
-@pytest.mark.parametrize("naming", [connector, tool, backend])
+@pytest.mark.parametrize("naming", [connector, tool, backend, frontend])
 @pytest.mark.parametrize("bad", ["", "   ", None, 7])
 def test_an_empty_name_is_refused(naming, bad):
     with pytest.raises(ValueError, match="non-empty string"):

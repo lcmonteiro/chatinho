@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **207 pass** |
+| `pytest -q` | **218 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -36,6 +36,11 @@ build_chat(
 )
 ```
 
+**Four roles, four parameters, and one of them is the terminal.** `ChatSession` takes a
+`frontend` beside its `backend`: the peer that speaks for the person, the peers it talks to, the
+commands it runs, the thing that remembers. Every one of them is still a plain class the session
+tells apart by what it declared, never by which parameter carried it.
+
 A peer carries an **id** *and* a **visible name**, and they are deliberately different
 things: the id routes, the name is what the chat displays and what the user types after `/`. An
 older design routed on the display name, so renaming a connector broke the replies already in
@@ -50,13 +55,25 @@ to is TOOL    → a command was run          (invoke)
 reply_to set  → it answers that message    (answer)
 ```
 
-**The presentation is peer zero, and says so itself.** `ChatApp` is
-`@connector("chat", id=LOCAL)` — being the person is what it *is*, not a favour whoever attaches
-it does — and it declares the same hooks a connector does. There is no privileged path: a terminal
-reaches the conversation through exactly the doors a weather service does, and the session numbers
-everything else from one. `ChatApp` no longer attaches itself, either: it takes no session in its
-constructor, and `chat_builder.build_chat` hands it to `ChatSession.add_connector` the same way it
-would hand over any other connector.
+**The presentation is peer zero, and says so itself.** `ChatApp` is `@frontend("chat")` — being
+the person is what it *is*, not a favour whoever attaches it does — and it declares the same hooks
+a connector does. There is no privileged path: a terminal reaches the conversation through exactly
+the doors a weather service does, and the session numbers everything else from one. `ChatApp` no
+longer attaches itself, either: it takes no session in its constructor, and
+`chat_builder.build_chat` hands it over as the session's `frontend` the same way it would hand
+over any other peer.
+
+**`@frontend(name)` is `@connector(name, id=LOCAL)`, and exists because writing that out is an
+invitation to get it wrong.** Three presentations in this repository wrote it by hand, and a
+fourth — `examples/hooks.py` — pinned the id at the call site instead, which is a second way of
+saying the same thing. Peer zero is what a presentation *is*; now it declares that, and the
+`frontend=` parameter is where it goes.
+
+The two roles differ in exactly one thing, and it is worth knowing before it surprises you: a
+backend has no id of its own, so `backend=` is pure sugar for the role, while a frontend *is* an
+id, so `frontend=` **pins** `LOCAL` even for something that never declared `@frontend`. Without
+that, passing an ordinary connector there would land it at one and leave the chat with nobody at
+zero — and nothing would say so. A second frontend is refused like any id already taken.
 
 ## Three verbs
 
@@ -227,6 +244,10 @@ misspelled is an import error rather than a hook that silently never fires.
 
 `@connector(name)`, `@tool(name, description)` and `@backend(name)` only name the class; an
 instance may override with `self.name`. The session assigns the id at `attach`.
+`@frontend(name)` is the exception that proves it: it names the class *and* pins `LOCAL`, because
+that is not a choice a presentation gets to make. The name defaults to `chat`, so `@frontend()`
+is enough; `@frontend` without the parentheses is refused, the class having arrived where the name
+belongs.
 
 `ChatSession.add_connector(obj)` registers a peer: an id, a queue, its grants. `ChatSession.add_command(cmd)`
 registers a command: a name, its grants — no id and no queue, because there is nothing to address
@@ -269,8 +290,8 @@ src/chatinho/
   __init__.py      public API
   chat_app.py      ChatApp — Textual presentation only, no session of its own
   chat_builder.py  build_chat — builds a ChatSession and ChatApp, wires the two
-  chat_session.py  ChatSession: run, peers, commands, queues, routing, context      (511)
-  chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (439)
+  chat_session.py  ChatSession: run, peers, commands, queues, routing, context      (545)
+  chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (489)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
   chat_log.py      ChatLog widget: renders through the granted context reader
   chat_input.py    CommandInput (a multi-line TextArea) + CommandSuggestions
@@ -493,8 +514,8 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 38 names: `build_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
-the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, `options_of`,
+`__init__.py` exports 39 names: `build_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
+the declaring machinery (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`,
 `declares`, `declared_id`, `name_of`, `Hook`); the ten `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `HelpCommand`, `TestCommand`).
@@ -503,8 +524,8 @@ the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, 
 `build_chat` is the way to build one, in `chat_builder.py`, and the class itself lives in
 `chat_app.py` — a public module, reachable from it, with nothing enforcing that a caller goes
 through the factory instead. The underscore was dropped once the class stopped attaching itself in
-its own constructor: it takes no session, and `build_chat` hands it to
-`ChatSession.add_connector` the same way it would hand over any other connector, so there is no
+its own constructor: it takes no session, and `build_chat` hands it over as the session's
+`frontend` the same way it would hand over any other peer, so there is no
 longer anything privileged about instantiating it directly — only the missing `session` attribute
 a caller would then have to wire up by hand, which `build_chat` still does more conveniently.
 

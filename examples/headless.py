@@ -19,7 +19,6 @@ import sys
 from typing import List, Optional
 
 from chatinho import (
-    LOCAL,
     Ask,
     ChatMessage,
     ChatSession,
@@ -37,6 +36,7 @@ from chatinho import (
     Peers,
     Say,
     connector,
+    frontend,
     require,
     tool,
 )
@@ -79,7 +79,7 @@ class UpperCommand:
         return args.upper() if args else "Usage: /upper <text>"
 
 
-@connector("terminal", id=LOCAL)
+@frontend("terminal")
 @require(HookSay)
 @require(HookAsk)
 @require(HookListen)
@@ -149,13 +149,15 @@ async def read_lines() -> List[str]:
 
 def main() -> None:
     """Builds a headless chat and lets the session run it."""
-    # The terminal is a connector like any other: it declares the id it can
-    # only be — LOCAL, because it speaks for the person — and the session
-    # numbers the rest. Registration order matters: hooks fire in it, and the
-    # echo answers re-entrantly, so the terminal listening first keeps the
-    # reply below the message it answers.
+    # The terminal is a peer like any other; `frontend` is the role it fills,
+    # and `@frontend` is where the id it can only be — LOCAL, because it speaks
+    # for the person — is declared. The session attaches it before the rest,
+    # which matters: hooks fire in registration order and the echo answers
+    # re-entrantly, so the terminal listening first keeps the reply below the
+    # message it answers.
     ChatSession(
-        connectors = [Terminal(), EchoConnector()],
+        frontend   = Terminal(),
+        connectors = [EchoConnector()],
         commands   = [HelpCommand(), UpperCommand()],
     ).run()
 

@@ -34,7 +34,7 @@ from .chat_hooks import (
     declared_id,
     name_of,
 )
-from .chat_message import TOOL, ChatMessage, MessageStore
+from .chat_message import LOCAL, TOOL, ChatMessage, MessageStore
 
 logger = logging.getLogger(__name__)
 
@@ -52,19 +52,27 @@ class ChatSession:
     - ``HookContext``  grants  ``context(since=, start=, limit=)``.
     - ``HookListen``   demands ``listen(msg)`` — every message that crosses.
     - ``HookAnswer``   demands ``answer(msg)`` — someone asked you.
+
+    Four roles arrive as four parameters, and every one of them is a plain
+    class the session tells apart by what it declared, never by which parameter
+    carried it: ``frontend`` speaks for the person, ``connectors`` are who they
+    are talking to, ``commands`` only run, and ``backend`` listens and recalls.
     """
 
     def __init__(
         self,
         connectors : Optional[List[Any]] = None,
         commands   : Optional[List[Any]] = None,
+        frontend   : Optional[Any] = None,
         backend    : Optional[Any] = None,
         recall     : int = 200,
     ) -> None:
+        #: Who speaks for the person: a terminal, a stdin reader, an inbox.
+        self.frontend : Optional[Any] = frontend
         #: Where the conversation goes when it is no longer recent.
-        self.backend : Optional[Any] = backend
+        self.backend  : Optional[Any] = backend
         #: How much of the archive ``start()`` pulls back into the session.
-        self.recall  : int = recall
+        self.recall   : int = recall
 
         self._store    : MessageStore = MessageStore()
         self._connectors    : Dict[int, Any] = {}
@@ -81,6 +89,13 @@ class ChatSession:
         #: They run when someone runs them, and answer whoever did.
         self.commands : Dict[str, Any] = {}
 
+        if frontend is not None:
+            # Pinned rather than merely registered, and that is the one place
+            # `frontend` and `backend` differ: a backend has no id of its own,
+            # while a frontend *is* an id. Passing something that never
+            # declared `@frontend` would otherwise land it at one, leaving the
+            # chat with nobody at zero and nothing saying so.
+            self.add_connector(frontend, at=LOCAL)
         for who in connectors or []:
             self.add_connector(who)
         for cmd in commands or []:
@@ -100,9 +115,10 @@ class ChatSession:
 
         The whole plugin contract. The id comes from the first of three: what
         the caller pins here, what the class declared with
-        ``@connector(name, id=…)``, or the next free number. The terminal
-        declares ``id=LOCAL`` rather than being attached specially, because
-        being peer zero is what it *is*, not a favour the caller does it.
+        ``@connector(name, id=…)`` or ``@frontend(name)``, or the next free
+        number. A presentation declares its way to :data:`LOCAL` rather than
+        being attached specially, because being peer zero is what it *is*, not
+        a favour the caller does it.
 
         Args:
             connector: Anything declaring hooks.
