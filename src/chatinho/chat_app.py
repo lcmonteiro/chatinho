@@ -5,11 +5,11 @@ The class here, :class:`ChatApp`, is built and attached to a session by
 no session of its own, because it is a normal connector like any other, wired
 up by whoever builds the chat rather than by its own constructor.
 
-The presentation is a peer like any other — it is registered at
-:data:`~chatinho.chat_message.LOCAL`, because the user is peer zero by
-definition, and it declares the same hooks a connector does. There is no
-privileged path: a terminal reaches the conversation through exactly the doors
-a weather service does.
+The presentation is a peer like any other. ``@frontend`` is what says so — it
+is ``@connector`` pinned to :data:`~chatinho.chat_message.LOCAL`, because the
+user is peer zero by definition — and beyond that it declares the same hooks a
+connector does. There is no privileged path: a terminal reaches the
+conversation through exactly the doors a weather service does.
 
 This module is the *only* place that knows the chat is a terminal app. It owns
 the widget tree, the reply target (a click is a UI concept), thread marshalling
@@ -51,12 +51,12 @@ from .chat_hooks import (
     Commands,
     Invoke,
     Say,
-    connector,
+    frontend,
     require,
 )
 from .chat_input import COMMAND_PREFIX, SUGGESTIONS_ID, CommandInput, CommandSuggestions
 from .chat_log import ChatLog
-from .chat_message import LOCAL, ChatMessage
+from .chat_message import ChatMessage
 from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
@@ -155,7 +155,7 @@ def _validate_key(key: str) -> str:
     return key
 
 
-@connector("chat", id=LOCAL)
+@frontend("chat")
 @require(HookSay)
 @require(HookAsk)
 @require(HookListen)
@@ -204,7 +204,7 @@ class ChatApp(App):
     ) -> None:
         super().__init__()
         if name is not None:
-            # Only works because @connector wrote `name` onto the class:
+            # Only works because @frontend wrote `name` onto the class:
             # DOMNode.name is a read-only property, so on a plain App this
             # same line raises. The decorator's class attribute shadows it.
             if not name.strip():

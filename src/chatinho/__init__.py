@@ -59,6 +59,7 @@ from .chat_message import LOCAL, TOOL, ChatMessage
 from .chat_hooks import (
     connector,
     tool,
+    frontend,
     backend,
     require,
     hooks_of,
@@ -144,6 +145,7 @@ __all__ = [
     # declaring
     "connector",
     "tool",
+    "frontend",
     "backend",
     "require",
     "hooks_of",

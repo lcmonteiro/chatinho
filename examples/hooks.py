@@ -42,6 +42,7 @@ from chatinho import (
     Say,
     backend,
     connector,
+    frontend,
     require,
     tool,
 )
@@ -59,6 +60,7 @@ def note(hook: str, what: str) -> None:
 # plus the two demands below.
 
 
+@frontend("screen")     # the presentation: peer zero, and it says so itself
 @require(HookSay)       # say(text, reply_to=None) -> id
 @require(HookAsk)       # await ask(to, text)      -> the answer
 @require(HookInvoke)    # await invoke(name, args) -> what the command answered
@@ -66,7 +68,11 @@ def note(hook: str, what: str) -> None:
 @require(HookPeers)     # peers() -> {id: peer}
 @require(HookCommands)  # commands() -> {name: command}
 class Screen:
-    """The presentation, attached at ``LOCAL``: peer zero, and nothing special.
+    """The presentation: peer zero, and nothing special.
+
+    ``@frontend`` is the whole of what makes it peer zero — it is
+    ``@connector(name, id=LOCAL)`` with the invariant spelled once, here,
+    instead of by every presentation that ever gets written.
 
     Annotate every grant, or a type checker cannot see it: the session sets them
     with ``setattr`` at ``attach``, so nothing in the class body declares them.
@@ -210,13 +216,13 @@ async def main() -> None:
     yesterday = datetime.now() - timedelta(days=1)
     seeded    = [ChatMessage(id="old-1", text="said yesterday", frm=LOCAL, timestamp=yesterday)]
 
+    screen  = Screen()
     session = ChatSession(
         connectors = [EchoConnector(), WeatherConnector()],
         commands   = [UpperCommand()],
+        frontend   = screen,
         backend    = ListArchive(seeded),
     )
-    screen = Screen()
-    session.add_connector(screen, at=LOCAL)        # the presentation is peer zero
 
     print("\n-- start(): HookLoad runs before anyone can ask for context --")
     await session.start()

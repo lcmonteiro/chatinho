@@ -19,11 +19,13 @@ A chat is **peers** exchanging **messages**. Each peer has an integer id. Two ar
 
 | id | name | who |
 |---|---|---|
-| `0` | `LOCAL` | the user — the presentation declares `@connector("chat", id=LOCAL)`, and is a peer like any other |
+| `0` | `LOCAL` | the user — the presentation declares `@frontend("chat")`, and is a peer like any other |
 | `-1` | `TOOL` | not a peer: the name a command's messages carry |
 
 Connectors are numbered from one, in the order they are attached — unless the class pins its own
 with `@connector(name, id=…)`, which is for a connector that can only ever be one peer.
+`@frontend(name)` is that call with `id=LOCAL` already in it, since a presentation can only ever
+be peer zero.
 
 A message says where it came from and where it is going, and that is the whole of the routing:
 
@@ -337,13 +339,20 @@ The terminal declares the same hooks a connector does and is attached at `LOCAL`
 privileged path: it reaches the conversation through exactly the doors a weather service does.
 
 ```python
+@frontend("terminal")                                   # = @connector(name, id=LOCAL)
 @require(HookSay) @require(HookAsk) @require(HookInvoke)
 @require(HookContext) @require(HookPeers)
 @require(HookListen) @require(HookAnswer)
 class Terminal: ...
 
-session.add_connector(terminal, at=LOCAL)
+ChatSession(frontend=Terminal(), connectors=[...])
 ```
+
+`frontend` and `backend` are the two roles a session takes by name, and neither is a privilege:
+the session still finds what it can do by what it declared. They differ in one thing only — a
+backend has no id of its own, so that parameter is pure sugar, while a frontend *is* an id, so
+`frontend=` pins `LOCAL` even for something that never declared `@frontend`. A chat has one of
+each: a second frontend is refused like any id already taken.
 
 ### Demands are not exclusive
 
@@ -354,7 +363,7 @@ both.
 
 ## 6. The session's own surface
 
-`ChatSession` exposes six members. Everything about the conversation is reached by declaring a
+`ChatSession` exposes seven members. Everything about the conversation is reached by declaring a
 hook, not by calling the session.
 
 | | |

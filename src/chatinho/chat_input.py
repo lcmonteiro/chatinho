@@ -30,8 +30,13 @@ COMMAND_PREFIX : str = "/"
 SUGGESTIONS_ID : str = "command-suggestions"
 
 #: What opens a new line instead of sending. Terminals differ on which of
-#: these they can report at all, which is why there is more than one.
-NEWLINE_KEYS : Tuple[str, ...] = ("shift+enter", "alt+enter")
+#: these they can report at all, which is why there is more than one: all three
+#: reach Textual only through the enhanced keyboard protocol, as ``CSI 13;n u``,
+#: and a terminal that does not speak it sends a bare carriage return for every
+#: one of them — which arrives as ``enter`` and therefore *sends*. That is the
+#: failure to expect here, and it is a loud one; it is not ``ctrl+h``'s silent
+#: nothing, which is why these are not in the swallowed list.
+NEWLINE_KEYS : Tuple[str, ...] = ("ctrl+enter", "shift+enter", "alt+enter")
 
 
 class CommandSuggestions(OptionList):

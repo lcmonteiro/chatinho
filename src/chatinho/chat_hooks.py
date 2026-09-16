@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Tuple
 
-from .chat_message import TOOL, ChatMessage
+from .chat_message import LOCAL, TOOL, ChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -349,11 +349,45 @@ def tool(name: str, description: str = "") -> Callable[[type], type]:
     return decorator
 
 
+def frontend(name: str = "chat") -> Callable[[type], type]:
+    """Names the presentation, and pins it to :data:`~chatinho.chat_message.LOCAL`.
+
+    A frontend is the peer that **is** the person — a terminal, a stdin reader,
+    an HTTP inbox — and being peer zero is what that *is*, not an id whoever
+    attaches it chooses. This exists beside :func:`connector` rather than being
+    a call of it a presentation writes out by hand, because
+    ``@connector(name, id=LOCAL)`` asked every presentation to spell the
+    invariant out and invited one of them to get it wrong: three do in this
+    repository alone.
+
+    A chat has one, since :data:`LOCAL` is one id — a second frontend is
+    refused at :meth:`~chatinho.chat_session.ChatSession.add_connector` like
+    any id already taken.
+
+    Args:
+        name: What the presentation is called in the log, shown as ``@name``
+            beside everything the user says. The default reads poorly in a
+            chat you are in, which is why ``build_chat(name="me")`` overrides
+            it; a presentation that knows its own name declares it here.
+
+    Returns:
+        Callable: The class decorator.
+
+    Raises:
+        ValueError: If *name* is empty or not a string — which is also what
+            ``@frontend`` without parentheses raises, the class arriving where
+            the name belongs.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("A frontend name must be a non-empty string, got %r" % (name,))
+    return connector(name, id=LOCAL)
+
+
 def backend(name: str) -> Callable[[type], type]:
     """Names a backend class.
 
     The name only identifies the backend in logs — a chat has one — but naming
-    it keeps the three roles reading the same way.
+    it keeps the four roles reading the same way.
 
     Args:
         name: The backend's name; a non-empty string.

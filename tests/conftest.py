@@ -3,8 +3,9 @@
 The conversation is protected: nothing calls ``session._say``. A peer
 declares the hooks it needs and the session hands the capabilities over at
 ``add_connector``. :class:`Driver` is the presentation with the terminal taken
-out — the same declarations ``ChatApp`` makes — so a test drives a chat exactly
-the way the TUI does.
+out — the same declarations ``ChatApp`` makes, ``@frontend`` included — so a
+test drives a chat exactly the way the TUI does, through the same parameter
+``build_chat`` hands the terminal over by.
 """
 
 from typing import Any, List, Optional
@@ -12,7 +13,6 @@ from typing import Any, List, Optional
 import pytest
 
 from chatinho import (
-    LOCAL,
     Ask,
     ChatMessage,
     HookAsk,
@@ -26,13 +26,13 @@ from chatinho import (
     Peers,
     Invoke,
     Say,
-    connector,
+    frontend,
     require,
 )
 from chatinho.chat_session import ChatSession
 
 
-@connector("driver")
+@frontend("driver")
 @require(HookSay)
 @require(HookAsk)
 @require(HookListen)
@@ -88,9 +88,8 @@ async def driven(**kwargs) -> tuple:
     Returns:
         tuple: The session and its driver.
     """
-    session = ChatSession(**kwargs)
     view    = Driver()
-    session.add_connector(view, at=LOCAL)
+    session = ChatSession(frontend=view, **kwargs)
     await session.start()
     return session, view
 

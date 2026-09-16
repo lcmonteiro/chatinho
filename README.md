@@ -114,14 +114,15 @@ executable.
 
 ### Without a terminal
 
-Nothing to install beyond the package. Attach your own presentation at `LOCAL`; it reaches the
-conversation through exactly the doors a connector does.
+Nothing to install beyond the package. Write your own presentation and hand it over as the
+session's `frontend`; it reaches the conversation through exactly the doors a connector does.
 
 ```python
 import asyncio
-from chatinho import ChatSession, LOCAL, HelpCommand, require, HookSay, HookInvoke, HookListen
+from chatinho import ChatSession, HelpCommand, frontend, require, HookSay, HookInvoke, HookListen
 from chatinho import Say, Invoke
 
+@frontend("printer")
 @require(HookSay)
 @require(HookInvoke)
 @require(HookListen)
@@ -133,9 +134,8 @@ class Printer:
         print("<", msg.text)
 
 async def main():
-    session = ChatSession(commands=[HelpCommand()])
     screen  = Printer()
-    session.add_connector(screen, at=LOCAL)
+    session = ChatSession(frontend=screen, commands=[HelpCommand()])
     await session.start()
 
     await screen.say("good morning")    # not printed: you never hear yourself
@@ -160,12 +160,14 @@ build_chat(
 ).run()
 ```
 
-`build_chat` returns the **session**, with the terminal attached at `LOCAL` as an ordinary
-connector that declares `@connector("chat", id=LOCAL)`. The session owns the loop: `run()` starts
+`build_chat` returns the **session**, with the terminal handed over as its `frontend` — an
+ordinary peer that declares `@frontend("chat")`, which is `@connector` pinned to `LOCAL`. The
+session owns the loop: `run()` starts
 everything, runs every peer's `serve()`, and closes when the first of them returns — quitting the
 terminal is the end of the chat. Markdown rendering,
 syntax-highlighted code blocks, command autocomplete and click-to-reply come with it. The input
-takes more than one line — **Enter sends, Shift+Enter opens a line** — bubbles are drawn as
+takes more than one line — **Enter sends, Ctrl+Enter opens a line** (Shift+Enter and
+Alt+Enter do too) — bubbles are drawn as
 outlines that grow with their text, and the one filled bubble is the message you selected to reply
 to. `ChatStyle` is a dataclass — use `dataclasses.replace` to change a colour.
 
@@ -192,9 +194,16 @@ Needs `chatinho[all]`, or whichever extras those three names ask for.
 
 ### Writing your own
 
-A connector, a command and a backend are all plain classes; the difference is what they declare.
+A frontend, a connector, a command and a backend are all plain classes; the difference is what
+they declare.
 
 ```python
+@frontend("terminal")               # peer zero: the one that speaks for the person
+@require(HookListen)
+class Terminal:
+    async def listen(self, msg) -> None:
+        print(msg.text)
+
 @connector("weather")               # a peer: it gets an id and a queue
 @require(HookAnswer)
 class Weather:

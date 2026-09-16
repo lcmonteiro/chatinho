@@ -2,9 +2,9 @@
 
 :func:`build_chat` is the public entry point for a chat with a terminal. It
 does what a caller would do by hand — build a :class:`~chatinho.chat_session.ChatSession`,
-build a :class:`~chatinho.chat_app.ChatApp`, and hand the app to the session
-with :meth:`~chatinho.chat_session.ChatSession.add_connector` — because the
-terminal is a normal connector now, not something its own constructor wires up.
+build a :class:`~chatinho.chat_app.ChatApp`, and hand it over as the
+session's ``frontend`` — because the terminal is a normal peer now, one of the
+four roles a session takes, not something its own constructor wires up.
 """
 
 from typing import Any, List, Optional
@@ -57,14 +57,14 @@ def build_chat(
             separate binding and is left alone.
 
     Returns:
-        ChatSession: The session, with the terminal attached at ``LOCAL``. Call
-        ``run()`` on it: the session owns the loop, and the terminal is one of
-        the peers it serves.
+        ChatSession: The session, with the terminal as its ``frontend`` and so
+        attached at ``LOCAL``. Call ``run()`` on it: the session owns the loop,
+        and the terminal is one of the peers it serves.
 
     Raises:
         ValueError: ``quit_key`` is not a key Textual could receive.
     """
-    chat_connector = ChatApp(
+    presentation = ChatApp(
         title           = title,
         welcome_message = welcome_message,
         max_displayed   = max_displayed,
@@ -74,7 +74,8 @@ def build_chat(
         name            = name,
     )
     return ChatSession(
-        connectors=[chat_connector, *(connectors or [])], 
-        commands=commands, 
-        backend=backend,
+        connectors = connectors,
+        commands   = commands,
+        frontend   = presentation,
+        backend    = backend,
     )
