@@ -388,12 +388,13 @@ pass a suite full of doubles. That gap was found while chasing a report of copyi
 phone: the environment turned out to be healthy and the whole path sound, which nothing in the
 suite had ever actually shown.
 
-There were three ways to copy for a while: a `/copy` command answered in the conversation, which
-is the one channel a chat is guaranteed to manage when a gesture, a key and a notification can each
-fail silently. It was removed — a command is a heavy thing to carry for a diagnostic, and
-`diagnose.sh` answers the same question from outside the app. What it leaves behind is the
-**end-to-end test**, moved onto `ChatLog.copy_message`: that path runs a worker, an executor and a
-subprocess, and every other test of it replaces the last step.
+Two things were built while chasing this and then removed, because neither was a feature: a
+`/copy` command that answered in the conversation, and a `diagnose.sh` that asked the machine what
+the terminal could do. Both were somewhere to *read a result* when a gesture, a key and a
+notification can each fail silently — worth having during the hunt, not worth carrying afterwards.
+What stays is the **end-to-end test** the command hosted, moved onto `ChatLog.copy_message`: that
+path runs a worker, an executor and a subprocess, and every other test of it replaces the last
+step.
 
 Three things this cost, all found by measuring rather than by reading:
 
@@ -527,12 +528,7 @@ Everything about the conversation is reached by declaring a hook — which is wh
 ```bash
 ./setup.sh    # idempotent; auto-installs uv (handles Termux via pkg), creates .venv, uv sync
 ./run.sh      # runs examples/demo.py (calls setup.sh first if .venv is missing)
-./diagnose.sh # what this terminal can do: commit, Python, TERM, clipboard helpers
 ```
-
-`diagnose.sh` exists because copying depends on the terminal more than on the code, and fails
-silently in several different ways. Three rounds of guessing from "it does not work" produced three
-mechanisms without establishing which one was broken; asking the machine settled it in one.
 
 Both scripts resolve paths relative to their own location, so they work from any cwd.
 
