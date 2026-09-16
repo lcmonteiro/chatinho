@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **223 pass** |
+| `pytest -q` | **224 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -438,8 +438,9 @@ Three things this cost, all found by measuring rather than by reading:
   `.message-body > *:last-child`, which Textual supports, so paragraphs are still separated from
   *each other*. A bubble holding one word is five rows now, not seven.
 - **The input had to stop being an `Input`.** It is single-line by construction, so there was
-  nowhere to put a second line. `CommandInput` is a `TextArea`: **Enter sends, Ctrl+J opens a
-  line** — as do Ctrl+Enter, Shift+Enter and Alt+Enter, where the terminal can report them — and the
+  nowhere to put a second line. `CommandInput` is a `TextArea`: **Enter sends; Ctrl+J, or a `\`
+  typed before Enter, opens a line** — as do Ctrl+Enter, Shift+Enter and Alt+Enter, where the
+  terminal can report them — and the
   box grows with the text up to `input_max_height`. Enter is
   claimed in `_on_key` rather than by a `Binding`, because `TextArea` inserts its newline from
   inside its own key handler and a binding is never reached. Up and Down move the suggestion
@@ -456,7 +457,7 @@ not**. Then the fallbacks fail in both directions at once:
 |---|---|---|
 | Enter | `CR` `0x0D` | `enter` — sends |
 | **Ctrl+J** | **`LF` `0x0A`** | **`ctrl+j` — opens a line** |
-| Ctrl+Enter | `CR` `0x0D` | `enter` — **sends**, loudly wrong |
+| Ctrl+Enter, Shift+Enter | `CR` `0x0D` | `enter` — **sends**, loudly wrong |
 | Alt+Enter | `ESC CR` | nothing at all — silently wrong |
 
 `ctrl+j` needs no protocol because it is not a modified Return: Line Feed has been its own byte
@@ -466,10 +467,21 @@ there is a test that fails if it is, and it fails on the exact shape that shippe
 alone to a phone. Pasting multi-line text works regardless of any of this.
 
 These are deliberately *not* in `_validate_key`'s swallowed list: that list is for keys that can
-never work, and three of these four do, on a terminal that answers. A second test names both
-failure modes byte by byte, because each is reported as a different bug — "it sends" and "nothing
-happens" — and `pilot.press` synthesises the key name directly, so without those two the suite
+never work, and three of these four do, on a terminal that answers. One test carries both tables
+above and names each degradation, because each is reported as a different bug — "it sends" and
+"nothing happens" — and `pilot.press` synthesises the key name directly, so without it the suite
 proves the handling and nothing at all about the wire.
+
+**And a way in that needs no key at all: `\` then Enter.** A backslash is a character; Enter is the
+key everyone has. `CommandInput._open_line_at_a_backslash` removes it and opens the line instead of
+sending. Claude Code ships the same escape for the same reason, alongside the same `ctrl+j` — which
+is independent confirmation of both, arrived at from the bytes here and found in its docs
+afterwards; it ships no `ctrl+enter` at all.
+
+The check is anchored to the **cursor**, not to the end of the text, and that is not incidental: it
+is the only way left to send a message that really does end in a backslash — move off the end, and
+Enter sends. A test says so, and the `text.endswith()` version passes the first backslash test and
+fails that one.
 
 **Four `ctrl` combos are not keys at all**, and `_validate_key` now refuses them. A terminal sends
 one byte for `ctrl+h` and for Backspace alike, so Textual reports `backspace` and a `ctrl+h`

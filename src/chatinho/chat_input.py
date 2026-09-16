@@ -29,19 +29,12 @@ COMMAND_PREFIX : str = "/"
 
 SUGGESTIONS_ID : str = "command-suggestions"
 
-#: What opens a new line instead of sending.
-#:
-#: **Only ``ctrl+j`` is guaranteed to arrive.** It is Line Feed, ``0x0A``, a
-#: byte of its own since teletypes, and Enter is Carriage Return, ``0x0D`` —
-#: two different bytes, so no protocol is needed to tell them apart. The other
-#: three reach Textual only through the enhanced keyboard protocol, as
-#: ``CSI 13;n u`` where 13 is Return and ``n-1`` the modifier bitmask. Textual
-#: asks every terminal for that protocol at startup; a terminal that does not
-#: answer — Termux does not — sends the same carriage return for ``ctrl+enter``
-#: as for Enter, which arrives as ``enter`` and therefore **sends the message**,
-#: and sends ``ESC CR`` for ``alt+enter``, which Textual's parser drops
-#: entirely. So the fallbacks fail in both ways, loudly and silently, and
-#: ``ctrl+j`` is the one that cannot: a test says so, byte by byte.
+#: The keys that open a new line instead of sending. ``ctrl+j`` is the only
+#: one that needs no enhanced keyboard protocol to arrive — it is Line Feed,
+#: a byte of its own, where the rest are a modified Return — so it must stay:
+#: a test fails if every key in here depends on a protocol, and names what
+#: each of the others degrades to without one. The way in that needs no key at
+#: all is ``\`` before Enter, in :meth:`CommandInput._open_line_at_a_backslash`.
 NEWLINE_KEYS : Tuple[str, ...] = ("ctrl+enter", "ctrl+j", "shift+enter", "alt+enter")
 
 
@@ -122,8 +115,9 @@ class CommandInput(TextArea):
     """Multi-line input that drives the sibling :class:`CommandSuggestions` popup.
 
     Enter sends what was typed as :class:`CommandInput.Submitted`; the keys in
-    :data:`NEWLINE_KEYS` open a new line instead. Tab and Escape are only
-    claimed while the popup is open (see ``check_action``), so Tab still moves
+    :data:`NEWLINE_KEYS`, and a ``\\`` typed just before it, open a new line
+    instead. Tab and Escape are only claimed while the popup is open (see
+    ``check_action``), so Tab still moves
     focus as usual. Up and Down move the suggestion highlight when the popup is
     open and the cursor between lines when it is not — a multi-line input needs
     them for both.
@@ -206,8 +200,33 @@ class CommandInput(TextArea):
             self.post_message(self.Submitted(self, text))
         return False
 
+    def _open_line_at_a_backslash(self) -> bool:
+        """Turns a ``\\`` immediately before the cursor into a new line.
+
+        The second way in, and the only one needing no key a terminal might not
+        report: a backslash is a character, and Enter is the key everyone has.
+        Claude Code ships the same escape, for the same reason.
+
+        It is anchored to the **cursor**, not to the end of the text, and that
+        is what leaves a way to send a message which really does end in a
+        backslash: move off the end, and Enter sends. There is no other escape
+        — doubling the backslash is not one.
+
+        Returns:
+            bool: True when a line was opened. False when there was no
+            backslash, and Enter means what it usually means.
+        """
+        row, column = self.cursor_location
+        if column == 0 or self.document.get_line(row)[column - 1] != "\\":
+            return False
+        self.replace("\n", (row, column - 1), (row, column))
+        return True
+
     async def _on_key(self, event: events.Key) -> None:
         """Claims Enter for sending, and the newline keys for a second line.
+
+        Enter only sends when no backslash precedes the cursor; that is the
+        second way to open a line, and the only one no terminal can swallow.
 
         ``TextArea`` inserts on Enter from inside its own key handler rather
         than through a binding, so a ``Binding("enter", …)`` here would never
@@ -221,7 +240,8 @@ class CommandInput(TextArea):
         if event.key == "enter":
             event.stop()
             event.prevent_default()
-            self.submit()
+            if not self._open_line_at_a_backslash():
+                self.submit()
             return
         await super()._on_key(event)
 

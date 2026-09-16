@@ -463,55 +463,82 @@ async def test_a_newline_key_opens_a_line_and_enter_sends_both(newline_key):
         assert app.query_one("#input-line", CommandInput).text == ""
 
 
-#: A byte of its own since teletypes, so no protocol is needed to tell it from
-#: Enter's carriage return. Ctrl+J is what a terminal sends for it.
-_ALWAYS_ARRIVES = {"ctrl+j": "\n"}
+async def test_a_backslash_before_enter_opens_a_line_and_goes_away():
+    """The way in that needs no key at all: a backslash is a character."""
+    app = await chat_app()
+    async with app.run_test() as pilot:
+        await pilot.press("a", "backslash", "enter", "b")
+        assert app.query_one("#input-line", CommandInput).text == "a\nb"
+        assert app.messages == [], "the backslash opened a line, it did not send"
 
-#: `CSI 13 ; n u` — 13 is Return, n-1 the modifier bitmask. Only a terminal
-#: that answers Textual's request for the enhanced keyboard protocol sends it.
-_NEEDS_THE_PROTOCOL = {"ctrl+enter": "\x1b[13;5u", "shift+enter": "\x1b[13;2u",
-                       "alt+enter": "\x1b[13;3u"}
+        await pilot.press("enter")
+        await pilot.pause()
+        assert [m.text for m in app.messages] == ["a\nb"]
+
+
+async def test_a_message_that_really_ends_in_a_backslash_can_still_be_sent():
+    """Which is why the check is anchored to the cursor, not to the text.
+
+    Move off the end and Enter means what it usually means. There is no other
+    escape, so without this the character would be unsendable at the end of a
+    message.
+    """
+    app = await chat_app()
+    async with app.run_test() as pilot:
+        await pilot.press("a", "backslash", "left", "enter")
+        await pilot.pause()
+        assert [m.text for m in app.messages] == ["a\\"]
+
+
+#: What a terminal really puts on the wire for each newline key, and what
+#: Textual makes of it. `CSI 13 ; n u` — 13 is Return, n-1 the modifier
+#: bitmask — arrives only from a terminal that answers Textual's request for
+#: the enhanced keyboard protocol; `LF` needs no protocol, being a byte of its
+#: own since teletypes rather than a modified Return.
+_ON_THE_WIRE = {
+    "ctrl+j"      : "\n",             # LF 0x0A
+    "ctrl+enter"  : "\x1b[13;5u",
+    "shift+enter" : "\x1b[13;2u",
+    "alt+enter"   : "\x1b[13;3u",
+}
+
+#: What the same keys degrade to where that protocol is not spoken, which is
+#: the case this whole constant exists for. Termux is such a terminal.
+#: `shift+enter` is not listed because it degrades exactly as `ctrl+enter`
+#: does — a bare carriage return — and a second row would prove it twice.
+_WITHOUT_THE_PROTOCOL = {
+    "ctrl+j"     : ("\n",       ["ctrl+j"]),   # unchanged: it was never modified
+    "ctrl+enter" : ("\r",       ["enter"]),    # Enter's own byte, so it SENDS
+    "alt+enter"  : ("\x1b\r",   []),           # no key comes out at all
+}
 
 
 def test_at_least_one_newline_key_arrives_without_the_enhanced_protocol():
     """What a key is *called* is ours; whether it arrives is the terminal's.
 
-    `pilot.press` synthesises the name directly, so the test above proves the
+    `pilot.press` synthesises the name directly, so every test above proves the
     handling and nothing at all about the wire. This one feeds Textual's own
-    parser the bytes a terminal really sends, and the invariant it guards is
-    the one a bug report is actually about: **something has to work on a
-    terminal that answers no protocol**, or the input has no second line at
-    all. Shipping `ctrl+enter` alone failed exactly here, on Termux.
+    parser the bytes, and guards the invariant a bug report is actually about:
+    **something has to work on a terminal that answers no protocol**, or the
+    input has no second line at all. Shipping `ctrl+enter` alone failed exactly
+    there, on a phone.
+
+    The degradations are named one by one because each is reported as a
+    different bug — "ctrl+enter sends the message" and "alt+enter does
+    nothing". What the parser does with whatever *follows* an `ESC CR` is the
+    driver's timing, which this does not model and so does not claim.
     """
     from textual._xterm_parser import XTermParser
 
-    assert set(_ALWAYS_ARRIVES) | set(_NEEDS_THE_PROTOCOL) == set(NEWLINE_KEYS), \
+    assert set(_ON_THE_WIRE) == set(NEWLINE_KEYS), \
         "a newline key was added or removed without its bytes"
-    assert _ALWAYS_ARRIVES, "every newline key would then need a protocol to arrive"
-
-    for name, sequence in {**_ALWAYS_ARRIVES, **_NEEDS_THE_PROTOCOL}.items():
+    for name, sequence in _ON_THE_WIRE.items():
         assert [e.key for e in XTermParser().feed(sequence)] == [name]
 
-
-def test_the_two_ways_a_newline_key_is_lost_without_the_protocol():
-    """Both failures, named — because each looks like a different bug.
-
-    Ctrl+Enter degrades to the carriage return Enter itself sends, so the
-    message goes: loud, and reported as "ctrl+enter sends". Alt+Enter degrades
-    to `ESC CR`, out of which the parser yields no key at all: silent, and
-    reported as "nothing happens". Ctrl+J is in the constant because of these
-    two lines.
-
-    What the parser does with whatever follows that `ESC CR` is the driver's
-    timing, which this does not model and so does not claim.
-    """
-    from textual._xterm_parser import XTermParser
-
-    assert [e.key for e in XTermParser().feed("\r")] == ["enter"], \
-        "ctrl+enter without the protocol is Enter, so it sends"
-
-    assert list(XTermParser().feed("\x1b\r")) == [], \
-        "alt+enter without the protocol is ESC CR, and no key comes out of it"
+    survivors = [name for name, (seq, keys) in _WITHOUT_THE_PROTOCOL.items() if keys == [name]]
+    assert survivors, "every newline key would then need a protocol to arrive"
+    for name, (sequence, expected) in _WITHOUT_THE_PROTOCOL.items():
+        assert [e.key for e in XTermParser().feed(sequence)] == expected, name
 
 
 async def test_the_input_grows_with_the_lines_up_to_its_maximum():
