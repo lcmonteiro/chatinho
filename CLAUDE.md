@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **218 pass** |
+| `pytest -q` | **221 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -438,15 +438,24 @@ Three things this cost, all found by measuring rather than by reading:
   `.message-body > *:last-child`, which Textual supports, so paragraphs are still separated from
   *each other*. A bubble holding one word is five rows now, not seven.
 - **The input had to stop being an `Input`.** It is single-line by construction, so there was
-  nowhere to put a second line. `CommandInput` is a `TextArea`: **Enter sends, Shift+Enter or
-  Alt+Enter opens a line**, and the box grows with the text up to `input_max_height`. Enter is
+  nowhere to put a second line. `CommandInput` is a `TextArea`: **Enter sends, Ctrl+Enter opens a
+  line** — as do Shift+Enter and Alt+Enter — and the box grows with the text up to `input_max_height`. Enter is
   claimed in `_on_key` rather than by a `Binding`, because `TextArea` inserts its newline from
   inside its own key handler and a binding is never reached. Up and Down move the suggestion
   highlight while the popup is open and the cursor between lines when it is not — a multi-line
   input needs them for both, so they delegate rather than relying on a binding falling through.
 
-Which terminals can report `shift+enter` at all varies; `alt+enter` is there as the second way, and
-pasting multi-line text works regardless.
+**All three newline keys are the same key underneath, and that is what can go wrong.** Textual only
+ever sees them through the enhanced keyboard protocol, as `CSI 13;n u` — 13 is Return and `n-1` the
+modifier bitmask — so a terminal that does not speak it sends a bare carriage return for `ctrl+enter`,
+`shift+enter` and `alt+enter` alike, which arrives as `enter` and therefore **sends**. Which
+terminals report which varies, which is why `NEWLINE_KEYS` holds three; pasting multi-line text
+works regardless.
+
+That failure is loud — the line goes — so these are deliberately *not* in `_validate_key`'s
+swallowed list, which exists for the silent kind. A test feeds Textual's own parser the bytes for
+all three and then a bare `\r`, because `pilot.press` synthesises the name directly and so proves
+the handling and nothing at all about the wire.
 
 **Four `ctrl` combos are not keys at all**, and `_validate_key` now refuses them. A terminal sends
 one byte for `ctrl+h` and for Backspace alike, so Textual reports `backspace` and a `ctrl+h`

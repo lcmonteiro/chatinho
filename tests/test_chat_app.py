@@ -16,7 +16,7 @@ from textual import events
 from textual.binding import NoBinding
 
 from chatinho.chat_app import ChatApp
-from chatinho.chat_input import CommandInput
+from chatinho.chat_input import NEWLINE_KEYS, CommandInput
 from chatinho.chat_log import preview_of
 from chatinho import (
     LOCAL,
@@ -443,12 +443,17 @@ async def test_every_message_is_aligned_left():
 # === The input takes more than one line =========================================
 
 
-async def test_shift_enter_opens_a_line_and_enter_sends_both():
-    """Input is single-line by construction; this is why it became a TextArea."""
+@pytest.mark.parametrize("newline_key", NEWLINE_KEYS)
+async def test_a_newline_key_opens_a_line_and_enter_sends_both(newline_key):
+    """Input is single-line by construction; this is why it became a TextArea.
+
+    Parametrized over the constant rather than over a list written out here, so
+    a key added to it cannot arrive untested.
+    """
     app = await chat_app()
     async with app.run_test() as pilot:
         await pilot.press("a")
-        await pilot.press("shift+enter")
+        await pilot.press(newline_key)
         await pilot.press("b")
         assert app.query_one("#input-line", CommandInput).text == "a\nb"
 
@@ -456,6 +461,31 @@ async def test_shift_enter_opens_a_line_and_enter_sends_both():
         await pilot.pause()
         assert [m.text for m in app.messages] == ["a\nb"]
         assert app.query_one("#input-line", CommandInput).text == ""
+
+
+def test_a_terminal_reports_the_newline_keys_as_those_names_or_as_enter():
+    """What a key is *called* is ours; whether it arrives is the terminal's.
+
+    `pilot.press` synthesises the name directly, so the test above proves the
+    handling and nothing about the wire. This feeds Textual's own parser the
+    bytes a terminal sends: with the enhanced keyboard protocol every newline
+    key comes back under its own name, and without it all three are a bare
+    carriage return, which is `enter` — so they send instead of opening a line.
+    That is the cost of every one of them, and it is worth a test because it is
+    the thing a bug report about this will actually be.
+    """
+    from textual._xterm_parser import XTermParser
+
+    #: `CSI 13 ; n u` — 13 is Return, n-1 is the modifier bitmask.
+    enhanced = {"ctrl+enter": "\x1b[13;5u", "shift+enter": "\x1b[13;2u",
+                "alt+enter": "\x1b[13;3u"}
+    assert set(enhanced) == set(NEWLINE_KEYS), "a key was added without its sequence"
+
+    for name, sequence in enhanced.items():
+        assert [e.key for e in XTermParser().feed(sequence)] == [name]
+
+    assert [e.key for e in XTermParser().feed("\r")] == ["enter"], \
+        "no enhanced protocol: the modifier is lost and the line is sent"
 
 
 async def test_the_input_grows_with_the_lines_up_to_its_maximum():
