@@ -86,7 +86,7 @@ from .chat_hooks import (
     Commands,
 )
 from .chat_style import ChatStyle
-from .commands import CopyCommand, HelpCommand, TestCommand
+from .commands import HelpCommand, TestCommand
 
 __version__ = "0.1.0"
 
@@ -176,7 +176,6 @@ __all__ = [
     "A2AConnector",
     "OpenAIConnector",
     "DatabaseBackend",
-    "CopyCommand",
     "HelpCommand",
     "TestCommand",
 ]

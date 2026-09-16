@@ -11,7 +11,6 @@ import asyncio
 
 from chatinho import (
     ChatMessage,
-    CopyCommand,
     HelpCommand,
     HookExecute,
     HookListen,
@@ -90,7 +89,7 @@ def main() -> None:
     """Builds the demo chat and runs it."""
     build_chat(
         connectors      = [EchoConnector()],
-        commands        = [HelpCommand(), CopyCommand(), CodeCommand()],
+        commands        = [HelpCommand(), CodeCommand()],
         title           = "chatinho demo",
         welcome_message = WELCOME,
         quit_key        = "ctrl+g",
