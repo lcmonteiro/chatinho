@@ -3,15 +3,22 @@
 :class:`CommandSuggestions` owns the popup's options and visibility;
 :class:`CommandInput` drives it through the sibling widget rather than
 reaching up into the application.
+
+The input is a :class:`~textual.widgets.TextArea` rather than an ``Input``
+because a message may span lines: **Enter sends, Shift+Enter (or Alt+Enter)
+opens a new line.** ``Input`` is single-line by construction, so there was
+nowhere to put the second line.
 """
 
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from textual import events
 from textual.app import ScreenStackError
 from textual.binding import Binding
 from textual.css.query import NoMatches
-from textual.widgets import Input, OptionList
+from textual.message import Message
+from textual.widgets import OptionList, TextArea
 from textual.widgets.option_list import Option
 
 
@@ -21,6 +28,10 @@ logger = logging.getLogger(__name__)
 COMMAND_PREFIX : str = "/"
 
 SUGGESTIONS_ID : str = "command-suggestions"
+
+#: What opens a new line instead of sending. Terminals differ on which of
+#: these they can report at all, which is why there is more than one.
+NEWLINE_KEYS : Tuple[str, ...] = ("shift+enter", "alt+enter")
 
 
 class CommandSuggestions(OptionList):
@@ -96,13 +107,35 @@ class CommandSuggestions(OptionList):
         return f"{COMMAND_PREFIX}{name}"
 
 
-class CommandInput(Input):
-    """Input that drives the sibling :class:`CommandSuggestions` popup.
+class CommandInput(TextArea):
+    """Multi-line input that drives the sibling :class:`CommandSuggestions` popup.
 
-    Tab/Down/Up/Escape are only claimed while a suggestion popup is open
-    (see ``check_action``) — otherwise they fall through to Textual's
-    normal bindings (e.g. Tab still moves focus as usual).
+    Enter sends what was typed as :class:`CommandInput.Submitted`; the keys in
+    :data:`NEWLINE_KEYS` open a new line instead. Tab and Escape are only
+    claimed while the popup is open (see ``check_action``), so Tab still moves
+    focus as usual. Up and Down move the suggestion highlight when the popup is
+    open and the cursor between lines when it is not — a multi-line input needs
+    them for both.
     """
+
+    class Submitted(Message):
+        """Posted when Enter sends the line.
+
+        Attributes:
+            input: The input that sent it.
+            text: What was typed, stripped. Never empty — Enter on a blank
+                input sends nothing at all.
+        """
+
+        def __init__(self, input: "CommandInput", text: str) -> None:
+            super().__init__()
+            self.input = input
+            self.text = text
+
+        @property
+        def control(self) -> "CommandInput":
+            """The input that sent it, under the name Textual expects."""
+            return self.input
 
     BINDINGS = [
         Binding("tab", "accept_suggestion", show=False),
@@ -110,6 +143,13 @@ class CommandInput(Input):
         Binding("up", "prev_suggestion", show=False),
         Binding("escape", "dismiss_suggestions", show=False),
     ]
+
+    def __init__(self, **kwargs) -> None:
+        # No cursor-line highlight: the input is drawn as an outline, and a
+        # filled row would be the one background in it.
+        kwargs.setdefault("soft_wrap", True)
+        kwargs.setdefault("highlight_cursor_line", False)
+        super().__init__(**kwargs)
 
     @property
     def suggestions(self) -> Optional[CommandSuggestions]:
@@ -119,6 +159,12 @@ class CommandInput(Input):
         except (NoMatches, ScreenStackError):
             # Bindings are checked before the widget tree exists too.
             return None
+
+    @property
+    def _popup_is_open(self) -> bool:
+        """Whether there is a suggestion to move through or accept."""
+        suggestions = self.suggestions
+        return suggestions is not None and suggestions.has_suggestions
 
     def accept_suggestion(self) -> bool:
         """Completes the input with the highlighted suggestion, if any.
@@ -132,33 +178,63 @@ class CommandInput(Input):
         name = suggestions.take_highlighted()
         if name is None:
             return False
-        self.value = f"{COMMAND_PREFIX}{name} "
-        self.action_end()
+        self.text = f"{COMMAND_PREFIX}{name} "
+        self.move_cursor(self.document.end)
         return True
 
+    def submit(self) -> bool:
+        """Sends what was typed, or accepts a suggestion if the popup is open.
+
+        Returns:
+            bool: True if a suggestion was accepted instead of sending.
+        """
+        if self._popup_is_open and self.accept_suggestion():
+            return True
+        text = self.text.strip()
+        if text:
+            self.post_message(self.Submitted(self, text))
+        return False
+
+    async def _on_key(self, event: events.Key) -> None:
+        """Claims Enter for sending, and the newline keys for a second line.
+
+        ``TextArea`` inserts on Enter from inside its own key handler rather
+        than through a binding, so a ``Binding("enter", …)`` here would never
+        be reached. This is the only place the two can be told apart.
+        """
+        if event.key in NEWLINE_KEYS:
+            event.stop()
+            event.prevent_default()
+            self.insert("\n")
+            return
+        if event.key == "enter":
+            event.stop()
+            event.prevent_default()
+            self.submit()
+            return
+        await super()._on_key(event)
+
     def check_action(self, action: str, parameters: Tuple[object, ...]) -> Optional[bool]:
-        if action in ("accept_suggestion", "next_suggestion", "prev_suggestion", "dismiss_suggestions"):
-            suggestions = self.suggestions
-            return suggestions is not None and suggestions.has_suggestions
+        # Up and Down are always ours: they fall back to moving the cursor.
+        if action in ("accept_suggestion", "dismiss_suggestions"):
+            return self._popup_is_open
         return True
 
     def action_accept_suggestion(self) -> None:
         self.accept_suggestion()
 
     def action_next_suggestion(self) -> None:
-        if self.suggestions is not None:
+        if self._popup_is_open and self.suggestions is not None:
             self.suggestions.move(1)
+        else:
+            self.action_cursor_down()
 
     def action_prev_suggestion(self) -> None:
-        if self.suggestions is not None:
+        if self._popup_is_open and self.suggestions is not None:
             self.suggestions.move(-1)
+        else:
+            self.action_cursor_up()
 
     def action_dismiss_suggestions(self) -> None:
         if self.suggestions is not None:
             self.suggestions.hide()
-
-    async def action_submit(self) -> None:
-        suggestions = self.suggestions
-        if suggestions is not None and suggestions.has_suggestions and self.accept_suggestion():
-            return
-        await super().action_submit()

@@ -92,7 +92,8 @@ def main() -> None:
         commands        = [HelpCommand(), CodeCommand()],
         title           = "chatinho demo",
         welcome_message = WELCOME,
-        quit_key        = "ctrl+h",
+        quit_key        = "ctrl+g",
+        name            = "me",
     ).run()
 
 

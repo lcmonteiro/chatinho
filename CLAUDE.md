@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **149 pass** |
+| `pytest -q` | **207 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -273,7 +273,8 @@ src/chatinho/
   chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (439)
   chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
   chat_log.py      ChatLog widget: renders through the granted context reader
-  chat_input.py    CommandInput + CommandSuggestions (autocomplete over the commands)
+  chat_input.py    CommandInput (a multi-line TextArea) + CommandSuggestions
+  chat_clipboard.py  OSC 52's second route: a clipboard helper, if the system has one
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      a2a.py, openai.py — plain classes, no base
   commands/        help.py, test.py — commands: they run, they are not peers
@@ -283,11 +284,156 @@ examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (std
                    agent_inbox.py (HTTP, inbound)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
-                   test_require.py, test_architecture.py, test_a2a_payload.py (no terminal)
+                   test_require.py, test_architecture.py, test_a2a_payload.py,
+                   test_clipboard.py (no terminal)
 ```
 
 The split follows one rule: **anything that does not need Textual moves out**, because that is
 what makes it testable without a terminal.
+
+## The chat is drawn as outlines
+
+A bubble is a **border and nothing else** — the chat background shows through it. The one filled
+thing in the log is the message you have selected to reply to, which is what the two `*_bubble_bg`
+fields in `ChatStyle` now mean, and the fill is the *whole* of the selection: there is no second
+outline on top of it. **Which side you are on is `ChatStyle.local_align`**, `"left"` or `"right"`; everyone else is
+always on the left, so `"right"` makes the conversation read as two columns and the default
+`"left"` as one. The sender is already in the header and in the border colour, so a right-hand
+column is a second way of saying it that costs half the width — worth having, not worth assuming.
+A value that is neither side is refused at construction, because Textual would take the broken rule
+and report it nowhere the caller would look.
+
+**The chat is centred, and `chat_max_width` caps it.** A line the width of a desk is a line nobody
+reads across, so a wide terminal gives margins instead. It is a *maximum* and not a width: on a
+phone the body takes all sixty columns and wastes none. `#input-area` is `dock: bottom`, which is
+relative to its parent — now the narrower body rather than the screen — and a test says the input
+moved in with it, after first asserting the body really is narrower, or it would pass just as well
+with no centring at all.
+
+**A peer is one colour, and the header wears it above the bubble.** `ChatStyle.peer_headers` is a
+palette indexed by the peer's id — slot zero is the user — and it wraps round when there are more
+peers than colours. `to_css()` renders two rules per entry, plus `.peer-tool` because a command has
+no id of its own: the header's `color` and the bubble's `border`. The header is a *sibling* of the
+bubble rather than a child, so the bubble holds only what was said — but it still sets the bubble's
+**minimum** width — the header's own indent plus one space, so the two do not end flush — because a
+bubble narrower than the header sitting on it reads as two things rather than one. The hues
+are spread apart deliberately: the common chat is the user and one connector, so slots 0 and 1 have
+to be told apart at a glance, and the two greens they started as could not be.
+
+**The header names the peer**: `21:15 @meteo · msg-3`. `ChatLog` reads the roster through the
+`peers` grant, the same way it reads the conversation through `context`, and calls it fresh rather
+than holding it — a peer may be registered after the widget was built. `TOOL` is named outright
+because a command is in no roster, and a peer that has since gone falls back to its number: history
+outlives connectors, since a backend reloads what a peer once said. `You`/`Other` told you nothing
+once two connectors were in the room.
+
+The terminal's own name is `chat`, which is a poor thing to call yourself, so `build_chat(name=…)`
+overrides it — the demo is `@me`. **That assignment works only because `@connector` wrote `name`
+onto the class**: `DOMNode.name` is a read-only property, and the same line on a plain `App` raises
+`AttributeError`. The shadowing the fitness tests hunt for is load-bearing here, which is why
+there is a test that says so; mypy sees only the property underneath, so the assignment carries a
+narrow `type: ignore` explaining itself.
+
+**One tap selects a message to reply to; two copy it.** It was a two-second hold before, and a
+phone terminal takes a long press for its own menu before the application sees any of it — two taps
+are a gesture nothing else is competing for.
+
+**`event.chain` is deliberately not what decides.** Textual counts a double click only when both
+land on the *exact same cell* and within half a second, which is right for a mouse and wrong for a
+thumb — reaching for it would repeat the class of failure that made the long press useless here.
+`_A_DOUBLE` allows 0.7s and `_A_WOBBLE` a cell of travel, and a test says so, because using the
+chain count later would look like a simplification and would quietly stop working on the device
+this exists for.
+
+Selecting is a toggle, so the second tap of a pair calls it again and puts the reply target back
+where it was: a double tap only copies, which is what the hold it replaced did. The press position
+is still recorded in `on_mouse_down`, because a release more than `_A_DRAG` rows from the landing
+was the log being scrolled and selects nothing; neither handler stops its event, or the
+drag-to-scroll underneath would have nothing left to read.
+
+**The drag test was empty for a while.** It drove `pilot.mouse_down`/`mouse_up`, which do not
+synthesise a `Click` — the app does that, from a release on the widget the press landed on — so
+nothing reached the handler and the assertion held for the wrong reason. It builds the events by
+hand now, and fails when the guard goes. Found by removing the guard and watching it pass.
+
+The copy is confirmed by a **popup**, and it shows the text back rather than only saying a copy
+happened: on a phone the clipboard cannot be checked without leaving the chat, so seeing the words
+is the confirmation. `run_test` disables notifications by default, so every test that asserts on
+`notify` proves only that it was *called* — there is now one that turns them on and looks for the
+`Toast` on screen, because "it was called" is not "the user saw it".
+
+**The gesture is not always reachable, so there is a key as well.** A phone terminal may take a
+long press for its own selection menu before the application sees any of it, which is what Termux
+does — pressing on the rendered text works in a mounted test, so what fails there is the gesture
+arriving, not the handling. `copy_key` (default `ctrl+y`, validated like `quit_key`) copies the
+message selected as the reply target: tap, then press.
+
+**Copying takes two routes, because neither is enough alone.** Textual's own `copy_to_clipboard` is
+OSC 52, an escape sequence a terminal is free to drop — Termux drops it — so `chat_clipboard` also
+runs a **helper**: `termux-clipboard-set`, `wl-copy`, `xclip`, `xsel` or `pbcopy`, whichever the
+system has. Both run every time: over SSH a helper writes the *server's* clipboard, which nobody
+is looking at, and OSC 52 is what reaches the person at the keyboard. The helper is a subprocess,
+so it runs in a worker rather than stopping the chat, and a failure is logged rather than raised —
+the other route has already been taken, and a clipboard is never worth interrupting a conversation
+for. The notification **names the routes that ran** (`Copied msg-3 (OSC 52 + termux-clipboard-set)`)
+rather than claiming the text arrived; whether it did is the terminal's business, and saying which
+route was taken is what makes a silent failure diagnosable. `chat_clipboard` imports nothing but
+the standard library, so it is tested without mounting anything.
+
+**Two of those tests run the helper for real**, with a working one put on `PATH`, because every
+other test in the file replaces `chat_clipboard.put` with a double. Those prove the callers do the
+right thing and prove nothing about the thing itself — and the wiring from `copy_message` through a
+worker, an executor and `subprocess.run` is exactly where a copy can be connected wrongly and still
+pass a suite full of doubles. That gap was found while chasing a report of copying not working on a
+phone: the environment turned out to be healthy and the whole path sound, which nothing in the
+suite had ever actually shown.
+
+Two things were built while chasing this and then removed, because neither was a feature: a
+`/copy` command that answered in the conversation, and a `diagnose.sh` that asked the machine what
+the terminal could do. Both were somewhere to *read a result* when a gesture, a key and a
+notification can each fail silently — worth having during the hunt, not worth carrying afterwards.
+What stays is the **end-to-end test** the command hosted, moved onto `ChatLog.copy_message`: that
+path runs a worker, an executor and a subprocess, and every other test of it replaces the last
+step.
+
+Three things this cost, all found by measuring rather than by reading:
+
+- **`width: auto` collapses a bubble to four cells.** `Markdown` reports no content width of its
+  own, so a container that sizes to its children sizes to nothing. The width is measured in
+  `ChatLog._bubble_width` instead — the widest of the header, the body's lines and the quote, plus
+  the six cells the padding and border take, capped at `bubble_max_width`. A bubble is genuinely
+  dynamic now (25, 38, 54, 72 in the demo), which `width: 90%` never was.
+- **A cap in cells is not a width.** `max-width: 72` let a bubble reach x=74 in a 60-column window —
+  past the scrollbar and past the window itself. What keeps a bubble inside is `max-width: 100%`;
+  the 72 is applied in Python, where the text is measured. `bubble_margin_right` is the separate
+  gap between the bubble and the scrollbar, and it needs its own assertion: without it a bubble
+  still clears the scrollbar by the log's own padding, so an edge test passes either way and guards
+  nothing. That was found by breaking it.
+- **`Markdown` pads and margins inside what the bubble already measured.** It carries
+  `padding: 0 2 0 2` of its own, four cells the bubble's width never counted, so a line measured to
+  fit wrapped anyway; and every `MarkdownParagraph` carries `margin: 0 0 1 0`, which put a second
+  blank row under the text on top of the bubble's own padding. The stylesheet zeroes the padding —
+  fixing the cause rather than adding four to `_BUBBLE_CHROME` — and drops the trailing margin with
+  `.message-body > *:last-child`, which Textual supports, so paragraphs are still separated from
+  *each other*. A bubble holding one word is five rows now, not seven.
+- **The input had to stop being an `Input`.** It is single-line by construction, so there was
+  nowhere to put a second line. `CommandInput` is a `TextArea`: **Enter sends, Shift+Enter or
+  Alt+Enter opens a line**, and the box grows with the text up to `input_max_height`. Enter is
+  claimed in `_on_key` rather than by a `Binding`, because `TextArea` inserts its newline from
+  inside its own key handler and a binding is never reached. Up and Down move the suggestion
+  highlight while the popup is open and the cursor between lines when it is not — a multi-line
+  input needs them for both, so they delegate rather than relying on a binding falling through.
+
+Which terminals can report `shift+enter` at all varies; `alt+enter` is there as the second way, and
+pasting multi-line text works regardless.
+
+**Four `ctrl` combos are not keys at all**, and `_validate_key` now refuses them. A terminal sends
+one byte for `ctrl+h` and for Backspace alike, so Textual reports `backspace` and a `ctrl+h`
+binding never fires — which is exactly the silent nothing that validator exists to prevent, and it
+was shipped as the demo's own quit key until Termux proved it. The same holds for `ctrl+i`/Tab,
+`ctrl+m`/Enter and `ctrl+[`/Escape. The list is *derived* from Textual's `ANSI_SEQUENCES_KEYS`
+rather than written out here, so it cannot drift from what Textual actually does; the demo quits
+with `ctrl+g` now.
 
 ## The boundaries something checks
 
@@ -347,7 +493,7 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 36 names: `build_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
+`__init__.py` exports 38 names: `build_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
 the declaring machinery (`connector`, `tool`, `backend`, `require`, `hooks_of`, `options_of`,
 `declares`, `declared_id`, `name_of`, `Hook`); the ten `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
