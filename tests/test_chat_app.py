@@ -9,6 +9,7 @@ model as the headless ones, with a terminal attached.
 import asyncio
 import inspect
 import threading
+from dataclasses import replace
 
 import pytest
 from textual import events
@@ -1095,3 +1096,90 @@ def test_the_double_tap_does_not_use_textuals_chain_count():
     ).replace("chain count", ""), "the chain count is not what decides"
     assert log._A_DOUBLE > App.CLICK_CHAIN_TIME_THRESHOLD, "longer than a mouse's"
     assert log._A_WOBBLE >= 1, "and a cell of slack, which Textual allows none of"
+
+
+# === Where the chat sits, and which side you are on =============================
+
+
+def _sides(app):
+    """Where each bubble starts, by who spoke."""
+    out = {}
+    for container in app.query(".message-container"):
+        who = "sent" if "sent" in container.classes else "received"
+        out.setdefault(who, container.query_one(".message-bubble").region.x)
+    return out
+
+
+async def test_the_chat_is_centred_and_capped_on_a_wide_terminal():
+    """A line the width of a desk is a line nobody reads across."""
+    app = await chat_app()
+    async with app.run_test(size=(140, 20)) as pilot:
+        await app.say("oi")
+        await pilot.pause()
+
+        body = app.query_one("#chat-body")
+        cap  = int(ChatStyle().chat_max_width)
+        assert body.region.width == cap, "capped at chat_max_width"
+        assert body.region.x == (140 - cap) // 2, "and centred in what is left"
+
+
+async def test_a_narrow_terminal_gives_the_chat_all_of_it():
+    """The cap is a maximum, not a width: nothing is wasted on a phone."""
+    app = await chat_app()
+    async with app.run_test(size=(60, 20)) as pilot:
+        await app.say("oi")
+        await pilot.pause()
+
+        body = app.query_one("#chat-body")
+        assert (body.region.x, body.region.width) == (0, 60)
+
+
+async def test_the_input_is_still_at_the_bottom_of_the_centred_body():
+    """`dock: bottom` is relative to the parent, which is now a narrower one."""
+    app = await chat_app()
+    async with app.run_test(size=(140, 20)) as pilot:
+        await app.say("oi")
+        await pilot.pause()
+
+        body  = app.query_one("#chat-body")
+        input = app.query_one("#input-area")
+        # The premise first, or this passes for the wrong reason: with no
+        # centring at all the input is still at the bottom of a full-width
+        # screen, and every assertion below holds while guarding nothing.
+        assert body.region.width < 140, "the body really is narrower than the screen"
+        assert input.region.y + input.region.height == body.region.y + body.region.height
+        assert input.region.x == body.region.x, "and the input moved in with it"
+
+
+async def test_your_own_messages_are_on_the_left_by_default():
+    app = await chat_app(connectors=[_Outro()])
+    async with app.run_test(size=(140, 20)) as pilot:
+        at = {getattr(who, "name", None): i for i, who in app.peers().items()}
+        await app.say("minha")
+        await app.ask(at["outro"], "tua?")
+        await pilot.pause()
+
+        sides = _sides(app)
+        assert sides["sent"] == sides["received"], "one column"
+
+
+async def test_local_align_right_puts_your_messages_on_the_other_side():
+    """Everyone else stays left, so it reads as two columns."""
+    app = await chat_app(connectors=[_Outro()],
+                         style=replace(ChatStyle(), local_align="right"))
+    async with app.run_test(size=(140, 20)) as pilot:
+        at = {getattr(who, "name", None): i for i, who in app.peers().items()}
+        await app.say("minha")
+        await app.ask(at["outro"], "tua?")
+        await pilot.pause()
+
+        sides = _sides(app)
+        assert sides["sent"] > sides["received"], "yours moved right"
+        assert sides["received"] == app.query_one("#chat-body").region.x + 2, \
+            "and theirs did not"
+
+
+def test_a_local_align_that_is_not_a_side_is_refused():
+    """Textual would take a broken rule and report it nowhere useful."""
+    with pytest.raises(ValueError, match="left.*right"):
+        ChatStyle(local_align="middle")

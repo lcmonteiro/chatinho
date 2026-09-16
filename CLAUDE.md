@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **207 pass** |
+| `pytest -q` | **213 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -296,9 +296,19 @@ what makes it testable without a terminal.
 A bubble is a **border and nothing else** — the chat background shows through it. The one filled
 thing in the log is the message you have selected to reply to, which is what the two `*_bubble_bg`
 fields in `ChatStyle` now mean, and the fill is the *whole* of the selection: there is no second
-outline on top of it. Everything is aligned left, whoever spoke: the sender is already in the
-header and in the border colour, and a right-hand column bought a second way of saying it at the
-cost of half the width.
+outline on top of it. **Which side you are on is `ChatStyle.local_align`**, `"left"` or `"right"`; everyone else is
+always on the left, so `"right"` makes the conversation read as two columns and the default
+`"left"` as one. The sender is already in the header and in the border colour, so a right-hand
+column is a second way of saying it that costs half the width — worth having, not worth assuming.
+A value that is neither side is refused at construction, because Textual would take the broken rule
+and report it nowhere the caller would look.
+
+**The chat is centred, and `chat_max_width` caps it.** A line the width of a desk is a line nobody
+reads across, so a wide terminal gives margins instead. It is a *maximum* and not a width: on a
+phone the body takes all sixty columns and wastes none. `#input-area` is `dock: bottom`, which is
+relative to its parent — now the narrower body rather than the screen — and a test says the input
+moved in with it, after first asserting the body really is narrower, or it would pass just as well
+with no centring at all.
 
 **A peer is one colour, and the header wears it above the bubble.** `ChatStyle.peer_headers` is a
 palette indexed by the peer's id — slot zero is the user — and it wraps round when there are more

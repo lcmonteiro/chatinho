@@ -62,6 +62,7 @@ from .chat_style import ChatStyle
 logger = logging.getLogger(__name__)
 
 CHAT_LOG_ID : str = "chat-log"
+CHAT_BODY_ID: str = "chat-body"
 INPUT_ID    : str = "input-line"
 
 
@@ -327,6 +328,7 @@ class ChatApp(App):
                 CommandInput(placeholder=self._input_placeholder, id=INPUT_ID),
                 id="input-area",
             ),
+            id=CHAT_BODY_ID,
         )
 
     async def on_mount(self) -> None:

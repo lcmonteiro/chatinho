@@ -31,7 +31,13 @@ _CSS_TEMPLATE = Template(
     """
 Screen {
     layout: vertical;
+    align-horizontal: center;
     background: $screen_bg;
+}
+#chat-body {
+    width: 100%;
+    max-width: $chat_max_width;
+    height: 1fr;
 }
 #chat-log {
     height: 1fr;
@@ -80,6 +86,9 @@ Screen {
     margin: 0 $bubble_margin_right 0 0;
     height: auto;
     align: left top;
+}
+.message-container.sent {
+    align: $local_align top;
 }
 .message-bubble {
     layout: vertical;
@@ -161,6 +170,16 @@ class ChatStyle:
     bubble_max_width: int = 72
     bubble_margin_right: str = "2"
 
+    # How wide the chat itself may grow. It is centred in whatever is left
+    # over, so a wide terminal gives margins rather than lines too long to
+    # read across.
+    chat_max_width: str = "100"
+
+    # Which side the user's own messages sit on: "left" or "right". Everyone
+    # else is always on the left, so "right" makes the conversation read as
+    # two columns and "left" as one.
+    local_align: str = "left"
+
     # One colour per peer: the header — who spoke, and the message id — and
     # the bubble's border beneath it, so a peer is one colour and not two.
     # Indexed by the peer's id, and wrapped round when there are more peers
@@ -188,14 +207,20 @@ class ChatStyle:
     quote_bg: str = "#111b21"
 
     def __post_init__(self) -> None:
-        """Refuses a palette with nothing in it.
+        """Refuses a palette with nothing in it, and a side that is neither.
 
         Raises:
             ValueError: ``peer_headers`` is empty, which would leave the
-                header with no colour and the modulo with no divisor.
+                header with no colour and the modulo with no divisor; or
+                ``local_align`` is not a side, which Textual would take as a
+                broken rule and report nowhere the caller would look.
         """
         if not self.peer_headers:
             raise ValueError("peer_headers needs at least one colour")
+        if self.local_align not in ("left", "right"):
+            raise ValueError(
+                "local_align is a side: 'left' or 'right', not %r" % (self.local_align,)
+            )
 
     def header_class(self, frm: int) -> str:
         """The header class carrying *frm*'s colour.
