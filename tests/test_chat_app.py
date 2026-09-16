@@ -463,29 +463,55 @@ async def test_a_newline_key_opens_a_line_and_enter_sends_both(newline_key):
         assert app.query_one("#input-line", CommandInput).text == ""
 
 
-def test_a_terminal_reports_the_newline_keys_as_those_names_or_as_enter():
+#: A byte of its own since teletypes, so no protocol is needed to tell it from
+#: Enter's carriage return. Ctrl+J is what a terminal sends for it.
+_ALWAYS_ARRIVES = {"ctrl+j": "\n"}
+
+#: `CSI 13 ; n u` — 13 is Return, n-1 the modifier bitmask. Only a terminal
+#: that answers Textual's request for the enhanced keyboard protocol sends it.
+_NEEDS_THE_PROTOCOL = {"ctrl+enter": "\x1b[13;5u", "shift+enter": "\x1b[13;2u",
+                       "alt+enter": "\x1b[13;3u"}
+
+
+def test_at_least_one_newline_key_arrives_without_the_enhanced_protocol():
     """What a key is *called* is ours; whether it arrives is the terminal's.
 
     `pilot.press` synthesises the name directly, so the test above proves the
-    handling and nothing about the wire. This feeds Textual's own parser the
-    bytes a terminal sends: with the enhanced keyboard protocol every newline
-    key comes back under its own name, and without it all three are a bare
-    carriage return, which is `enter` — so they send instead of opening a line.
-    That is the cost of every one of them, and it is worth a test because it is
-    the thing a bug report about this will actually be.
+    handling and nothing at all about the wire. This one feeds Textual's own
+    parser the bytes a terminal really sends, and the invariant it guards is
+    the one a bug report is actually about: **something has to work on a
+    terminal that answers no protocol**, or the input has no second line at
+    all. Shipping `ctrl+enter` alone failed exactly here, on Termux.
     """
     from textual._xterm_parser import XTermParser
 
-    #: `CSI 13 ; n u` — 13 is Return, n-1 is the modifier bitmask.
-    enhanced = {"ctrl+enter": "\x1b[13;5u", "shift+enter": "\x1b[13;2u",
-                "alt+enter": "\x1b[13;3u"}
-    assert set(enhanced) == set(NEWLINE_KEYS), "a key was added without its sequence"
+    assert set(_ALWAYS_ARRIVES) | set(_NEEDS_THE_PROTOCOL) == set(NEWLINE_KEYS), \
+        "a newline key was added or removed without its bytes"
+    assert _ALWAYS_ARRIVES, "every newline key would then need a protocol to arrive"
 
-    for name, sequence in enhanced.items():
+    for name, sequence in {**_ALWAYS_ARRIVES, **_NEEDS_THE_PROTOCOL}.items():
         assert [e.key for e in XTermParser().feed(sequence)] == [name]
 
+
+def test_the_two_ways_a_newline_key_is_lost_without_the_protocol():
+    """Both failures, named — because each looks like a different bug.
+
+    Ctrl+Enter degrades to the carriage return Enter itself sends, so the
+    message goes: loud, and reported as "ctrl+enter sends". Alt+Enter degrades
+    to `ESC CR`, out of which the parser yields no key at all: silent, and
+    reported as "nothing happens". Ctrl+J is in the constant because of these
+    two lines.
+
+    What the parser does with whatever follows that `ESC CR` is the driver's
+    timing, which this does not model and so does not claim.
+    """
+    from textual._xterm_parser import XTermParser
+
     assert [e.key for e in XTermParser().feed("\r")] == ["enter"], \
-        "no enhanced protocol: the modifier is lost and the line is sent"
+        "ctrl+enter without the protocol is Enter, so it sends"
+
+    assert list(XTermParser().feed("\x1b\r")) == [], \
+        "alt+enter without the protocol is ESC CR, and no key comes out of it"
 
 
 async def test_the_input_grows_with_the_lines_up_to_its_maximum():

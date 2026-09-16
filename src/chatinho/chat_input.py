@@ -29,14 +29,20 @@ COMMAND_PREFIX : str = "/"
 
 SUGGESTIONS_ID : str = "command-suggestions"
 
-#: What opens a new line instead of sending. Terminals differ on which of
-#: these they can report at all, which is why there is more than one: all three
-#: reach Textual only through the enhanced keyboard protocol, as ``CSI 13;n u``,
-#: and a terminal that does not speak it sends a bare carriage return for every
-#: one of them — which arrives as ``enter`` and therefore *sends*. That is the
-#: failure to expect here, and it is a loud one; it is not ``ctrl+h``'s silent
-#: nothing, which is why these are not in the swallowed list.
-NEWLINE_KEYS : Tuple[str, ...] = ("ctrl+enter", "shift+enter", "alt+enter")
+#: What opens a new line instead of sending.
+#:
+#: **Only ``ctrl+j`` is guaranteed to arrive.** It is Line Feed, ``0x0A``, a
+#: byte of its own since teletypes, and Enter is Carriage Return, ``0x0D`` —
+#: two different bytes, so no protocol is needed to tell them apart. The other
+#: three reach Textual only through the enhanced keyboard protocol, as
+#: ``CSI 13;n u`` where 13 is Return and ``n-1`` the modifier bitmask. Textual
+#: asks every terminal for that protocol at startup; a terminal that does not
+#: answer — Termux does not — sends the same carriage return for ``ctrl+enter``
+#: as for Enter, which arrives as ``enter`` and therefore **sends the message**,
+#: and sends ``ESC CR`` for ``alt+enter``, which Textual's parser drops
+#: entirely. So the fallbacks fail in both ways, loudly and silently, and
+#: ``ctrl+j`` is the one that cannot: a test says so, byte by byte.
+NEWLINE_KEYS : Tuple[str, ...] = ("ctrl+enter", "ctrl+j", "shift+enter", "alt+enter")
 
 
 class CommandSuggestions(OptionList):
