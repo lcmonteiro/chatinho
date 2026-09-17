@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **224 pass** |
+| `pytest -q` | **229 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -438,7 +438,7 @@ Three things this cost, all found by measuring rather than by reading:
   `.message-body > *:last-child`, which Textual supports, so paragraphs are still separated from
   *each other*. A bubble holding one word is five rows now, not seven.
 - **The input had to stop being an `Input`.** It is single-line by construction, so there was
-  nowhere to put a second line. `CommandInput` is a `TextArea`: **Enter sends; Ctrl+J, or a `\`
+  nowhere to put a second line. `CommandInput` is a `TextArea`: **Enter sends; Ctrl+J, or a space
   typed before Enter, opens a line** — as do Ctrl+Enter, Shift+Enter and Alt+Enter, where the
   terminal can report them — and the
   box grows with the text up to `input_max_height`. Enter is
@@ -472,16 +472,29 @@ above and names each degradation, because each is reported as a different bug �
 "nothing happens" — and `pilot.press` synthesises the key name directly, so without it the suite
 proves the handling and nothing at all about the wire.
 
-**And a way in that needs no key at all: `\` then Enter.** A backslash is a character; Enter is the
-key everyone has. `CommandInput._open_line_at_a_backslash` removes it and opens the line instead of
-sending. Claude Code ships the same escape for the same reason, alongside the same `ctrl+j` — which
-is independent confirmation of both, arrived at from the bytes here and found in its docs
-afterwards; it ships no `ctrl+enter` at all.
+**And a way in that needs no key at all: a character before Enter.** The escape is a *character*,
+and Enter is the key everyone has, so nothing about it can be swallowed by a terminal.
+`CommandInput._open_line_at_the_escape` consumes it and opens the line instead of sending. Claude
+Code ships this too, alongside the same `ctrl+j` — independent confirmation of both, arrived at
+from the bytes here and found in its docs afterwards; it ships no `ctrl+enter` at all.
+
+**The default is a space, not the backslash Claude Code uses.** Ending a line with a space and
+carrying on is what continuing already *feels* like: the gesture is the intention rather than a
+code for it, which is the whole difference between a shortcut you remember and one you don't.
+`build_chat(newline_escape=…)` takes any single character, or `None` to turn it off —
+`validate_escape` refuses anything else, and refuses `"\n"` outright because the escape is looked
+for on the cursor's own line, which never holds a newline, so it could only ever be a silent
+nothing.
 
 The check is anchored to the **cursor**, not to the end of the text, and that is not incidental: it
-is the only way left to send a message that really does end in a backslash — move off the end, and
-Enter sends. A test says so, and the `text.endswith()` version passes the first backslash test and
-fails that one.
+is the only way left to send a message that really does end in the escape — move off the end, and
+Enter sends. A test says so, and the `text.endswith()` version passes the first escape test and
+fails that one. With a space the cost is invisible anyway, since `submit()` strips what it sends.
+
+`None` has no branch of its own, deliberately: no character equals it, so the comparison already
+never fires. An early return for it was written, and then deleted — nothing could be broken to
+make a test notice it, which is this repository's definition of code that is not earning its
+place.
 
 **Four `ctrl` combos are not keys at all**, and `_validate_key` now refuses them. A terminal sends
 one byte for `ctrl+h` and for Backspace alike, so Textual reports `backspace` and a `ctrl+h`

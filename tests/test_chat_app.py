@@ -463,31 +463,62 @@ async def test_a_newline_key_opens_a_line_and_enter_sends_both(newline_key):
         assert app.query_one("#input-line", CommandInput).text == ""
 
 
-async def test_a_backslash_before_enter_opens_a_line_and_goes_away():
-    """The way in that needs no key at all: a backslash is a character."""
+async def test_a_space_before_enter_opens_a_line_and_is_consumed():
+    """The default escape, and the way in that needs no key at all.
+
+    Ending a line with a space and carrying on is what continuing already
+    feels like, so the gesture is the intention rather than a code for it.
+    """
     app = await chat_app()
     async with app.run_test() as pilot:
-        await pilot.press("a", "backslash", "enter", "b")
+        await pilot.press("a", "space", "enter", "b")
         assert app.query_one("#input-line", CommandInput).text == "a\nb"
-        assert app.messages == [], "the backslash opened a line, it did not send"
+        assert app.messages == [], "the space opened a line, it did not send"
 
         await pilot.press("enter")
         await pilot.pause()
         assert [m.text for m in app.messages] == ["a\nb"]
 
 
-async def test_a_message_that_really_ends_in_a_backslash_can_still_be_sent():
+async def test_a_message_that_really_ends_in_the_escape_can_still_be_sent():
     """Which is why the check is anchored to the cursor, not to the text.
 
     Move off the end and Enter means what it usually means. There is no other
     escape, so without this the character would be unsendable at the end of a
-    message.
+    message — and `submit` strips the text anyway, so with a space the whole
+    question is invisible.
     """
     app = await chat_app()
     async with app.run_test() as pilot:
-        await pilot.press("a", "backslash", "left", "enter")
+        await pilot.press("a", "space", "left", "enter")
         await pilot.pause()
-        assert [m.text for m in app.messages] == ["a\\"]
+        assert [m.text for m in app.messages] == ["a"], "stripped on the way out"
+
+
+async def test_the_escape_is_configurable_and_can_be_turned_off():
+    """A space suits a chat; a backslash suits somebody who types prose in one."""
+    app = await chat_app(newline_escape="\\")
+    async with app.run_test() as pilot:
+        await pilot.press("a", "space", "enter")
+        await pilot.pause()
+        assert [m.text for m in app.messages] == ["a"], "a space is no longer the escape"
+
+        await pilot.press("b", "backslash", "enter", "c")
+        assert app.query_one("#input-line", CommandInput).text == "b\nc"
+
+    off = await chat_app(newline_escape=None)
+    async with off.run_test() as pilot:
+        await pilot.press("a", "space", "enter")
+        await pilot.pause()
+        assert [m.text for m in off.messages] == ["a"], "no escape at all"
+
+
+@pytest.mark.parametrize("bad", ["", "  ", "\n", 7])
+def test_an_escape_that_could_never_fire_is_refused(bad):
+    """`\n` is the silent one: the escape is looked for on the cursor's own
+    line, which never holds a newline, so it would simply never match."""
+    with pytest.raises(ValueError, match="newline_escape"):
+        CommandInput(newline_escape=bad)
 
 
 #: What a terminal really puts on the wire for each newline key, and what

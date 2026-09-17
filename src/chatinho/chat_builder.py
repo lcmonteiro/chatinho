@@ -10,6 +10,7 @@ four roles a session takes, not something its own constructor wires up.
 from typing import Any, List, Optional
 
 from .chat_app import ChatApp
+from .chat_input import NEWLINE_ESCAPE
 from .chat_session import ChatSession
 from .chat_style import ChatStyle
 
@@ -24,6 +25,7 @@ def build_chat(
     style           : Optional[ChatStyle] = None,
     quit_key        : str = "ctrl+q",
     copy_key        : str = "ctrl+y",
+    newline_escape  : Optional[str] = NEWLINE_ESCAPE,
     name            : Optional[str] = None,
 ) -> ChatSession:
     """Builds a chat application from peers and a backend.
@@ -45,6 +47,12 @@ def build_chat(
         welcome_message: Message displayed on mount; empty means none.
         max_displayed: How many messages are rendered at once (sliding window).
         style: Colour scheme; defaults to :class:`~chatinho.chat_style.ChatStyle`.
+        newline_escape: Typed just before Enter, opens a line instead of
+            sending, and is consumed doing it. A space by default — ending a
+            line with one and carrying on is what continuing already feels
+            like. One character, or None for no escape at all. It is the only
+            way to a second line that no terminal can swallow, which is why it
+            is not simply a key.
         copy_key: Copies the message selected as the reply target. Tap a
             message, then press it — the keyboard way in, for a terminal that
             takes the long press for its own menu before the chat sees it.
@@ -71,6 +79,7 @@ def build_chat(
         style           = style,
         quit_key        = quit_key,
         copy_key        = copy_key,
+        newline_escape  = newline_escape,
         name            = name,
     )
     return ChatSession(

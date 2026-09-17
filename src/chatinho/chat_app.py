@@ -54,7 +54,14 @@ from .chat_hooks import (
     frontend,
     require,
 )
-from .chat_input import COMMAND_PREFIX, SUGGESTIONS_ID, CommandInput, CommandSuggestions
+from .chat_input import (
+    COMMAND_PREFIX,
+    NEWLINE_ESCAPE,
+    SUGGESTIONS_ID,
+    CommandInput,
+    CommandSuggestions,
+    validate_escape,
+)
 from .chat_log import ChatLog
 from .chat_message import ChatMessage
 from .chat_style import ChatStyle
@@ -200,6 +207,7 @@ class ChatApp(App):
         style           : Optional[ChatStyle] = None,
         quit_key        : str = "ctrl+q",
         copy_key        : str = "ctrl+y",
+        newline_escape  : Optional[str] = NEWLINE_ESCAPE,
         name            : Optional[str] = None,
     ) -> None:
         super().__init__()
@@ -212,6 +220,9 @@ class ChatApp(App):
             # mypy only sees DOMNode's read-only property, not the class
             # attribute the decorator put in front of it.
             self.name = name  # type: ignore[misc]
+        # Validated here as well as in the widget, because the widget is not
+        # built until compose() — and a mount is not where the caller looks.
+        self._newline_escape : Optional[str] = validate_escape(newline_escape)
         self._rebind_quit(_validate_key(quit_key))
         self._bindings.bind(
             _validate_key(copy_key), "copy_selected",
@@ -325,7 +336,11 @@ class ChatApp(App):
             ),
             Vertical(
                 CommandSuggestions(self.commands, id=SUGGESTIONS_ID),
-                CommandInput(placeholder=self._input_placeholder, id=INPUT_ID),
+                CommandInput(
+                    newline_escape = self._newline_escape,
+                    placeholder    = self._input_placeholder,
+                    id             = INPUT_ID,
+                ),
                 id="input-area",
             ),
             id=CHAT_BODY_ID,
