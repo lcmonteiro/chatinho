@@ -29,14 +29,48 @@ COMMAND_PREFIX : str = "/"
 
 SUGGESTIONS_ID : str = "command-suggestions"
 
-#: What opens a new line instead of sending. Terminals differ on which of
-#: these they can report at all, which is why there is more than one: all three
-#: reach Textual only through the enhanced keyboard protocol, as ``CSI 13;n u``,
-#: and a terminal that does not speak it sends a bare carriage return for every
-#: one of them — which arrives as ``enter`` and therefore *sends*. That is the
-#: failure to expect here, and it is a loud one; it is not ``ctrl+h``'s silent
-#: nothing, which is why these are not in the swallowed list.
-NEWLINE_KEYS : Tuple[str, ...] = ("ctrl+enter", "shift+enter", "alt+enter")
+#: The keys that open a new line instead of sending. ``ctrl+j`` is the only
+#: one that needs no enhanced keyboard protocol to arrive — it is Line Feed,
+#: a byte of its own, where the rest are a modified Return — so it must stay:
+#: a test fails if every key in here depends on a protocol, and names what
+#: each of the others degrades to without one. The way in that needs no key at
+#: all is :data:`NEWLINE_ESCAPE` before Enter, in
+#: :meth:`CommandInput._open_line_at_the_escape`.
+NEWLINE_KEYS : Tuple[str, ...] = ("ctrl+enter", "ctrl+j", "shift+enter", "alt+enter")
+
+#: The character that, typed just before Enter, opens a line instead of
+#: sending — and is consumed doing it. A **space**: ending a line with one and
+#: carrying on is what continuing already feels like, so the gesture is the
+#: intention rather than a code for it. Set it to another character, or to
+#: None to turn it off, with ``build_chat(newline_escape=…)``.
+NEWLINE_ESCAPE : str = " "
+
+
+def validate_escape(char: Optional[str]) -> Optional[str]:
+    """Checks the escape character, or None for no escape at all.
+
+    Args:
+        char: One character, or None to disable the escape.
+
+    Returns:
+        Optional[str]: *char*, unchanged.
+
+    Raises:
+        ValueError: If it is not a single character, or is a newline — which
+            could never match, since the escape is looked for on the cursor's
+            own line and a line never holds one. That is precisely the silent
+            nothing the key validator next door exists to prevent.
+    """
+    if char is None:
+        return None
+    if not isinstance(char, str) or len(char) != 1:
+        raise ValueError(
+            "newline_escape must be a single character or None, got %r" % (char,))
+    if char == "\n":
+        raise ValueError(
+            "newline_escape cannot be a newline: it is looked for on the cursor's "
+            "own line, which never holds one, so it would simply never fire")
+    return char
 
 
 class CommandSuggestions(OptionList):
@@ -116,8 +150,9 @@ class CommandInput(TextArea):
     """Multi-line input that drives the sibling :class:`CommandSuggestions` popup.
 
     Enter sends what was typed as :class:`CommandInput.Submitted`; the keys in
-    :data:`NEWLINE_KEYS` open a new line instead. Tab and Escape are only
-    claimed while the popup is open (see ``check_action``), so Tab still moves
+    :data:`NEWLINE_KEYS`, and :attr:`newline_escape` typed just before it, open
+    a new line instead. Tab and Escape are only claimed while the popup is open (see
+    ``check_action``), so Tab still moves
     focus as usual. Up and Down move the suggestion highlight when the popup is
     open and the cursor between lines when it is not — a multi-line input needs
     them for both.
@@ -149,7 +184,9 @@ class CommandInput(TextArea):
         Binding("escape", "dismiss_suggestions", show=False),
     ]
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, newline_escape: Optional[str] = NEWLINE_ESCAPE, **kwargs) -> None:
+        #: Typed just before Enter, opens a line instead of sending. None: none.
+        self.newline_escape : Optional[str] = validate_escape(newline_escape)
         # No cursor-line highlight: the input is drawn as an outline, and a
         # filled row would be the one background in it.
         kwargs.setdefault("soft_wrap", True)
@@ -200,8 +237,43 @@ class CommandInput(TextArea):
             self.post_message(self.Submitted(self, text))
         return False
 
+    def _open_line_at_the_escape(self) -> bool:
+        """Turns :attr:`newline_escape` immediately before the cursor into a line.
+
+        The second way in, and the only one needing no key a terminal might not
+        report: the escape is a *character*, and Enter is the key everyone has.
+        Claude Code ships this too, as a backslash; the default here is a space,
+        because ending a line with one and carrying on is what continuing
+        already feels like — the gesture is the intention rather than a code
+        for it.
+
+        It is anchored to the **cursor**, not to the end of the text, and that
+        is what leaves a way to send a message which really does end in the
+        escape: move off the end, and Enter sends. There is no other escape —
+        doubling the character is not one. With a space that costs little,
+        since :meth:`submit` strips what it sends anyway.
+
+        ``None`` needs no branch of its own and deliberately has none: no
+        character equals it, so the comparison below already never fires. An
+        early return for it was here and was deleted, because nothing could be
+        broken to make a test notice it.
+
+        Returns:
+            bool: True when a line was opened. False when the escape was not
+            there, or is off, and Enter means what it usually means.
+        """
+        row, column = self.cursor_location
+        if column == 0 or self.document.get_line(row)[column - 1] != self.newline_escape:
+            return False
+        self.replace("\n", (row, column - 1), (row, column))
+        return True
+
     async def _on_key(self, event: events.Key) -> None:
         """Claims Enter for sending, and the newline keys for a second line.
+
+        Enter only sends when the escape character does not precede the cursor;
+        that is the second way to open a line, and the only one no terminal can
+        swallow.
 
         ``TextArea`` inserts on Enter from inside its own key handler rather
         than through a binding, so a ``Binding("enter", …)`` here would never
@@ -215,7 +287,8 @@ class CommandInput(TextArea):
         if event.key == "enter":
             event.stop()
             event.prevent_default()
-            self.submit()
+            if not self._open_line_at_the_escape():
+                self.submit()
             return
         await super()._on_key(event)
 

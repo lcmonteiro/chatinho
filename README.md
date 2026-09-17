@@ -166,8 +166,10 @@ session owns the loop: `run()` starts
 everything, runs every peer's `serve()`, and closes when the first of them returns — quitting the
 terminal is the end of the chat. Markdown rendering,
 syntax-highlighted code blocks, command autocomplete and click-to-reply come with it. The input
-takes more than one line — **Enter sends, Ctrl+Enter opens a line** (Shift+Enter and
-Alt+Enter do too) — bubbles are drawn as
+takes more than one line — **Enter sends; Ctrl+J, or a space typed before Enter, opens a line**
+(Ctrl+Enter, Shift+Enter and Alt+Enter do too, on a terminal that reports them; those two always
+work, and `build_chat(newline_escape=…)` changes the character or turns it off) — bubbles are
+drawn as
 outlines that grow with their text, and the one filled bubble is the message you selected to reply
 to. `ChatStyle` is a dataclass — use `dataclasses.replace` to change a colour.
 

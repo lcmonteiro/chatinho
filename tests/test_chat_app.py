@@ -463,29 +463,113 @@ async def test_a_newline_key_opens_a_line_and_enter_sends_both(newline_key):
         assert app.query_one("#input-line", CommandInput).text == ""
 
 
-def test_a_terminal_reports_the_newline_keys_as_those_names_or_as_enter():
+async def test_a_space_before_enter_opens_a_line_and_is_consumed():
+    """The default escape, and the way in that needs no key at all.
+
+    Ending a line with a space and carrying on is what continuing already
+    feels like, so the gesture is the intention rather than a code for it.
+    """
+    app = await chat_app()
+    async with app.run_test() as pilot:
+        await pilot.press("a", "space", "enter", "b")
+        assert app.query_one("#input-line", CommandInput).text == "a\nb"
+        assert app.messages == [], "the space opened a line, it did not send"
+
+        await pilot.press("enter")
+        await pilot.pause()
+        assert [m.text for m in app.messages] == ["a\nb"]
+
+
+async def test_a_message_that_really_ends_in_the_escape_can_still_be_sent():
+    """Which is why the check is anchored to the cursor, not to the text.
+
+    Move off the end and Enter means what it usually means. There is no other
+    escape, so without this the character would be unsendable at the end of a
+    message — and `submit` strips the text anyway, so with a space the whole
+    question is invisible.
+    """
+    app = await chat_app()
+    async with app.run_test() as pilot:
+        await pilot.press("a", "space", "left", "enter")
+        await pilot.pause()
+        assert [m.text for m in app.messages] == ["a"], "stripped on the way out"
+
+
+async def test_the_escape_is_configurable_and_can_be_turned_off():
+    """A space suits a chat; a backslash suits somebody who types prose in one."""
+    app = await chat_app(newline_escape="\\")
+    async with app.run_test() as pilot:
+        await pilot.press("a", "space", "enter")
+        await pilot.pause()
+        assert [m.text for m in app.messages] == ["a"], "a space is no longer the escape"
+
+        await pilot.press("b", "backslash", "enter", "c")
+        assert app.query_one("#input-line", CommandInput).text == "b\nc"
+
+    off = await chat_app(newline_escape=None)
+    async with off.run_test() as pilot:
+        await pilot.press("a", "space", "enter")
+        await pilot.pause()
+        assert [m.text for m in off.messages] == ["a"], "no escape at all"
+
+
+@pytest.mark.parametrize("bad", ["", "  ", "\n", 7])
+def test_an_escape_that_could_never_fire_is_refused(bad):
+    """`\n` is the silent one: the escape is looked for on the cursor's own
+    line, which never holds a newline, so it would simply never match."""
+    with pytest.raises(ValueError, match="newline_escape"):
+        CommandInput(newline_escape=bad)
+
+
+#: What a terminal really puts on the wire for each newline key, and what
+#: Textual makes of it. `CSI 13 ; n u` — 13 is Return, n-1 the modifier
+#: bitmask — arrives only from a terminal that answers Textual's request for
+#: the enhanced keyboard protocol; `LF` needs no protocol, being a byte of its
+#: own since teletypes rather than a modified Return.
+_ON_THE_WIRE = {
+    "ctrl+j"      : "\n",             # LF 0x0A
+    "ctrl+enter"  : "\x1b[13;5u",
+    "shift+enter" : "\x1b[13;2u",
+    "alt+enter"   : "\x1b[13;3u",
+}
+
+#: What the same keys degrade to where that protocol is not spoken, which is
+#: the case this whole constant exists for. Termux is such a terminal.
+#: `shift+enter` is not listed because it degrades exactly as `ctrl+enter`
+#: does — a bare carriage return — and a second row would prove it twice.
+_WITHOUT_THE_PROTOCOL = {
+    "ctrl+j"     : ("\n",       ["ctrl+j"]),   # unchanged: it was never modified
+    "ctrl+enter" : ("\r",       ["enter"]),    # Enter's own byte, so it SENDS
+    "alt+enter"  : ("\x1b\r",   []),           # no key comes out at all
+}
+
+
+def test_at_least_one_newline_key_arrives_without_the_enhanced_protocol():
     """What a key is *called* is ours; whether it arrives is the terminal's.
 
-    `pilot.press` synthesises the name directly, so the test above proves the
-    handling and nothing about the wire. This feeds Textual's own parser the
-    bytes a terminal sends: with the enhanced keyboard protocol every newline
-    key comes back under its own name, and without it all three are a bare
-    carriage return, which is `enter` — so they send instead of opening a line.
-    That is the cost of every one of them, and it is worth a test because it is
-    the thing a bug report about this will actually be.
+    `pilot.press` synthesises the name directly, so every test above proves the
+    handling and nothing at all about the wire. This one feeds Textual's own
+    parser the bytes, and guards the invariant a bug report is actually about:
+    **something has to work on a terminal that answers no protocol**, or the
+    input has no second line at all. Shipping `ctrl+enter` alone failed exactly
+    there, on a phone.
+
+    The degradations are named one by one because each is reported as a
+    different bug — "ctrl+enter sends the message" and "alt+enter does
+    nothing". What the parser does with whatever *follows* an `ESC CR` is the
+    driver's timing, which this does not model and so does not claim.
     """
     from textual._xterm_parser import XTermParser
 
-    #: `CSI 13 ; n u` — 13 is Return, n-1 is the modifier bitmask.
-    enhanced = {"ctrl+enter": "\x1b[13;5u", "shift+enter": "\x1b[13;2u",
-                "alt+enter": "\x1b[13;3u"}
-    assert set(enhanced) == set(NEWLINE_KEYS), "a key was added without its sequence"
-
-    for name, sequence in enhanced.items():
+    assert set(_ON_THE_WIRE) == set(NEWLINE_KEYS), \
+        "a newline key was added or removed without its bytes"
+    for name, sequence in _ON_THE_WIRE.items():
         assert [e.key for e in XTermParser().feed(sequence)] == [name]
 
-    assert [e.key for e in XTermParser().feed("\r")] == ["enter"], \
-        "no enhanced protocol: the modifier is lost and the line is sent"
+    survivors = [name for name, (seq, keys) in _WITHOUT_THE_PROTOCOL.items() if keys == [name]]
+    assert survivors, "every newline key would then need a protocol to arrive"
+    for name, (sequence, expected) in _WITHOUT_THE_PROTOCOL.items():
+        assert [e.key for e in XTermParser().feed(sequence)] == expected, name
 
 
 async def test_the_input_grows_with_the_lines_up_to_its_maximum():
