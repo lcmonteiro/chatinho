@@ -628,6 +628,18 @@ Everything about the conversation is reached by declaring a hook — which is wh
 
 Both scripts resolve paths relative to their own location, so they work from any cwd.
 
+**On Termux, `setup.sh` syncs `--extra tui` rather than `--extra dev`, and that is not a
+preference.** PyPI ships no aarch64-Android wheel for `ruff`, nor for `openai`'s `pydantic-core`
+— both are Rust — so `--extra dev` on a phone is not an install at all: it is uv handing them to
+maturin and cargo to compile there. That is slow when it works, and when the cargo registry holds
+a half-extracted crate it fails outright with `failed to open …/.cargo-ok: File exists`, which
+reads like a chatinho problem and is not one. `tui` is textual and its pure-Python wheels, which
+is the whole of what `run.sh` needs. `CHATINHO_EXTRA=dev bash setup.sh` overrides it for a phone
+with a working cargo, and `CHATINHO_EXTRA` works the other way round too on a desktop.
+
+`UV` may be pre-set to point the script at a particular uv, which is also how the Termux branch is
+exercised off a phone: a stub on `PREFIX` and a stub uv show which extra each platform picks.
+
 **Requires Python >= 3.12.** Many sandboxes default `python3` to 3.11, where the install fails
 with `Package 'chatinho' requires a different Python`. Use `python3.12` explicitly if so.
 

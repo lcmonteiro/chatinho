@@ -23,7 +23,9 @@ find_uv() {
     return 1
 }
 
-UV="$(find_uv || true)"
+# A pre-set UV wins, so the script can be driven somewhere other than where
+# find_uv looks — which is also how its Termux branch is exercised off a phone.
+UV="${UV:-$(find_uv || true)}"
 
 # Detect Termux/Android: the official uv installer does not support aarch64-linux-android.
 is_termux() {
@@ -65,10 +67,32 @@ else
     echo "🔄 .venv exists — updating dependencies..."
 fi
 
-# Always sync dependencies (installs new ones, updates changed ones, removes unused).
-# --extra dev is explicit on purpose: the package itself installs nothing, and the
-# batteries live behind extras, so a bare `uv sync` would depend on which uv you
-# have for whether the test tools land in .venv at all.
-echo "📦 Installing/updating all dependencies (including the extras)..."
-"$UV" sync --extra dev
+# Which extra to sync. `dev` is explicit on purpose: the package itself installs
+# nothing, and the batteries live behind extras, so a bare `uv sync` would depend
+# on which uv you have for whether the test tools land in .venv at all.
+#
+# Termux is the exception, and not a preference: PyPI ships no aarch64-Android
+# wheel for `ruff` (Rust) or for `openai`'s pydantic-core (Rust), so `--extra dev`
+# there is not an install at all — it is uv handing both to maturin and cargo to
+# compile on a phone, which is slow when it works and fails outright when the
+# cargo registry has a half-extracted crate in it ("failed to open .cargo-ok:
+# File exists"). `tui` is textual and nothing else, all pure-Python wheels, and
+# it is the whole of what ./run.sh needs.
+EXTRA="${CHATINHO_EXTRA:-}"
+if [ -z "$EXTRA" ]; then
+    if is_termux; then
+        EXTRA="tui"
+    else
+        EXTRA="dev"
+    fi
+fi
+
+echo "📦 Installing/updating dependencies (--extra $EXTRA)..."
+"$UV" sync --extra "$EXTRA"
+
+if [ "$EXTRA" = "tui" ] && is_termux; then
+    echo "   (Termux: the terminal only. ruff and openai are Rust on this platform"
+    echo "    and would be built from source — CHATINHO_EXTRA=dev bash setup.sh if"
+    echo "    you have a working cargo and want the checks too.)"
+fi
 echo "✅ Setup complete — run: ./run.sh  (or .venv/bin/python demo.py)"
