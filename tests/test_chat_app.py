@@ -424,8 +424,13 @@ async def test_a_bubble_has_no_background_until_it_is_the_reply_target():
         assert bubble.styles.background.a == 0, "deselected: back to an outline"
 
 
-async def test_every_message_is_aligned_left():
-    """Sent and received start at the same column; nothing is pushed right."""
+async def test_who_spoke_is_on_the_container_whichever_side_it_takes():
+    """The side is a style; the class is what the log routes on.
+
+    Alignment itself is asserted where ``local_align`` is — both defaults and
+    the other side, in one place. What matters here is that every message
+    carries one of the two classes the stylesheet aligns by.
+    """
     app = await chat_app(connectors=[_Outro()])
     async with app.run_test(size=(100, 30)) as pilot:
         outro = next(at for at, who in app.peers().items()
@@ -434,11 +439,9 @@ async def test_every_message_is_aligned_left():
         await app.ask(outro, "e tu?")
         await pilot.pause()
 
-        containers = list(app.query(".message-container"))
-        assert {"sent", "received"} <= {c for w in containers for c in w.classes}, \
-            "both kinds are in the log"
-        assert len({w.query_one(".message-bubble").region.x for w in containers}) == 1, \
-            "one column, whoever spoke"
+        kinds = [{"sent", "received"} & w.classes for w in app.query(".message-container")]
+        assert all(len(k) == 1 for k in kinds), "exactly one of the two, never both"
+        assert {"sent"} in kinds and {"received"} in kinds, "both kinds are in the log"
 
 
 # === The input takes more than one line =========================================
@@ -1289,7 +1292,8 @@ async def test_the_input_is_still_at_the_bottom_of_the_centred_body():
         assert input.region.x == body.region.x, "and the input moved in with it"
 
 
-async def test_your_own_messages_are_on_the_left_by_default():
+async def test_your_own_messages_are_on_the_right_by_default():
+    """Everyone else stays left, so it reads as two columns."""
     app = await chat_app(connectors=[_Outro()])
     async with app.run_test(size=(140, 20)) as pilot:
         at = {getattr(who, "name", None): i for i, who in app.peers().items()}
@@ -1298,13 +1302,14 @@ async def test_your_own_messages_are_on_the_left_by_default():
         await pilot.pause()
 
         sides = _sides(app)
-        assert sides["sent"] == sides["received"], "one column"
+        assert sides["sent"] > sides["received"], "yours are on the right"
+        assert sides["received"] == app.query_one("#chat-body").region.x + 2, \
+            "and theirs are not"
 
 
-async def test_local_align_right_puts_your_messages_on_the_other_side():
-    """Everyone else stays left, so it reads as two columns."""
+async def test_local_align_left_puts_everyone_in_one_column():
     app = await chat_app(connectors=[_Outro()],
-                         style=replace(ChatStyle(), local_align="right"))
+                         style=replace(ChatStyle(), local_align="left"))
     async with app.run_test(size=(140, 20)) as pilot:
         at = {getattr(who, "name", None): i for i, who in app.peers().items()}
         await app.say("minha")
@@ -1312,9 +1317,7 @@ async def test_local_align_right_puts_your_messages_on_the_other_side():
         await pilot.pause()
 
         sides = _sides(app)
-        assert sides["sent"] > sides["received"], "yours moved right"
-        assert sides["received"] == app.query_one("#chat-body").region.x + 2, \
-            "and theirs did not"
+        assert sides["sent"] == sides["received"], "one column"
 
 
 def test_a_local_align_that_is_not_a_side_is_refused():

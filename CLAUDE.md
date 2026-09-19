@@ -317,12 +317,14 @@ what makes it testable without a terminal.
 A bubble is a **border and nothing else** — the chat background shows through it. The one filled
 thing in the log is the message you have selected to reply to, which is what the two `*_bubble_bg`
 fields in `ChatStyle` now mean, and the fill is the *whole* of the selection: there is no second
-outline on top of it. **Which side you are on is `ChatStyle.local_align`**, `"left"` or `"right"`; everyone else is
-always on the left, so `"right"` makes the conversation read as two columns and the default
-`"left"` as one. The sender is already in the header and in the border colour, so a right-hand
-column is a second way of saying it that costs half the width — worth having, not worth assuming.
-A value that is neither side is refused at construction, because Textual would take the broken rule
-and report it nowhere the caller would look.
+outline on top of it. **Which side you are on is `ChatStyle.local_align`**, and the default is
+`"right"`: everyone else is always on the left, so your own messages on the other side make the
+conversation read as two columns, which is what a chat looks like. `"left"` puts everyone in one.
+The cost is real and was the reason it defaulted the other way — a right-hand column says what the
+header and the border colour already said, and it costs half the width to say it — but a chat that
+does not sort by side does not read as a chat, and the width is there on a terminal. On a phone it
+is not, which is what `"left"` is for. A value that is neither side is refused at construction,
+because Textual would take the broken rule and report it nowhere the caller would look.
 
 **The chat is centred, and `chat_max_width` caps it.** A line the width of a desk is a line nobody
 reads across, so a wide terminal gives margins instead. It is a *maximum* and not a width: on a

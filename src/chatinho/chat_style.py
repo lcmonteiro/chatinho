@@ -205,7 +205,7 @@ class ChatStyle:
     # Which side the user's own messages sit on: "left" or "right". Everyone
     # else is always on the left, so "right" makes the conversation read as
     # two columns and "left" as one.
-    local_align: str = "left"
+    local_align: str = "right"
 
     # One colour per peer: the header — who spoke, and the message id — and
     # the bubble's border beneath it, so a peer is one colour and not two.
