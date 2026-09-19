@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **229 pass** |
+| `pytest -q` | **230 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -340,6 +340,33 @@ bubble rather than a child, so the bubble holds only what was said — but it st
 bubble narrower than the header sitting on it reads as two things rather than one. The hues
 are spread apart deliberately: the common chat is the user and one connector, so slots 0 and 1 have
 to be told apart at a glance, and the two greens they started as could not be.
+
+**The default palette is Claude Code's**, which the chat was a WhatsApp green before. Every colour
+in `ChatStyle` comes from that terminal: a warm neutral ramp — `#1f1e1d` background, `#262624` and
+`#2f2e2b` surfaces, `#3d3b37` borders and the selected bubble, `#8a8984` for what is muted, and
+`#f0eee6` cream to write on — with Claude's `#d97757` as the accent, on the quote border and on the
+focused input. Slot 0 is that cream and slot 1 the orange, because "you in plain text, them in
+orange" is the pairing the terminal itself reads by; the periwinkle, green, amber and pink behind
+them are the rest of its colours. `tool_header` is the muted grey rather than a hue of its own:
+a command is not a peer, and Claude Code dims a tool line rather than giving it a voice.
+
+**Three places kept Textual's blue, and only a render showed it.** Swapping the hexes left the
+chat warm and the chrome blue, because none of the three is styled the way a bubble is:
+
+- **The scrollbar was never ours at all.** The four `scrollbar_*` fields were rendered into a
+  `.scrollbar` rule — a valid selector matching nothing, so the stylesheet parsed, the fields
+  looked set, and the default theme's blue ran down the side of the chat. Textual styles a
+  scrollbar with `scrollbar-background`/`scrollbar-color` *properties on the scrollable widget*,
+  which is what `#chat-log` carries now, and a test asserts the bar wears the palette — it fails
+  on the old rule.
+- **The command popup never takes focus**, the input keeps it, so Textual drew the highlighted row
+  with its *blurred* block cursor. Both states are set to the accent, or the palette holds
+  everywhere except the one row the eye is on.
+- **The copy confirmation is Textual's own `Toast`**, floated above the chat and themed by it.
+  Only `-information` is overridden; warning and error keep their colours, which mean something.
+
+What stays Textual's is the syntax highlighting inside a fence: that is a code theme, not a chat
+palette, and Claude Code's own blocks are no different.
 
 **The header names the peer**: `21:15 @meteo · msg-3`. `ChatLog` reads the roster through the
 `peers` grant, the same way it reads the conversation through `context`, and calls it fresh rather

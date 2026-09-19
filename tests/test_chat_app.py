@@ -14,6 +14,7 @@ from dataclasses import replace
 import pytest
 from textual import events
 from textual.binding import NoBinding
+from textual.color import Color
 
 from chatinho.chat_app import ChatApp
 from chatinho.chat_input import NEWLINE_KEYS, CommandInput
@@ -651,6 +652,29 @@ def test_the_palette_wraps_round_rather_than_running_out():
 def test_a_palette_with_no_colours_is_refused():
     with pytest.raises(ValueError, match="peer_headers"):
         ChatStyle(peer_headers=())
+
+
+async def test_the_scrollbar_wears_the_palette_too():
+    """Textual styles a scrollbar with properties, not with a class of its own.
+
+    The four ``scrollbar_*`` fields used to be rendered into a ``.scrollbar``
+    rule, which is a valid selector matching nothing — so the fields were set,
+    the stylesheet parsed, and the default theme's blue still ran down the side
+    of the chat. Only a render showed it.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(60, 14)) as pilot:
+        for i in range(6):
+            await app.say("mensagem %d, comprida o suficiente para encher a linha toda" % i)
+        await pilot.pause()
+
+        log   = app._chat_log
+        style = ChatStyle()
+        assert log.show_vertical_scrollbar, "narrow and full: the bar is up to be looked at"
+        assert log.styles.scrollbar_background       == Color.parse(style.scrollbar_bg)
+        assert log.styles.scrollbar_color            == Color.parse(style.scrollbar_color)
+        assert log.styles.scrollbar_background_hover == Color.parse(style.scrollbar_hover_bg)
+        assert log.styles.scrollbar_color_hover      == Color.parse(style.scrollbar_hover_color)
 
 
 # === A bubble stays inside the window ============================================
