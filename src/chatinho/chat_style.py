@@ -143,6 +143,13 @@ Toast.-information .toast--title {
     text-style: bold;
     margin: 0 0 0 1;
 }
+/* ChatLog gives the header the bubble's own span, so the text inside it can
+   take the side the bubble took. Without this the header sits against the
+   bubble's left edge on both sides, because `align` moves the pair as one
+   block and does not align within it. */
+.message-container.sent .message-header {
+    text-align: $local_align;
+}
 $peer_header_rules
 .message-body {
     margin: 0;

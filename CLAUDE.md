@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **230 pass** |
+| `pytest -q` | **231 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -339,7 +339,21 @@ peers than colours. `to_css()` renders two rules per entry, plus `.peer-tool` be
 no id of its own: the header's `color` and the bubble's `border`. The header is a *sibling* of the
 bubble rather than a child, so the bubble holds only what was said — but it still sets the bubble's
 **minimum** width — the header's own indent plus one space, so the two do not end flush — because a
-bubble narrower than the header sitting on it reads as two things rather than one. The hues
+bubble narrower than the header sitting on it reads as two things rather than one.
+
+**A header sized by its own text hugs the wrong edge, and `align` will not fix it.** Textual moves
+the header and the bubble as one *block*; it does not align within that block, so a header left to
+size itself stays against the bubble's left edge whichever side the block landed on. On the right,
+under a wide bubble, that strands it up to fifty cells from the message it names — which looked
+like the header not having moved at all. `ChatLog` gives the header the bubble's own measured span
+less `_HEADER_SLACK` (the border cell at each end), and `.message-container.sent .message-header`
+takes `text-align: $local_align`, so the text lands on the side the bubble took. A header too long
+for that span keeps its own width, exactly as it did before.
+
+The test reads the *rendered* header line and finds where the ink is, not where the box is: now
+that the box spans the bubble on both sides, a box measurement passes with the text stranded at
+either end of it. Both halves were broken separately to watch it fail — the width alone leaves the
+text at the far end, and the `text-align` alone has nothing to align inside. The hues
 are spread apart deliberately: the common chat is the user and one connector, so slots 0 and 1 have
 to be told apart at a glance, and the two greens they started as could not be.
 

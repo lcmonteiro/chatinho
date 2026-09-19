@@ -284,8 +284,17 @@ class ChatLog(TouchScrollableContainer):
         # max-width the stylesheet sets, which Textual clamps this against.
         # It has to be measured here: `width: auto` collapses to nothing,
         # because Markdown reports no content width of its own.
-        bubble.styles.width = self._bubble_width(msg.text, quote, floor=len(prefix))
+        width = self._bubble_width(msg.text, quote, floor=len(prefix))
+        bubble.styles.width = width
 
+        # The header is a sibling of the bubble, and Textual's `align` shifts
+        # the two as one block: a header left to size itself stays against the
+        # bubble's *left* edge whichever side the block lands on, which on the
+        # right is a whole bubble away from where the message is. So it takes
+        # the bubble's own span, minus the border cell at each end, and the
+        # stylesheet aligns the text inside it to the same side the bubble took.
+        # A header too long for that keeps its own width, as it always did.
+        header.styles.width = max(width - _HEADER_SLACK, len(prefix))
 
         # The header sits above the bubble rather than inside it, and the peer
         # class is on the container so one colour reaches both.

@@ -1251,6 +1251,19 @@ def _sides(app):
     return out
 
 
+def _header_text_span(container):
+    """The columns the header's *text* occupies, not the box holding it.
+
+    The box spans the bubble on both sides now, so a box measurement would
+    pass with the text stranded at either end of it. This renders the header
+    and finds where the ink actually is.
+    """
+    header = container.query_one(".message-header")
+    line   = header.render_lines(header.region.size.region)[0].text
+    return (header.region.x + len(line) - len(line.lstrip()),
+            header.region.x + len(line.rstrip()))
+
+
 async def test_the_chat_is_centred_and_capped_on_a_wide_terminal():
     """A line the width of a desk is a line nobody reads across."""
     app = await chat_app()
@@ -1305,6 +1318,36 @@ async def test_your_own_messages_are_on_the_right_by_default():
         assert sides["sent"] > sides["received"], "yours are on the right"
         assert sides["received"] == app.query_one("#chat-body").region.x + 2, \
             "and theirs are not"
+
+
+async def test_a_header_hugs_the_same_edge_its_bubble_does():
+    """Textual's ``align`` moves the header and the bubble as one block.
+
+    It does not align *within* that block, so a header left to size itself
+    stays against the bubble's left edge whichever side the block landed on —
+    which on the right, under a wide bubble, strands it a whole bubble away
+    from the message it names. The header takes the bubble's own span now, and
+    the text inside it takes the same side.
+    """
+    app = await chat_app(connectors=[_Outro()])
+    async with app.run_test(size=(96, 24)) as pilot:
+        at = {getattr(who, "name", None): i for i, who in app.peers().items()}
+        await app.say("uma mensagem longa o suficiente para a bolha esticar bem para a esquerda")
+        await app.ask(at["outro"], "e uma pergunta igualmente comprida, para a bolha dela esticar")
+        await pilot.pause()
+
+        mine   = app.query_one(".message-container.sent")
+        theirs = app.query_one(".message-container.received")
+
+        bubble = mine.query_one(".message-bubble").region
+        start, end = _header_text_span(mine)
+        assert end == bubble.right - 1, "mine ends where its bubble does, a cell inside the border"
+        assert start > bubble.x + 10, "and is not stranded at the far end of it"
+
+        bubble = theirs.query_one(".message-bubble").region
+        start, end = _header_text_span(theirs)
+        assert start == bubble.x + 1, "theirs starts where its bubble does, a cell inside"
+        assert end < bubble.right - 10, "and is not dragged over to the other end"
 
 
 async def test_local_align_left_puts_everyone_in_one_column():
