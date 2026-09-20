@@ -14,6 +14,11 @@ Use ``dataclasses.replace`` to tweak a base style without touching the rest:
     dark = ChatStyle()
     green = replace(dark, accent="#00ff88")
 
+**The default palette is Claude Code's**: a warm neutral ramp from
+``#1f1e1d`` up to the ``#f0eee6`` cream it writes on, with Claude's own
+``#d97757`` as the accent, and the rest of that terminal's colours —
+periwinkle, green, amber, pink — spread across the peer slots.
+
 **A bubble is drawn as an outline, not as a fill.** The border carries the
 colour and the chat background shows through, so the two ``*_bubble_bg``
 fields are the tint a bubble takes *only* while it is the reply target —
@@ -44,14 +49,13 @@ Screen {
     overflow-y: auto;
     padding: 1 2;
     background: $chat_bg;
-}
-.scrollbar {
-    background: $scrollbar_bg;
-    color: $scrollbar_color;
-}
-.scrollbar:hover {
-    background: $scrollbar_hover_bg;
-    color: $scrollbar_hover_color;
+    scrollbar-background: $scrollbar_bg;
+    scrollbar-color: $scrollbar_color;
+    scrollbar-background-hover: $scrollbar_hover_bg;
+    scrollbar-color-hover: $scrollbar_hover_color;
+    scrollbar-background-active: $scrollbar_hover_bg;
+    scrollbar-color-active: $scrollbar_hover_color;
+    scrollbar-corner-color: $chat_bg;
 }
 #input-area {
     dock: bottom;
@@ -67,6 +71,29 @@ Screen {
 }
 #command-suggestions.-visible {
     display: block;
+}
+/* The popup never takes focus — the input keeps it — so Textual draws the
+   highlighted row with its *blurred* block cursor, which is the theme's blue
+   and not ours. Both states are set, or the palette holds everywhere except
+   the one row the eye is on. */
+#command-suggestions > .option-list--option-highlighted,
+#command-suggestions:focus > .option-list--option-highlighted {
+    background: $accent;
+    color: $screen_bg;
+    text-style: bold;
+}
+/* The copy confirmation is Textual's own widget, floated above the chat;
+   without this it arrives in the default theme's colours. Warning and error
+   keep theirs, which mean something. */
+Toast {
+    background: $input_bg;
+    color: $input_color;
+}
+Toast.-information {
+    border-left: outer $accent;
+}
+Toast.-information .toast--title {
+    color: $accent;
 }
 #input-line {
     height: auto;
@@ -116,6 +143,13 @@ Screen {
     text-style: bold;
     margin: 0 0 0 1;
 }
+/* ChatLog gives the header the bubble's own span, so the text inside it can
+   take the side the bubble took. Without this the header sits against the
+   bubble's left edge on both sides, because `align` moves the pair as one
+   block and does not align within it. */
+.message-container.sent .message-header {
+    text-align: $local_align;
+}
 $peer_header_rules
 .message-body {
     margin: 0;
@@ -145,24 +179,24 @@ class ChatStyle:
     """
 
     # Screen / layout
-    screen_bg: str = "#0b141a"
-    chat_bg: str = "#0b141a"
+    screen_bg: str = "#1f1e1d"
+    chat_bg: str = "#1f1e1d"
 
     # Scrollbar
-    scrollbar_bg: str = "#1f2c33"
-    scrollbar_color: str = "#8696a0"
-    scrollbar_hover_bg: str = "#2a3942"
-    scrollbar_hover_color: str = "#e9edef"
+    scrollbar_bg: str = "#2f2e2b"
+    scrollbar_color: str = "#8a8984"
+    scrollbar_hover_bg: str = "#3d3b37"
+    scrollbar_hover_color: str = "#f0eee6"
 
     # Input line — drawn as an outline; it grows with the text up to this many rows
-    input_bg: str = "#202c33"
-    input_border: str = "#2a3942"
-    input_color: str = "#e9edef"
-    input_focus_border: str = "#00a884"
+    input_bg: str = "#262624"
+    input_border: str = "#3d3b37"
+    input_color: str = "#f0eee6"
+    input_focus_border: str = "#d97757"
     input_max_height: str = "8"
 
     # Accent (quote border)
-    accent: str = "#00a884"
+    accent: str = "#d97757"
 
     # How wide a bubble may grow before its text wraps, and how far its right
     # edge stays clear of the scrollbar. The width is applied in Python, by
@@ -178,33 +212,41 @@ class ChatStyle:
     # Which side the user's own messages sit on: "left" or "right". Everyone
     # else is always on the left, so "right" makes the conversation read as
     # two columns and "left" as one.
-    local_align: str = "left"
+    local_align: str = "right"
 
     # One colour per peer: the header — who spoke, and the message id — and
     # the bubble's border beneath it, so a peer is one colour and not two.
     # Indexed by the peer's id, and wrapped round when there are more peers
     # than colours; slot zero is the user, and a command speaks as TOOL.
     peer_headers: Tuple[str, ...] = (
-        "#8fd6b4",       # 0 — LOCAL, the user
-        "#f6c177",       # the hues are spread apart on purpose: the common
-        "#9ccfd8",       # chat is the user and one connector, so slots 0 and
-        "#c4a7e7",       # 1 have to be told apart at a glance — two greens
-        "#eb6f92",       # were not
-        "#7de0a3",
+        "#e5e4df",       # 0 — LOCAL, the user: Claude Code writes your own
+                         #     turn in plain cream, and so does this
+        "#d97757",       # 1 — Claude's orange. The hues are spread apart on
+                         #     purpose: the common chat is the user and one
+                         #     connector, so slots 0 and 1 have to be told
+                         #     apart at a glance — two greens were not, and
+                         #     cream against orange is the pairing Claude
+                         #     Code itself reads as "you" and "them"
+        "#b1b9f9",       # periwinkle
+        "#4eba65",       # green
+        "#ffc107",       # amber
+        "#fd5db1",       # pink
     )
-    tool_header: str = "#b8a1e3"
+    # A command is not a peer, and Claude Code dims its tool lines rather than
+    # giving them a voice; the warm grey says machinery, not somebody speaking.
+    tool_header: str = "#8a8984"
 
     # Sent bubbles — the border is what is drawn; the bg is the reply-target tint
-    sent_bubble_bg: str = "#005c4b"
-    sent_text: str = "#e9edef"
+    sent_bubble_bg: str = "#3d3b37"
+    sent_text: str = "#f0eee6"
 
     # Received bubbles — the border is what is drawn; the bg is the reply-target tint
-    received_bubble_bg: str = "#202c33"
-    received_text: str = "#e9edef"
+    received_bubble_bg: str = "#2f2e2b"
+    received_text: str = "#f0eee6"
 
     # Quote (reply preview)
-    quote_color: str = "#8696a0"
-    quote_bg: str = "#111b21"
+    quote_color: str = "#8a8984"
+    quote_bg: str = "#262624"
 
     def __post_init__(self) -> None:
         """Refuses a palette with nothing in it, and a side that is neither.

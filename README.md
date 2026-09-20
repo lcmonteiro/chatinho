@@ -171,7 +171,8 @@ takes more than one line — **Enter sends; Ctrl+J, or a space typed before Ente
 work, and `build_chat(newline_escape=…)` changes the character or turns it off) — bubbles are
 drawn as
 outlines that grow with their text, and the one filled bubble is the message you selected to reply
-to. `ChatStyle` is a dataclass — use `dataclasses.replace` to change a colour.
+to. The colours are Claude Code's — its warm neutrals and Claude's own orange — and `ChatStyle` is
+a dataclass, so `dataclasses.replace` changes any one of them.
 
 `quit_key` moves the quit binding off Textual's `ctrl+q` — `build_chat(quit_key="ctrl+g")` — and a
 key Textual could never receive is refused there and then, rather than becoming a binding that

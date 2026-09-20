@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **229 pass** |
+| `pytest -q` | **231 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -317,12 +317,14 @@ what makes it testable without a terminal.
 A bubble is a **border and nothing else** — the chat background shows through it. The one filled
 thing in the log is the message you have selected to reply to, which is what the two `*_bubble_bg`
 fields in `ChatStyle` now mean, and the fill is the *whole* of the selection: there is no second
-outline on top of it. **Which side you are on is `ChatStyle.local_align`**, `"left"` or `"right"`; everyone else is
-always on the left, so `"right"` makes the conversation read as two columns and the default
-`"left"` as one. The sender is already in the header and in the border colour, so a right-hand
-column is a second way of saying it that costs half the width — worth having, not worth assuming.
-A value that is neither side is refused at construction, because Textual would take the broken rule
-and report it nowhere the caller would look.
+outline on top of it. **Which side you are on is `ChatStyle.local_align`**, and the default is
+`"right"`: everyone else is always on the left, so your own messages on the other side make the
+conversation read as two columns, which is what a chat looks like. `"left"` puts everyone in one.
+The cost is real and was the reason it defaulted the other way — a right-hand column says what the
+header and the border colour already said, and it costs half the width to say it — but a chat that
+does not sort by side does not read as a chat, and the width is there on a terminal. On a phone it
+is not, which is what `"left"` is for. A value that is neither side is refused at construction,
+because Textual would take the broken rule and report it nowhere the caller would look.
 
 **The chat is centred, and `chat_max_width` caps it.** A line the width of a desk is a line nobody
 reads across, so a wide terminal gives margins instead. It is a *maximum* and not a width: on a
@@ -337,9 +339,50 @@ peers than colours. `to_css()` renders two rules per entry, plus `.peer-tool` be
 no id of its own: the header's `color` and the bubble's `border`. The header is a *sibling* of the
 bubble rather than a child, so the bubble holds only what was said — but it still sets the bubble's
 **minimum** width — the header's own indent plus one space, so the two do not end flush — because a
-bubble narrower than the header sitting on it reads as two things rather than one. The hues
+bubble narrower than the header sitting on it reads as two things rather than one.
+
+**A header sized by its own text hugs the wrong edge, and `align` will not fix it.** Textual moves
+the header and the bubble as one *block*; it does not align within that block, so a header left to
+size itself stays against the bubble's left edge whichever side the block landed on. On the right,
+under a wide bubble, that strands it up to fifty cells from the message it names — which looked
+like the header not having moved at all. `ChatLog` gives the header the bubble's own measured span
+less `_HEADER_SLACK` (the border cell at each end), and `.message-container.sent .message-header`
+takes `text-align: $local_align`, so the text lands on the side the bubble took. A header too long
+for that span keeps its own width, exactly as it did before.
+
+The test reads the *rendered* header line and finds where the ink is, not where the box is: now
+that the box spans the bubble on both sides, a box measurement passes with the text stranded at
+either end of it. Both halves were broken separately to watch it fail — the width alone leaves the
+text at the far end, and the `text-align` alone has nothing to align inside. The hues
 are spread apart deliberately: the common chat is the user and one connector, so slots 0 and 1 have
 to be told apart at a glance, and the two greens they started as could not be.
+
+**The default palette is Claude Code's**, which the chat was a WhatsApp green before. Every colour
+in `ChatStyle` comes from that terminal: a warm neutral ramp — `#1f1e1d` background, `#262624` and
+`#2f2e2b` surfaces, `#3d3b37` borders and the selected bubble, `#8a8984` for what is muted, and
+`#f0eee6` cream to write on — with Claude's `#d97757` as the accent, on the quote border and on the
+focused input. Slot 0 is that cream and slot 1 the orange, because "you in plain text, them in
+orange" is the pairing the terminal itself reads by; the periwinkle, green, amber and pink behind
+them are the rest of its colours. `tool_header` is the muted grey rather than a hue of its own:
+a command is not a peer, and Claude Code dims a tool line rather than giving it a voice.
+
+**Three places kept Textual's blue, and only a render showed it.** Swapping the hexes left the
+chat warm and the chrome blue, because none of the three is styled the way a bubble is:
+
+- **The scrollbar was never ours at all.** The four `scrollbar_*` fields were rendered into a
+  `.scrollbar` rule — a valid selector matching nothing, so the stylesheet parsed, the fields
+  looked set, and the default theme's blue ran down the side of the chat. Textual styles a
+  scrollbar with `scrollbar-background`/`scrollbar-color` *properties on the scrollable widget*,
+  which is what `#chat-log` carries now, and a test asserts the bar wears the palette — it fails
+  on the old rule.
+- **The command popup never takes focus**, the input keeps it, so Textual drew the highlighted row
+  with its *blurred* block cursor. Both states are set to the accent, or the palette holds
+  everywhere except the one row the eye is on.
+- **The copy confirmation is Textual's own `Toast`**, floated above the chat and themed by it.
+  Only `-information` is overridden; warning and error keep their colours, which mean something.
+
+What stays Textual's is the syntax highlighting inside a fence: that is a code theme, not a chat
+palette, and Claude Code's own blocks are no different.
 
 **The header names the peer**: `21:15 @meteo · msg-3`. `ChatLog` reads the roster through the
 `peers` grant, the same way it reads the conversation through `context`, and calls it fresh rather
@@ -600,6 +643,18 @@ Everything about the conversation is reached by declaring a hook — which is wh
 ```
 
 Both scripts resolve paths relative to their own location, so they work from any cwd.
+
+**On Termux, `setup.sh` syncs `--extra tui` rather than `--extra dev`, and that is not a
+preference.** PyPI ships no aarch64-Android wheel for `ruff`, nor for `openai`'s `pydantic-core`
+— both are Rust — so `--extra dev` on a phone is not an install at all: it is uv handing them to
+maturin and cargo to compile there. That is slow when it works, and when the cargo registry holds
+a half-extracted crate it fails outright with `failed to open …/.cargo-ok: File exists`, which
+reads like a chatinho problem and is not one. `tui` is textual and its pure-Python wheels, which
+is the whole of what `run.sh` needs. `CHATINHO_EXTRA=dev bash setup.sh` overrides it for a phone
+with a working cargo, and `CHATINHO_EXTRA` works the other way round too on a desktop.
+
+`UV` may be pre-set to point the script at a particular uv, which is also how the Termux branch is
+exercised off a phone: a stub on `PREFIX` and a stub uv show which extra each platform picks.
 
 **Requires Python >= 3.12.** Many sandboxes default `python3` to 3.11, where the install fails
 with `Package 'chatinho' requires a different Python`. Use `python3.12` explicitly if so.

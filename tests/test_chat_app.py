@@ -14,6 +14,7 @@ from dataclasses import replace
 import pytest
 from textual import events
 from textual.binding import NoBinding
+from textual.color import Color
 
 from chatinho.chat_app import ChatApp
 from chatinho.chat_input import NEWLINE_KEYS, CommandInput
@@ -423,8 +424,13 @@ async def test_a_bubble_has_no_background_until_it_is_the_reply_target():
         assert bubble.styles.background.a == 0, "deselected: back to an outline"
 
 
-async def test_every_message_is_aligned_left():
-    """Sent and received start at the same column; nothing is pushed right."""
+async def test_who_spoke_is_on_the_container_whichever_side_it_takes():
+    """The side is a style; the class is what the log routes on.
+
+    Alignment itself is asserted where ``local_align`` is — both defaults and
+    the other side, in one place. What matters here is that every message
+    carries one of the two classes the stylesheet aligns by.
+    """
     app = await chat_app(connectors=[_Outro()])
     async with app.run_test(size=(100, 30)) as pilot:
         outro = next(at for at, who in app.peers().items()
@@ -433,11 +439,9 @@ async def test_every_message_is_aligned_left():
         await app.ask(outro, "e tu?")
         await pilot.pause()
 
-        containers = list(app.query(".message-container"))
-        assert {"sent", "received"} <= {c for w in containers for c in w.classes}, \
-            "both kinds are in the log"
-        assert len({w.query_one(".message-bubble").region.x for w in containers}) == 1, \
-            "one column, whoever spoke"
+        kinds = [{"sent", "received"} & w.classes for w in app.query(".message-container")]
+        assert all(len(k) == 1 for k in kinds), "exactly one of the two, never both"
+        assert {"sent"} in kinds and {"received"} in kinds, "both kinds are in the log"
 
 
 # === The input takes more than one line =========================================
@@ -651,6 +655,29 @@ def test_the_palette_wraps_round_rather_than_running_out():
 def test_a_palette_with_no_colours_is_refused():
     with pytest.raises(ValueError, match="peer_headers"):
         ChatStyle(peer_headers=())
+
+
+async def test_the_scrollbar_wears_the_palette_too():
+    """Textual styles a scrollbar with properties, not with a class of its own.
+
+    The four ``scrollbar_*`` fields used to be rendered into a ``.scrollbar``
+    rule, which is a valid selector matching nothing — so the fields were set,
+    the stylesheet parsed, and the default theme's blue still ran down the side
+    of the chat. Only a render showed it.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(60, 14)) as pilot:
+        for i in range(6):
+            await app.say("mensagem %d, comprida o suficiente para encher a linha toda" % i)
+        await pilot.pause()
+
+        log   = app._chat_log
+        style = ChatStyle()
+        assert log.show_vertical_scrollbar, "narrow and full: the bar is up to be looked at"
+        assert log.styles.scrollbar_background       == Color.parse(style.scrollbar_bg)
+        assert log.styles.scrollbar_color            == Color.parse(style.scrollbar_color)
+        assert log.styles.scrollbar_background_hover == Color.parse(style.scrollbar_hover_bg)
+        assert log.styles.scrollbar_color_hover      == Color.parse(style.scrollbar_hover_color)
 
 
 # === A bubble stays inside the window ============================================
@@ -1224,6 +1251,19 @@ def _sides(app):
     return out
 
 
+def _header_text_span(container):
+    """The columns the header's *text* occupies, not the box holding it.
+
+    The box spans the bubble on both sides now, so a box measurement would
+    pass with the text stranded at either end of it. This renders the header
+    and finds where the ink actually is.
+    """
+    header = container.query_one(".message-header")
+    line   = header.render_lines(header.region.size.region)[0].text
+    return (header.region.x + len(line) - len(line.lstrip()),
+            header.region.x + len(line.rstrip()))
+
+
 async def test_the_chat_is_centred_and_capped_on_a_wide_terminal():
     """A line the width of a desk is a line nobody reads across."""
     app = await chat_app()
@@ -1265,7 +1305,8 @@ async def test_the_input_is_still_at_the_bottom_of_the_centred_body():
         assert input.region.x == body.region.x, "and the input moved in with it"
 
 
-async def test_your_own_messages_are_on_the_left_by_default():
+async def test_your_own_messages_are_on_the_right_by_default():
+    """Everyone else stays left, so it reads as two columns."""
     app = await chat_app(connectors=[_Outro()])
     async with app.run_test(size=(140, 20)) as pilot:
         at = {getattr(who, "name", None): i for i, who in app.peers().items()}
@@ -1274,13 +1315,44 @@ async def test_your_own_messages_are_on_the_left_by_default():
         await pilot.pause()
 
         sides = _sides(app)
-        assert sides["sent"] == sides["received"], "one column"
+        assert sides["sent"] > sides["received"], "yours are on the right"
+        assert sides["received"] == app.query_one("#chat-body").region.x + 2, \
+            "and theirs are not"
 
 
-async def test_local_align_right_puts_your_messages_on_the_other_side():
-    """Everyone else stays left, so it reads as two columns."""
+async def test_a_header_hugs_the_same_edge_its_bubble_does():
+    """Textual's ``align`` moves the header and the bubble as one block.
+
+    It does not align *within* that block, so a header left to size itself
+    stays against the bubble's left edge whichever side the block landed on —
+    which on the right, under a wide bubble, strands it a whole bubble away
+    from the message it names. The header takes the bubble's own span now, and
+    the text inside it takes the same side.
+    """
+    app = await chat_app(connectors=[_Outro()])
+    async with app.run_test(size=(96, 24)) as pilot:
+        at = {getattr(who, "name", None): i for i, who in app.peers().items()}
+        await app.say("uma mensagem longa o suficiente para a bolha esticar bem para a esquerda")
+        await app.ask(at["outro"], "e uma pergunta igualmente comprida, para a bolha dela esticar")
+        await pilot.pause()
+
+        mine   = app.query_one(".message-container.sent")
+        theirs = app.query_one(".message-container.received")
+
+        bubble = mine.query_one(".message-bubble").region
+        start, end = _header_text_span(mine)
+        assert end == bubble.right - 1, "mine ends where its bubble does, a cell inside the border"
+        assert start > bubble.x + 10, "and is not stranded at the far end of it"
+
+        bubble = theirs.query_one(".message-bubble").region
+        start, end = _header_text_span(theirs)
+        assert start == bubble.x + 1, "theirs starts where its bubble does, a cell inside"
+        assert end < bubble.right - 10, "and is not dragged over to the other end"
+
+
+async def test_local_align_left_puts_everyone_in_one_column():
     app = await chat_app(connectors=[_Outro()],
-                         style=replace(ChatStyle(), local_align="right"))
+                         style=replace(ChatStyle(), local_align="left"))
     async with app.run_test(size=(140, 20)) as pilot:
         at = {getattr(who, "name", None): i for i, who in app.peers().items()}
         await app.say("minha")
@@ -1288,9 +1360,7 @@ async def test_local_align_right_puts_your_messages_on_the_other_side():
         await pilot.pause()
 
         sides = _sides(app)
-        assert sides["sent"] > sides["received"], "yours moved right"
-        assert sides["received"] == app.query_one("#chat-body").region.x + 2, \
-            "and theirs did not"
+        assert sides["sent"] == sides["received"], "one column"
 
 
 def test_a_local_align_that_is_not_a_side_is_refused():
