@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **239 pass** |
+| `pytest -q` | **242 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -350,6 +350,16 @@ less `_HEADER_SLACK` (the border cell at each end), and `.message-container.sent
 takes `text-align: $local_align`, so the text lands on the side the bubble took. A header too long
 for that span keeps its own width, exactly as it did before.
 
+**And a span in cells is not a width either — the header needed `max-width: 100%` too.** The
+bubble learned that lesson; the header was handed the same measured span and nothing to clamp it
+with, so below about 64 columns its box ran past the log and the right-aligned text inside it
+landed off-screen: truncated at 60 (`14:25 @chat · ms`), **invisible** at 50 and 40. That is
+phone width, which is the terminal this is for. The one test of the header ran at 96 columns,
+where the bubble is narrower than the screen and nothing overflows, so the suite never saw it;
+there is one at 40, 50 and 60 now. The clamp costs the `_HEADER_SLACK` inset at those widths —
+the header ends flush with the bubble instead of a cell inside it — which is a trade against not
+being there at all.
+
 The test reads the *rendered* header line and finds where the ink is, not where the box is: now
 that the box spans the bubble on both sides, a box measurement passes with the text stranded at
 either end of it. Both halves were broken separately to watch it fail — the width alone leaves the
@@ -435,11 +445,28 @@ is still recorded in `on_mouse_down`, because a release more than `_A_DRAG` cell
 was a drag and selects nothing; neither handler stops its event, or the pan underneath would have
 nothing left to read.
 
-**`_A_DRAG` is measured on both axes, and only one of them was ever checked.** Textual synthesises
-a `Click` from any release on the *widget* the press landed on, so dragging across a line to select
-a few words — which never leaves the row it started on — arrived as a tap and silently moved the
-reply target. Two such selections inside `_A_DOUBLE` copied the whole message. A press that
-travelled sideways was a selection; one that travelled down was a pan; neither is a tap.
+**Two things say a press was not a tap, and a travel threshold is the weaker of them.** Textual
+synthesises a `Click` from any release on the *widget* the press landed on, so dragging across a
+line to select a few words — which never leaves the row it started on — arrived as a tap and
+silently moved the reply target; two of them inside `_A_DOUBLE` copied the whole message.
+`_A_DRAG` was widened to both axes for that, and it is not enough on its own: it has to allow a
+cell or two of wobble for a thumb, so a drag selecting one or two characters slips through it —
+measured, `'um'` selected and the reply retargeted anyway.
+
+What catches that is **the selection the screen is still holding**. Textual clears it when the
+press and the release share a cell, so text left selected at click time means the pointer dragged
+across it, however short the drag:
+
+| travel | selected | is it a tap? |
+|---|---|---|
+| 0 cells | nothing | yes — the selection was cleared, so nothing is held |
+| 1 cell | `um` | no |
+| 6 cells | `uma men` | no |
+
+So the selection check is first and `_A_DRAG` is second, and they cover different gestures: a pan
+selects nothing, so only the travel catches it; a short selection never travels, so only the
+selection catches that. A test at travel 0 guards the guard, or a check that always fired would
+take the tap with it.
 
 **A drag is a text selection, unless it started where there is nothing to select.** From Textual 3
 a mouse drag *is* a selection — the screen starts one in `_forward_event`, before the event reaches

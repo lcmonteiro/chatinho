@@ -141,6 +141,7 @@ Toast.-information .toast--title {
 }
 .message-header {
     width: auto;
+    max-width: 100%;
     text-style: bold;
     margin: 0 0 0 1;
 }

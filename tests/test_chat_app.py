@@ -1009,7 +1009,7 @@ def _a_cell_holding_text(screen, log):
     select, which is the whole of what tells a pan from a selection.
     """
     region = log.content_region
-    for y in range(region.y + 4, region.bottom - 4):
+    for y in range(region.y, region.bottom):
         for x in range(region.x, region.right):
             widget, offset = screen.get_widget_and_offset_at(x, y)
             if offset is not None and type(widget).__name__ == "MarkdownParagraph":
@@ -1111,6 +1111,94 @@ async def test_selecting_sideways_does_not_retarget_the_reply():
         await pilot.pause()
 
         assert app._chat_log.reply_target is None, "a sideways drag selects text, not a message"
+
+
+async def test_the_header_stays_inside_a_phone_width_terminal():
+    """`_bubble_width` caps at `bubble_max_width`, which is 72 — wider than a phone.
+
+    The bubble survives that because `max-width: 100%` clamps it; the header
+    was given the same measured span and nothing to clamp it with, so its box
+    ran past the log and the right-aligned text inside it landed off-screen
+    entirely. CLAUDE.md already records this exact failure for the bubble —
+    "a cap in cells is not a width" — and the header never got the fix.
+
+    The one other test of the header runs at 96 columns, where the bubble is
+    narrower than the terminal and nothing overflows, so the suite never saw
+    it.
+    """
+    for width in (40, 50, 60):
+        app = await chat_app()
+        async with app.run_test(size=(width, 16)) as pilot:
+            await app.say("uma mensagem bastante longa para encher a bolha toda")
+            await pilot.pause()
+
+            log       = app._chat_log
+            container = log._msg_widgets[app.messages[0].id]
+            start, end = _header_text_span(container)
+
+            assert end <= log.content_region.right, \
+                "at %d columns the header ran past the log" % width
+            assert start >= log.content_region.x, \
+                "at %d columns the header started before the log" % width
+
+
+async def test_selecting_one_character_is_not_a_tap_either():
+    """`_A_DRAG` has to allow a cell of wobble, so it cannot catch a short drag.
+
+    Textual clears the selection when the press and the release share a cell,
+    so a selection the screen is *still holding* at click time means the
+    pointer dragged across text — which a travel threshold generous enough for
+    a thumb will always let through.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(80, 16)) as pilot:
+        await app.say("uma mensagem com varias palavras")
+        await pilot.pause()
+
+        log, screen = app._chat_log, app.screen
+        x, y = _a_cell_holding_text(screen, log)
+
+        screen._forward_event(_mouse(events.MouseDown, x, y))
+        await pilot.pause()
+        screen._forward_event(_mouse(events.MouseMove, x + 1, y))
+        await pilot.pause()
+        screen._forward_event(_mouse(events.MouseUp, x + 1, y, button=0))
+        await pilot.pause()
+
+        assert screen.get_selected_text(), "the premise: one cell did select something"
+
+        container = log._msg_widgets[app.messages[0].id]
+        container.on_mouse_down(_mouse(events.MouseDown, x, y))
+        container.on_click(_mouse(events.Click, x + 1, y))
+        await pilot.pause()
+
+        assert log.reply_target is None, "a selection, however short, is not a tap"
+
+
+async def test_a_tap_that_selects_nothing_still_taps():
+    """And the guard above must not eat the gesture it sits in front of."""
+    app = await chat_app()
+    async with app.run_test(size=(80, 16)) as pilot:
+        await app.say("uma mensagem com varias palavras")
+        await pilot.pause()
+
+        log, screen = app._chat_log, app.screen
+        x, y = _a_cell_holding_text(screen, log)
+
+        screen._forward_event(_mouse(events.MouseDown, x, y))
+        await pilot.pause()
+        screen._forward_event(_mouse(events.MouseUp, x, y, button=0))
+        await pilot.pause()
+
+        assert screen.get_selected_text() is None, \
+            "the premise: pressing and lifting in one cell selects nothing"
+
+        container = log._msg_widgets[app.messages[0].id]
+        container.on_mouse_down(_mouse(events.MouseDown, x, y))
+        container.on_click(_mouse(events.Click, x, y))
+        await pilot.pause()
+
+        assert log.reply_target == app.messages[0].id
 
 
 # === The header names who spoke =================================================

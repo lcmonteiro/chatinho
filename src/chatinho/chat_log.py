@@ -40,10 +40,10 @@ _A_DOUBLE : float = 0.7
 _A_WOBBLE : int = 1
 
 #: How far a press may wander between landing and lifting and still be a tap
-#: rather than the log being scrolled, or text being selected. It is measured
-#: on both axes: Textual synthesises a `Click` whenever the release lands on
-#: the same *widget* as the press, so dragging across a line to select a few
-#: words arrives here as a tap, and used to retarget the reply.
+#: rather than the log being panned. It is measured on both axes, and it is
+#: the *second* of the two things that say a press was not a tap — a selection
+#: the screen is still holding is the first, and the only one that catches a
+#: drag shorter than this.
 _A_DRAG : int = 2
 
 #: How long the copy confirmation stays up. Long enough to read on a phone,
@@ -180,17 +180,24 @@ class _MessageContainer(Vertical):
         a mouse and wrong for a thumb; this allows the second tap a cell of
         wobble, and a little longer to arrive.
 
-        A press that travelled on *either* axis is not a tap: sideways it was
-        a text selection, downwards it was the log being panned.
+        Two things say this was not a tap, and they cover different gestures.
+        **A selection is what the screen is holding**: Textual clears it when
+        the press and the release share a cell, so text left selected means
+        the pointer dragged across it — true even of the one- and two-cell
+        drags a travel threshold has to let through as wobble. And a press
+        that *travelled* was the log being panned, which selects nothing and
+        so leaves the first signal silent.
         """
         pressed_x, self._pressed_x = self._pressed_x, None
         pressed_y, self._pressed_y = self._pressed_y, None
+        if self.screen.get_selected_text() is not None:
+            return                      # text was selected, not a message tapped
         travelled = (
             (pressed_x is not None and abs(event.screen_x - pressed_x) > _A_DRAG)
             or (pressed_y is not None and abs(event.screen_y - pressed_y) > _A_DRAG)
         )
         if travelled:
-            return                      # the log was panned or text selected, not tapped
+            return                      # the log was panned, not tapped
 
         now = time.monotonic()
         doubled = (now - self._last_tap_at <= _A_DOUBLE
