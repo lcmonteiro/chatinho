@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **231 pass** |
+| `pytest -q` | **242 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -350,6 +350,16 @@ less `_HEADER_SLACK` (the border cell at each end), and `.message-container.sent
 takes `text-align: $local_align`, so the text lands on the side the bubble took. A header too long
 for that span keeps its own width, exactly as it did before.
 
+**And a span in cells is not a width either — the header needed `max-width: 100%` too.** The
+bubble learned that lesson; the header was handed the same measured span and nothing to clamp it
+with, so below about 64 columns its box ran past the log and the right-aligned text inside it
+landed off-screen: truncated at 60 (`14:25 @chat · ms`), **invisible** at 50 and 40. That is
+phone width, which is the terminal this is for. The one test of the header ran at 96 columns,
+where the bubble is narrower than the screen and nothing overflows, so the suite never saw it;
+there is one at 40, 50 and 60 now. The clamp costs the `_HEADER_SLACK` inset at those widths —
+the header ends flush with the bubble instead of a cell inside it — which is a trade against not
+being there at all.
+
 The test reads the *rendered* header line and finds where the ink is, not where the box is: now
 that the box spans the bubble on both sides, a box measurement passes with the text stranded at
 either end of it. Both halves were broken separately to watch it fail — the width alone leaves the
@@ -374,7 +384,27 @@ chat warm and the chrome blue, because none of the three is styled the way a bub
   looked set, and the default theme's blue ran down the side of the chat. Textual styles a
   scrollbar with `scrollbar-background`/`scrollbar-color` *properties on the scrollable widget*,
   which is what `#chat-log` carries now, and a test asserts the bar wears the palette — it fails
-  on the old rule.
+  on the old rule. **Its width is a field too, and one cell rather than Textual's two**:
+  `scrollbar_size` renders `scrollbar-size-vertical`, and the cell it gives back goes to the
+  bubbles. The test reads `scrollbar_size_vertical` — what the widget actually reserves — so it
+  fails on the default rather than merely on a field being set, which is the mistake the
+  `.scrollbar` rule made. Textual refuses a width below one as well, but at *mount*, in a panel
+  naming a line of the stylesheet this generated; `__post_init__` refuses it where the caller
+  wrote it, for `local_align`'s reason.
+
+  **One cell is the floor, so the rest of the thinning is what the cell is painted with.** A
+  terminal cannot reserve less than a cell, Textual refuses a width below one outright, and there
+  is no overlay scrollbar to ask for either — `scrollbar-gutter` chooses only `auto` or `stable`,
+  and both reserve the column. What was left was the *track*: a colour of its own made it a strip
+  down the full height of the chat whether or not anyone was scrolling. It is `transparent` now,
+  so at rest the bar is the thumb alone and the column behind it is chat. The hover and active
+  colours are untouched, so the track comes back the moment the pointer reaches for it — measured,
+  not assumed: `#3d3b37` under the pointer, the chat background at rest.
+
+  **`transparent`, not `chat_bg`'s hex a second time.** Textual composites a translucent scrollbar
+  background onto the parent's, so the track follows the chat wherever it is recoloured. The hex
+  written twice passes the at-rest test and fails the one that recolours the chat and looks again —
+  which is why that second test exists, and it was proved by writing the hex.
 - **The command popup never takes focus**, the input keeps it, so Textual drew the highlighted row
   with its *blurred* block cursor. Both states are set to the accent, or the palette holds
   everywhere except the one row the eye is on.
@@ -411,9 +441,63 @@ this exists for.
 
 Selecting is a toggle, so the second tap of a pair calls it again and puts the reply target back
 where it was: a double tap only copies, which is what the hold it replaced did. The press position
-is still recorded in `on_mouse_down`, because a release more than `_A_DRAG` rows from the landing
-was the log being scrolled and selects nothing; neither handler stops its event, or the
-drag-to-scroll underneath would have nothing left to read.
+is still recorded in `on_mouse_down`, because a release more than `_A_DRAG` cells from the landing
+was a drag and selects nothing; neither handler stops its event, or the pan underneath would have
+nothing left to read.
+
+**Two things say a press was not a tap, and a travel threshold is the weaker of them.** Textual
+synthesises a `Click` from any release on the *widget* the press landed on, so dragging across a
+line to select a few words — which never leaves the row it started on — arrived as a tap and
+silently moved the reply target; two of them inside `_A_DOUBLE` copied the whole message.
+`_A_DRAG` was widened to both axes for that, and it is not enough on its own: it has to allow a
+cell or two of wobble for a thumb, so a drag selecting one or two characters slips through it —
+measured, `'um'` selected and the reply retargeted anyway.
+
+What catches that is **the selection the screen is still holding**. Textual clears it when the
+press and the release share a cell, so text left selected at click time means the pointer dragged
+across it, however short the drag:
+
+| travel | selected | is it a tap? |
+|---|---|---|
+| 0 cells | nothing | yes — the selection was cleared, so nothing is held |
+| 1 cell | `um` | no |
+| 6 cells | `uma men` | no |
+
+So the selection check is first and `_A_DRAG` is second, and they cover different gestures: a pan
+selects nothing, so only the travel catches it; a short selection never travels, so only the
+selection catches that. A test at travel 0 guards the guard, or a check that always fired would
+take the tap with it.
+
+**A drag is a text selection, unless it started where there is nothing to select.** From Textual 3
+a mouse drag *is* a selection — the screen starts one in `_forward_event`, before the event reaches
+any widget, so `event.stop()` never held it off — and `TouchScrollableContainer` was panning the log
+on the same drag. Two controllers on one gesture: the selection reached for the pointer while the
+pan moved the text out from under it, and the log shook. Selecting across a bubble with a mouse was
+the report; the cause was older than the report.
+
+**It cannot be split by device, and that is not a limitation of Textual.** A terminal speaks the
+XTerm SGR mouse protocol and Termux turns a swipe into exactly the bytes a trackpad sends; no
+protocol any terminal speaks carries the device, which is why `MouseEvent` has no field for it.
+What the gesture is split by instead is *where it landed*:
+`Screen.get_widget_and_offset_at` reports no content offset for a coordinate holding nothing
+selectable, so a press on the margin beside a bubble pans and a press on text is Textual's to
+select with. The pan then calls `clear_selection()` once, which drops the selection the screen
+anchored on that same press — and, because the auto-scroll lives behind the same `_select_state`,
+stops Textual reaching for the offset the pan is about to drive.
+
+The cost is real and worth stating: **the pannable area is the background only.** On a wide
+terminal that is most of the log, since the chat is centred and a bubble takes one side; on a
+phone, a message long enough to fill the width leaves little to grab, and scrolling there is the
+scrollbar, the wheel, or dragging to the edge — Textual's own select-auto-scroll carries the view
+while a selection is open, which is now the only thing that moves the log during one.
+
+**The pan was measured in the wrong frame from the day it was written, and nothing said so.**
+`_drag_start_y` took `event.y`, which on a bubbled mouse event is relative to whatever descendant
+the press first landed on — and the next report comes from a *different* descendant, because the
+pan just moved one under the pointer. Traced: a press at `screen_y=8` recorded `2`, and five cells
+of travel moved the log two, in a 0/1/0/1 limp. It reads `screen_y` now, which no scroll can
+move. No test had ever asserted that dragging scrolls at all, which is how a feature stayed broken
+through two rewrites; there is one now, and it fails on the old frame.
 
 **The drag test was empty for a while.** It drove `pilot.mouse_down`/`mouse_up`, which do not
 synthesise a `Click` — the app does that, from a release on the widget the press landed on — so

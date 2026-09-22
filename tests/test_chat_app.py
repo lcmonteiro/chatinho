@@ -683,6 +683,96 @@ async def test_the_scrollbar_wears_the_palette_too():
 # === A bubble stays inside the window ============================================
 
 
+async def test_the_scrollbar_is_one_cell_wide():
+    """Textual's own is two, which is a lot to give up beside a narrow chat.
+
+    ``scrollbar_size_vertical`` is what the widget actually reserves, so this
+    fails on the default rather than merely on a field being unset — the
+    `.scrollbar` rule that matched nothing once made exactly that mistake.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(60, 24)) as pilot:
+        for i in range(30):
+            await app.say("mensagem %d" % i)
+        await pilot.pause()
+
+        log = app._chat_log
+        assert log.show_vertical_scrollbar, "narrow and full: the bar is up to be looked at"
+        assert log.scrollbar_size_vertical == 1, "one cell, not Textual's two"
+
+
+async def test_the_scrollbar_width_is_a_style_field():
+    """And a wider one is still reachable, for a terminal where one is too thin."""
+    app = await chat_app(style=replace(ChatStyle(), scrollbar_size=3))
+    async with app.run_test(size=(60, 24)) as pilot:
+        for i in range(30):
+            await app.say("mensagem %d" % i)
+        await pilot.pause()
+
+        assert app._chat_log.scrollbar_size_vertical == 3
+
+
+def test_a_scrollbar_with_no_width_is_refused_at_construction():
+    """Textual refuses it too, but at mount, pointing at the generated CSS.
+
+    `local_align`'s argument exactly: a stylesheet error names a line the
+    caller never wrote.
+    """
+    for bad in (0, -1, "2", 1.5, True):
+        with pytest.raises(ValueError, match="scrollbar_size"):
+            ChatStyle(scrollbar_size=bad)
+
+
+async def _scrollbar_column(app, pilot):
+    """Every background colour painted down the scrollbar's own column."""
+    for i in range(14):
+        await app.say("mensagem %d" % i)
+    await pilot.pause()
+    log = app._chat_log
+    log.scroll_to(y=6, animate=False)
+    await pilot.pause()
+    await pilot.pause()
+    assert log.show_vertical_scrollbar, "narrow and full: the bar is up to be looked at"
+    bar = log.vertical_scrollbar
+    return log, bar, lambda: {app.screen.get_style_at(bar.region.x, y).bgcolor.name
+                              for y in range(bar.region.y, bar.region.bottom)}
+
+
+async def test_the_track_is_the_chat_behind_it_until_you_reach_for_it():
+    """One cell is the floor, so the thinning left is what the cell is painted with.
+
+    A track in a colour of its own is a strip down the whole height of the
+    chat whether or not anyone is scrolling. `transparent` leaves the thumb
+    alone at rest, and the hover colour brings the track back under the
+    pointer — so nothing is lost, it is only quiet.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(48, 14)) as pilot:
+        _, bar, painted = await _scrollbar_column(app, pilot)
+        style = ChatStyle()
+
+        assert painted() == {style.chat_bg}, "at rest the column is chat, not a strip"
+
+        bar.mouse_over = True
+        await pilot.pause()
+        await pilot.pause()
+        assert painted() == {style.scrollbar_hover_bg}, "and the track is there when reached for"
+
+
+async def test_a_transparent_track_follows_the_chat_background():
+    """Which is why it is `transparent` and not `chat_bg`'s hex written twice.
+
+    Textual composites a translucent scrollbar background onto the parent's,
+    so recolouring the chat carries the track with it. Spelling the hex again
+    would leave a strip behind the moment someone changed one of the two.
+    """
+    style = replace(ChatStyle(), chat_bg="#101010", screen_bg="#101010")
+    app = await chat_app(style=style)
+    async with app.run_test(size=(48, 14)) as pilot:
+        _, _, painted = await _scrollbar_column(app, pilot)
+        assert painted() == {"#101010"}
+
+
 async def test_a_bubble_never_runs_past_the_window_or_under_the_scrollbar():
     """bubble_max_width is a cap, not a width: a narrow window wins over it."""
     app = await chat_app()
@@ -846,13 +936,14 @@ async def test_one_tap_still_selects_the_reply_target():
         assert app._chat_log.reply_target == app.messages[0].id
 
 
-def _press_at(widget, screen_y):
+def _press_at(widget, screen_y, screen_x=None):
     """A MouseDown on *widget*, landing at *screen_y*."""
     return events.MouseDown(widget, 0, 0, 0, 0, 1, False, False, False,
-                            screen_x=widget.region.x, screen_y=screen_y)
+                            screen_x=widget.region.x if screen_x is None else screen_x,
+                            screen_y=screen_y)
 
 
-def _click_at(widget, screen_y):
+def _click_at(widget, screen_y, screen_x=None):
     """The Click Textual synthesises when the release lands at *screen_y*.
 
     Built by hand because ``pilot.mouse_down``/``mouse_up`` do not produce one
@@ -863,11 +954,12 @@ def _click_at(widget, screen_y):
     handler at all.
     """
     return events.Click(widget, 0, 0, 0, 0, 1, False, False, False,
-                        screen_x=widget.region.x, screen_y=screen_y)
+                        screen_x=widget.region.x if screen_x is None else screen_x,
+                        screen_y=screen_y)
 
 
-async def test_dragging_across_a_message_scrolls_rather_than_selecting_it():
-    """The log scrolls by dragging, and it drags across messages."""
+async def test_a_press_that_travelled_down_is_not_a_tap():
+    """A press that landed low and lifted high was a drag, not a tap."""
     app = await chat_app()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("nem copiar nem responder")
@@ -896,6 +988,217 @@ async def test_a_tap_that_barely_moves_is_still_a_tap():
         await pilot.pause()
 
         assert app._chat_log.reply_target == app.messages[0].id
+
+
+# === A drag is a selection, unless it started where there is nothing to select ===
+
+
+def _mouse(cls, x, y, button=1):
+    """A raw mouse event in *screen* coordinates, for the screen to route.
+
+    The pilot cannot express this: it presses and releases in one spot, and
+    what is under test here is a press that travels across widgets.
+    """
+    return cls(None, x, y, 0, 0, button, False, False, False, screen_x=x, screen_y=y)
+
+
+def _a_cell_holding_text(screen, log):
+    """The first coordinate in *log* that has selectable content under it.
+
+    ``get_widget_and_offset_at`` reports no offset where there is nothing to
+    select, which is the whole of what tells a pan from a selection.
+    """
+    region = log.content_region
+    for y in range(region.y, region.bottom):
+        for x in range(region.x, region.right):
+            widget, offset = screen.get_widget_and_offset_at(x, y)
+            if offset is not None and type(widget).__name__ == "MarkdownParagraph":
+                return x, y
+    raise AssertionError("no text in the log to press on")
+
+
+async def _a_full_log(pilot, app, count=30):
+    """Enough messages that the log scrolls, parked away from either end."""
+    for i in range(count):
+        await app.say("mensagem %d com algum texto para encher a bolha" % i)
+    await pilot.pause()
+    log = app._chat_log
+    log.scroll_to(y=log.max_scroll_y // 2, animate=False)
+    await pilot.pause()
+    await pilot.pause()
+    return log
+
+
+async def test_dragging_across_text_selects_it_and_the_log_holds_still():
+    """The reported bug: selecting across a bubble made the scroll shake.
+
+    Two things read the same drag. From Textual 3 a mouse drag is a text
+    selection, started by the screen before the event reaches any widget, and
+    the log was panning on the same one — so the text slid out from under the
+    selection while the selection reached after it. A terminal cannot tell the
+    two gestures apart by device, because no mouse protocol reports one: what
+    decides is whether the press landed on anything selectable.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log    = await _a_full_log(pilot, app)
+        screen = app.screen
+        x, y   = _a_cell_holding_text(screen, log)
+
+        parked = int(log.scroll_offset.y)
+        screen._forward_event(_mouse(events.MouseDown, x, y))
+        await pilot.pause()
+        for below in range(y + 1, y + 6):
+            screen._forward_event(_mouse(events.MouseMove, x, below))
+            await pilot.pause()
+            assert int(log.scroll_offset.y) == parked, \
+                "the log moved under the selection — that is the shake"
+
+        assert screen.get_selected_text(), "and the drag selected the text it crossed"
+
+
+async def test_dragging_the_background_still_pans_the_log():
+    """A drag with nothing to select under it is still how the log is panned.
+
+    A finger and a mouse arrive as the same bytes, so the touch gesture cannot
+    be kept by asking which device sent it. It is kept by where it starts: the
+    margin beside a bubble has no text in it.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        log    = await _a_full_log(pilot, app)
+        screen = app.screen
+        x      = log.content_region.x          # left of the right-aligned bubbles
+        top    = log.content_region.y + 4
+        assert screen.get_widget_and_offset_at(x, top)[1] is None, \
+            "the margin is the background, or this test is pressing on a bubble"
+
+        parked = int(log.scroll_offset.y)
+        screen._forward_event(_mouse(events.MouseDown, x, top))
+        await pilot.pause()
+        travelled = 5
+        for below in range(top + 1, top + 1 + travelled):
+            screen._forward_event(_mouse(events.MouseMove, x, below))
+            await pilot.pause()
+
+        # Cell for cell, and that is the second half of the bug: the drag used
+        # to be measured in `event.y`, which is relative to whatever descendant
+        # the pointer is over *now* — a different one on every report, once the
+        # log started moving. Five cells of travel moved the log two.
+        assert int(log.scroll_offset.y) == parked - travelled, \
+            "the pan follows the pointer cell for cell"
+        assert screen.get_selected_text() is None, "and a pan selects nothing"
+
+
+async def test_selecting_sideways_does_not_retarget_the_reply():
+    """Textual makes a Click from any release on the widget the press landed on.
+
+    Dragging across a line to select a few words never moves a row, so the
+    guard that watched only `screen_y` let it through as a tap — and the tap
+    silently moved the reply target. A press that travelled on either axis is
+    a drag.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.say("uma mensagem com palavras que se seleccionam")
+        await pilot.pause()
+
+        container = app._chat_log._msg_widgets[app.messages[0].id]
+        here      = container.region.y
+        left      = container.region.x
+        container.on_mouse_down(_press_at(container, here, screen_x=left))
+        container.on_click(_click_at(container, here, screen_x=left + 12))
+        await pilot.pause()
+
+        assert app._chat_log.reply_target is None, "a sideways drag selects text, not a message"
+
+
+async def test_the_header_stays_inside_a_phone_width_terminal():
+    """`_bubble_width` caps at `bubble_max_width`, which is 72 — wider than a phone.
+
+    The bubble survives that because `max-width: 100%` clamps it; the header
+    was given the same measured span and nothing to clamp it with, so its box
+    ran past the log and the right-aligned text inside it landed off-screen
+    entirely. CLAUDE.md already records this exact failure for the bubble —
+    "a cap in cells is not a width" — and the header never got the fix.
+
+    The one other test of the header runs at 96 columns, where the bubble is
+    narrower than the terminal and nothing overflows, so the suite never saw
+    it.
+    """
+    for width in (40, 50, 60):
+        app = await chat_app()
+        async with app.run_test(size=(width, 16)) as pilot:
+            await app.say("uma mensagem bastante longa para encher a bolha toda")
+            await pilot.pause()
+
+            log       = app._chat_log
+            container = log._msg_widgets[app.messages[0].id]
+            start, end = _header_text_span(container)
+
+            assert end <= log.content_region.right, \
+                "at %d columns the header ran past the log" % width
+            assert start >= log.content_region.x, \
+                "at %d columns the header started before the log" % width
+
+
+async def test_selecting_one_character_is_not_a_tap_either():
+    """`_A_DRAG` has to allow a cell of wobble, so it cannot catch a short drag.
+
+    Textual clears the selection when the press and the release share a cell,
+    so a selection the screen is *still holding* at click time means the
+    pointer dragged across text — which a travel threshold generous enough for
+    a thumb will always let through.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(80, 16)) as pilot:
+        await app.say("uma mensagem com varias palavras")
+        await pilot.pause()
+
+        log, screen = app._chat_log, app.screen
+        x, y = _a_cell_holding_text(screen, log)
+
+        screen._forward_event(_mouse(events.MouseDown, x, y))
+        await pilot.pause()
+        screen._forward_event(_mouse(events.MouseMove, x + 1, y))
+        await pilot.pause()
+        screen._forward_event(_mouse(events.MouseUp, x + 1, y, button=0))
+        await pilot.pause()
+
+        assert screen.get_selected_text(), "the premise: one cell did select something"
+
+        container = log._msg_widgets[app.messages[0].id]
+        container.on_mouse_down(_mouse(events.MouseDown, x, y))
+        container.on_click(_mouse(events.Click, x + 1, y))
+        await pilot.pause()
+
+        assert log.reply_target is None, "a selection, however short, is not a tap"
+
+
+async def test_a_tap_that_selects_nothing_still_taps():
+    """And the guard above must not eat the gesture it sits in front of."""
+    app = await chat_app()
+    async with app.run_test(size=(80, 16)) as pilot:
+        await app.say("uma mensagem com varias palavras")
+        await pilot.pause()
+
+        log, screen = app._chat_log, app.screen
+        x, y = _a_cell_holding_text(screen, log)
+
+        screen._forward_event(_mouse(events.MouseDown, x, y))
+        await pilot.pause()
+        screen._forward_event(_mouse(events.MouseUp, x, y, button=0))
+        await pilot.pause()
+
+        assert screen.get_selected_text() is None, \
+            "the premise: pressing and lifting in one cell selects nothing"
+
+        container = log._msg_widgets[app.messages[0].id]
+        container.on_mouse_down(_mouse(events.MouseDown, x, y))
+        container.on_click(_mouse(events.Click, x, y))
+        await pilot.pause()
+
+        assert log.reply_target == app.messages[0].id
 
 
 # === The header names who spoke =================================================

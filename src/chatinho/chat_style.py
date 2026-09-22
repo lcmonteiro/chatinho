@@ -49,6 +49,7 @@ Screen {
     overflow-y: auto;
     padding: 1 2;
     background: $chat_bg;
+    scrollbar-size-vertical: $scrollbar_size;
     scrollbar-background: $scrollbar_bg;
     scrollbar-color: $scrollbar_color;
     scrollbar-background-hover: $scrollbar_hover_bg;
@@ -140,6 +141,7 @@ Toast.-information .toast--title {
 }
 .message-header {
     width: auto;
+    max-width: 100%;
     text-style: bold;
     margin: 0 0 0 1;
 }
@@ -173,8 +175,9 @@ $peer_header_rules
 class ChatStyle:
     """Theme colours for the chat UI.
 
-    Every colour field is a hex string; the two size fields are Textual
-    lengths (cells, or a percentage). ``to_css()`` turns the values into a
+    Every colour field is a hex string; the size fields are Textual lengths
+    (cells, or a percentage), except ``scrollbar_size``, which Textual takes
+    only as a whole number of cells. ``to_css()`` turns the values into a
     Textual stylesheet by rendering the module-level ``_CSS_TEMPLATE``.
     """
 
@@ -182,8 +185,20 @@ class ChatStyle:
     screen_bg: str = "#1f1e1d"
     chat_bg: str = "#1f1e1d"
 
-    # Scrollbar
-    scrollbar_bg: str = "#2f2e2b"
+    # Scrollbar. Textual draws it two cells wide by default, which is a wide
+    # thing to give up beside a chat that is mostly margin already; one cell
+    # still reads as a bar and still takes a drag, and one cell is the floor —
+    # a terminal cannot reserve less, and Textual refuses a width below it.
+    #
+    # What the cell is *painted* with is the other half. The track is
+    # `transparent` rather than a colour of its own, so at rest the bar is the
+    # thumb alone and the column behind it is chat: Textual composites a
+    # translucent scrollbar background onto the parent's, so this follows
+    # `chat_bg` wherever it goes instead of repeating its hex. The hover and
+    # active colours below are unchanged, so the track comes back the moment
+    # the pointer reaches for it.
+    scrollbar_size: int = 1
+    scrollbar_bg: str = "transparent"
     scrollbar_color: str = "#8a8984"
     scrollbar_hover_bg: str = "#3d3b37"
     scrollbar_hover_color: str = "#f0eee6"
@@ -249,19 +264,28 @@ class ChatStyle:
     quote_bg: str = "#262624"
 
     def __post_init__(self) -> None:
-        """Refuses a palette with nothing in it, and a side that is neither.
+        """Refuses a palette with nothing in it, a side that is neither, and a bar of no width.
 
         Raises:
             ValueError: ``peer_headers`` is empty, which would leave the
-                header with no colour and the modulo with no divisor; or
+                header with no colour and the modulo with no divisor;
                 ``local_align`` is not a side, which Textual would take as a
-                broken rule and report nowhere the caller would look.
+                broken rule and report nowhere the caller would look; or
+                ``scrollbar_size`` is not a whole number of cells above zero,
+                which Textual refuses too — but at mount, pointing at the
+                stylesheet this generated rather than at the field it came
+                from.
         """
         if not self.peer_headers:
             raise ValueError("peer_headers needs at least one colour")
         if self.local_align not in ("left", "right"):
             raise ValueError(
                 "local_align is a side: 'left' or 'right', not %r" % (self.local_align,)
+            )
+        if not isinstance(self.scrollbar_size, int) or isinstance(self.scrollbar_size, bool) \
+           or self.scrollbar_size < 1:
+            raise ValueError(
+                "scrollbar_size is a width in cells, one or more, not %r" % (self.scrollbar_size,)
             )
 
     def header_class(self, frm: int) -> str:

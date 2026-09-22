@@ -40,7 +40,10 @@ _A_DOUBLE : float = 0.7
 _A_WOBBLE : int = 1
 
 #: How far a press may wander between landing and lifting and still be a tap
-#: rather than the log being scrolled.
+#: rather than the log being panned. It is measured on both axes, and it is
+#: the *second* of the two things that say a press was not a tap — a selection
+#: the screen is still holding is the first, and the only one that catches a
+#: drag shorter than this.
 _A_DRAG : int = 2
 
 #: How long the copy confirmation stays up. Long enough to read on a phone,
@@ -71,33 +74,67 @@ def preview_of(text: str, width: int = 60) -> str:
 
 
 class TouchScrollableContainer(ScrollableContainer):
-    """Scrollable container that supports mouse/touch drag scrolling."""
+    """Scrollable container that pans by dragging, where there is nothing to select.
+
+    **A terminal cannot tell a finger from a mouse.** Termux turns a swipe into
+    the same SGR mouse report a trackpad sends, and no mouse protocol any
+    terminal speaks carries the device — Textual's `MouseEvent` has no field
+    for it because there is nothing to put there. So the gesture is split by
+    *what it landed on* rather than by what made it: from Textual 3 a drag is
+    already a text selection, so a drag that starts on text belongs to Textual,
+    and only one that starts where there is nothing to select pans the log.
+
+    Both used to run at once, and that is what shook: the selection extended to
+    the pointer while the pan moved the text out from under it.
+    """
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._drag_start_y: int = 0
-        self._scroll_start_y: int = 0
+        self._panning        : bool = False
+        self._drag_start_y   : int  = 0
+        self._scroll_start_y : int  = 0
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
-        """Record the start position when drag begins."""
-        self._drag_start_y = event.y
-        self._scroll_start_y = self.scroll_offset.y
+        """Starts a pan, if the press landed where there is no text to select.
+
+        The screen reports no content offset for a coordinate holding nothing
+        selectable — the log's background, the margin beside a bubble — and
+        that is the whole of the test. Textual anchored a selection on this
+        same press before the event reached here, so a pan drops it: clearing
+        `_select_state` is also what stops Textual's own select-auto-scroll
+        from reaching for the same offset this is about to drive.
+        """
+        _, offset = self.screen.get_widget_and_offset_at(int(event.screen_x), int(event.screen_y))
+        self._panning = offset is None
+        if not self._panning:
+            return                      # the drag is Textual's, to select with
+        self.screen.clear_selection()
+        # `screen_y`, never `event.y`: a bubbled mouse event carries
+        # coordinates relative to whatever descendant it first landed on, and
+        # the pan puts a *different* descendant under the pointer by the next
+        # report. Mixing the two frames is what made the scroll stutter — five
+        # cells of travel moved the log two, in a 0/1/0/1 limp.
+        self._drag_start_y   = int(event.screen_y)
+        self._scroll_start_y = int(self.scroll_offset.y)
         event.stop()
 
     def on_mouse_move(self, event: events.MouseMove) -> None:
-        """Handle drag to scroll vertically."""
-        if not event.button:
+        """Pans the log, while a pan is what this drag is."""
+        if not self._panning or not event.button:
             return
-        delta_y = event.y - self._drag_start_y
+        delta_y  = int(event.screen_y) - self._drag_start_y
         target_y = self._scroll_start_y - delta_y
-        max_y = self.max_scroll_y
+        max_y    = self.max_scroll_y
         if max_y > 0:
             target_y = max(0, min(target_y, max_y))
             self.scroll_to(y=target_y, animate=False)
         event.stop()
 
     def on_mouse_up(self, event: events.MouseUp) -> None:
-        """Handle drag end."""
+        """Ends the pan, if there was one."""
+        if not self._panning:
+            return
+        self._panning = False
         event.stop()
 
 
@@ -119,17 +156,20 @@ class _MessageContainer(Vertical):
         self.msg_id = msg_id
         self._on_select = on_select
         self._on_copy = on_copy
+        self._pressed_x   : Optional[int] = None
         self._pressed_y   : Optional[int] = None
         self._last_tap_at : float = 0.0
         self._last_tap_y  : int = 0
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
-        """Remembers where the press landed, to tell a tap from a scroll.
+        """Remembers where the press landed, to tell a tap from a drag.
 
-        Deliberately does not stop the event: the log scrolls by dragging, and
-        that reads the same mouse events, so a message that swallowed them
-        would be a message you could not scroll past.
+        Deliberately does not stop the event: a drag across a message is
+        Textual's to read as a text selection, and the log reads the same
+        events to pan, so a message that swallowed them would be a message
+        you could neither select from nor scroll past.
         """
+        self._pressed_x = event.screen_x
         self._pressed_y = event.screen_y
 
     def on_click(self, event: events.Click) -> None:
@@ -139,10 +179,25 @@ class _MessageContainer(Vertical):
         click only when both land on the *exact same cell*, which is right for
         a mouse and wrong for a thumb; this allows the second tap a cell of
         wobble, and a little longer to arrive.
+
+        Two things say this was not a tap, and they cover different gestures.
+        **A selection is what the screen is holding**: Textual clears it when
+        the press and the release share a cell, so text left selected means
+        the pointer dragged across it — true even of the one- and two-cell
+        drags a travel threshold has to let through as wobble. And a press
+        that *travelled* was the log being panned, which selects nothing and
+        so leaves the first signal silent.
         """
+        pressed_x, self._pressed_x = self._pressed_x, None
         pressed_y, self._pressed_y = self._pressed_y, None
-        if pressed_y is not None and abs(event.screen_y - pressed_y) > _A_DRAG:
-            return                      # the log was being scrolled, not tapped
+        if self.screen.get_selected_text() is not None:
+            return                      # text was selected, not a message tapped
+        travelled = (
+            (pressed_x is not None and abs(event.screen_x - pressed_x) > _A_DRAG)
+            or (pressed_y is not None and abs(event.screen_y - pressed_y) > _A_DRAG)
+        )
+        if travelled:
+            return                      # the log was panned, not tapped
 
         now = time.monotonic()
         doubled = (now - self._last_tap_at <= _A_DOUBLE
