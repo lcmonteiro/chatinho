@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **234 pass** |
+| `pytest -q` | **237 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -374,7 +374,13 @@ chat warm and the chrome blue, because none of the three is styled the way a bub
   looked set, and the default theme's blue ran down the side of the chat. Textual styles a
   scrollbar with `scrollbar-background`/`scrollbar-color` *properties on the scrollable widget*,
   which is what `#chat-log` carries now, and a test asserts the bar wears the palette — it fails
-  on the old rule.
+  on the old rule. **Its width is a field too, and one cell rather than Textual's two**:
+  `scrollbar_size` renders `scrollbar-size-vertical`, and the cell it gives back goes to the
+  bubbles. The test reads `scrollbar_size_vertical` — what the widget actually reserves — so it
+  fails on the default rather than merely on a field being set, which is the mistake the
+  `.scrollbar` rule made. Textual refuses a width below one as well, but at *mount*, in a panel
+  naming a line of the stylesheet this generated; `__post_init__` refuses it where the caller
+  wrote it, for `local_align`'s reason.
 - **The command popup never takes focus**, the input keeps it, so Textual drew the highlighted row
   with its *blurred* block cursor. Both states are set to the accent, or the palette holds
   everywhere except the one row the eye is on.

@@ -683,6 +683,46 @@ async def test_the_scrollbar_wears_the_palette_too():
 # === A bubble stays inside the window ============================================
 
 
+async def test_the_scrollbar_is_one_cell_wide():
+    """Textual's own is two, which is a lot to give up beside a narrow chat.
+
+    ``scrollbar_size_vertical`` is what the widget actually reserves, so this
+    fails on the default rather than merely on a field being unset — the
+    `.scrollbar` rule that matched nothing once made exactly that mistake.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(60, 24)) as pilot:
+        for i in range(30):
+            await app.say("mensagem %d" % i)
+        await pilot.pause()
+
+        log = app._chat_log
+        assert log.show_vertical_scrollbar, "narrow and full: the bar is up to be looked at"
+        assert log.scrollbar_size_vertical == 1, "one cell, not Textual's two"
+
+
+async def test_the_scrollbar_width_is_a_style_field():
+    """And a wider one is still reachable, for a terminal where one is too thin."""
+    app = await chat_app(style=replace(ChatStyle(), scrollbar_size=3))
+    async with app.run_test(size=(60, 24)) as pilot:
+        for i in range(30):
+            await app.say("mensagem %d" % i)
+        await pilot.pause()
+
+        assert app._chat_log.scrollbar_size_vertical == 3
+
+
+def test_a_scrollbar_with_no_width_is_refused_at_construction():
+    """Textual refuses it too, but at mount, pointing at the generated CSS.
+
+    `local_align`'s argument exactly: a stylesheet error names a line the
+    caller never wrote.
+    """
+    for bad in (0, -1, "2", 1.5, True):
+        with pytest.raises(ValueError, match="scrollbar_size"):
+            ChatStyle(scrollbar_size=bad)
+
+
 async def test_a_bubble_never_runs_past_the_window_or_under_the_scrollbar():
     """bubble_max_width is a cap, not a width: a narrow window wins over it."""
     app = await chat_app()
