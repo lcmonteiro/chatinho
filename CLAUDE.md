@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **231 pass** |
+| `pytest -q` | **234 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -411,9 +411,46 @@ this exists for.
 
 Selecting is a toggle, so the second tap of a pair calls it again and puts the reply target back
 where it was: a double tap only copies, which is what the hold it replaced did. The press position
-is still recorded in `on_mouse_down`, because a release more than `_A_DRAG` rows from the landing
-was the log being scrolled and selects nothing; neither handler stops its event, or the
-drag-to-scroll underneath would have nothing left to read.
+is still recorded in `on_mouse_down`, because a release more than `_A_DRAG` cells from the landing
+was a drag and selects nothing; neither handler stops its event, or the pan underneath would have
+nothing left to read.
+
+**`_A_DRAG` is measured on both axes, and only one of them was ever checked.** Textual synthesises
+a `Click` from any release on the *widget* the press landed on, so dragging across a line to select
+a few words — which never leaves the row it started on — arrived as a tap and silently moved the
+reply target. Two such selections inside `_A_DOUBLE` copied the whole message. A press that
+travelled sideways was a selection; one that travelled down was a pan; neither is a tap.
+
+**A drag is a text selection, unless it started where there is nothing to select.** From Textual 3
+a mouse drag *is* a selection — the screen starts one in `_forward_event`, before the event reaches
+any widget, so `event.stop()` never held it off — and `TouchScrollableContainer` was panning the log
+on the same drag. Two controllers on one gesture: the selection reached for the pointer while the
+pan moved the text out from under it, and the log shook. Selecting across a bubble with a mouse was
+the report; the cause was older than the report.
+
+**It cannot be split by device, and that is not a limitation of Textual.** A terminal speaks the
+XTerm SGR mouse protocol and Termux turns a swipe into exactly the bytes a trackpad sends; no
+protocol any terminal speaks carries the device, which is why `MouseEvent` has no field for it.
+What the gesture is split by instead is *where it landed*:
+`Screen.get_widget_and_offset_at` reports no content offset for a coordinate holding nothing
+selectable, so a press on the margin beside a bubble pans and a press on text is Textual's to
+select with. The pan then calls `clear_selection()` once, which drops the selection the screen
+anchored on that same press — and, because the auto-scroll lives behind the same `_select_state`,
+stops Textual reaching for the offset the pan is about to drive.
+
+The cost is real and worth stating: **the pannable area is the background only.** On a wide
+terminal that is most of the log, since the chat is centred and a bubble takes one side; on a
+phone, a message long enough to fill the width leaves little to grab, and scrolling there is the
+scrollbar, the wheel, or dragging to the edge — Textual's own select-auto-scroll carries the view
+while a selection is open, which is now the only thing that moves the log during one.
+
+**The pan was measured in the wrong frame from the day it was written, and nothing said so.**
+`_drag_start_y` took `event.y`, which on a bubbled mouse event is relative to whatever descendant
+the press first landed on — and the next report comes from a *different* descendant, because the
+pan just moved one under the pointer. Traced: a press at `screen_y=8` recorded `2`, and five cells
+of travel moved the log two, in a 0/1/0/1 limp. It reads `screen_y` now, which no scroll can
+move. No test had ever asserted that dragging scrolls at all, which is how a feature stayed broken
+through two rewrites; there is one now, and it fails on the old frame.
 
 **The drag test was empty for a while.** It drove `pilot.mouse_down`/`mouse_up`, which do not
 synthesise a `Click` — the app does that, from a release on the widget the press landed on — so
