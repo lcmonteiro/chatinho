@@ -101,12 +101,9 @@ Toast.-information .toast--title {
     max-height: $input_max_height;
     padding: 0 1;
     background: transparent;
-    border: round $input_border;
     color: $input_color;
 }
-#input-line:focus {
-    border: round $input_focus_border;
-}
+$input_frame_rules
 .message-container {
     layout: vertical;
     width: 100%;
@@ -203,7 +200,14 @@ class ChatStyle:
     scrollbar_hover_bg: str = "#3d3b37"
     scrollbar_hover_color: str = "#f0eee6"
 
-    # Input line — drawn as an outline; it grows with the text up to this many rows
+    # Input line — it grows with the text up to this many rows.
+    #
+    # `input_frame` is how it is drawn: "lines" rules it off above and below
+    # and leaves the sides open, "box" puts the rounded border back on all
+    # four. Two lines give the text the two columns the sides were taking,
+    # which is the whole width on a phone, and read as somewhere to write
+    # rather than as a widget sitting in the chat.
+    input_frame: str = "lines"
     input_bg: str = "#262624"
     input_border: str = "#3d3b37"
     input_color: str = "#f0eee6"
@@ -264,13 +268,14 @@ class ChatStyle:
     quote_bg: str = "#262624"
 
     def __post_init__(self) -> None:
-        """Refuses a palette with nothing in it, a side that is neither, and a bar of no width.
+        """Refuses a palette with nothing in it, a side or a frame that is neither, and a bar of no width.
 
         Raises:
             ValueError: ``peer_headers`` is empty, which would leave the
                 header with no colour and the modulo with no divisor;
-                ``local_align`` is not a side, which Textual would take as a
-                broken rule and report nowhere the caller would look; or
+                ``local_align`` is not a side or ``input_frame`` is neither
+                shape, which Textual would take as a broken rule and report
+                nowhere the caller would look; or
                 ``scrollbar_size`` is not a whole number of cells above zero,
                 which Textual refuses too — but at mount, pointing at the
                 stylesheet this generated rather than at the field it came
@@ -281,6 +286,10 @@ class ChatStyle:
         if self.local_align not in ("left", "right"):
             raise ValueError(
                 "local_align is a side: 'left' or 'right', not %r" % (self.local_align,)
+            )
+        if self.input_frame not in ("lines", "box"):
+            raise ValueError(
+                "input_frame is 'lines' or 'box', not %r" % (self.input_frame,)
             )
         if not isinstance(self.scrollbar_size, int) or isinstance(self.scrollbar_size, bool) \
            or self.scrollbar_size < 1:
@@ -315,5 +324,29 @@ class ChatStyle:
             )
         return _CSS_TEMPLATE.substitute(
             peer_header_rules="\n".join(rules),
+            input_frame_rules=self._input_frame_rules(),
             **asdict(self),
+        )
+
+    def _input_frame_rules(self) -> str:
+        """The border declarations for the input, resting and focused.
+
+        They are computed rather than written into the template because the
+        two shapes do not differ by a value: a box sets one `border`, and two
+        rules have to clear it and set `border-top` and `border-bottom`
+        instead — a rule left in place would override them, the declaration
+        coming later in the block.
+
+        Returns:
+            str: The `#input-line` and `#input-line:focus` rules.
+        """
+        def framed(colour: str) -> str:
+            if self.input_frame == "box":
+                return "    border: round %s;" % colour
+            return ("    border: none;\n"
+                    "    border-top: solid %s;\n"
+                    "    border-bottom: solid %s;" % (colour, colour))
+
+        return "#input-line {\n%s\n}\n#input-line:focus {\n%s\n}" % (
+            framed(self.input_border), framed(self.input_focus_border),
         )

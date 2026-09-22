@@ -1201,6 +1201,72 @@ async def test_a_tap_that_selects_nothing_still_taps():
         assert log.reply_target == app.messages[0].id
 
 
+# === The input is ruled off, not boxed in ========================================
+
+
+async def test_the_input_is_ruled_off_above_and_below_with_open_sides():
+    """Two lines, not a bubble: the sides were costing the text two columns.
+
+    A box is a widget sitting in the chat; a rule above and below is somewhere
+    to write. On a phone those two columns are the difference, which is why
+    the content width is asserted and not only the border type — a `border:
+    none` that forgot the rules would pass a type check on top and bottom.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(46, 14)) as pilot:
+        await pilot.pause()
+
+        inp = app.query_one("#input-line", CommandInput)
+        assert inp.styles.border_top[0]    == "solid", "a rule above"
+        assert inp.styles.border_bottom[0] == "solid", "and below"
+        assert inp.styles.border_left[0]   == "", "and nothing at the sides"
+        assert inp.styles.border_right[0]  == ""
+        # 46 columns, less the one cell of padding each side and no border:
+        # the box below takes two more for its sides.
+        assert inp.content_region.width == 44, "so the text keeps the two side columns"
+
+
+async def test_the_rules_wear_the_accent_only_while_the_input_has_focus():
+    """`_input_frame_rules` writes the colour twice, once per state.
+
+    Wiring both to one colour is the easy slip, and it is invisible until you
+    look away from the input — which nothing else in the suite does.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(46, 14)) as pilot:
+        await pilot.pause()
+        style = ChatStyle()
+
+        inp = app.query_one("#input-line", CommandInput)
+        assert inp.has_focus, "the premise: the input holds focus at rest"
+        assert inp.styles.border_top[1] == Color.parse(style.input_focus_border)
+
+        app.set_focus(None)
+        await pilot.pause()
+        assert inp.styles.border_top[1] == Color.parse(style.input_border), \
+            "and drops back to the resting colour when it loses focus"
+
+
+async def test_the_box_is_still_there_for_whoever_prefers_it():
+    """Both shapes are real; `input_frame` is which one."""
+    app = await chat_app(style=replace(ChatStyle(), input_frame="box"))
+    async with app.run_test(size=(46, 14)) as pilot:
+        await pilot.pause()
+
+        inp = app.query_one("#input-line", CommandInput)
+        edges = (inp.styles.border_top, inp.styles.border_bottom,
+                 inp.styles.border_left, inp.styles.border_right)
+        assert [e[0] for e in edges] == ["round"] * 4, "boxed in on all four sides"
+        assert inp.content_region.width == 42, "which costs the two side columns"
+
+
+def test_a_frame_that_is_neither_shape_is_refused_at_construction():
+    """`local_align`'s argument again: Textual reports a broken rule nowhere useful."""
+    for bad in ("round", "none", "", None):
+        with pytest.raises(ValueError, match="input_frame"):
+            ChatStyle(input_frame=bad)
+
+
 # === The header names who spoke =================================================
 
 

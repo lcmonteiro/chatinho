@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **242 pass** |
+| `pytest -q` | **246 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -366,6 +366,23 @@ either end of it. Both halves were broken separately to watch it fail — the wi
 text at the far end, and the `text-align` alone has nothing to align inside. The hues
 are spread apart deliberately: the common chat is the user and one connector, so slots 0 and 1 have
 to be told apart at a glance, and the two greens they started as could not be.
+
+**The input is ruled off rather than boxed in.** `input_frame` is `"lines"`: a rule above and a
+rule below, and nothing at the sides. A box is a widget sitting in the chat; two lines are
+somewhere to write — and the sides were costing the text two columns, which on a phone is the
+difference. `"box"` puts the rounded border back, and anything else is refused at construction
+for `local_align`'s reason.
+
+The declarations are computed in `_input_frame_rules` rather than written into the template,
+because the two shapes do not differ by a *value*: a box sets one `border`, and two rules have to
+clear it and set `border-top`/`border-bottom` instead. A `border: round` left in the block would
+win anyway, the declaration coming later — which is exactly how the first attempt at this rendered
+a box while looking like it had set two rules. The colour is written twice, once per state, so the
+test that matters is the one that **blurs** the input and looks again: wiring both to the accent is
+the easy slip and nothing else in the suite ever looks away from the input.
+
+The suggestion popup keeps its rounded box, deliberately: it is a floating list that appears over
+the chat, not a place to type, and the two shapes saying two different things is the point.
 
 **The default palette is Claude Code's**, which the chat was a WhatsApp green before. Every colour
 in `ChatStyle` comes from that terminal: a warm neutral ramp — `#1f1e1d` background, `#262624` and
