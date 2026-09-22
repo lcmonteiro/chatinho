@@ -723,6 +723,56 @@ def test_a_scrollbar_with_no_width_is_refused_at_construction():
             ChatStyle(scrollbar_size=bad)
 
 
+async def _scrollbar_column(app, pilot):
+    """Every background colour painted down the scrollbar's own column."""
+    for i in range(14):
+        await app.say("mensagem %d" % i)
+    await pilot.pause()
+    log = app._chat_log
+    log.scroll_to(y=6, animate=False)
+    await pilot.pause()
+    await pilot.pause()
+    assert log.show_vertical_scrollbar, "narrow and full: the bar is up to be looked at"
+    bar = log.vertical_scrollbar
+    return log, bar, lambda: {app.screen.get_style_at(bar.region.x, y).bgcolor.name
+                              for y in range(bar.region.y, bar.region.bottom)}
+
+
+async def test_the_track_is_the_chat_behind_it_until_you_reach_for_it():
+    """One cell is the floor, so the thinning left is what the cell is painted with.
+
+    A track in a colour of its own is a strip down the whole height of the
+    chat whether or not anyone is scrolling. `transparent` leaves the thumb
+    alone at rest, and the hover colour brings the track back under the
+    pointer — so nothing is lost, it is only quiet.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(48, 14)) as pilot:
+        _, bar, painted = await _scrollbar_column(app, pilot)
+        style = ChatStyle()
+
+        assert painted() == {style.chat_bg}, "at rest the column is chat, not a strip"
+
+        bar.mouse_over = True
+        await pilot.pause()
+        await pilot.pause()
+        assert painted() == {style.scrollbar_hover_bg}, "and the track is there when reached for"
+
+
+async def test_a_transparent_track_follows_the_chat_background():
+    """Which is why it is `transparent` and not `chat_bg`'s hex written twice.
+
+    Textual composites a translucent scrollbar background onto the parent's,
+    so recolouring the chat carries the track with it. Spelling the hex again
+    would leave a strip behind the moment someone changed one of the two.
+    """
+    style = replace(ChatStyle(), chat_bg="#101010", screen_bg="#101010")
+    app = await chat_app(style=style)
+    async with app.run_test(size=(48, 14)) as pilot:
+        _, _, painted = await _scrollbar_column(app, pilot)
+        assert painted() == {"#101010"}
+
+
 async def test_a_bubble_never_runs_past_the_window_or_under_the_scrollbar():
     """bubble_max_width is a cap, not a width: a narrow window wins over it."""
     app = await chat_app()

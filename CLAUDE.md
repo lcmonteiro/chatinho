@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **237 pass** |
+| `pytest -q` | **239 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -381,6 +381,20 @@ chat warm and the chrome blue, because none of the three is styled the way a bub
   `.scrollbar` rule made. Textual refuses a width below one as well, but at *mount*, in a panel
   naming a line of the stylesheet this generated; `__post_init__` refuses it where the caller
   wrote it, for `local_align`'s reason.
+
+  **One cell is the floor, so the rest of the thinning is what the cell is painted with.** A
+  terminal cannot reserve less than a cell, Textual refuses a width below one outright, and there
+  is no overlay scrollbar to ask for either — `scrollbar-gutter` chooses only `auto` or `stable`,
+  and both reserve the column. What was left was the *track*: a colour of its own made it a strip
+  down the full height of the chat whether or not anyone was scrolling. It is `transparent` now,
+  so at rest the bar is the thumb alone and the column behind it is chat. The hover and active
+  colours are untouched, so the track comes back the moment the pointer reaches for it — measured,
+  not assumed: `#3d3b37` under the pointer, the chat background at rest.
+
+  **`transparent`, not `chat_bg`'s hex a second time.** Textual composites a translucent scrollbar
+  background onto the parent's, so the track follows the chat wherever it is recoloured. The hex
+  written twice passes the at-rest test and fails the one that recolours the chat and looks again —
+  which is why that second test exists, and it was proved by writing the hex.
 - **The command popup never takes focus**, the input keeps it, so Textual drew the highlighted row
   with its *blurred* block cursor. Both states are set to the accent, or the palette holds
   everywhere except the one row the eye is on.

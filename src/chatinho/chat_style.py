@@ -186,9 +186,18 @@ class ChatStyle:
 
     # Scrollbar. Textual draws it two cells wide by default, which is a wide
     # thing to give up beside a chat that is mostly margin already; one cell
-    # still reads as a bar and still takes a drag.
+    # still reads as a bar and still takes a drag, and one cell is the floor —
+    # a terminal cannot reserve less, and Textual refuses a width below it.
+    #
+    # What the cell is *painted* with is the other half. The track is
+    # `transparent` rather than a colour of its own, so at rest the bar is the
+    # thumb alone and the column behind it is chat: Textual composites a
+    # translucent scrollbar background onto the parent's, so this follows
+    # `chat_bg` wherever it goes instead of repeating its hex. The hover and
+    # active colours below are unchanged, so the track comes back the moment
+    # the pointer reaches for it.
     scrollbar_size: int = 1
-    scrollbar_bg: str = "#2f2e2b"
+    scrollbar_bg: str = "transparent"
     scrollbar_color: str = "#8a8984"
     scrollbar_hover_bg: str = "#3d3b37"
     scrollbar_hover_color: str = "#f0eee6"
