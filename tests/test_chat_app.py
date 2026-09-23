@@ -1226,25 +1226,45 @@ async def test_the_input_is_ruled_off_above_and_below_with_open_sides():
         assert inp.content_region.width == 44, "so the text keeps the two side columns"
 
 
-async def test_the_rules_wear_the_accent_only_while_the_input_has_focus():
+async def test_the_rules_brighten_while_the_input_has_focus():
     """`_input_frame_rules` writes the colour twice, once per state.
 
     Wiring both to one colour is the easy slip, and it is invisible until you
-    look away from the input — which nothing else in the suite does.
+    look away from the input — which nothing else in the suite does. Focus
+    really does leave: Tab moves it to the log.
+
+    The two colours are asserted to differ first, or this passes on a palette
+    that made them the same and the whole check would be vacuous.
     """
     app = await chat_app()
     async with app.run_test(size=(46, 14)) as pilot:
         await pilot.pause()
         style = ChatStyle()
+        assert style.input_focus_border != style.input_border, \
+            "the premise: the two states are meant to look different"
 
         inp = app.query_one("#input-line", CommandInput)
-        assert inp.has_focus, "the premise: the input holds focus at rest"
+        assert inp.has_focus, "and the input holds focus at rest"
         assert inp.styles.border_top[1] == Color.parse(style.input_focus_border)
 
         app.set_focus(None)
         await pilot.pause()
         assert inp.styles.border_top[1] == Color.parse(style.input_border), \
             "and drops back to the resting colour when it loses focus"
+
+
+async def test_the_input_rules_carry_no_hue_of_their_own():
+    """Two orange bars across the width is not an accent, it is a stripe.
+
+    The accent stays on the quote border and the popup's highlighted row,
+    where it marks one thing rather than framing the whole screen.
+    """
+    style = ChatStyle()
+    for colour in (style.input_border, style.input_focus_border):
+        red, green, blue = Color.parse(colour).rgb
+        assert max(red, green, blue) - min(red, green, blue) <= 8, \
+            "%s is a hue, not a grey" % colour
+    assert style.accent != style.input_focus_border, "the accent is not the input's"
 
 
 async def test_the_box_is_still_there_for_whoever_prefers_it():

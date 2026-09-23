@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **246 pass** |
+| `pytest -q` | **247 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -381,14 +381,26 @@ a box while looking like it had set two rules. The colour is written twice, once
 test that matters is the one that **blurs** the input and looks again: wiring both to the accent is
 the easy slip and nothing else in the suite ever looks away from the input.
 
+**The rules carry no hue, and that changed with the shape.** The accent used to mark the focused
+input, which was fine while it outlined a box the size of a widget; as two rules across the whole
+width it was two orange bars over a chat that has no others. Focus really does leave the input —
+Tab moves it to the log — so the two states still have to differ, and they do by *brightness*:
+`#3d3b37` at rest, `#8a8984` focused, both off the same neutral ramp. A test asserts neither is a
+hue at all, so putting the accent back fails it; the accent stays on the quote border and the
+popup's highlighted row, where it marks one thing instead of framing the screen.
+
+The test that checks the two states differ now asserts they are *meant* to differ first. Without
+that line it passes on a palette that made them the same colour — the exact thing it exists to
+catch — because both halves would then compare equal to the same value.
+
 The suggestion popup keeps its rounded box, deliberately: it is a floating list that appears over
 the chat, not a place to type, and the two shapes saying two different things is the point.
 
 **The default palette is Claude Code's**, which the chat was a WhatsApp green before. Every colour
 in `ChatStyle` comes from that terminal: a warm neutral ramp — `#1f1e1d` background, `#262624` and
 `#2f2e2b` surfaces, `#3d3b37` borders and the selected bubble, `#8a8984` for what is muted, and
-`#f0eee6` cream to write on — with Claude's `#d97757` as the accent, on the quote border and on the
-focused input. Slot 0 is that cream and slot 1 the orange, because "you in plain text, them in
+`#f0eee6` cream to write on — with Claude's `#d97757` as the accent, on the quote border and on
+the popup's highlighted row. Slot 0 is that cream and slot 1 the orange, because "you in plain text, them in
 orange" is the pairing the terminal itself reads by; the periwinkle, green, amber and pink behind
 them are the rest of its colours. `tool_header` is the muted grey rather than a hue of its own:
 a command is not a peer, and Claude Code dims a tool line rather than giving it a voice.

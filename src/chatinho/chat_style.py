@@ -211,7 +211,12 @@ class ChatStyle:
     input_bg: str = "#262624"
     input_border: str = "#3d3b37"
     input_color: str = "#f0eee6"
-    input_focus_border: str = "#d97757"
+    # Brighter than the resting rule, not a different hue: the accent outlined
+    # a box the size of a widget, and as two rules across the whole width it
+    # was two orange bars over a chat that has none anywhere else. Focus does
+    # leave the input — Tab moves it to the log — so the two states still have
+    # to differ; brightness is enough to say which one it is.
+    input_focus_border: str = "#8a8984"
     input_max_height: str = "8"
 
     # Accent (quote border)
