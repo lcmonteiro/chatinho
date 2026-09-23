@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **247 pass** |
+| `pytest -q` | **249 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -429,6 +429,21 @@ chat warm and the chrome blue, because none of the three is styled the way a bub
   so at rest the bar is the thumb alone and the column behind it is chat. The hover and active
   colours are untouched, so the track comes back the moment the pointer reaches for it — measured,
   not assumed: `#3d3b37` under the pointer, the chat background at rest.
+
+  **The input has a bar of its own, and nothing had ever named it.** `CommandInput` is a
+  `TextArea`, so it scrolls once the text passes `input_max_height` — and it wore Textual's
+  default there: `Color(0, 48, 84)`, two cells wide, beside a one-cell grey one. The same silence
+  the dead `.scrollbar` rule kept, in a second place. Both selectors share **one** rule now
+  (`#chat-log, #input-line`), so the two cannot drift; the test asserts each against `ChatStyle`
+  rather than against the other, or two identically wrong bars would pass it.
+
+  **A scrollbar is inset by its widget's right padding**, which is what the two had different
+  amounts of — the log `2`, the input `1` — so they sat in different columns. Zeroing the right
+  padding on both is what aligns them *and* what puts them against the edge, in one change:
+  measured, column 43 of a 44-column window for both. The left padding stays, so the text does not
+  touch the frame. What keeps a bubble off the bar is now `bubble_margin_right` alone — the log's
+  own padding used to do it too, which is exactly why CLAUDE.md already said that margin "needs
+  its own assertion".
 
   **`transparent`, not `chat_bg`'s hex a second time.** Textual composites a translucent scrollbar
   background onto the parent's, so the track follows the chat wherever it is recoloured. The hex

@@ -773,6 +773,62 @@ async def test_a_transparent_track_follows_the_chat_background():
         assert painted() == {"#101010"}
 
 
+async def _both_bars_up(pilot, app):
+    """A log long enough and an input tall enough that both bars are drawn."""
+    for i in range(20):
+        await app.say("mensagem %d" % i)
+    await pilot.pause()
+    inp = app.query_one("#input-line", CommandInput)
+    inp.text = "\n".join("linha %d" % i for i in range(20))
+    await pilot.pause()
+    await pilot.pause()
+    log = app._chat_log
+    assert log.show_vertical_scrollbar and inp.show_vertical_scrollbar, \
+        "the premise: both are scrolling"
+    return log, inp
+
+
+async def test_the_input_scrollbar_wears_the_same_palette_as_the_log():
+    """The input is a TextArea with a bar of its own, and nothing named it.
+
+    It wore Textual's default — two cells of dark blue — beside a one-cell
+    grey one, which is the same silence the dead `.scrollbar` rule kept. Both
+    selectors share one rule now, so the two cannot drift; the assertions go
+    against `ChatStyle` and not against each other, or two identically wrong
+    bars would pass.
+    """
+    style = ChatStyle()
+    app = await chat_app()
+    async with app.run_test(size=(44, 18)) as pilot:
+        log, inp = await _both_bars_up(pilot, app)
+
+        for who, widget in (("log", log), ("input", inp)):
+            assert widget.scrollbar_size_vertical == style.scrollbar_size, \
+                "%s: one cell, not Textual's two" % who
+            assert widget.styles.scrollbar_color == Color.parse(style.scrollbar_color), \
+                "%s: the palette's thumb, not the theme's blue" % who
+            assert widget.styles.scrollbar_background == Color.parse(style.scrollbar_bg), \
+                "%s: the track is the chat behind it" % who
+
+
+async def test_both_scrollbars_line_up_against_the_edge():
+    """One column down the right side, not two bars in two places.
+
+    A scrollbar is inset by its widget's *right padding*, which is what the
+    two had different amounts of — so zeroing both is what aligns them and
+    what puts them against the edge at the same time. Measured, not assumed:
+    at 44 columns the last one is 43.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(44, 18)) as pilot:
+        log, inp = await _both_bars_up(pilot, app)
+
+        assert log.vertical_scrollbar.region.x == inp.vertical_scrollbar.region.x, \
+            "the two bars are in the same column"
+        assert log.vertical_scrollbar.region.x == 44 - log.scrollbar_size_vertical, \
+            "and that column is the last one in the window"
+
+
 async def test_a_bubble_never_runs_past_the_window_or_under_the_scrollbar():
     """bubble_max_width is a cap, not a width: a narrow window wins over it."""
     app = await chat_app()
@@ -1221,9 +1277,12 @@ async def test_the_input_is_ruled_off_above_and_below_with_open_sides():
         assert inp.styles.border_bottom[0] == "solid", "and below"
         assert inp.styles.border_left[0]   == "", "and nothing at the sides"
         assert inp.styles.border_right[0]  == ""
-        # 46 columns, less the one cell of padding each side and no border:
-        # the box below takes two more for its sides.
-        assert inp.content_region.width == 44, "so the text keeps the two side columns"
+        # 46 columns, less the one cell of padding on the left and no border
+        # either side. There is no padding on the right: that is what the
+        # scrollbar is inset by, and zeroing it is what puts the bar against
+        # the edge in the same column as the log's. The box below takes two
+        # more columns for its sides.
+        assert inp.content_region.width == 45, "so the text keeps the side columns"
 
 
 async def test_the_rules_brighten_while_the_input_has_focus():
@@ -1277,7 +1336,7 @@ async def test_the_box_is_still_there_for_whoever_prefers_it():
         edges = (inp.styles.border_top, inp.styles.border_bottom,
                  inp.styles.border_left, inp.styles.border_right)
         assert [e[0] for e in edges] == ["round"] * 4, "boxed in on all four sides"
-        assert inp.content_region.width == 42, "which costs the two side columns"
+        assert inp.content_region.width == 43, "which costs the two side columns"
 
 
 def test_a_frame_that_is_neither_shape_is_refused_at_construction():

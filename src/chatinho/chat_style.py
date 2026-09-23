@@ -47,8 +47,17 @@ Screen {
 #chat-log {
     height: 1fr;
     overflow-y: auto;
-    padding: 1 2;
+    /* No padding on the right: a scrollbar is inset by it, and this is what
+       puts the bar against the edge. What keeps a bubble off the bar is its
+       own `bubble_margin_right`, which is now the only thing doing it. */
+    padding: 1 0 1 2;
     background: $chat_bg;
+}
+/* Both scrollables in one rule, so the log's bar and the input's cannot
+   drift apart. The input is a TextArea with a bar of its own, and it wore
+   Textual's blue at two cells wide until it was named here — the same
+   silence the dead `.scrollbar` rule used to keep. */
+#chat-log, #input-line {
     scrollbar-size-vertical: $scrollbar_size;
     scrollbar-background: $scrollbar_bg;
     scrollbar-color: $scrollbar_color;
@@ -99,7 +108,9 @@ Toast.-information .toast--title {
 #input-line {
     height: auto;
     max-height: $input_max_height;
-    padding: 0 1;
+    /* Right padding zeroed for the same reason the log's is: it is what the
+       bar is inset by, and both have to land in the same column. */
+    padding: 0 0 0 1;
     background: transparent;
     color: $input_color;
 }
