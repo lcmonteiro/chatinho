@@ -10,6 +10,7 @@ import logging
 import time
 from typing import Callable, Dict, List, Optional
 
+from markdown_it import MarkdownIt
 from textual import events
 from textual.containers import ScrollableContainer, Vertical
 from textual.widget import Widget
@@ -53,6 +54,50 @@ _CONFIRMATION : float = 5.0
 #: What a bubble adds to its header's width to sit under it: the header's own
 #: `margin-left`, plus one space so the two do not end flush.
 _HEADER_SLACK : int = 2
+
+
+def _newlines_are_breaks(state) -> None:
+    """Rewrites every soft break in the token stream as a hard one.
+
+    **A fenced block is safe because it has no children at all**, not because
+    anything checks its type: across headings, links, images, quotes, tables,
+    fences and nested lists, `inline` is the only token markdown-it ever gives
+    children to. A `token.type == "inline"` guard was written here and then
+    deleted — breaking it changed no test, which is this repository's
+    definition of code not earning its place. What guards the fence is the
+    test that reads one back out of a bubble.
+
+    Args:
+        state: markdown-it's core state, whose `tokens` this edits in place.
+    """
+    for token in state.tokens:
+        for child in token.children or ():
+            if child.type == "softbreak":
+                child.type = "hardbreak"
+
+
+def chat_markdown() -> MarkdownIt:
+    """The parser a message body is rendered with: Markdown, but chat-shaped.
+
+    A lone newline is a *soft* break in Markdown, and Textual renders one as a
+    space — so a message typed over three lines arrived as one line. Nobody
+    pressing Enter in a chat box means "put a space here".
+
+    **markdown-it's `breaks` option does not do this**, which is worth knowing
+    because it reads exactly as though it would: `breaks` belongs to the
+    *renderer*, so it turns a soft break into `<br>` when rendering **HTML**
+    and leaves the token stream alone. Textual never renders HTML — it walks
+    the tokens — so the option is invisible to it. Checking `render()` shows
+    the `<br>` and proves nothing at all. What works is rewriting the token,
+    which is what the core rule above does.
+
+    Returns:
+        MarkdownIt: The `gfm-like` parser Textual would build for itself, with
+        that one rule pushed on the end.
+    """
+    parser = MarkdownIt("gfm-like")
+    parser.core.ruler.push("chat_hard_breaks", _newlines_are_breaks)
+    return parser
 
 
 def preview_of(text: str, width: int = 60) -> str:
@@ -332,7 +377,7 @@ class ChatLog(TouchScrollableContainer):
                 quote = f"↳ {original.id}: {preview}…"
                 parts.append(Static(quote, classes="message-quote"))
 
-        parts.append(Markdown(msg.text, classes="message-body"))
+        parts.append(Markdown(msg.text, classes="message-body", parser_factory=chat_markdown))
 
         bubble = Vertical(*parts, classes="message-bubble")
         # A bubble is as wide as its widest line and no wider, up to the

@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **242 pass** |
+| `pytest -q` | **254 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -367,11 +367,40 @@ text at the far end, and the `text-align` alone has nothing to align inside. The
 are spread apart deliberately: the common chat is the user and one connector, so slots 0 and 1 have
 to be told apart at a glance, and the two greens they started as could not be.
 
+**The input is ruled off rather than boxed in.** `input_frame` is `"lines"`: a rule above and a
+rule below, and nothing at the sides. A box is a widget sitting in the chat; two lines are
+somewhere to write — and the sides were costing the text two columns, which on a phone is the
+difference. `"box"` puts the rounded border back, and anything else is refused at construction
+for `local_align`'s reason.
+
+The declarations are computed in `_input_frame_rules` rather than written into the template,
+because the two shapes do not differ by a *value*: a box sets one `border`, and two rules have to
+clear it and set `border-top`/`border-bottom` instead. A `border: round` left in the block would
+win anyway, the declaration coming later — which is exactly how the first attempt at this rendered
+a box while looking like it had set two rules. The colour is written twice, once per state, so the
+test that matters is the one that **blurs** the input and looks again: wiring both to the accent is
+the easy slip and nothing else in the suite ever looks away from the input.
+
+**The rules carry no hue, and that changed with the shape.** The accent used to mark the focused
+input, which was fine while it outlined a box the size of a widget; as two rules across the whole
+width it was two orange bars over a chat that has no others. Focus really does leave the input —
+Tab moves it to the log — so the two states still have to differ, and they do by *brightness*:
+`#3d3b37` at rest, `#8a8984` focused, both off the same neutral ramp. A test asserts neither is a
+hue at all, so putting the accent back fails it; the accent stays on the quote border and the
+popup's highlighted row, where it marks one thing instead of framing the screen.
+
+The test that checks the two states differ now asserts they are *meant* to differ first. Without
+that line it passes on a palette that made them the same colour — the exact thing it exists to
+catch — because both halves would then compare equal to the same value.
+
+The suggestion popup keeps its rounded box, deliberately: it is a floating list that appears over
+the chat, not a place to type, and the two shapes saying two different things is the point.
+
 **The default palette is Claude Code's**, which the chat was a WhatsApp green before. Every colour
 in `ChatStyle` comes from that terminal: a warm neutral ramp — `#1f1e1d` background, `#262624` and
 `#2f2e2b` surfaces, `#3d3b37` borders and the selected bubble, `#8a8984` for what is muted, and
-`#f0eee6` cream to write on — with Claude's `#d97757` as the accent, on the quote border and on the
-focused input. Slot 0 is that cream and slot 1 the orange, because "you in plain text, them in
+`#f0eee6` cream to write on — with Claude's `#d97757` as the accent, on the quote border and on
+the popup's highlighted row. Slot 0 is that cream and slot 1 the orange, because "you in plain text, them in
 orange" is the pairing the terminal itself reads by; the periwinkle, green, amber and pink behind
 them are the rest of its colours. `tool_header` is the muted grey rather than a hue of its own:
 a command is not a peer, and Claude Code dims a tool line rather than giving it a voice.
@@ -401,6 +430,21 @@ chat warm and the chrome blue, because none of the three is styled the way a bub
   colours are untouched, so the track comes back the moment the pointer reaches for it — measured,
   not assumed: `#3d3b37` under the pointer, the chat background at rest.
 
+  **The input has a bar of its own, and nothing had ever named it.** `CommandInput` is a
+  `TextArea`, so it scrolls once the text passes `input_max_height` — and it wore Textual's
+  default there: `Color(0, 48, 84)`, two cells wide, beside a one-cell grey one. The same silence
+  the dead `.scrollbar` rule kept, in a second place. Both selectors share **one** rule now
+  (`#chat-log, #input-line`), so the two cannot drift; the test asserts each against `ChatStyle`
+  rather than against the other, or two identically wrong bars would pass it.
+
+  **A scrollbar is inset by its widget's right padding**, which is what the two had different
+  amounts of — the log `2`, the input `1` — so they sat in different columns. Zeroing the right
+  padding on both is what aligns them *and* what puts them against the edge, in one change:
+  measured, column 43 of a 44-column window for both. The left padding stays, so the text does not
+  touch the frame. What keeps a bubble off the bar is now `bubble_margin_right` alone — the log's
+  own padding used to do it too, which is exactly why CLAUDE.md already said that margin "needs
+  its own assertion".
+
   **`transparent`, not `chat_bg`'s hex a second time.** Textual composites a translucent scrollbar
   background onto the parent's, so the track follows the chat wherever it is recoloured. The hex
   written twice passes the at-rest test and fails the one that recolours the chat and looks again —
@@ -413,6 +457,30 @@ chat warm and the chrome blue, because none of the three is styled the way a bub
 
 What stays Textual's is the syntax highlighting inside a fence: that is a code theme, not a chat
 palette, and Claude Code's own blocks are no different.
+
+**A newline typed in the input is a newline in the bubble, and Markdown disagreed.** A lone
+newline is a *soft* break, which Textual renders as `" "` — `_token_to_content` says so in one
+line — so a message written over three lines arrived as one. Nobody pressing Enter in a chat box
+means "put a space here". `chat_markdown()` pushes one core rule onto the `gfm-like` parser that
+rewrites every `softbreak` token as a `hardbreak`, which Textual renders as `"\n"`.
+
+**markdown-it's `breaks` option is not this, and reads exactly as though it were.** It belongs to
+the *renderer*: it emits `<br>` when rendering **HTML** and leaves the token stream untouched.
+Textual never renders HTML — it walks tokens — so the option is invisible to it. That wrong fix
+was written, checked with `render()`, seen to produce `<br />`, shipped into the widget and only
+then caught by looking at the bubble: the tokens still said `softbreak`. The test is written
+against the token stream for that reason, and it fails on `breaks` as surely as on no fix at all.
+
+Both ways of getting this wrong were false results from a real measurement, one in each direction.
+The first attempt to *reproduce* the bug came back green, because the words were long enough that
+the bubble wrapped them onto three rows anyway and joined text looks exactly like broken text. The
+test uses `um`/`dois`/`tres` so the two cannot be confused.
+
+The rule touches prose and nothing else, and **a fence is safe because it has no children at all**
+— across headings, links, images, quotes, tables, fences and nested lists, `inline` is the only
+token markdown-it ever gives children to. A `token.type == "inline"` guard was written and then
+deleted: breaking it changed no test. `markdown-it-py` is named in the `tui` extra now, since
+`chat_log` imports it directly rather than leaning on textual to have brought it.
 
 **The header names the peer**: `21:15 @meteo · msg-3`. `ChatLog` reads the roster through the
 `peers` grant, the same way it reads the conversation through `context`, and calls it fresh rather

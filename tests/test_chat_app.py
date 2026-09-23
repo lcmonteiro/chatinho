@@ -18,7 +18,7 @@ from textual.color import Color
 
 from chatinho.chat_app import ChatApp
 from chatinho.chat_input import NEWLINE_KEYS, CommandInput
-from chatinho.chat_log import preview_of
+from chatinho.chat_log import chat_markdown, preview_of
 from chatinho import (
     LOCAL,
     build_chat,
@@ -773,6 +773,62 @@ async def test_a_transparent_track_follows_the_chat_background():
         assert painted() == {"#101010"}
 
 
+async def _both_bars_up(pilot, app):
+    """A log long enough and an input tall enough that both bars are drawn."""
+    for i in range(20):
+        await app.say("mensagem %d" % i)
+    await pilot.pause()
+    inp = app.query_one("#input-line", CommandInput)
+    inp.text = "\n".join("linha %d" % i for i in range(20))
+    await pilot.pause()
+    await pilot.pause()
+    log = app._chat_log
+    assert log.show_vertical_scrollbar and inp.show_vertical_scrollbar, \
+        "the premise: both are scrolling"
+    return log, inp
+
+
+async def test_the_input_scrollbar_wears_the_same_palette_as_the_log():
+    """The input is a TextArea with a bar of its own, and nothing named it.
+
+    It wore Textual's default — two cells of dark blue — beside a one-cell
+    grey one, which is the same silence the dead `.scrollbar` rule kept. Both
+    selectors share one rule now, so the two cannot drift; the assertions go
+    against `ChatStyle` and not against each other, or two identically wrong
+    bars would pass.
+    """
+    style = ChatStyle()
+    app = await chat_app()
+    async with app.run_test(size=(44, 18)) as pilot:
+        log, inp = await _both_bars_up(pilot, app)
+
+        for who, widget in (("log", log), ("input", inp)):
+            assert widget.scrollbar_size_vertical == style.scrollbar_size, \
+                "%s: one cell, not Textual's two" % who
+            assert widget.styles.scrollbar_color == Color.parse(style.scrollbar_color), \
+                "%s: the palette's thumb, not the theme's blue" % who
+            assert widget.styles.scrollbar_background == Color.parse(style.scrollbar_bg), \
+                "%s: the track is the chat behind it" % who
+
+
+async def test_both_scrollbars_line_up_against_the_edge():
+    """One column down the right side, not two bars in two places.
+
+    A scrollbar is inset by its widget's *right padding*, which is what the
+    two had different amounts of — so zeroing both is what aligns them and
+    what puts them against the edge at the same time. Measured, not assumed:
+    at 44 columns the last one is 43.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(44, 18)) as pilot:
+        log, inp = await _both_bars_up(pilot, app)
+
+        assert log.vertical_scrollbar.region.x == inp.vertical_scrollbar.region.x, \
+            "the two bars are in the same column"
+        assert log.vertical_scrollbar.region.x == 44 - log.scrollbar_size_vertical, \
+            "and that column is the last one in the window"
+
+
 async def test_a_bubble_never_runs_past_the_window_or_under_the_scrollbar():
     """bubble_max_width is a cap, not a width: a narrow window wins over it."""
     app = await chat_app()
@@ -1199,6 +1255,181 @@ async def test_a_tap_that_selects_nothing_still_taps():
         await pilot.pause()
 
         assert log.reply_target == app.messages[0].id
+
+
+# === The input is ruled off, not boxed in ========================================
+
+
+async def test_the_input_is_ruled_off_above_and_below_with_open_sides():
+    """Two lines, not a bubble: the sides were costing the text two columns.
+
+    A box is a widget sitting in the chat; a rule above and below is somewhere
+    to write. On a phone those two columns are the difference, which is why
+    the content width is asserted and not only the border type — a `border:
+    none` that forgot the rules would pass a type check on top and bottom.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(46, 14)) as pilot:
+        await pilot.pause()
+
+        inp = app.query_one("#input-line", CommandInput)
+        assert inp.styles.border_top[0]    == "solid", "a rule above"
+        assert inp.styles.border_bottom[0] == "solid", "and below"
+        assert inp.styles.border_left[0]   == "", "and nothing at the sides"
+        assert inp.styles.border_right[0]  == ""
+        # 46 columns, less the one cell of padding on the left and no border
+        # either side. There is no padding on the right: that is what the
+        # scrollbar is inset by, and zeroing it is what puts the bar against
+        # the edge in the same column as the log's. The box below takes two
+        # more columns for its sides.
+        assert inp.content_region.width == 45, "so the text keeps the side columns"
+
+
+async def test_the_rules_brighten_while_the_input_has_focus():
+    """`_input_frame_rules` writes the colour twice, once per state.
+
+    Wiring both to one colour is the easy slip, and it is invisible until you
+    look away from the input — which nothing else in the suite does. Focus
+    really does leave: Tab moves it to the log.
+
+    The two colours are asserted to differ first, or this passes on a palette
+    that made them the same and the whole check would be vacuous.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(46, 14)) as pilot:
+        await pilot.pause()
+        style = ChatStyle()
+        assert style.input_focus_border != style.input_border, \
+            "the premise: the two states are meant to look different"
+
+        inp = app.query_one("#input-line", CommandInput)
+        assert inp.has_focus, "and the input holds focus at rest"
+        assert inp.styles.border_top[1] == Color.parse(style.input_focus_border)
+
+        app.set_focus(None)
+        await pilot.pause()
+        assert inp.styles.border_top[1] == Color.parse(style.input_border), \
+            "and drops back to the resting colour when it loses focus"
+
+
+async def test_the_input_rules_carry_no_hue_of_their_own():
+    """Two orange bars across the width is not an accent, it is a stripe.
+
+    The accent stays on the quote border and the popup's highlighted row,
+    where it marks one thing rather than framing the whole screen.
+    """
+    style = ChatStyle()
+    for colour in (style.input_border, style.input_focus_border):
+        red, green, blue = Color.parse(colour).rgb
+        assert max(red, green, blue) - min(red, green, blue) <= 8, \
+            "%s is a hue, not a grey" % colour
+    assert style.accent != style.input_focus_border, "the accent is not the input's"
+
+
+async def test_the_box_is_still_there_for_whoever_prefers_it():
+    """Both shapes are real; `input_frame` is which one."""
+    app = await chat_app(style=replace(ChatStyle(), input_frame="box"))
+    async with app.run_test(size=(46, 14)) as pilot:
+        await pilot.pause()
+
+        inp = app.query_one("#input-line", CommandInput)
+        edges = (inp.styles.border_top, inp.styles.border_bottom,
+                 inp.styles.border_left, inp.styles.border_right)
+        assert [e[0] for e in edges] == ["round"] * 4, "boxed in on all four sides"
+        assert inp.content_region.width == 43, "which costs the two side columns"
+
+
+def test_a_frame_that_is_neither_shape_is_refused_at_construction():
+    """`local_align`'s argument again: Textual reports a broken rule nowhere useful."""
+    for bad in ("round", "none", "", None):
+        with pytest.raises(ValueError, match="input_frame"):
+            ChatStyle(input_frame=bad)
+
+
+# === A newline typed in the input is a newline in the bubble =====================
+
+
+def test_the_chat_parser_turns_a_soft_break_into_a_hard_one():
+    """Markdown's own answer to a lone newline is a space, and Textual obeys it.
+
+    This asserts on the **token stream**, because that is what Textual walks.
+    markdown-it's `breaks` option looks like the fix and is not: it belongs to
+    the *renderer*, so it emits `<br>` when rendering HTML and leaves the
+    tokens untouched. A test written against `render()` passes with `breaks`
+    on and the bubble still joins the lines — which is how that wrong fix got
+    as far as being rendered before it was caught.
+    """
+    kinds = []
+    for token in chat_markdown().parse("um\ndois"):
+        kinds += [child.type for child in (token.children or [])]
+
+    assert "hardbreak" in kinds, "the newline survives as a break"
+    assert "softbreak" not in kinds, "and none is left as a space"
+
+
+def test_the_parser_leaves_a_fenced_block_alone():
+    """A fence carries its content whole and has no children to rewrite."""
+    fences = [t for t in chat_markdown().parse("```\na = 1\nb = 2\n```") if t.type == "fence"]
+
+    assert len(fences) == 1
+    assert fences[0].content == "a = 1\nb = 2\n", "the code is untouched"
+
+
+async def test_a_message_typed_over_three_lines_is_three_lines_in_the_bubble():
+    """The report: the Enters pressed in the input did not reach the bubble.
+
+    Short words on purpose. With long ones the bubble wraps them onto separate
+    rows anyway, and the joined text looks exactly like the broken text — which
+    is how the first attempt to reproduce this came back green.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(60, 20)) as pilot:
+        await app.say("um\ndois\ntres")
+        await pilot.pause()
+
+        body = app._chat_log._msg_widgets[app.messages[0].id].query_one(".message-body")
+        paragraphs = [str(block._content) for block in body.children]
+
+        assert paragraphs == ["um\ndois\ntres"], "three lines, not 'um dois tres'"
+
+
+async def test_the_enters_reach_the_bubble_from_the_keyboard():
+    """End to end, by the gesture: space+Enter opens a line, Ctrl+J opens one.
+
+    The input is where the report came from, so the test presses keys rather
+    than calling `say` — nothing between the two is allowed to eat a newline.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(60, 20)) as pilot:
+        await pilot.pause()
+        for key in list("um") + ["space", "enter"] + list("dois") + ["ctrl+j"] + list("tres"):
+            await pilot.press(key)
+        await pilot.pause()
+
+        inp = app.query_one("#input-line", CommandInput)
+        assert inp.text == "um\ndois\ntres", "the input holds three lines"
+
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.pause()
+
+        assert app.messages[0].text == "um\ndois\ntres", "and so does the message"
+        body = app._chat_log._msg_widgets[app.messages[0].id].query_one(".message-body")
+        assert [str(b._content) for b in body.children] == ["um\ndois\ntres"]
+
+
+async def test_a_fenced_block_still_renders_as_code_in_a_bubble():
+    """The rewrite must not reach inside a fence, where newlines were fine."""
+    app = await chat_app()
+    async with app.run_test(size=(60, 24)) as pilot:
+        await app.say("antes\n\n```python\na = 1\nb = 2\n```\n\ndepois")
+        await pilot.pause()
+
+        body   = app._chat_log._msg_widgets[app.messages[0].id].query_one(".message-body")
+        blocks = [type(b).__name__ for b in body.children]
+
+        assert "MarkdownFence" in blocks, "the fence is still a fence"
+        assert blocks.count("MarkdownParagraph") == 2, "with a paragraph either side"
 
 
 # === The header names who spoke =================================================
