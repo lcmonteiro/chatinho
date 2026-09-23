@@ -18,7 +18,7 @@ from textual.color import Color
 
 from chatinho.chat_app import ChatApp
 from chatinho.chat_input import NEWLINE_KEYS, CommandInput
-from chatinho.chat_log import preview_of
+from chatinho.chat_log import chat_markdown, preview_of
 from chatinho import (
     LOCAL,
     build_chat,
@@ -1344,6 +1344,92 @@ def test_a_frame_that_is_neither_shape_is_refused_at_construction():
     for bad in ("round", "none", "", None):
         with pytest.raises(ValueError, match="input_frame"):
             ChatStyle(input_frame=bad)
+
+
+# === A newline typed in the input is a newline in the bubble =====================
+
+
+def test_the_chat_parser_turns_a_soft_break_into_a_hard_one():
+    """Markdown's own answer to a lone newline is a space, and Textual obeys it.
+
+    This asserts on the **token stream**, because that is what Textual walks.
+    markdown-it's `breaks` option looks like the fix and is not: it belongs to
+    the *renderer*, so it emits `<br>` when rendering HTML and leaves the
+    tokens untouched. A test written against `render()` passes with `breaks`
+    on and the bubble still joins the lines — which is how that wrong fix got
+    as far as being rendered before it was caught.
+    """
+    kinds = []
+    for token in chat_markdown().parse("um\ndois"):
+        kinds += [child.type for child in (token.children or [])]
+
+    assert "hardbreak" in kinds, "the newline survives as a break"
+    assert "softbreak" not in kinds, "and none is left as a space"
+
+
+def test_the_parser_leaves_a_fenced_block_alone():
+    """A fence carries its content whole and has no children to rewrite."""
+    fences = [t for t in chat_markdown().parse("```\na = 1\nb = 2\n```") if t.type == "fence"]
+
+    assert len(fences) == 1
+    assert fences[0].content == "a = 1\nb = 2\n", "the code is untouched"
+
+
+async def test_a_message_typed_over_three_lines_is_three_lines_in_the_bubble():
+    """The report: the Enters pressed in the input did not reach the bubble.
+
+    Short words on purpose. With long ones the bubble wraps them onto separate
+    rows anyway, and the joined text looks exactly like the broken text — which
+    is how the first attempt to reproduce this came back green.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(60, 20)) as pilot:
+        await app.say("um\ndois\ntres")
+        await pilot.pause()
+
+        body = app._chat_log._msg_widgets[app.messages[0].id].query_one(".message-body")
+        paragraphs = [str(block._content) for block in body.children]
+
+        assert paragraphs == ["um\ndois\ntres"], "three lines, not 'um dois tres'"
+
+
+async def test_the_enters_reach_the_bubble_from_the_keyboard():
+    """End to end, by the gesture: space+Enter opens a line, Ctrl+J opens one.
+
+    The input is where the report came from, so the test presses keys rather
+    than calling `say` — nothing between the two is allowed to eat a newline.
+    """
+    app = await chat_app()
+    async with app.run_test(size=(60, 20)) as pilot:
+        await pilot.pause()
+        for key in list("um") + ["space", "enter"] + list("dois") + ["ctrl+j"] + list("tres"):
+            await pilot.press(key)
+        await pilot.pause()
+
+        inp = app.query_one("#input-line", CommandInput)
+        assert inp.text == "um\ndois\ntres", "the input holds three lines"
+
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.pause()
+
+        assert app.messages[0].text == "um\ndois\ntres", "and so does the message"
+        body = app._chat_log._msg_widgets[app.messages[0].id].query_one(".message-body")
+        assert [str(b._content) for b in body.children] == ["um\ndois\ntres"]
+
+
+async def test_a_fenced_block_still_renders_as_code_in_a_bubble():
+    """The rewrite must not reach inside a fence, where newlines were fine."""
+    app = await chat_app()
+    async with app.run_test(size=(60, 24)) as pilot:
+        await app.say("antes\n\n```python\na = 1\nb = 2\n```\n\ndepois")
+        await pilot.pause()
+
+        body   = app._chat_log._msg_widgets[app.messages[0].id].query_one(".message-body")
+        blocks = [type(b).__name__ for b in body.children]
+
+        assert "MarkdownFence" in blocks, "the fence is still a fence"
+        assert blocks.count("MarkdownParagraph") == 2, "with a paragraph either side"
 
 
 # === The header names who spoke =================================================

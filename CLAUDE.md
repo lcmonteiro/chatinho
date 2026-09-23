@@ -9,7 +9,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 | check | result |
 |---|---|
-| `pytest -q` | **249 pass** |
+| `pytest -q` | **254 pass** |
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
@@ -457,6 +457,30 @@ chat warm and the chrome blue, because none of the three is styled the way a bub
 
 What stays Textual's is the syntax highlighting inside a fence: that is a code theme, not a chat
 palette, and Claude Code's own blocks are no different.
+
+**A newline typed in the input is a newline in the bubble, and Markdown disagreed.** A lone
+newline is a *soft* break, which Textual renders as `" "` — `_token_to_content` says so in one
+line — so a message written over three lines arrived as one. Nobody pressing Enter in a chat box
+means "put a space here". `chat_markdown()` pushes one core rule onto the `gfm-like` parser that
+rewrites every `softbreak` token as a `hardbreak`, which Textual renders as `"\n"`.
+
+**markdown-it's `breaks` option is not this, and reads exactly as though it were.** It belongs to
+the *renderer*: it emits `<br>` when rendering **HTML** and leaves the token stream untouched.
+Textual never renders HTML — it walks tokens — so the option is invisible to it. That wrong fix
+was written, checked with `render()`, seen to produce `<br />`, shipped into the widget and only
+then caught by looking at the bubble: the tokens still said `softbreak`. The test is written
+against the token stream for that reason, and it fails on `breaks` as surely as on no fix at all.
+
+Both ways of getting this wrong were false results from a real measurement, one in each direction.
+The first attempt to *reproduce* the bug came back green, because the words were long enough that
+the bubble wrapped them onto three rows anyway and joined text looks exactly like broken text. The
+test uses `um`/`dois`/`tres` so the two cannot be confused.
+
+The rule touches prose and nothing else, and **a fence is safe because it has no children at all**
+— across headings, links, images, quotes, tables, fences and nested lists, `inline` is the only
+token markdown-it ever gives children to. A `token.type == "inline"` guard was written and then
+deleted: breaking it changed no test. `markdown-it-py` is named in the `tui` extra now, since
+`chat_log` imports it directly rather than leaning on textual to have brought it.
 
 **The header names the peer**: `21:15 @meteo · msg-3`. `ChatLog` reads the roster through the
 `peers` grant, the same way it reads the conversation through `context`, and calls it fresh rather

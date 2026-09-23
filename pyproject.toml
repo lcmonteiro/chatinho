@@ -36,14 +36,18 @@ Repository = "https://github.com/lcmonteiro/chatinho"
 
 [project.optional-dependencies]
 # What most people want: the terminal app that build_chat builds.
-tui = ["textual>=0.45.0"]
+# markdown-it-py arrives with textual anyway, and is named here because
+# chat_log imports it directly: a bubble is rendered with a parser carrying a
+# rule of ours, so a newline typed in the input stays one.
+tui = ["textual>=0.45.0", "markdown-it-py>=2.0.0"]
 # One per battery, named after what it gives you.
 openai = ["openai>=1.0.0"]
 a2a    = ["requests>=2.25.0"]
 sql    = ["sqlalchemy>=2.0.0"]
-all    = ["textual>=0.45.0", "openai>=1.0.0", "requests>=2.25.0", "sqlalchemy>=2.0.0"]
+all    = ["textual>=0.45.0", "markdown-it-py>=2.0.0", "openai>=1.0.0", "requests>=2.25.0", "sqlalchemy>=2.0.0"]
 dev = [
     "textual>=0.45.0",
+    "markdown-it-py>=2.0.0",
     "openai>=1.0.0",
     "requests>=2.25.0",
     "sqlalchemy>=2.0.0",
