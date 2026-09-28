@@ -33,11 +33,12 @@ TOOL : int = -1
 
 @dataclass(frozen=True)
 class Attachment:
-    """Something a message carries: a page, an image, a file.
+    """Something a peer attaches to what it says: a page, an image, a file.
 
-    The message's Markdown text can link to it by name —
-    ``[chart](revenue.html)``. Checking those links, keeping attachments and
-    serving them is a backend's business, not the message's.
+    It never rides on the message. The session hands it to the backend that
+    declared ``HookKeep``, under the message's id, and the message's Markdown
+    text links to it by name — ``[chart](revenue.html)``. Opening one is asking
+    ``locate`` where it is.
 
     Attributes:
         name: What the text links to, e.g. ``revenue.html``.
@@ -59,7 +60,7 @@ class Reply:
 
     Attributes:
         text: The answer, as Markdown.
-        attachments: What the reply carries.
+        attachments: What the reply attaches; they go to the backend.
     """
 
     text        : str
@@ -77,16 +78,14 @@ class ChatMessage:
         to: The id it was addressed to, or None when it went to everyone.
         reply_to: The id of the message this answers, when it answers one.
         timestamp: When it entered the history.
-        attachments: What the message carries, as the speaker attached it.
     """
 
-    id          : str
-    text        : str
-    frm         : int = LOCAL
-    to          : Optional[int] = None
-    reply_to    : Optional[str] = None
-    timestamp   : datetime = field(default_factory=datetime.now)
-    attachments : Tuple[Attachment, ...] = ()
+    id        : str
+    text      : str
+    frm       : int = LOCAL
+    to        : Optional[int] = None
+    reply_to  : Optional[str] = None
+    timestamp : datetime = field(default_factory=datetime.now)
 
     @property
     def is_broadcast(self) -> bool:

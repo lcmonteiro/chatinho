@@ -47,7 +47,7 @@ The four posting sites build a text-only `ChatMessage`, call `_kept`, then `_pos
 
 ### `locate` is routed like `forget`
 
-`_grant` gains `locate = lambda: self._locate`. `_locate(msg_id, name)` finds the peer declaring `HookLink`. With none, it returns `None`. Otherwise it awaits `link(msg_id, name)`, logging any exception and returning `None`. `ChatSession` also exposes `locate` publicly, like `forget`, for code without a peer.
+`ChatSession.locate(msg_id, name)` is public, like `forget`, and `_grant` gains `locate = lambda: self.locate`, so peers and code without a peer use the same method. It finds the peer declaring `HookLink`. With none, it returns `None`. Otherwise it awaits `link(msg_id, name)`, logging any exception and returning `None`.
 
 ### `ChatMessage` loses `attachments`
 

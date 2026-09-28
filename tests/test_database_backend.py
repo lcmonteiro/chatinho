@@ -6,10 +6,12 @@ work off the event loop.
 """
 
 from datetime import datetime, timedelta
+from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import pytest
 
-from chatinho import LOCAL, ChatMessage, ChatSession, DatabaseBackend
+from chatinho import LOCAL, Attachment, ChatMessage, ChatSession, DatabaseBackend
 from conftest import Driver
 
 
@@ -153,4 +155,96 @@ async def test_load_is_bounded_by_what_the_session_asks_for(tmp_path):
     second.add_connector(again, at=LOCAL)
     await second.start()
     assert [m.text for m in again.context()] == ["m3", "m4"]
+    await second.close()
+
+
+# === What messages carry ========================================================
+
+
+def page(name: str = "revenue.html", data: bytes = b"<p>up 12%</p>") -> Attachment:
+    return Attachment(name, "text/html", data)
+
+
+def content(link: str) -> bytes:
+    """What a file:// link points at."""
+    assert link.startswith("file://")
+    return Path(unquote(urlparse(link).path)).read_bytes()
+
+
+async def test_a_kept_attachment_links_to_a_file_with_its_data(archive):
+    await archive.keep("msg-1", [page()])
+    link = await archive.link("msg-1", "revenue.html")
+    assert link is not None and content(link) == b"<p>up 12%</p>"
+
+
+async def test_a_name_never_kept_has_no_link(archive):
+    await archive.keep("msg-1", [page()])
+    assert await archive.link("msg-1", "other.html") is None
+    assert await archive.link("msg-2", "revenue.html") is None
+
+
+async def test_keeping_the_same_attachment_twice_is_one_row(archive):
+    from chatinho.backends.database import ArchivedAttachment
+
+    await archive.keep("msg-1", [page()])
+    await archive.keep("msg-1", [page()])
+    with archive._session() as session:
+        assert session.query(ArchivedAttachment).count() == 1
+
+
+async def test_a_name_that_is_not_a_file_name_still_links(archive):
+    await archive.keep("msg-1", [page("my report/v2.html")])
+    link = await archive.link("msg-1", "my report/v2.html")
+    assert link is not None and content(link) == b"<p>up 12%</p>"
+
+
+async def test_shutdown_removes_the_files_it_wrote():
+    store = DatabaseBackend("sqlite:///:memory:")
+    store.initialize()
+    await store.keep("msg-1", [page()])
+    link = await store.link("msg-1", "revenue.html")
+    assert link is not None
+    written = Path(unquote(urlparse(link).path))
+    assert written.exists()
+    store.shutdown()
+    assert not written.exists()
+
+
+async def test_forget_drops_what_the_forgotten_messages_carried(archive):
+    now = datetime.now()
+    await heard(archive, message("msg-1", "old", now - timedelta(hours=2)),
+                message("msg-2", "new", now))
+    await archive.keep("msg-1", [page()])
+    await archive.keep("msg-2", [page()])
+    await archive.forget(before=now - timedelta(hours=1))
+    assert await archive.link("msg-1", "revenue.html") is None
+    assert await archive.link("msg-2", "revenue.html") is not None
+
+
+async def test_forgetting_everything_drops_every_attachment(archive):
+    await heard(archive, message("msg-1", "old", datetime.now()))
+    await archive.keep("msg-1", [page()])
+    await archive.keep("msg-9", [page()])             # kept, even with no message heard
+    await archive.forget()
+    assert await archive.link("msg-1", "revenue.html") is None
+    assert await archive.link("msg-9", "revenue.html") is None
+
+
+async def test_an_attachment_outlives_the_session_that_said_it(tmp_path):
+    """Close the chat, open another on the same file, and the link still opens."""
+    store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
+
+    first = ChatSession(backend=store)
+    view = Driver()
+    first.add_connector(view, at=LOCAL)
+    await first.start()
+    said = await view.say("See the [chart](revenue.html)", attachments=[page()])
+    await first.close()
+
+    second = ChatSession(backend=store)
+    again = Driver()
+    second.add_connector(again, at=LOCAL)
+    await second.start()
+    link = await second.locate(said, "revenue.html")
+    assert link is not None and content(link) == b"<p>up 12%</p>"
     await second.close()
