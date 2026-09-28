@@ -104,7 +104,7 @@ Four rules hold everywhere: **you never hear yourself**; **nothing blocks** (one
 per peer); **hearing is queued**, so a listener sees a message shortly after it was said; and
 **everything that crosses is in the context**.
 
-[`docs/SPEC.md`](docs/SPEC.md) is the reference for all eleven hooks — what each demands, what it
+[`docs/SPEC.md`](docs/SPEC.md) is the reference for all fourteen hooks — what each demands, what it
 grants, an example, and what it costs. [`examples/hooks.py`](examples/hooks.py) is that document
 executable.
 
@@ -229,7 +229,8 @@ class Archive:
 
 ### Attachments
 
-A message is Markdown, and it can carry pages, images and files that its text links to:
+A message is Markdown text. Pages, images and files a peer attaches go to the backend, and the
+text links to them by name:
 
 ```python
 from chatinho import Attachment, Reply
@@ -241,7 +242,13 @@ async def answer(self, msg) -> Reply:           # answers and commands attach by
     return Reply("Here: [report](report.html)", (Attachment("report.html", "text/html", page),))
 ```
 
-The session passes attachments through untouched; storing and serving them is a backend's job.
+The session hands attachments to the backend (`HookKeep`) before the text is posted, and nobody else
+ever holds them. Any peer declaring `HookLocate` can ask where one is; the terminal does exactly that
+when a message's relative link is clicked, and says "Not found" when there is no answer.
+`DatabaseBackend` keeps them in its database and writes a file only when one is opened.
+
+Attachments are whatever a peer produced — an agent's HTML page included. Treat them as untrusted
+content: an HTML attachment runs its scripts when your browser opens it.
 
 ---
 
@@ -249,7 +256,7 @@ The session passes attachments through untouched; storing and serving them is a 
 
 | | |
 |---|---|
-| [`examples/hooks.py`](examples/hooks.py) | **start here** — one peer per hook, all eleven, no terminal |
+| [`examples/hooks.py`](examples/hooks.py) | **start here** — one peer for each of the eleven conversation hooks, no terminal |
 | [`examples/demo.py`](examples/demo.py) | the full TUI: Markdown, code blocks, autocomplete, replies |
 | [`examples/headless.py`](examples/headless.py) | the same chat wired to stdin/stdout |
 | [`examples/agent_inbox.py`](examples/agent_inbox.py) | inbound: an agent asks over HTTP, you answer |

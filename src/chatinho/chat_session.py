@@ -25,6 +25,8 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from .chat_hooks import (
     HookExecute,
+    HookKeep,
+    HookLink,
     HookForget,
     HookLoad,
     HookAnswer,
@@ -208,10 +210,11 @@ class ChatSession:
             if not isinstance(reply, Reply):
                 raise TypeError("Command %r returned %s; execute must return a Reply or None"
                                 % (name, type(reply).__name__))
-            await self._post(ChatMessage(
+            result = ChatMessage(
                 id=self._store.new_id(), text=reply.text, frm=TOOL, to=None, reply_to=asked.id,
-                attachments=tuple(reply.attachments),
-            ))
+            )
+            await self._kept(result, reply.attachments)
+            await self._post(result)
             return reply.text
         return invoke
 
@@ -249,6 +252,7 @@ class ChatSession:
             invoke  = lambda: self._invoke_for(at),
             peers   = lambda: self._peers,
             commands= lambda: self._commands,
+            locate  = lambda: self.locate,
         )
         for hook in hooks_of(who):
             for granted in hook.grants:
@@ -282,24 +286,45 @@ class ChatSession:
             reply_to    : Optional[str] = None,
             attachments : Sequence[Attachment] = (),
         ) -> str:
-            return await self._post(ChatMessage(
-                id=self._store.new_id(), text=text, frm=frm, to=None, reply_to=reply_to,
-                attachments=tuple(attachments),
-            ))
+            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=None, reply_to=reply_to)
+            await self._kept(msg, attachments)
+            return await self._post(msg)
         return say
 
     def _ask_for(self, frm: int):
         async def ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
-            msg = ChatMessage(
-                id=self._store.new_id(), text=text, frm=frm, to=to, attachments=tuple(attachments),
-            )
+            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
+            await self._kept(msg, attachments)
             future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
             await self._post(msg)
             return await future
         return ask
+
+    async def _kept(self, msg: ChatMessage, attachments: Sequence[Attachment]) -> None:
+        """Hands what *msg* carries to the backend, before *msg* is posted.
+
+        The message itself stays text. With no backend declaring ``HookKeep``
+        the attachments have nowhere to go and are dropped; one that raises is
+        logged, and the message is posted all the same — a broken store must
+        not silence the chat.
+
+        Args:
+            msg: The message the attachments belong to; its id is the key.
+            attachments: What was attached; nothing happens when empty.
+        """
+        if not attachments:
+            return
+        keeper = next((w for w in self._connectors.values() if declares(w, HookKeep)), None)
+        if keeper is None:
+            logger.debug("No backend keeps attachments; dropping %d of %s", len(attachments), msg.id)
+            return
+        try:
+            await keeper.keep(msg.id, tuple(attachments))
+        except Exception:
+            logger.error("Keeping the attachments of %s failed", msg.id, exc_info=True)
 
     async def _post(self, msg: ChatMessage) -> str:
         """
@@ -351,10 +376,9 @@ class ChatSession:
         reply = await who.answer(msg)
         if reply is not None:
             text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
-            await self._post(ChatMessage(
-                id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id,
-                attachments=tuple(carried),
-            ))
+            answered = ChatMessage(id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id)
+            await self._kept(answered, carried)
+            await self._post(answered)
 
     async def _drain(self, at: int) -> None:
         """
@@ -543,6 +567,29 @@ class ChatSession:
                 self._store.add(msg)
         except Exception:
             logger.error("Loading the older context failed; starting empty", exc_info=True)
+
+    async def locate(self, msg_id: str, name: str) -> Optional[str]:
+        """
+        Where attachment *name* of message *msg_id* can be opened, or None.
+
+        Granted to peers by ``HookLocate``. The answer is the backend's, from
+        whoever declared ``HookLink``; with none, or when it fails, it is None.
+
+        Args:
+            msg_id: The message the attachment was kept under.
+            name: The attachment's name, as the message's text links to it.
+
+        Returns:
+            Optional[str]: A link a browser can open, or None.
+        """
+        linker = next((w for w in self._connectors.values() if declares(w, HookLink)), None)
+        if linker is None:
+            return None
+        try:
+            return await linker.link(msg_id, name)
+        except Exception:
+            logger.error("Linking %s of %s failed", name, msg_id, exc_info=True)
+            return None
 
     async def forget(self, before: Optional[datetime] = None) -> int:
         """

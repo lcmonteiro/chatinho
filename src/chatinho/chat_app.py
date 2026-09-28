@@ -45,11 +45,13 @@ from .chat_hooks import (
     HookPeers,
     HookCommands,
     HookInvoke,
+    HookLocate,
     HookSay,
     Context,
     Peers,
     Commands,
     Invoke,
+    Locate,
     Say,
     frontend,
     require,
@@ -171,6 +173,7 @@ def _validate_key(key: str) -> str:
 @require(HookPeers)
 @require(HookCommands)
 @require(HookInvoke)
+@require(HookLocate)
 class ChatApp(App):
     """
     Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
@@ -198,6 +201,7 @@ class ChatApp(App):
     peers   : Peers
     commands: Commands
     invoke  : Invoke
+    locate  : Locate
 
     def __init__(
         self,
@@ -329,6 +333,7 @@ class ChatApp(App):
             ChatLog(
                 self.context,
                 peers=self.peers,
+                locate=self.locate,
                 max_displayed=self.max_displayed,
                 style=self._style,
                 on_reply_target_change=self._on_reply_target_change,

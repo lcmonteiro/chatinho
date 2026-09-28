@@ -1,7 +1,7 @@
 # chatinho — the hook specification
 
-Everything a peer can do, and everything it can be asked to do, is one of **eleven hooks**. This
-document is the reference for all eleven: what each one demands, what it grants, and what actually
+Everything a peer can do, and everything it can be asked to do, is one of **fourteen hooks**. This
+document is the reference for all fourteen: what each one demands, what it grants, and what actually
 arrives at its door.
 
 Every claim here is executable. `examples/hooks.py` declares one peer per hook and runs a short
@@ -67,7 +67,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 
 ---
 
-## 2. The eleven hooks at a glance
+## 2. The fourteen hooks at a glance
 
 | hook | demands | grants | declared by |
 |---|---|---|---|
@@ -82,6 +82,9 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 | [`HookCommands`](#hookcommands) | — | `commands` | `/help`, the autocomplete popup |
 | [`HookLoad`](#hookload) | `load` | — | a backend |
 | [`HookForget`](#hookforget) | `forget` | — | a backend |
+| [`HookKeep`](#hookkeep) | `keep` | — | a backend that keeps attachments |
+| [`HookLink`](#hooklink) | `link` | — | a backend that keeps attachments |
+| [`HookLocate`](#hooklocate) | — | `locate` | a presentation, a peer that opens attachments |
 
 **Every hook is one or the other**, never both.
 
@@ -113,8 +116,8 @@ A class that declares only grants is asked for nothing.
 
 > **grants** `say(text: str, *, reply_to: Optional[str] = None, attachments: Sequence[Attachment] = ()) -> str`
 
-Says *text* to everyone but the speaker. Returns the new message's id. *text* is Markdown, and
-*attachments* travel with it — see [Attachments](#attachments).
+Says *text* to everyone but the speaker. Returns the new message's id. *text* is Markdown;
+*attachments* go to the backend under the new message's id — see [Attachments](#attachments).
 
 ```python
 await self.say("good morning")
@@ -130,8 +133,8 @@ waiting ask by saying the reply with `reply_to` set to the question's id.
 > **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str`
 
 Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id.
-What comes back is the reply's text, even when the reply attaches something: the whole reply,
-attachments and all, is in `context()` and reaches whoever listens.
+What comes back is the reply's text. Anything the reply attached went to the backend, under the
+reply's id, where `locate` finds it.
 
 ```python
 answer = await self.ask(session.id_of("weather"), "what is the weather?")
@@ -316,6 +319,48 @@ logged, and the chat starts empty rather than failing.
 Drops what was held — everything, or only what is older than *before*. Returns how many went.
 Reached from outside by `ChatSession.forget(before=None)`.
 
+### HookKeep
+
+> **demands** `async keep(msg_id: str, attachments: Sequence[Attachment]) -> None`
+
+Keeps what a message carries. The session calls it **before** the message is posted, so whatever the
+text links to exists by the time anyone reads it; the message itself goes on as text only.
+
+```python
+async def keep(self, msg_id, attachments) -> None:
+    for item in attachments:
+        self.kept[(msg_id, item.name)] = item
+```
+
+With no backend declaring it, attachments are dropped. One that raises is logged, and the text is
+posted anyway.
+
+### HookLink
+
+> **demands** `async link(msg_id: str, name: str) -> Optional[str]`
+
+A link a browser on the same machine can open, for one kept attachment — or None when nothing by that
+name was kept for that message. How it is stored and what the link looks like are the backend's
+business: `DatabaseBackend` writes a file on request and answers `file://…`.
+
+```python
+async def link(self, msg_id, name) -> Optional[str]:
+    return self.urls.get((msg_id, name))
+```
+
+### HookLocate
+
+> **grants** `await locate(msg_id: str, name: str) -> Optional[str]`
+
+Where an attachment can be opened. The session asks whoever declared `HookLink`; with none, or when
+it fails, the answer is None. Reached from outside by `ChatSession.locate(msg_id, name)`.
+
+```python
+url = await self.locate(msg.id, "revenue.html")
+```
+
+The terminal uses it for a message's relative links: it opens what comes back, or says "Not found".
+
 ---
 
 ## 5. Composing them
@@ -360,18 +405,30 @@ each: a second frontend is refused like any id already taken.
 
 ### Attachments
 
-A message is Markdown, and it may carry `Attachment(name, media_type, data)`s — a page, an image, a
-file. Its text links to them by name:
+A message is text. What a peer attaches to it — `Attachment(name, media_type, data)`: a page, an
+image, a file — goes to the backend instead, and the text links to it by name:
 
 ```python
 chart = Attachment("revenue.html", "text/html", html.encode())
 await self.say("Revenue is up 12% — see the [chart](revenue.html)", attachments=[chart])
 ```
 
+```
+   say(text, attachments) -> the session keeps them first:  backend.keep(msg_id, attachments)
+                          -> then posts the text, and only the text, to everyone
+   locate(msg_id, name)   -> the session asks:               backend.link(msg_id, name)
+                          <- a link to open, or None
+```
+
 `say` and `ask` take `attachments`; `answer` attaches by returning a `Reply`, and `execute` always
-returns one. A command's
-invocation (`/name args`) is a command line and carries none. The session passes attachments through
-as given: checking the links, keeping what matters and serving it are a backend's business.
+returns one. A command's invocation (`/name args`) is a command line and carries none. No listener,
+no `context()` and no archive ever holds attachment content — only the backend that declared
+[`HookKeep`](#hookkeep) does, and only it touches the file system. With none, attachments are
+dropped and `locate` answers None.
+
+The terminal opens a message's **relative** links this way: it asks `locate` with the message's id
+and the link's target, opens what comes back, and says "Not found" when nothing does. Absolute links
+open as they always did.
 
 ### Demands are not exclusive
 

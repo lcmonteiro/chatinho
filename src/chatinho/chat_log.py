@@ -7,8 +7,9 @@ only tells it when the history changed.
 
 import asyncio
 import logging
+import re
 import time
-from typing import Callable, Dict, List, Optional
+from typing import Awaitable, Callable, Dict, List, Optional
 
 from markdown_it import MarkdownIt
 from textual import events
@@ -98,6 +99,27 @@ def chat_markdown() -> MarkdownIt:
     parser = MarkdownIt("gfm-like")
     parser.core.ruler.push("chat_hard_breaks", _newlines_are_breaks)
     return parser
+
+
+def _attachment_name(href: str) -> Optional[str]:
+    """The attachment a link names, or None when it is an ordinary link.
+
+    A scheme (``https:``, ``mailto:``), a leading ``/`` or ``//``, or a
+    fragment (``#``) make it an ordinary link; anything else is relative and
+    names an attachment of the message it is in, with ``./`` removed.
+
+    Args:
+        href: The link's target, as Textual reports it (already unquoted).
+
+    Returns:
+        Optional[str]: The attachment's name, or None.
+    """
+    href = href.strip()
+    if not href or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", href) or href.startswith(("/", "#")):
+        return None
+    if href.startswith("./"):
+        href = href[2:]
+    return href or None
 
 
 def preview_of(text: str, width: int = 60) -> str:
@@ -274,9 +296,13 @@ class ChatLog(TouchScrollableContainer):
         max_displayed : int = 100,
         style : Optional[ChatStyle] = None,
         on_reply_target_change : Optional[Callable[[Optional[str]], None]] = None,
+        locate : Optional[Callable[[str, str], Awaitable[Optional[str]]]] = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
+        # Granted by HookLocate: asks the backend where a message's attachment
+        # can be opened. The log never learns where attachments live.
+        self._locate = locate
         # The same style the stylesheet was rendered from: the header colours
         # are CSS, but the widest a bubble may grow is applied here, because
         # only this knows how wide the text actually is.
@@ -329,6 +355,29 @@ class ChatLog(TouchScrollableContainer):
         if was_at_bottom:
             self.scroll_to_bottom()
 
+    async def on_markdown_link_clicked(self, event: Markdown.LinkClicked) -> None:
+        """Opens a link in a message: an attachment through ``locate``, anything else as is.
+
+        A relative link names an attachment of the message it is in, so the
+        backend is asked where that is; nothing to open says "Not found" rather
+        than handing the browser a name it cannot resolve.
+        """
+        event.stop()
+        name = _attachment_name(event.href)
+        if name is None:
+            self.app.open_url(event.href)
+            return
+        container = next(
+            (node for node in event.markdown.ancestors if isinstance(node, _MessageContainer)), None,
+        )
+        link = None
+        if container is not None and self._locate is not None:
+            link = await self._locate(container.msg_id, name)
+        if link is None:
+            self.notify("Not found", severity="warning")
+            return
+        self.app.open_url(link)
+
     def _find(self, msg_id: str) -> Optional[ChatMessage]:
         """Returns the message with *msg_id*, or None."""
         return next((m for m in self._read_context() if m.id == msg_id), None)
@@ -377,7 +426,11 @@ class ChatLog(TouchScrollableContainer):
                 quote = f"↳ {short_id(original.id)}: {preview}…"
                 parts.append(Static(quote, classes="message-quote"))
 
-        parts.append(Markdown(msg.text, classes="message-body", parser_factory=chat_markdown))
+        # Links are ours to open: a relative one names an attachment of this
+        # message, and only the log knows which message a body belongs to.
+        parts.append(Markdown(
+            msg.text, classes="message-body", parser_factory=chat_markdown, open_links=False,
+        ))
 
         bubble = Vertical(*parts, classes="message-bubble")
         # A bubble is as wide as its widest line and no wider, up to the

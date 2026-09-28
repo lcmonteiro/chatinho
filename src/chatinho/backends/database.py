@@ -6,6 +6,11 @@ way it crosses anyone, and it writes what it hears. At ``start()`` the session
 asks whoever declared ``HookLoad`` for the older context, which is how a chat
 reopens where it left off.
 
+It also keeps what messages carry. The session hands a message's attachments
+over through ``HookKeep`` before the message is posted; they are rows here, and
+become a file only when someone asks where one is, through ``HookLink`` — in a
+directory of this backend's own, removed when it shuts down.
+
 Every method is a coroutine and every one of them runs its SQLAlchemy work in
 an executor, because SQLAlchemy is synchronous and the chat's whole promise is
 that one slow subsystem holds up nobody but itself.
@@ -13,15 +18,19 @@ that one slow subsystem holds up nobody but itself.
 
 import asyncio
 import logging
+import shutil
+import tempfile
 from datetime import datetime
-from typing import Any, List, Optional
+from pathlib import Path
+from typing import Any, List, Optional, Sequence
+from urllib.parse import quote
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from ..chat_hooks import HookForget, HookListen, HookLoad, backend, require
-from ..chat_message import ChatMessage
+from ..chat_hooks import HookForget, HookKeep, HookLink, HookListen, HookLoad, backend, require
+from ..chat_message import Attachment, ChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +57,27 @@ class ArchivedMessage(Base):
     timestamp = Column(DateTime(timezone=False), nullable=False, index=True)
 
 
+class ArchivedAttachment(Base):
+    """One attachment, kept under the message it was attached to.
+
+    ``(msg_id, name)`` is the key: a name is what the message's text links to,
+    and keeping the same attachment twice is a no-op rather than a second row.
+    """
+
+    __tablename__ = "attachments"
+
+    msg_id     = Column(String, primary_key=True)
+    name       = Column(String, primary_key=True)
+    media_type = Column(String, nullable=False)
+    data       = Column(LargeBinary, nullable=False)
+
+
 @backend("database")
 @require(HookListen)
 @require(HookLoad)
 @require(HookForget)
+@require(HookKeep)
+@require(HookLink)
 class DatabaseBackend:
     """Listens to the conversation and keeps it, one row per message.
 
@@ -74,6 +100,8 @@ class DatabaseBackend:
         self.echo         = echo
         self.engine       : Optional[Any] = None
         self.SessionLocal : Optional[Any] = None
+        # Where linked attachments are written; made on the first link.
+        self._files       : Optional[Path] = None
 
     # === Lifecycle ==================================================================
 
@@ -102,6 +130,9 @@ class DatabaseBackend:
             self.engine.dispose()
             self.engine = None
             self.SessionLocal = None
+        if self._files is not None:
+            shutil.rmtree(self._files, ignore_errors=True)
+            self._files = None
 
     # === The archive ================================================================
 
@@ -139,6 +170,32 @@ class DatabaseBackend:
             int: How many rows were dropped.
         """
         return await self._off_loop(self._forget, before)
+
+    # === What messages carry =========================================================
+
+    async def keep(self, msg_id: str, attachments: Sequence[Attachment]) -> None:
+        """Keeps what message *msg_id* carries, before the message is posted.
+
+        Args:
+            msg_id: The message the attachments belong to.
+            attachments: What its speaker attached.
+        """
+        await self._off_loop(self._keep, msg_id, tuple(attachments))
+
+    async def link(self, msg_id: str, name: str) -> Optional[str]:
+        """A ``file://`` link to attachment *name* of message *msg_id*, or None.
+
+        The file is written on the first request, into a directory this backend
+        removes at :meth:`shutdown`.
+
+        Args:
+            msg_id: The message the attachment was kept under.
+            name: The attachment's name, as the message links to it.
+
+        Returns:
+            Optional[str]: The link, or None when nothing by that name was kept.
+        """
+        return await self._off_loop(self._link, msg_id, name)
 
     # === Internals ==================================================================
 
@@ -184,11 +241,42 @@ class DatabaseBackend:
             ]
 
     def _forget(self, before: Optional[datetime]) -> int:
-        """The synchronous half of :meth:`forget`."""
+        """The synchronous half of :meth:`forget`: messages and what they carried."""
         with self._session() as session:
             query = session.query(ArchivedMessage)
             if before is not None:
                 query = query.filter(ArchivedMessage.timestamp < before)
+            carried = session.query(ArchivedAttachment)
+            if before is not None:
+                carried = carried.filter(ArchivedAttachment.msg_id.in_(
+                    query.with_entities(ArchivedMessage.id).scalar_subquery()))
+            carried.delete(synchronize_session=False)
             dropped = query.delete(synchronize_session=False)
             session.commit()
             return int(dropped)
+
+    def _keep(self, msg_id: str, attachments: Sequence[Attachment]) -> None:
+        """The synchronous half of :meth:`keep`."""
+        with self._session() as session:
+            for item in attachments:
+                session.merge(ArchivedAttachment(
+                    msg_id=msg_id, name=item.name, media_type=item.media_type, data=item.data,
+                ))
+            session.commit()
+
+    def _link(self, msg_id: str, name: str) -> Optional[str]:
+        """The synchronous half of :meth:`link`."""
+        with self._session() as session:
+            row = session.get(ArchivedAttachment, (msg_id, name))
+            if row is None:
+                return None
+            data = bytes(row.data)
+        if self._files is None:
+            self._files = Path(tempfile.mkdtemp(prefix="chatinho-"))
+        # Quoted so no name reaches outside its folder, and prefixed so "." and
+        # ".." — which quoting leaves alone — are files too, not directories.
+        path = self._files / ("_" + quote(msg_id, safe="")) / ("_" + quote(name, safe=""))
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        return path.as_uri()
