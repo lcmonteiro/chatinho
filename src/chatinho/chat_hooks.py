@@ -54,8 +54,8 @@ class Say(Protocol):
     ) -> str:
         """Adds *text* to the conversation and returns the new message's id.
 
-        *attachments* travel with the message; its Markdown text can link to
-        them by name.
+        *attachments* go to the backend, kept under the new message's id; its
+        Markdown text can link to them by name. The message itself is text.
         """
         ...
 
@@ -66,8 +66,20 @@ class Ask(Protocol):
     async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
         """Asks peer *to* and waits for the text of the answer it sends back.
 
-        *attachments* travel with the question, as with ``say``.
+        *attachments* go to the backend, as with ``say``.
         """
+        ...
+
+
+class Locate(Protocol):
+    """Granted by ``HookLocate``: where an attachment can be opened.
+
+    The session asks the backend that declared ``HookLink``; with none, or when
+    it has nothing by that name, the answer is None.
+    """
+
+    async def __call__(self, msg_id: str, name: str) -> Optional[str]:
+        """Returns a link to attachment *name* of message *msg_id*, or None."""
         ...
 
 
@@ -262,6 +274,32 @@ HookForget = Hook(
     # async forget(before=) -> int. How much of what was held gets dropped.
 )
 
+# === Holding what a message carries =============================================
+#
+# A message is text. What it carries goes to the backend instead, keyed by the
+# message's id, and anyone who wants to open one asks where it is.
+
+HookKeep = Hook(
+    name="HookKeep",
+    method="keep",
+    # async keep(msg_id, attachments). Called by the session before the message
+    # is posted, so what the text links to exists by the time anyone reads it.
+)
+
+HookLink = Hook(
+    name="HookLink",
+    method="link",
+    # async link(msg_id, name) -> str | None. A link a browser can open, made
+    # on request; None when nothing by that name was kept for that message.
+)
+
+HookLocate = Hook(
+    name="HookLocate",
+    grants=("locate",),
+    # await locate(msg_id, name) -> str | None. Asks whoever declared HookLink;
+    # None when nobody did. The terminal opens a message's relative links so.
+)
+
 ALL_HOOKS: Tuple[Hook, ...] = (
     HookSay,
     HookListen,
@@ -274,6 +312,9 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookCommands,
     HookLoad,
     HookForget,
+    HookKeep,
+    HookLink,
+    HookLocate,
 )
 
 # Lifecycle is not a hook: initialize() and shutdown() are optional and called

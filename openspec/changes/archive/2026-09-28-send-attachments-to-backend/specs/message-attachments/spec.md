@@ -1,10 +1,6 @@
-# message-attachments Specification
+# Spec Delta
 
-## Purpose
-
-Lets a peer attach pages, images and files to what it says. The backend keeps them and links them on request, any peer can locate them, and the terminal opens them, while messages themselves carry text only.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Attachments go to the backend
 Messages SHALL carry text only: no listener, conversation context or archived message MUST contain attachment content. When a peer produces a message with attachments, the session MUST give them to the backend that keeps attachments, keyed by the new message's id, before the message is delivered to anyone. Each attachment MUST have a name, a media type and content bytes, and MUST NOT be modifiable after it is created. When no backend keeps attachments, they MUST be dropped and the text posted as usual. When keeping fails, the failure MUST be logged and the text MUST still be posted.
@@ -24,35 +20,6 @@ Messages SHALL carry text only: no listener, conversation context or archived me
 #### Scenario: Keeping fails
 - **WHEN** the backend raises while keeping a message's attachments
 - **THEN** the failure is logged and the message's text is still posted
-
-### Requirement: Every verb can attach
-Peers SHALL be able to attach to every message they produce:
-- `say(text, *, reply_to=None, attachments=())`
-- `ask(to, text, *, attachments=())`
-- `answer` MUST be able to return either a string, as before, or a reply value that carries text and attachments
-- a command's `execute` MUST return a reply value (or nothing). A plain string MUST be refused with `TypeError`, and no result is posted
-
-In every case the attachments go to the backend, not onto the message. Command invocations (`/name args`) remain plain text and carry no attachments. `ask` and `invoke` MUST keep returning the reply's text.
-
-#### Scenario: Ask with attachments
-- **WHEN** a peer asks another with `ask(2, "Review [this](draft.md)", attachments=[draft.md])`
-- **THEN** peer 2 receives the question's text, and the backend keeps `draft.md` for the question's id
-
-#### Scenario: Answer with attachments
-- **WHEN** a connector's `answer` returns a reply with text `Here: [report](report.html)` and a `report.html` attachment
-- **THEN** the backend keeps `report.html` for the answer's id, and the asker's `ask` returns the text `Here: [report](report.html)`
-
-#### Scenario: Command result with attachments
-- **WHEN** a command's `execute` returns a reply with text `[export](data.csv)` and a `data.csv` attachment
-- **THEN** the backend keeps `data.csv` for the result's id, nothing is kept for the invocation, and `invoke` returns the text
-
-#### Scenario: String answers unchanged
-- **WHEN** an existing `answer` returns a plain string
-- **THEN** it is posted exactly as before, and nothing is kept
-
-#### Scenario: Command returns a string
-- **WHEN** a command's `execute` returns a plain string
-- **THEN** `invoke` raises `TypeError`, and only the invocation message is posted
 
 ### Requirement: Backend links attachments
 A backend that keeps attachments SHALL be able to return a link for one of them, given the message id and the attachment name. The link MUST be something a browser on the same machine can open. When the backend holds no attachment with that name for that message, it MUST return nothing.
@@ -105,3 +72,40 @@ When the user activates a relative link in a message (no URL scheme, not startin
 #### Scenario: Files cleaned at shutdown
 - **WHEN** the backend wrote files to answer link requests and then shuts down
 - **THEN** those files no longer exist
+
+## MODIFIED Requirements
+
+### Requirement: Every verb can attach
+Peers SHALL be able to attach to every message they produce:
+- `say(text, *, reply_to=None, attachments=())`
+- `ask(to, text, *, attachments=())`
+- `answer` MUST be able to return either a string, as before, or a reply value that carries text and attachments
+- a command's `execute` MUST return a reply value (or nothing). A plain string MUST be refused with `TypeError`, and no result is posted
+
+In every case the attachments go to the backend, not onto the message. Command invocations (`/name args`) remain plain text and carry no attachments. `ask` and `invoke` MUST keep returning the reply's text.
+
+#### Scenario: Ask with attachments
+- **WHEN** a peer asks another with `ask(2, "Review [this](draft.md)", attachments=[draft.md])`
+- **THEN** peer 2 receives the question's text, and the backend keeps `draft.md` for the question's id
+
+#### Scenario: Answer with attachments
+- **WHEN** a connector's `answer` returns a reply with text `Here: [report](report.html)` and a `report.html` attachment
+- **THEN** the backend keeps `report.html` for the answer's id, and the asker's `ask` returns the text `Here: [report](report.html)`
+
+#### Scenario: Command result with attachments
+- **WHEN** a command's `execute` returns a reply with text `[export](data.csv)` and a `data.csv` attachment
+- **THEN** the backend keeps `data.csv` for the result's id, nothing is kept for the invocation, and `invoke` returns the text
+
+#### Scenario: String answers unchanged
+- **WHEN** an existing `answer` returns a plain string
+- **THEN** it is posted exactly as before, and nothing is kept
+
+#### Scenario: Command returns a string
+- **WHEN** a command's `execute` returns a plain string
+- **THEN** `invoke` raises `TypeError`, and only the invocation message is posted
+
+## REMOVED Requirements
+
+### Requirement: Attachments on a message
+**Reason**: The app layer carries text only. Attachment content belongs to the backend, which keeps it and links it on request, instead of riding on every message to every listener.
+**Migration**: Code that read `msg.attachments` calls `locate(msg.id, name)` (declare `HookLocate`) to get a link to an attachment instead.

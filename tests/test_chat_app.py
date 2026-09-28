@@ -21,6 +21,10 @@ from chatinho.chat_input import NEWLINE_KEYS, CommandInput
 from chatinho.chat_log import chat_markdown, preview_of
 from chatinho import (
     LOCAL,
+    Attachment,
+    HookKeep,
+    HookLink,
+    backend,
     build_chat,
     TOOL,
     Ask,
@@ -1902,3 +1906,88 @@ def test_a_local_align_that_is_not_a_side_is_refused():
     """Textual would take a broken rule and report it nowhere useful."""
     with pytest.raises(ValueError, match="left.*right"):
         ChatStyle(local_align="middle")
+
+
+# === Attachment links ===========================================================
+
+
+@backend("guarda")
+@require(HookKeep)
+@require(HookLink)
+class _Keeper:
+    """Links whatever it kept as ``mem://<id>/<name>``, and counts the questions."""
+
+    def __init__(self) -> None:
+        self.kept  : set = set()
+        self.asked : int = 0
+
+    async def keep(self, msg_id, attachments) -> None:
+        self.kept.update((msg_id, a.name) for a in attachments)
+
+    async def link(self, msg_id, name):
+        self.asked += 1
+        return "mem://%s/%s" % (msg_id, name) if (msg_id, name) in self.kept else None
+
+
+async def _click(app, pilot, msg_id: str, href: str) -> None:
+    """Posts a link click from the body of message *msg_id*, as Textual would."""
+    from textual.widgets import Markdown
+
+    body = app.query_one("#chat-log")._msg_widgets[msg_id].query_one(Markdown)
+    body.post_message(Markdown.LinkClicked(body, href))
+    await pilot.pause()
+
+
+def _record(app, monkeypatch) -> tuple:
+    opened  : list = []
+    notices : list = []
+    monkeypatch.setattr(app, "open_url", lambda url, **kwargs: opened.append(url))
+    monkeypatch.setattr(app, "notify", lambda text, **kwargs: notices.append(text))
+    return opened, notices
+
+
+async def test_an_attachment_link_opens_where_the_backend_says(monkeypatch):
+    keeper = _Keeper()
+    app = await chat_app(backend=keeper)
+    opened, notices = _record(app, monkeypatch)
+    async with app.run_test() as pilot:
+        chart  = Attachment("revenue.html", "text/html", b"<p>up</p>")
+        msg_id = await app.say("See the [chart](revenue.html)", attachments=[chart])
+        await pilot.pause()
+        await _click(app, pilot, msg_id, "./revenue.html")
+    assert opened == ["mem://%s/revenue.html" % msg_id]
+    assert notices == []
+
+
+async def test_an_attachment_the_backend_does_not_have_is_not_found(monkeypatch):
+    app = await chat_app(backend=_Keeper())
+    opened, notices = _record(app, monkeypatch)
+    async with app.run_test() as pilot:
+        msg_id = await app.say("See the [chart](revenue.html)")
+        await pilot.pause()
+        await _click(app, pilot, msg_id, "revenue.html")
+    assert opened == []
+    assert notices == ["Not found"]
+
+
+async def test_without_a_backend_an_attachment_link_is_not_found(monkeypatch):
+    app = await chat_app()
+    opened, notices = _record(app, monkeypatch)
+    async with app.run_test() as pilot:
+        msg_id = await app.say("See the [chart](revenue.html)")
+        await pilot.pause()
+        await _click(app, pilot, msg_id, "revenue.html")
+    assert opened == []
+    assert notices == ["Not found"]
+
+
+async def test_an_absolute_link_opens_without_asking_the_backend(monkeypatch):
+    keeper = _Keeper()
+    app = await chat_app(backend=keeper)
+    opened, notices = _record(app, monkeypatch)
+    async with app.run_test() as pilot:
+        msg_id = await app.say("see [this](https://example.com/page)")
+        await pilot.pause()
+        await _click(app, pilot, msg_id, "https://example.com/page")
+    assert opened == ["https://example.com/page"]
+    assert (notices, keeper.asked) == ([], 0)

@@ -190,20 +190,25 @@ whatever `ChatSession(recall=…)` pulled back.** Asking for older than that ret
 than reaching down again. Making it reach would make it a coroutine, and the terminal renders its
 log from inside a *synchronous* Textual paint.
 
-## Attachments ride on the message, and nothing more
+## Attachments go to the backend, and the message stays text
 
-A message is Markdown and may carry `Attachment`s its text links to by name. `say` and `ask` take
-them; `answer` attaches by returning a `Reply` (a plain string still works), a command's `execute`
-always returns a `Reply` (a string raises `TypeError`), and `ask` and `invoke` still return text.
-Each door builds its `ChatMessage` directly, unwrapping a `Reply` where one can come back.
-The core checks nothing about attachments: which links resolve, what is kept and how it is served
-belong to a backend.
+A peer attaches through every door it speaks through: `say` and `ask` take `attachments`, `answer`
+may return a `Reply` (a plain string still works), and a command's `execute` always returns one (a
+string raises `TypeError`); `ask` and `invoke` still return text. None of it rides on `ChatMessage`:
+at each door the session hands the attachments to the backend's `keep` (`HookKeep`), under the new
+message's id, **before** `_post` — so the link exists when the text arrives — and posts the text
+alone. No keeper, and they are dropped; a keeper that raises is logged and the text posted anyway.
 
-## The eleven hooks
+Opening one is `locate(msg_id, name)` (`HookLocate`), which the session routes to the backend's
+`link` (`HookLink`). The backend is the only thing that stores attachments or touches the file
+system; the terminal only asks, then opens the answer or says "Not found". `DatabaseBackend` keeps
+them as rows and writes a file on the first `link`, into a temp directory it removes at `shutdown`.
+
+## The fourteen hooks
 
 The reference is [`docs/SPEC.md`](docs/SPEC.md) — every hook with an example, what it costs, and
 the rules that hold across all of them. `examples/hooks.py` is that document executable: one peer
-per hook, in a chat with no terminal. This section is the summary.
+per conversation hook, in a chat with no terminal. This section is the summary.
 
 | hook | demands | grants |
 |---|---|---|
@@ -218,6 +223,9 @@ per hook, in a chat with no terminal. This section is the summary.
 | `HookCommands` | — | `commands` |
 | `HookLoad` | `load` | — |
 | `HookForget` | `forget` | — |
+| `HookKeep` | `keep` | — |
+| `HookLink` | `link` | — |
+| `HookLocate` | — | `locate` |
 
 Eleven became ten when the second way of hearing was folded into the first. `HookInvoke` and
 `HookExecute` are still two hooks where a single one used to serve, badly — that is the honest
@@ -301,16 +309,17 @@ src/chatinho/
   chat_builder.py  build_chat — builds a ChatSession and ChatApp, wires the two
   chat_session.py  ChatSession: run, peers, commands, queues, routing, context      (545)
   chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (489)
-  chat_message.py  ChatMessage (frm/to/reply_to/attachments) + MessageStore, LOCAL, TOOL,
-                   Attachment, Reply
+  chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
+                   Attachment, Reply (what peers attach; the backend keeps it)
   chat_log.py      ChatLog widget: renders through the granted context reader
   chat_input.py    CommandInput (a multi-line TextArea) + CommandSuggestions
   chat_clipboard.py  OSC 52's second route: a clipboard helper, if the system has one
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   connectors/      a2a.py, openai.py — plain classes, no base
   commands/        help.py, test.py — commands: they run, they are not peers
-  backends/        database.py (SQLAlchemy) — a peer that listens and loads
-docs/              SPEC.md — the eleven hooks, with an example and a cost for each
+  backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
+                   attachments
+docs/              SPEC.md — the fourteen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
                    agent_inbox.py (HTTP, inbound)
@@ -727,7 +736,7 @@ is a boundary that rots. It parses the core modules and fails if:
   `openai`, `sqlalchemy` and `requests` all blocked, and each of the four lazy names has to report
   its own extra;
 - **`docs/SPEC.md` disagrees with the hook constants** — its summary table has to name the same
-  eleven, with the same demanded method and the same grants, and each one has to have its own
+  fourteen, with the same demanded method and the same grants, and each one has to have its own
   section. A spec nothing checks is a spec that rots, so adding a hook without documenting it
   fails the suite. Both halves were proved by breaking them.
 
@@ -743,7 +752,7 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 ## Packaging: the core installs nothing
 
-`dependencies = []`. `ChatSession`, the eleven hooks, `HelpCommand` and `TestCommand` import nothing
+`dependencies = []`. `ChatSession`, the fourteen hooks, `HelpCommand` and `TestCommand` import nothing
 but the standard library — which the fitness tests already enforced, so the packaging now says it
 too. Four names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
