@@ -1,7 +1,7 @@
 """The ``/help`` command: lists what can be run."""
 
 from ..chat_hooks import HookExecute, HookPeers, HookCommands, HookSay, Commands, Peers, Say, require, tool
-from ..chat_message import LOCAL
+from ..chat_message import LOCAL, Reply
 
 
 @tool("help", "Lists the available commands")
@@ -21,7 +21,7 @@ class HelpCommand:
     commands : Commands
     say      : Say
 
-    async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> str:
+    async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> Reply:
         """Answers with the listing.
 
         It does not say it: what a command answers is posted by the session, in
@@ -34,7 +34,7 @@ class HelpCommand:
             **kwargs: Ignored.
 
         Returns:
-            str: The listing.
+            Reply: The listing.
         """
         del args, by, kwargs
         lines = ["/%s - %s" % (name, getattr(cmd, "description", ""))
@@ -42,4 +42,4 @@ class HelpCommand:
         listing = "Commands:\n  " + "\n  ".join(lines) if lines else "No commands registered."
 
         others = sorted(getattr(w, "name", "?") for at, w in self.peers().items() if at != LOCAL)
-        return listing + ("\n\nConnected: %s" % ", ".join(others) if others else "")
+        return Reply(listing + ("\n\nConnected: %s" % ", ".join(others) if others else ""))

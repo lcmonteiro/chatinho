@@ -11,7 +11,8 @@ A peer sometimes has something too rich for a chat bubble: an HTML chart, a smal
 - Every way of producing a message can attach:
   - `say(text, *, reply_to=None, attachments=())`
   - `ask(to, text, *, attachments=())`
-  - `answer()` and a command's `execute()` may return a new `Reply(text, attachments)` instead of a string. Returning a string keeps working unchanged.
+  - `answer()` may return a new `Reply(text, attachments)` instead of a string. Returning a string keeps working unchanged.
+  - **BREAKING**: a command's `execute()` must return a `Reply` (or `None`). A plain string raises `TypeError`. The built-in `HelpCommand` and `TestCommand` and the examples return a `Reply`.
 - The session passes attachments through as given. It doesn't check links, drop anything or validate names.
 - Links in a message stay as they are today: the terminal renders them and opens them on click.
 - Out of scope, and the responsibility of a later backend change: validating attachments and links, deciding what to keep, storing them and serving them to a browser. Command invocations (`/name args`) carry no attachments.
@@ -31,4 +32,5 @@ A peer sometimes has something too rich for a chat bubble: an HTML chart, a smal
 - `src/chatinho/chat_hooks.py`: the `Say` and `Ask` protocols, and the documented return types of `answer` and `execute`.
 - `src/chatinho/__init__.py`: exports `Attachment` and `Reply`.
 - `docs/SPEC.md`, `README.md`, `CLAUDE.md`: the new signatures.
-- Compatibility: no breaking changes. The terminal is unchanged.
+- `src/chatinho/commands/help.py`, `commands/test.py`, `examples/`: commands return a `Reply`.
+- Compatibility: commands written against the old API, which return a string from `execute`, must wrap it in `Reply(...)`. Everything else is unchanged, including the terminal.

@@ -111,9 +111,9 @@ A peer that declares `HookInvoke` is granted `invoke(name, args)`, and a command
 class UpperCommand:
     say : Say
 
-    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
         await self.say("working…")         # progress, said as TOOL
-        return args.upper()                # the answer: posted as TOOL, and returned
+        return Reply(args.upper())         # the answer: posted as TOOL, its text returned
 ```
 
 **The invocation and the answer are both messages.** There is one conversation and everything is
@@ -193,8 +193,9 @@ log from inside a *synchronous* Textual paint.
 ## Attachments ride on the message, and nothing more
 
 A message is Markdown and may carry `Attachment`s its text links to by name. `say` and `ask` take
-them; `answer` and `execute` attach by returning a `Reply`, a plain string still works, and `ask`
-still returns text. Each door builds its `ChatMessage` directly, unwrapping a `Reply` where one can come back.
+them; `answer` attaches by returning a `Reply` (a plain string still works), a command's `execute`
+always returns a `Reply` (a string raises `TypeError`), and `ask` and `invoke` still return text.
+Each door builds its `ChatMessage` directly, unwrapping a `Reply` where one can come back.
 The core checks nothing about attachments: which links resolve, what is kept and how it is served
 belong to a backend.
 

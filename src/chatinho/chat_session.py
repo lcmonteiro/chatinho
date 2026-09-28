@@ -205,12 +205,14 @@ class ChatSession:
                 raise
             if reply is None:
                 return None
-            text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
+            if not isinstance(reply, Reply):
+                raise TypeError("Command %r returned %s; execute must return a Reply or None"
+                                % (name, type(reply).__name__))
             await self._post(ChatMessage(
-                id=self._store.new_id(), text=text, frm=TOOL, to=None, reply_to=asked.id,
-                attachments=tuple(carried),
+                id=self._store.new_id(), text=reply.text, frm=TOOL, to=None, reply_to=asked.id,
+                attachments=tuple(reply.attachments),
             ))
-            return text
+            return reply.text
         return invoke
 
     def id_of(self, name: str) -> Optional[int]:

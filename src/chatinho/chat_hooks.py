@@ -217,10 +217,10 @@ HookInvoke = Hook(
 HookExecute = Hook(
     name="HookExecute",
     method="execute",
-    # async execute(args, **kwargs) -> str | Reply | None. What a command is.
-    # It is not a peer: no id, no queue, nothing addressed to it. Declare
-    # HookSay too and it can write as it works; return a string, or a Reply
-    # with attachments, and that goes to whoever ran it.
+    # async execute(args, **kwargs) -> Reply | None. What a command is. It is
+    # not a peer: no id, no queue, nothing addressed to it. Declare HookSay too
+    # and it can write as it works; return a Reply, with or without
+    # attachments, and its text goes to whoever ran it.
 )
 
 HookContext = Hook(

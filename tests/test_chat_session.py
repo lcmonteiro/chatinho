@@ -25,6 +25,7 @@ from chatinho import (
     HookExecute,
     HookListen,
     HookSay,
+    Reply,
     Say,
     backend,
     connector,
@@ -38,8 +39,8 @@ from conftest import driven
 @tool("eco", "repete")
 @require(HookExecute)
 class _Eco:
-    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
-        return "eco: %s" % args
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
+        return Reply("eco: %s" % args)
 
 
 @connector("lento")
@@ -197,9 +198,9 @@ async def test_a_command_that_says_writes_and_still_answers():
     class Relata:
         say : Say
 
-        async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+        async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
             await self.say("a trabalhar…")
-            return "pronto"
+            return Reply("pronto")
 
     session, view = await driven(commands=[Relata()])
     assert await view.command("relata") == "pronto"
@@ -213,9 +214,9 @@ async def test_a_command_is_told_which_peer_ran_it():
     @tool("quem", "")
     @require(HookExecute)
     class Quem:
-        async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+        async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
             seen.append(by)
-            return "ok"
+            return Reply("ok")
 
     session, view = await driven(commands=[Quem()])
     await view.command("quem")

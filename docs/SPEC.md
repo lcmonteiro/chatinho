@@ -260,7 +260,7 @@ A peer that is asked but declares no `HookAnswer` is logged, not crashed.
 
 ### HookExecute
 
-> **demands** `async execute(args: str = "", by: int = LOCAL, **kwargs) -> Optional[Union[str, Reply]]`
+> **demands** `async execute(args: str = "", by: int = LOCAL, **kwargs) -> Optional[Reply]`
 
 This is what a command **is**. `by` is the id of the peer that ran it, so a command may answer
 differently depending on who asked.
@@ -269,8 +269,8 @@ differently depending on who asked.
 @tool("upper", "Upper-case the rest of the line")
 @require(HookExecute)
 class UpperCommand:
-    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
-        return args.upper()            # the answer: posted as TOOL, and returned
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
+        return Reply(args.upper())     # the answer: posted as TOOL, and its text returned
 ```
 
 A command is **not a peer**: no id, no queue, nothing addressed to it. It is registered with
@@ -368,7 +368,8 @@ chart = Attachment("revenue.html", "text/html", html.encode())
 await self.say("Revenue is up 12% — see the [chart](revenue.html)", attachments=[chart])
 ```
 
-`say` and `ask` take `attachments`; `answer` and `execute` attach by returning a `Reply`. A command's
+`say` and `ask` take `attachments`; `answer` attaches by returning a `Reply`, and `execute` always
+returns one. A command's
 invocation (`/name args`) is a command line and carries none. The session passes attachments through
 as given: checking the links, keeping what matters and serving it are a backend's business.
 

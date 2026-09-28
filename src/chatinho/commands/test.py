@@ -3,7 +3,7 @@
 from typing import Optional
 
 from ..chat_hooks import Context, HookContext, HookExecute, HookPeers, HookSay, Peers, Say, require, tool
-from ..chat_message import LOCAL
+from ..chat_message import LOCAL, Reply
 
 
 @tool("test", "Checks the chat is wired up")
@@ -23,7 +23,7 @@ class TestCommand:
     context : Context
     peers   : Peers
 
-    async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> Optional[str]:
+    async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> Optional[Reply]:
         """Runs the checks, saying each one, and answers with the verdict.
 
         Args:
@@ -32,11 +32,11 @@ class TestCommand:
             **kwargs: Ignored.
 
         Returns:
-            Optional[str]: A one-line verdict.
+            Optional[Reply]: A one-line verdict.
         """
         del args, kwargs
         await self.say("Running checks…")
         connected = sorted(getattr(w, "name", "?") for at, w in self.peers().items() if at != LOCAL)
         await self.say("Peers: %s" % (", ".join(connected) or "none"))
         await self.say("Context: %d message(s) in reach" % len(self.context()))
-        return "Checks done, for peer %d." % by
+        return Reply("Checks done, for peer %d." % by)

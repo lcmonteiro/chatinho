@@ -10,14 +10,14 @@ See proposal.md for motivation and specs/message-attachments/spec.md for the req
   - an answer's reply in `_deliver`
 
   Every message goes through `_post`.
-- `answer` and `execute` return `Optional[str]`. `ask` waits on a future that `_post` resolves with `msg.text`.
+- `answer` and `execute` returned `Optional[str]` before this change. `ask` waits on a future that `_post` resolves with `msg.text`.
 - The terminal renders message bodies with Textual's `Markdown`, which already opens clicked links itself (with the system opener, for example `xdg-open`).
 
 ## Goals / Non-Goals
 
 **Goals:**
 - A message carries attachments, and every way of producing a message can attach them.
-- No change for peers, commands, backends or the terminal that never use attachments.
+- No change for peers, backends or the terminal that never use attachments. Commands are the one exception: see below.
 
 **Non-Goals:**
 - Any validation: link targets, names, unlinked attachments. That is the backend's job.
@@ -46,6 +46,10 @@ class Reply:
 ### Each door builds its message directly
 
 `say` and `ask` build their `ChatMessage` with `attachments=tuple(attachments)`. Where an answer or a command result can come back as a `Reply` (`_deliver` and `_invoke_for`), the code unwraps it in place into text plus attachments before building the message. There's no shared builder: the four sites are short and each reads on its own. The invocation message (`/name args`) is built with no attachments.
+
+### A command's `execute` always returns a `Reply`
+
+A command answers with a `Reply` or `None`, never a plain string. This gives commands one return type instead of two. The session raises `TypeError` naming the command when `execute` returns anything else, so an old-style command fails loudly rather than posting garbage. The built-in `HelpCommand`, `TestCommand` and the examples are updated. `answer` keeps accepting a plain string, because connectors onto services mostly produce text.
 
 ### `ask` and `invoke` still return text
 

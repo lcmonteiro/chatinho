@@ -216,8 +216,8 @@ class Weather:
 @tool("upper", "Upper-case the rest of the line")   # not a peer: it just runs
 @require(HookExecute)
 class Upper:
-    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
-        return args.upper()         # the answer, posted as TOOL, replying to the invocation
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
+        return Reply(args.upper())  # the answer, posted as TOOL, replying to the invocation
 
 @backend("archive")                 # a peer that listens, loads and forgets
 @require(HookListen)

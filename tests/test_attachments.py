@@ -63,11 +63,18 @@ class _Plain:
         return "just text"
 
 
-@tool("texto", "answers with text")
+@tool("texto", "answers with a plain string")
 @require(HookExecute)
 class _Text:
-    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+    async def execute(self, args="", by=LOCAL, **kwargs):
         return "only text"
+
+
+@tool("simples", "answers with text only")
+@require(HookExecute)
+class _TextReply:
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
+        return Reply("only text")
 
 
 @tool("exporta", "exports")
@@ -130,11 +137,19 @@ async def test_a_reply_built_with_a_list_is_carried_as_a_tuple():
     assert view.context()[-1].attachments == (item("report.html"),)
 
 
-async def test_a_plain_string_command_result_carries_nothing():
-    session, view = await driven(commands=[_Text()])
-    assert await view.command("texto") == "only text"
+async def test_a_command_reply_without_attachments_carries_nothing():
+    session, view = await driven(commands=[_TextReply()])
+    assert await view.command("simples") == "only text"
     await session.close()
     assert [m.attachments for m in view.context()] == [(), ()]
+
+
+async def test_a_command_that_returns_a_string_is_refused():
+    session, view = await driven(commands=[_Text()])
+    with pytest.raises(TypeError, match="must return a Reply"):
+        await view.command("texto")
+    await session.close()
+    assert [m.text for m in view.context()] == ["/texto"]
 
 
 async def test_a_command_result_can_attach_and_invoke_returns_its_text():

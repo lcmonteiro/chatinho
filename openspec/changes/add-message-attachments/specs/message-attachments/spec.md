@@ -21,7 +21,8 @@ A message SHALL carry a list of attachments, empty by default. Each attachment M
 Peers SHALL be able to attach to every message they produce:
 - `say(text, *, reply_to=None, attachments=())`
 - `ask(to, text, *, attachments=())`
-- `answer` and a command's `execute` MUST be able to return either a string, as before, or a reply value that carries text and attachments
+- `answer` MUST be able to return either a string, as before, or a reply value that carries text and attachments
+- a command's `execute` MUST return a reply value (or nothing). A plain string MUST be refused with `TypeError` and nothing posted
 
 Command invocations (`/name args`) remain plain text and carry no attachments. `ask` and `invoke` MUST keep returning the reply's text.
 
@@ -37,6 +38,10 @@ Command invocations (`/name args`) remain plain text and carry no attachments. `
 - **WHEN** a command's `execute` returns a reply with text `[export](data.csv)` and a `data.csv` attachment
 - **THEN** the posted command result carries `data.csv`, the invocation message carries none, and `invoke` returns the text
 
-#### Scenario: String returns unchanged
-- **WHEN** an existing `answer` or `execute` returns a plain string
+#### Scenario: String answers unchanged
+- **WHEN** an existing `answer` returns a plain string
 - **THEN** it is posted exactly as before, with no attachments
+
+#### Scenario: Command returns a string
+- **WHEN** a command's `execute` returns a plain string
+- **THEN** `invoke` raises `TypeError`, and only the invocation message is posted
