@@ -22,7 +22,7 @@ Peers SHALL be able to attach to every message they produce:
 - `say(text, *, reply_to=None, attachments=())`
 - `ask(to, text, *, attachments=())`
 - `answer` MUST be able to return either a string, as before, or a reply value that carries text and attachments
-- a command's `execute` MUST return a reply value (or nothing). A plain string MUST be refused with `TypeError` and nothing posted
+- a command's `execute` MUST return a reply value (or nothing). A plain string MUST be refused with `TypeError`, and no result is posted
 
 Command invocations (`/name args`) remain plain text and carry no attachments. `ask` and `invoke` MUST keep returning the reply's text.
 
