@@ -301,6 +301,7 @@ src/chatinho/
   commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads
 docs/              SPEC.md — the eleven hooks, with an example and a cost for each
+openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
                    agent_inbox.py (HTTP, inbound)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
@@ -818,6 +819,14 @@ ruff check src tests examples
 mypy src/chatinho
 pytest -q
 ```
+
+CI also runs a fourth job, `openspec`: `openspec validate --all --strict --no-interactive`.
+
+**New behavior is planned with OpenSpec first.** `/opsx:propose` writes a change under
+`openspec/changes/` (proposal, delta specs, design, tasks), `/opsx:apply` implements it and
+`/opsx:archive` folds its specs into `openspec/specs/`. Artifacts are written in English.
+`openspec/specs/` starts empty: capabilities appear as changes land, and `docs/SPEC.md` stays the
+reference for the hooks until they are specified there.
 
 `pyproject.toml` sets `asyncio_mode = "auto"`: every peer is a coroutine, so every test that
 drives one is too, and marking each of them would be noise.
