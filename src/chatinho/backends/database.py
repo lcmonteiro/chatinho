@@ -273,7 +273,9 @@ class DatabaseBackend:
             data = bytes(row.data)
         if self._files is None:
             self._files = Path(tempfile.mkdtemp(prefix="chatinho-"))
-        path = self._files / quote(msg_id, safe="") / quote(name, safe="")
+        # Quoted so no name reaches outside its folder, and prefixed so "." and
+        # ".." — which quoting leaves alone — are files too, not directories.
+        path = self._files / ("_" + quote(msg_id, safe="")) / ("_" + quote(name, safe=""))
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)

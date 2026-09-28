@@ -66,7 +66,7 @@ Textual already percent-decodes `href`. The handler's name must not shadow a Tex
 
 - **Storage:** a second table, `attachments`, with `msg_id`, `name`, `media_type` and `data` (a large binary). Its primary key is `(msg_id, name)`, so keeping the same attachment twice is one row, matching `messages`.
 - **`keep`:** `merge`s the rows in an executor, like `listen`.
-- **`link`:** reads the row. With none, it returns `None`. Otherwise it writes the data to `<cache>/<quoted msg_id>/<quoted name>` if not already there, and returns the file's `file://` URI (`Path.as_uri()`). The cache is a `tempfile.mkdtemp()` directory created on first use and removed with `shutil.rmtree` in `shutdown()`.
+- **`link`:** reads the row. With none, it returns `None`. Otherwise it writes the data to `<cache>/_<quoted msg_id>/_<quoted name>` if not already there (quoted so no name leaves its folder, prefixed so `.` and `..` are files, not directories), and returns the file's `file://` URI (`Path.as_uri()`). The cache is a `tempfile.mkdtemp()` directory created on first use and removed with `shutil.rmtree` in `shutdown()`.
 - **`forget(before)`:** deletes attachments whose `msg_id` belongs to a message being dropped. That's a subquery over `messages` with the same timestamp condition, done in the same transaction. Forgetting everything deletes all attachment rows.
 - **Why blobs, not files at `keep` time:** one database stays the only store, so `forget` stays one transaction and backing up the archive is one file. Files exist only for attachments someone actually opened, and never outlive the session.
 

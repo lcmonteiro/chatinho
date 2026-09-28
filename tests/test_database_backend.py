@@ -198,6 +198,14 @@ async def test_a_name_that_is_not_a_file_name_still_links(archive):
     assert link is not None and content(link) == b"<p>up 12%</p>"
 
 
+@pytest.mark.parametrize("name", ["..", "."])
+async def test_a_dot_name_links_to_a_file_not_a_folder(archive, name):
+    await archive.keep("msg-1", [page("revenue.html"), page(name, b"dots")])
+    await archive.link("msg-1", "revenue.html")          # the folders exist first
+    link = await archive.link("msg-1", name)
+    assert link is not None and content(link) == b"dots"
+
+
 async def test_shutdown_removes_the_files_it_wrote():
     store = DatabaseBackend("sqlite:///:memory:")
     store.initialize()
