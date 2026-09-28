@@ -41,7 +41,7 @@ class Reply:
     attachments : Tuple[Attachment, ...] = ()
 ```
 
-`ChatMessage` gains `attachments : Tuple[Attachment, ...] = ()` as its **last** field, so existing constructions still work. Tuples and frozen dataclasses keep one peer from changing what another receives, since every listener gets the same message object.
+`ChatMessage` gains `attachments : Tuple[Attachment, ...] = ()` as its **last** field, so existing constructions still work. Tuples and frozen dataclasses keep one peer from changing an attachment another peer receives, since every listener gets the same message object. `ChatMessage` itself stays mutable, as it is today.
 
 ### Each door builds its message directly
 

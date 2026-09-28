@@ -59,7 +59,7 @@ class Reply:
 
     Attributes:
         text: The answer, as Markdown.
-        attachments: What the text links to.
+        attachments: What the reply carries.
     """
 
     text        : str

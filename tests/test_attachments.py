@@ -47,11 +47,27 @@ class _Reporter:
         return Reply("Here: [report](report.html)", (item("report.html"),))
 
 
+@connector("lista")
+@require(HookAnswer)
+class _ListReporter:
+    """Builds its Reply with a list, as a peer easily might."""
+
+    async def answer(self, msg):
+        return Reply("Here: [report](report.html)", [item("report.html")])   # type: ignore[arg-type]
+
+
 @connector("simples")
 @require(HookAnswer)
 class _Plain:
     async def answer(self, msg) -> str:
         return "just text"
+
+
+@tool("texto", "answers with text")
+@require(HookExecute)
+class _Text:
+    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+        return "only text"
 
 
 @tool("exporta", "exports")
@@ -102,7 +118,23 @@ async def test_a_plain_string_answer_is_unchanged():
     session, view = await driven(connectors=[_Plain()])
     assert await view.ask(1, "?") == "just text"
     await session.close()
-    assert view.context()[-1].attachments == ()
+    question, answer = view.context()
+    assert question.attachments == ()
+    assert answer.attachments == ()
+
+
+async def test_a_reply_built_with_a_list_is_carried_as_a_tuple():
+    session, view = await driven(connectors=[_ListReporter()])
+    await view.ask(1, "report?")
+    await session.close()
+    assert view.context()[-1].attachments == (item("report.html"),)
+
+
+async def test_a_plain_string_command_result_carries_nothing():
+    session, view = await driven(commands=[_Text()])
+    assert await view.command("texto") == "only text"
+    await session.close()
+    assert [m.attachments for m in view.context()] == [(), ()]
 
 
 async def test_a_command_result_can_attach_and_invoke_returns_its_text():

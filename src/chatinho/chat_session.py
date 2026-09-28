@@ -208,7 +208,7 @@ class ChatSession:
             text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
             await self._post(ChatMessage(
                 id=self._store.new_id(), text=text, frm=TOOL, to=None, reply_to=asked.id,
-                attachments=carried,
+                attachments=tuple(carried),
             ))
             return text
         return invoke
@@ -351,7 +351,7 @@ class ChatSession:
             text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
             await self._post(ChatMessage(
                 id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id,
-                attachments=carried,
+                attachments=tuple(carried),
             ))
 
     async def _drain(self, at: int) -> None:

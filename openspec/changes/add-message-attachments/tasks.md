@@ -13,7 +13,7 @@
 ## 3. Hooks, exports and docs
 
 - [x] 3.1 Update the `Say` and `Ask` protocols in `src/chatinho/chat_hooks.py` to take `attachments`, and document the widened `answer`/`execute` return type. Export `Attachment` and `Reply` from `src/chatinho/__init__.py` (listed in `__all__`). Verify `mypy src/chatinho` is clean and `from chatinho import Attachment, Reply` works.
-- [x] 3.2 Update `docs/SPEC.md` (the `HookSay`, `HookAsk`, `HookAnswer`, `HookExecute` sections and a short "Attachments" subsection), `README.md` (a usage example) and `CLAUDE.md` (the layout line). Verify `pytest tests/test_architecture.py` still passes.
+- [x] 3.2 Update `docs/SPEC.md` (the `HookSay`, `HookAsk`, `HookAnswer`, `HookExecute` sections and a short "Attachments" subsection), `README.md` (a usage example) and `CLAUDE.md` (the layout line and a short "Attachments ride on the message" section). Verify `pytest tests/test_architecture.py` still passes.
 
 ## 4. Verification
 
