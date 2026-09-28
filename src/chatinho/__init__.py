@@ -55,7 +55,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .connectors import A2AConnector, OpenAIConnector
 
 from .chat_session import ChatSession
-from .chat_message import LOCAL, TOOL, ChatMessage
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, Reply
 from .chat_hooks import (
     connector,
     tool,
@@ -139,6 +139,8 @@ __all__ = [
     "build_chat",
     "ChatSession",
     "ChatMessage",
+    "Attachment",
+    "Reply",
     "ChatStyle",
     "LOCAL",
     "TOOL",

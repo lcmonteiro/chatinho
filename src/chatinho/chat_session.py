@@ -21,7 +21,7 @@ import asyncio
 import logging
 from datetime import datetime
 from inspect import isawaitable
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from .chat_hooks import (
     HookExecute,
@@ -34,7 +34,7 @@ from .chat_hooks import (
     declared_id,
     name_of,
 )
-from .chat_message import LOCAL, TOOL, ChatMessage, MessageStore
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageStore, Reply, attached
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,8 @@ class ChatSession:
     The five interfaces onto the conversation are reached only by declaring a
     hook — three the session grants, two it calls:
 
-    - ``HookSay``      grants  ``say(text, reply_to=None)``.
-    - ``HookAsk``      grants  ``ask(to, text)``, which awaits the answer.
+    - ``HookSay``      grants  ``say(text, reply_to=None, attachments=())``.
+    - ``HookAsk``      grants  ``ask(to, text, attachments=())``, which awaits the answer.
     - ``HookContext``  grants  ``context(since=, start=, limit=)``.
     - ``HookListen``   demands ``listen(msg)`` — every message that crosses.
     - ``HookAnswer``   demands ``answer(msg)`` — someone asked you.
@@ -203,11 +203,11 @@ class ChatSession:
             except Exception:
                 logger.error("Command %r failed", name, exc_info=True)
                 raise
-            if reply is not None:
-                await self._post(ChatMessage(
-                    id=self._store.new_id(), text=reply, frm=TOOL, to=None, reply_to=asked.id,
-                ))
-            return reply
+            if reply is None:
+                return None
+            posted = self._message(reply, frm=TOOL, to=None, reply_to=asked.id)
+            await self._post(posted)
+            return posted.text
         return invoke
 
     def id_of(self, name: str) -> Optional[int]:
@@ -270,18 +270,62 @@ class ChatSession:
 
     # === The three verbs, bound to one speaker ======================================
 
+    def _message(
+        self,
+        said        : Union[str, Reply],
+        *,
+        frm         : int,
+        to          : Optional[int] = None,
+        reply_to    : Optional[str] = None,
+        attachments : Sequence[Attachment] = (),
+    ) -> ChatMessage:
+        """Builds a message to post, keeping only the attachments its text links to.
+
+        Every door that posts what a peer produced comes through here, so the
+        attachment rule holds for all of them — and it runs before anything is
+        stored or queued, so a message it rejects was never said.
+
+        Args:
+            said: The text, or a Reply that carries its own attachments.
+            frm: Who said it.
+            to: Who it is for, or None for everyone.
+            reply_to: The message it answers, if any.
+            attachments: What was attached alongside a plain text.
+
+        Returns:
+            ChatMessage: The message, with a fresh id.
+
+        Raises:
+            ValueError: If the text links to a name nothing carries, or a name
+                is not one relative path segment, or two share a name.
+        """
+        if isinstance(said, Reply):
+            text, attachments = said.text, said.attachments
+        else:
+            text = said
+        # The rule first: a rejected message must not use up an id.
+        kept = attached(text, attachments)
+        return ChatMessage(
+            id=self._store.new_id(), text=text, frm=frm, to=to, reply_to=reply_to, attachments=kept,
+        )
+
     def _say_for(self, frm: int):
-        async def say(text: str, *, reply_to: Optional[str] = None) -> str:
-            return await self._post(ChatMessage(
-                id=self._store.new_id(), text=text, frm=frm, to=None, reply_to=reply_to,
+        async def say(
+            text        : str,
+            *,
+            reply_to    : Optional[str] = None,
+            attachments : Sequence[Attachment] = (),
+        ) -> str:
+            return await self._post(self._message(
+                text, frm=frm, reply_to=reply_to, attachments=attachments,
             ))
         return say
 
     def _ask_for(self, frm: int):
-        async def ask(to: int, text: str) -> str:
+        async def ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
-            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
+            msg = self._message(text, frm=frm, to=to, attachments=attachments)
             future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
             await self._post(msg)
@@ -337,9 +381,7 @@ class ChatSession:
             return
         reply = await who.answer(msg)
         if reply is not None:
-            await self._post(ChatMessage(
-                id=self._store.new_id(), text=reply, frm=at, to=msg.frm, reply_to=msg.id,
-            ))
+            await self._post(self._message(reply, frm=at, to=msg.frm, reply_to=msg.id))
 
     async def _drain(self, at: int) -> None:
         """

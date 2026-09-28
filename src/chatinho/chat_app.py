@@ -186,6 +186,10 @@ class ChatApp(App):
     ``max_displayed`` limits how many messages are rendered in the terminal
     (sliding window). The full history is always kept — older messages only
     leave the screen, not memory.
+
+    ``attachment_url`` is where attachment links open, as
+    ``<attachment_url>/m/<message id>/<name>``; None means there is no
+    attachment server, and activating one says so.
     """
 
     # Default stylesheet, rendered from ChatStyle() at class definition time.
@@ -209,6 +213,7 @@ class ChatApp(App):
         copy_key        : str = "ctrl+y",
         newline_escape  : Optional[str] = NEWLINE_ESCAPE,
         name            : Optional[str] = None,
+        attachment_url  : Optional[str] = None,
     ) -> None:
         super().__init__()
         if name is not None:
@@ -239,6 +244,7 @@ class ChatApp(App):
         self.welcome_message = welcome_message
         self._input_placeholder = "Type a message or /command"
         self.max_displayed : int = max_displayed
+        self._attachment_url : Optional[str] = attachment_url
         # Thread id of the app's main loop (set in on_mount)
         self._app_thread_id : Optional[int] = None
 
@@ -332,6 +338,7 @@ class ChatApp(App):
                 max_displayed=self.max_displayed,
                 style=self._style,
                 on_reply_target_change=self._on_reply_target_change,
+                attachment_url=self._attachment_url,
                 id=CHAT_LOG_ID,
             ),
             Vertical(
