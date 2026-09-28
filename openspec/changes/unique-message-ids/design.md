@@ -21,7 +21,7 @@ See proposal.md for motivation. `MessageStore.new_id()` (`chat_message.py`) is t
 `new_id()` returns `"msg-" + secrets.token_hex(8)`. 64 bits of randomness makes a collision in a single archive negligible (about 1 in 36 million after a million messages), and needs no state, so the counter and its lock go away — `secrets` is safe to call from any thread.
 
 - *Alternative: continue numbering after the recalled messages.* Keeps `msg-N`, but only works when `start()` recalls something: with `recall=0`, a backend without `HookLoad`, or an archive whose newest messages were forgotten, the numbers collide again. It would also need the backend to report its highest id.
-- *Alternative: full `uuid4()`.* Unique too, but 32 characters makes every terminal header noticeably wider for no practical gain over 16.
+- *Alternative: full `uuid4()`.* Unique too, but 32 characters doubles every id in logs, archives and `reply_to` fields for no practical gain: 64 bits already makes a collision negligible.
 - *Alternative: 8 hex characters.* Too short: collisions become likely around 65,000 messages.
 
 ### A git-style short id, for display only
@@ -35,7 +35,7 @@ The terminal calls it at the four places it shows an id: the header prefix (`Cha
 
 ### Keep the `msg-` prefix
 
-It keeps ids recognisable in logs and headers, and code that checks `startswith("msg-")` keeps working.
+It keeps full ids recognisable in logs, archives and debugging output, and code that checks `startswith("msg-")` keeps working. The terminal's short id drops it, as git's short hashes drop nothing but the tail: the header already marks what the id belongs to.
 
 ## Risks / Trade-offs
 
