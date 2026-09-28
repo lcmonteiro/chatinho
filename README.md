@@ -216,8 +216,8 @@ class Weather:
 @tool("upper", "Upper-case the rest of the line")   # not a peer: it just runs
 @require(HookExecute)
 class Upper:
-    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
-        return args.upper()         # the answer, posted as TOOL, replying to the invocation
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
+        return Reply(args.upper())  # the answer, posted as TOOL, replying to the invocation
 
 @backend("archive")                 # a peer that listens, loads and forgets
 @require(HookListen)
@@ -226,6 +226,22 @@ class Upper:
 class Archive:
     ...
 ```
+
+### Attachments
+
+A message is Markdown, and it can carry pages, images and files that its text links to:
+
+```python
+from chatinho import Attachment, Reply
+
+chart = Attachment("revenue.html", "text/html", html.encode())
+await self.say("Revenue is up — see the [chart](revenue.html)", attachments=[chart])
+
+async def answer(self, msg) -> Reply:           # answers and commands attach by returning a Reply
+    return Reply("Here: [report](report.html)", (Attachment("report.html", "text/html", page),))
+```
+
+The session passes attachments through untouched; storing and serving them is a backend's job.
 
 ---
 

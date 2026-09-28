@@ -111,9 +111,9 @@ A peer that declares `HookInvoke` is granted `invoke(name, args)`, and a command
 class UpperCommand:
     say : Say
 
-    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
         await self.say("working…")         # progress, said as TOOL
-        return args.upper()                # the answer: posted as TOOL, and returned
+        return Reply(args.upper())         # the answer: posted as TOOL, its text returned
 ```
 
 **The invocation and the answer are both messages.** There is one conversation and everything is
@@ -189,6 +189,15 @@ One cost, stated in the code as well as here: **`context()` is synchronous, so t
 whatever `ChatSession(recall=…)` pulled back.** Asking for older than that returns nothing rather
 than reaching down again. Making it reach would make it a coroutine, and the terminal renders its
 log from inside a *synchronous* Textual paint.
+
+## Attachments ride on the message, and nothing more
+
+A message is Markdown and may carry `Attachment`s its text links to by name. `say` and `ask` take
+them; `answer` attaches by returning a `Reply` (a plain string still works), a command's `execute`
+always returns a `Reply` (a string raises `TypeError`), and `ask` and `invoke` still return text.
+Each door builds its `ChatMessage` directly, unwrapping a `Reply` where one can come back.
+The core checks nothing about attachments: which links resolve, what is kept and how it is served
+belong to a backend.
 
 ## The eleven hooks
 
@@ -292,7 +301,8 @@ src/chatinho/
   chat_builder.py  build_chat — builds a ChatSession and ChatApp, wires the two
   chat_session.py  ChatSession: run, peers, commands, queues, routing, context      (545)
   chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (489)
-  chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL
+  chat_message.py  ChatMessage (frm/to/reply_to/attachments) + MessageStore, LOCAL, TOOL,
+                   Attachment, Reply
   chat_log.py      ChatLog widget: renders through the granted context reader
   chat_input.py    CommandInput (a multi-line TextArea) + CommandSuggestions
   chat_clipboard.py  OSC 52's second route: a clipboard helper, if the system has one

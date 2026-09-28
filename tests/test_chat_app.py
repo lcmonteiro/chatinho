@@ -28,6 +28,7 @@ from chatinho import (
     HookAnswer,
     HookAsk,
     HookExecute,
+    Reply,
     connector,
     ChatSession,
     ChatStyle,
@@ -61,8 +62,8 @@ class _Eco:
     saying it too would put the same line in the conversation twice.
     """
 
-    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
-        return "eco: %s" % args
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
+        return Reply("eco: %s" % args)
 
 
 @tool("mudo", "answers without writing")
@@ -70,8 +71,8 @@ class _Eco:
 class _Mudo:
     """A command that only answers: nothing of it reaches the conversation."""
 
-    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
-        return "só para quem correu"
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
+        return Reply("só para quem correu")
 
 
 @connector("agente")

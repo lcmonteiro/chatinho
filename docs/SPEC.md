@@ -111,9 +111,10 @@ A class that declares only grants is asked for nothing.
 
 ### HookSay
 
-> **grants** `say(text: str, *, reply_to: Optional[str] = None) -> str`
+> **grants** `say(text: str, *, reply_to: Optional[str] = None, attachments: Sequence[Attachment] = ()) -> str`
 
-Says *text* to everyone but the speaker. Returns the new message's id.
+Says *text* to everyone but the speaker. Returns the new message's id. *text* is Markdown, and
+*attachments* travel with it — see [Attachments](#attachments).
 
 ```python
 await self.say("good morning")
@@ -126,9 +127,11 @@ waiting ask by saying the reply with `reply_to` set to the question's id.
 
 ### HookAsk
 
-> **grants** `await ask(to: int, text: str) -> str`
+> **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str`
 
 Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id.
+What comes back is the reply's text, even when the reply attaches something: the whole reply,
+attachments and all, is in `context()` and reaches whoever listens.
 
 ```python
 answer = await self.ask(session.id_of("weather"), "what is the weather?")
@@ -235,9 +238,10 @@ Nothing is owed back. A backend, an audit log and a metrics counter each want al
 
 ### HookAnswer
 
-> **demands** `async answer(msg: ChatMessage) -> Optional[str]`
+> **demands** `async answer(msg: ChatMessage) -> Optional[Union[str, Reply]]`
 
-Someone asked *you*. What you return is the reply, posted by the session in your name.
+Someone asked *you*. What you return is the reply, posted by the session in your name. Return a
+`Reply(text, attachments)` to attach something; a plain string is a reply with none.
 
 ```python
 @connector("weather")
@@ -256,7 +260,7 @@ A peer that is asked but declares no `HookAnswer` is logged, not crashed.
 
 ### HookExecute
 
-> **demands** `async execute(args: str = "", by: int = LOCAL, **kwargs) -> Optional[str]`
+> **demands** `async execute(args: str = "", by: int = LOCAL, **kwargs) -> Optional[Reply]`
 
 This is what a command **is**. `by` is the id of the peer that ran it, so a command may answer
 differently depending on who asked.
@@ -265,8 +269,8 @@ differently depending on who asked.
 @tool("upper", "Upper-case the rest of the line")
 @require(HookExecute)
 class UpperCommand:
-    async def execute(self, args="", by=LOCAL, **kwargs) -> str:
-        return args.upper()            # the answer: posted as TOOL, and returned
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
+        return Reply(args.upper())     # the answer: posted as TOOL, and its text returned
 ```
 
 A command is **not a peer**: no id, no queue, nothing addressed to it. It is registered with
@@ -353,6 +357,21 @@ the session still finds what it can do by what it declared. They differ in one t
 backend has no id of its own, so that parameter is pure sugar, while a frontend *is* an id, so
 `frontend=` pins `LOCAL` even for something that never declared `@frontend`. A chat has one of
 each: a second frontend is refused like any id already taken.
+
+### Attachments
+
+A message is Markdown, and it may carry `Attachment(name, media_type, data)`s — a page, an image, a
+file. Its text links to them by name:
+
+```python
+chart = Attachment("revenue.html", "text/html", html.encode())
+await self.say("Revenue is up 12% — see the [chart](revenue.html)", attachments=[chart])
+```
+
+`say` and `ask` take `attachments`; `answer` attaches by returning a `Reply`, and `execute` always
+returns one. A command's
+invocation (`/name args`) is a command line and carries none. The session passes attachments through
+as given: checking the links, keeping what matters and serving it are a backend's business.
 
 ### Demands are not exclusive
 

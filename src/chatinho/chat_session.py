@@ -21,7 +21,7 @@ import asyncio
 import logging
 from datetime import datetime
 from inspect import isawaitable
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from .chat_hooks import (
     HookExecute,
@@ -34,7 +34,7 @@ from .chat_hooks import (
     declared_id,
     name_of,
 )
-from .chat_message import LOCAL, TOOL, ChatMessage, MessageStore
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageStore, Reply
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,8 @@ class ChatSession:
     The five interfaces onto the conversation are reached only by declaring a
     hook — three the session grants, two it calls:
 
-    - ``HookSay``      grants  ``say(text, reply_to=None)``.
-    - ``HookAsk``      grants  ``ask(to, text)``, which awaits the answer.
+    - ``HookSay``      grants  ``say(text, reply_to=None, attachments=())``.
+    - ``HookAsk``      grants  ``ask(to, text, attachments=())``, which awaits the answer.
     - ``HookContext``  grants  ``context(since=, start=, limit=)``.
     - ``HookListen``   demands ``listen(msg)`` — every message that crosses.
     - ``HookAnswer``   demands ``answer(msg)`` — someone asked you.
@@ -203,11 +203,16 @@ class ChatSession:
             except Exception:
                 logger.error("Command %r failed", name, exc_info=True)
                 raise
-            if reply is not None:
-                await self._post(ChatMessage(
-                    id=self._store.new_id(), text=reply, frm=TOOL, to=None, reply_to=asked.id,
-                ))
-            return reply
+            if reply is None:
+                return None
+            if not isinstance(reply, Reply):
+                raise TypeError("Command %r returned %s; execute must return a Reply or None"
+                                % (name, type(reply).__name__))
+            await self._post(ChatMessage(
+                id=self._store.new_id(), text=reply.text, frm=TOOL, to=None, reply_to=asked.id,
+                attachments=tuple(reply.attachments),
+            ))
+            return reply.text
         return invoke
 
     def id_of(self, name: str) -> Optional[int]:
@@ -271,17 +276,25 @@ class ChatSession:
     # === The three verbs, bound to one speaker ======================================
 
     def _say_for(self, frm: int):
-        async def say(text: str, *, reply_to: Optional[str] = None) -> str:
+        async def say(
+            text        : str,
+            *,
+            reply_to    : Optional[str] = None,
+            attachments : Sequence[Attachment] = (),
+        ) -> str:
             return await self._post(ChatMessage(
                 id=self._store.new_id(), text=text, frm=frm, to=None, reply_to=reply_to,
+                attachments=tuple(attachments),
             ))
         return say
 
     def _ask_for(self, frm: int):
-        async def ask(to: int, text: str) -> str:
+        async def ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
-            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
+            msg = ChatMessage(
+                id=self._store.new_id(), text=text, frm=frm, to=to, attachments=tuple(attachments),
+            )
             future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
             await self._post(msg)
@@ -337,8 +350,10 @@ class ChatSession:
             return
         reply = await who.answer(msg)
         if reply is not None:
+            text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
             await self._post(ChatMessage(
-                id=self._store.new_id(), text=reply, frm=at, to=msg.frm, reply_to=msg.id,
+                id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id,
+                attachments=tuple(carried),
             ))
 
     async def _drain(self, at: int) -> None:

@@ -35,9 +35,9 @@ Nothing here is inherited: no base class, no ``isinstance``.
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
 
-from .chat_message import LOCAL, TOOL, ChatMessage
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -45,16 +45,29 @@ logger = logging.getLogger(__name__)
 class Say(Protocol):
     """Granted by ``HookSay``: a message for everyone."""
 
-    async def __call__(self, text: str, *, reply_to: Optional[str] = None) -> str:
-        """Adds *text* to the conversation and returns the new message's id."""
+    async def __call__(
+        self,
+        text        : str,
+        *,
+        reply_to    : Optional[str] = None,
+        attachments : Sequence[Attachment] = (),
+    ) -> str:
+        """Adds *text* to the conversation and returns the new message's id.
+
+        *attachments* travel with the message; its Markdown text can link to
+        them by name.
+        """
         ...
 
 
 class Ask(Protocol):
     """Granted by ``HookAsk``: a message for one peer, and its reply."""
 
-    async def __call__(self, to: int, text: str) -> str:
-        """Asks peer *to* and waits for the answer it sends back."""
+    async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
+        """Asks peer *to* and waits for the text of the answer it sends back.
+
+        *attachments* travel with the question, as with ``say``.
+        """
         ...
 
 
@@ -182,8 +195,9 @@ HookListen = Hook(
 HookAnswer = Hook(
     name="HookAnswer",
     method="answer",
-    # async answer(msg) -> str | None. Someone asked you; what you return is
-    # the reply, and the session posts it in your name.
+    # async answer(msg) -> str | Reply | None. Someone asked you; what you
+    # return is the reply, and the session posts it in your name. Return a
+    # Reply to attach something to it; the asker still gets the text.
     #
     # Return None when the answer is not yours to invent yet — a terminal
     # waiting on a person, a connector waiting on a server. The ask stays
@@ -203,9 +217,10 @@ HookInvoke = Hook(
 HookExecute = Hook(
     name="HookExecute",
     method="execute",
-    # async execute(args, **kwargs) -> str | None. What a command is. It is not
-    # a peer: no id, no queue, nothing addressed to it. Declare HookSay too and
-    # it can write as it works; return a string and that goes to whoever ran it.
+    # async execute(args, **kwargs) -> Reply | None. What a command is. It is
+    # not a peer: no id, no queue, nothing addressed to it. Declare HookSay too
+    # and it can write as it works; return a Reply, with or without
+    # attachments, and its text goes to whoever ran it.
 )
 
 HookContext = Hook(

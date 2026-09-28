@@ -36,6 +36,7 @@ from chatinho import (
     HookPeers,
     HookCommands,
     HookSay,
+    Reply,
     Invoke,
     Peers,
     Commands,
@@ -142,7 +143,7 @@ class UpperCommand:
     it works. Saying and returning the same text writes it twice.
     """
 
-    async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> str:
+    async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> Reply:
         """Answers with *args* in upper case.
 
         Args:
@@ -152,11 +153,11 @@ class UpperCommand:
             **kwargs: Ignored.
 
         Returns:
-            str: The answer, which the session posts as ``TOOL``.
+            Reply: The answer, which the session posts as ``TOOL``.
         """
         del kwargs
         note("HookExecute", "run by %d with %r" % (by, args))
-        return args.upper()
+        return Reply(args.upper())
 
 
 @backend("archive")

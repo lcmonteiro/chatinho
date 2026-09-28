@@ -31,6 +31,7 @@ from chatinho import (
     HookInvoke,
     HookPeers,
     HookSay,
+    Reply,
     Context,
     Invoke,
     Peers,
@@ -70,13 +71,13 @@ class UpperCommand:
     runs only when someone runs it.
     """
 
-    async def execute(self, args: str = "", **kwargs) -> str:
+    async def execute(self, args: str = "", **kwargs) -> Reply:
         """Answers with the arguments in upper case.
 
         Answering is what puts it in the conversation: saying it too would
         write the same line twice.
         """
-        return args.upper() if args else "Usage: /upper <text>"
+        return Reply(args.upper() if args else "Usage: /upper <text>")
 
 
 @frontend("terminal")

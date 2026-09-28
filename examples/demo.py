@@ -15,6 +15,7 @@ from chatinho import (
     HookExecute,
     HookListen,
     HookSay,
+    Reply,
     Say,
     connector,
     build_chat,
@@ -62,9 +63,9 @@ class CodeCommand:
     that is for progress while it works, which this has none of.
     """
 
-    async def execute(self, args: str = "", **kwargs) -> str:
+    async def execute(self, args: str = "", **kwargs) -> Reply:
         """Answers with a Markdown code block."""
-        return (
+        return Reply(
             "Here is an example with **syntax highlighting**:\n\n"
             "```python\n"
             "def fib(n: int) -> int:\n"

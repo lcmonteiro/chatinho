@@ -20,7 +20,7 @@ application.
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 #: The chat itself — the user's own id. Every connector is numbered from one.
 LOCAL : int = 0
@@ -31,25 +31,62 @@ LOCAL : int = 0
 TOOL : int = -1
 
 
+@dataclass(frozen=True)
+class Attachment:
+    """Something a message carries: a page, an image, a file.
+
+    The message's Markdown text can link to it by name —
+    ``[chart](revenue.html)``. Checking those links, keeping attachments and
+    serving them is a backend's business, not the message's.
+
+    Attributes:
+        name: What the text links to, e.g. ``revenue.html``.
+        media_type: What the content is, e.g. ``text/html``.
+        data: The content itself.
+    """
+
+    name       : str
+    media_type : str
+    data       : bytes
+
+
+@dataclass(frozen=True)
+class Reply:
+    """What ``answer`` or a command's ``execute`` returns when it attaches.
+
+    Returning a plain string still works; a Reply is only for an answer that
+    carries attachments.
+
+    Attributes:
+        text: The answer, as Markdown.
+        attachments: What the reply carries.
+    """
+
+    text        : str
+    attachments : Tuple[Attachment, ...] = ()
+
+
 @dataclass
 class ChatMessage:
     """One message, addressed.
 
     Attributes:
         id: Unique within a chat, assigned by the store.
-        text: What was said.
+        text: What was said, as Markdown.
         frm: The id of whoever said it; :data:`LOCAL` for the user.
         to: The id it was addressed to, or None when it went to everyone.
         reply_to: The id of the message this answers, when it answers one.
         timestamp: When it entered the history.
+        attachments: What the message carries, as the speaker attached it.
     """
 
-    id        : str
-    text      : str
-    frm       : int = LOCAL
-    to        : Optional[int] = None
-    reply_to  : Optional[str] = None
-    timestamp : datetime = field(default_factory=datetime.now)
+    id          : str
+    text        : str
+    frm         : int = LOCAL
+    to          : Optional[int] = None
+    reply_to    : Optional[str] = None
+    timestamp   : datetime = field(default_factory=datetime.now)
+    attachments : Tuple[Attachment, ...] = ()
 
     @property
     def is_broadcast(self) -> bool:
