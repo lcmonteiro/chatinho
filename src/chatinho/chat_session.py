@@ -21,7 +21,7 @@ import asyncio
 import logging
 from datetime import datetime
 from inspect import isawaitable
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence
 
 from .chat_hooks import (
     HookExecute,
@@ -205,9 +205,12 @@ class ChatSession:
                 raise
             if reply is None:
                 return None
-            posted = self._message(reply, frm=TOOL, to=None, reply_to=asked.id)
-            await self._post(posted)
-            return posted.text
+            text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
+            await self._post(ChatMessage(
+                id=self._store.new_id(), text=text, frm=TOOL, to=None, reply_to=asked.id,
+                attachments=carried,
+            ))
+            return text
         return invoke
 
     def id_of(self, name: str) -> Optional[int]:
@@ -270,39 +273,6 @@ class ChatSession:
 
     # === The three verbs, bound to one speaker ======================================
 
-    def _message(
-        self,
-        said        : Union[str, Reply],
-        *,
-        frm         : int,
-        to          : Optional[int] = None,
-        reply_to    : Optional[str] = None,
-        attachments : Sequence[Attachment] = (),
-    ) -> ChatMessage:
-        """Builds a message to post, with whatever it carries.
-
-        Every door that posts what a peer produced comes through here, so a
-        Reply is unwrapped the same way whichever door returned it.
-
-        Args:
-            said: The text, or a Reply that carries its own attachments.
-            frm: Who said it.
-            to: Who it is for, or None for everyone.
-            reply_to: The message it answers, if any.
-            attachments: What was attached alongside a plain text.
-
-        Returns:
-            ChatMessage: The message, with a fresh id.
-        """
-        if isinstance(said, Reply):
-            text, attachments = said.text, said.attachments
-        else:
-            text = said
-        return ChatMessage(
-            id=self._store.new_id(), text=text, frm=frm, to=to, reply_to=reply_to,
-            attachments=tuple(attachments),
-        )
-
     def _say_for(self, frm: int):
         async def say(
             text        : str,
@@ -310,8 +280,9 @@ class ChatSession:
             reply_to    : Optional[str] = None,
             attachments : Sequence[Attachment] = (),
         ) -> str:
-            return await self._post(self._message(
-                text, frm=frm, reply_to=reply_to, attachments=attachments,
+            return await self._post(ChatMessage(
+                id=self._store.new_id(), text=text, frm=frm, to=None, reply_to=reply_to,
+                attachments=tuple(attachments),
             ))
         return say
 
@@ -319,7 +290,9 @@ class ChatSession:
         async def ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
-            msg = self._message(text, frm=frm, to=to, attachments=attachments)
+            msg = ChatMessage(
+                id=self._store.new_id(), text=text, frm=frm, to=to, attachments=tuple(attachments),
+            )
             future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
             await self._post(msg)
@@ -375,7 +348,11 @@ class ChatSession:
             return
         reply = await who.answer(msg)
         if reply is not None:
-            await self._post(self._message(reply, frm=at, to=msg.frm, reply_to=msg.id))
+            text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
+            await self._post(ChatMessage(
+                id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id,
+                attachments=carried,
+            ))
 
     async def _drain(self, at: int) -> None:
         """

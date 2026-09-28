@@ -6,8 +6,8 @@
 
 ## 2. Session: every verb attaches
 
-- [x] 2.1 In `src/chatinho/chat_session.py`, add one message builder that unwraps a `Reply` and passes attachments through, and use it for `say(text, *, reply_to=None, attachments=())` and `ask(to, text, *, attachments=())`. Verify with tests in `tests/test_attachments.py`: listeners and the context receive exactly what was attached, and `ask` carries attachments to the peer asked.
-- [x] 2.2 Accept `Optional[Union[str, Reply]]` from `answer` (in `_deliver`) and from `execute` (in `_invoke_for`), post it through the same builder, resolve `ask`'s future with the reply text, and have `invoke` return the text. Verify with tests: an answer with a `Reply` carries attachments and `ask` returns the text; a command `Reply` carries attachments and `invoke` returns the text; string returns are unchanged.
+- [x] 2.1 In `src/chatinho/chat_session.py`, give `say(text, *, reply_to=None, attachments=())` and `ask(to, text, *, attachments=())` an `attachments` parameter and build each `ChatMessage` directly with them. Verify with tests in `tests/test_attachments.py`: listeners and the context receive exactly what was attached, and `ask` carries attachments to the peer asked.
+- [x] 2.2 Accept `Optional[Union[str, Reply]]` from `answer` (in `_deliver`) and from `execute` (in `_invoke_for`), unwrap a `Reply` in place and build the `ChatMessage` directly, resolve `ask`'s future with the reply text, and have `invoke` return the text. Verify with tests: an answer with a `Reply` carries attachments and `ask` returns the text; a command `Reply` carries attachments and `invoke` returns the text; string returns are unchanged.
 - [x] 2.3 Keep the invocation message (`/name args`) free of attachments, and verify with a test that it posts with an empty attachment list.
 
 ## 3. Hooks, exports and docs

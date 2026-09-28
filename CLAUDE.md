@@ -194,7 +194,7 @@ log from inside a *synchronous* Textual paint.
 
 A message is Markdown and may carry `Attachment`s its text links to by name. `say` and `ask` take
 them; `answer` and `execute` attach by returning a `Reply`, a plain string still works, and `ask`
-still returns text. Every door goes through `ChatSession._message`, which only unwraps a `Reply`.
+still returns text. Each door builds its `ChatMessage` directly, unwrapping a `Reply` where one can come back.
 The core checks nothing about attachments: which links resolve, what is kept and how it is served
 belong to a backend.
 

@@ -43,9 +43,9 @@ class Reply:
 
 `ChatMessage` gains `attachments : Tuple[Attachment, ...] = ()` as its **last** field, so existing constructions still work. Tuples and frozen dataclasses keep one peer from changing what another receives, since every listener gets the same message object.
 
-### One builder unwraps a `Reply`
+### Each door builds its message directly
 
-`ChatSession._message` builds every message a peer produces: `say`, `ask`, the answer reply and the command result. It unwraps a `Reply` into text plus attachments and passes them through as a tuple. The invocation message (`/name args`) is built with no attachments.
+`say` and `ask` build their `ChatMessage` with `attachments=tuple(attachments)`. Where an answer or a command result can come back as a `Reply` (`_deliver` and `_invoke_for`), the code unwraps it in place into text plus attachments before building the message. There's no shared builder: the four sites are short and each reads on its own. The invocation message (`/name args`) is built with no attachments.
 
 ### `ask` and `invoke` still return text
 
