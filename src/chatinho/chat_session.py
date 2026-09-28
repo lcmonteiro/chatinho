@@ -36,7 +36,7 @@ from .chat_hooks import (
     declared_id,
     name_of,
 )
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageStore, Reply
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, MessageStore, Reply
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ class ChatSession:
         self._connectors    : Dict[int, Any] = {}
         self._queues   : Dict[int, "asyncio.Queue[ChatMessage]"] = {}
         self._tasks    : Dict[int, asyncio.Task] = {}
-        self._pending  : Dict[str, "asyncio.Future[str]"] = {}
+        self._pending  : Dict[MessageID, "asyncio.Future[str]"] = {}
         self._next_id  : int = 1
         self._started  : bool = False
         self._closed   : bool = False
@@ -283,9 +283,9 @@ class ChatSession:
         async def say(
             text        : str,
             *,
-            reply_to    : Optional[str] = None,
+            reply_to    : Optional[MessageID] = None,
             attachments : Sequence[Attachment] = (),
-        ) -> str:
+        ) -> MessageID:
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=None, reply_to=reply_to)
             await self._kept(msg, attachments)
             return await self._post(msg)
@@ -326,7 +326,7 @@ class ChatSession:
         except Exception:
             logger.error("Keeping the attachments of %s failed", msg.id, exc_info=True)
 
-    async def _post(self, msg: ChatMessage) -> str:
+    async def _post(self, msg: ChatMessage) -> MessageID:
         """
         Keeps *msg* and puts it in the queue of everyone it is for.
 
@@ -568,7 +568,7 @@ class ChatSession:
         except Exception:
             logger.error("Loading the older context failed; starting empty", exc_info=True)
 
-    async def locate(self, msg_id: str, name: str) -> Optional[str]:
+    async def locate(self, msg_id: MessageID, name: str) -> Optional[str]:
         """
         Where attachment *name* of message *msg_id* can be opened, or None.
 

@@ -31,6 +31,10 @@ LOCAL : int = 0
 #: that answers what the user says would otherwise answer /help's output too.
 TOOL : int = -1
 
+_PREFIX : str = "msg-"
+_FULL   : int = 16
+_HEX    = re.compile(r"[0-9a-f]+")
+
 
 @dataclass(frozen=True)
 class Attachment:
@@ -68,14 +72,73 @@ class Reply:
     attachments : Tuple[Attachment, ...] = ()
 
 
+@dataclass(frozen=True)
+class MessageID:
+    """A message's id: random, unique across sessions, and not a string.
+
+    ``str()`` gives the form that is stored and logged — ``msg-`` and 16 hex
+    characters — and :meth:`parse` reads it back. :attr:`short` is what a person
+    sees, the first 7 hex characters, as git shortens a commit hash.
+
+    Attributes:
+        hex: The hex digits after ``msg-``: 16 for a new id, any number for one
+            read from an archive older than this form.
+    """
+
+    hex : str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.hex, str) or not _HEX.fullmatch(self.hex):
+            raise ValueError("A message id is lowercase hex digits, got %r" % (self.hex,))
+
+    @classmethod
+    def new(cls) -> "MessageID":
+        """Returns a fresh id: 16 random hex characters.
+
+        Random, not counted, so a chat that reopens on an archive never hands
+        out an id already in it — a counter would start at one again. 64 bits
+        make a collision negligible, and there is no state to guard, so it is
+        safe to call from any thread.
+        """
+        return cls(secrets.token_hex(8))
+
+    @classmethod
+    def parse(cls, text: str) -> "MessageID":
+        """Reads back what ``str()`` wrote.
+
+        Args:
+            text: ``msg-`` and hex digits, e.g. ``msg-3f9a1c2e7b04d5a6``.
+
+        Returns:
+            MessageID: The id *text* names.
+
+        Raises:
+            ValueError: If *text* is not ``msg-`` and hex digits.
+        """
+        if not isinstance(text, str) or not text.startswith(_PREFIX):
+            raise ValueError("A message id starts with %r, got %r" % (_PREFIX, text))
+        return cls(text[len(_PREFIX):])
+
+    @property
+    def short(self) -> str:
+        """What to show a person: ``3f9a1c2`` for ``msg-3f9a1c2e7b04d5a6``.
+
+        Only for display. An id not 16 hex characters long — from an older
+        archive — is shown whole, as ``str()`` writes it.
+        """
+        return self.hex[:7] if len(self.hex) == _FULL else str(self)
+
+    def __str__(self) -> str:
+        return _PREFIX + self.hex
+
+
 @dataclass
 class ChatMessage:
     """One message, addressed.
 
     Attributes:
-        id: Unique across every chat that shares an archive: ``msg-`` and 16
-            random hex characters, assigned by the store. The terminal shows
-            its :func:`short_id`.
+        id: Unique across every chat that shares an archive, assigned by the
+            store. The terminal shows its :attr:`MessageID.short`.
         text: What was said, as Markdown.
         frm: The id of whoever said it; :data:`LOCAL` for the user.
         to: The id it was addressed to, or None when it went to everyone.
@@ -83,11 +146,11 @@ class ChatMessage:
         timestamp: When it entered the history.
     """
 
-    id        : str
+    id        : MessageID
     text      : str
     frm       : int = LOCAL
     to        : Optional[int] = None
-    reply_to  : Optional[str] = None
+    reply_to  : Optional[MessageID] = None
     timestamp : datetime = field(default_factory=datetime.now)
 
     @property
@@ -101,27 +164,6 @@ class ChatMessage:
         return self.frm == LOCAL
 
 
-#: A full id as :meth:`MessageStore.new_id` makes it.
-_FULL_ID = re.compile(r"msg-([0-9a-f]{16})")
-
-
-def short_id(msg_id: str) -> str:
-    """The id to show a person: the first 7 hex characters, as git shortens hashes.
-
-    Only for display — everything the library stores, returns or accepts is the
-    full id. An id not in the ``msg-`` + 16-hex form (one given explicitly, or
-    from an archive older than this form) is shown as it is.
-
-    Args:
-        msg_id: A message id.
-
-    Returns:
-        str: ``3f9a1c2`` for ``msg-3f9a1c2e7b04d5a6``; *msg_id* otherwise.
-    """
-    match = _FULL_ID.fullmatch(msg_id)
-    return match.group(1)[:7] if match else msg_id
-
-
 class MessageStore:
     """The chat's message history: ids, lookup and reply threading.
 
@@ -131,8 +173,8 @@ class MessageStore:
 
     def __init__(self) -> None:
         self._messages     : List[ChatMessage] = []
-        self._index        : Dict[str, ChatMessage] = {}
-        self._replies      : Dict[str, List[str]] = {}
+        self._index        : Dict[MessageID, ChatMessage] = {}
+        self._replies      : Dict[MessageID, List[MessageID]] = {}
 
     @property
     def messages(self) -> List[ChatMessage]:
@@ -144,15 +186,9 @@ class MessageStore:
         """
         return list(self._messages)
 
-    def new_id(self) -> str:
-        """Returns a fresh message id: ``msg-`` and 16 random hex characters.
-
-        Random, not counted, so a chat that reopens on an archive never hands
-        out an id already in it — a counter would start at one again. 64 bits
-        make a collision negligible, and there is no state to guard, so it is
-        safe to call from any thread.
-        """
-        return "msg-" + secrets.token_hex(8)
+    def new_id(self) -> MessageID:
+        """Returns a fresh message id; see :meth:`MessageID.new`."""
+        return MessageID.new()
 
     def add(self, msg: ChatMessage) -> ChatMessage:
         """Appends *msg*, indexes it and records it against what it answers.
@@ -169,10 +205,10 @@ class MessageStore:
             self._replies.setdefault(msg.reply_to, []).append(msg.id)
         return msg
 
-    def find(self, msg_id: str) -> Optional[ChatMessage]:
+    def find(self, msg_id: MessageID) -> Optional[ChatMessage]:
         """Returns the message with *msg_id*, or None."""
         return self._index.get(msg_id)
 
-    def replies(self, msg_id: str) -> List[str]:
+    def replies(self, msg_id: MessageID) -> List[MessageID]:
         """Returns the ids of the messages that answer *msg_id*."""
         return list(self._replies.get(msg_id, []))

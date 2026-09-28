@@ -33,6 +33,10 @@ A message says where it came from and where it is going, and that is the whole o
 ChatMessage(id, text, frm=0, to=None, reply_to=None, timestamp=...)
 ```
 
+`id` and `reply_to` are `MessageID`s, not strings. `str(msg.id)` is `msg-` and 16 random hex
+characters, unique across sessions, and `MessageID.parse` reads it back; `msg.id.short` is the first
+seven, which is what the terminal shows.
+
 | field | when | meaning |
 |---|---|---|
 | `to is None` | `say` | everyone but the speaker heard it (`msg.is_broadcast`) |
@@ -114,7 +118,7 @@ A class that declares only grants is asked for nothing.
 
 ### HookSay
 
-> **grants** `say(text: str, *, reply_to: Optional[str] = None, attachments: Sequence[Attachment] = ()) -> str`
+> **grants** `say(text: str, *, reply_to: Optional[MessageID] = None, attachments: Sequence[Attachment] = ()) -> MessageID`
 
 Says *text* to everyone but the speaker. Returns the new message's id. *text* is Markdown;
 *attachments* go to the backend under the new message's id — see [Attachments](#attachments).
@@ -321,7 +325,7 @@ Reached from outside by `ChatSession.forget(before=None)`.
 
 ### HookKeep
 
-> **demands** `async keep(msg_id: str, attachments: Sequence[Attachment]) -> None`
+> **demands** `async keep(msg_id: MessageID, attachments: Sequence[Attachment]) -> None`
 
 Keeps what a message carries. The session calls it **before** the message is posted, so whatever the
 text links to exists by the time anyone reads it; the message itself goes on as text only.
@@ -337,7 +341,7 @@ posted anyway.
 
 ### HookLink
 
-> **demands** `async link(msg_id: str, name: str) -> Optional[str]`
+> **demands** `async link(msg_id: MessageID, name: str) -> Optional[str]`
 
 A link a browser on the same machine can open, for one kept attachment — or None when nothing by that
 name was kept for that message. How it is stored and what the link looks like are the backend's
@@ -350,7 +354,7 @@ async def link(self, msg_id, name) -> Optional[str]:
 
 ### HookLocate
 
-> **grants** `await locate(msg_id: str, name: str) -> Optional[str]`
+> **grants** `await locate(msg_id: MessageID, name: str) -> Optional[str]`
 
 Where an attachment can be opened. The session asks whoever declared `HookLink`; with none, or when
 it fails, the answer is None. Reached from outside by `ChatSession.locate(msg_id, name)`.

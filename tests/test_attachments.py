@@ -22,6 +22,7 @@ from chatinho import (
     HookListen,
     HookLocate,
     Locate,
+    MessageID,
     Reply,
     backend,
     connector,
@@ -121,7 +122,7 @@ def test_an_attachment_cannot_be_changed_after_it_is_made():
 def test_a_message_has_no_attachments_field():
     from chatinho import ChatMessage
 
-    assert not hasattr(ChatMessage(id="msg-1", text="hi"), "attachments")
+    assert not hasattr(ChatMessage(id=MessageID.parse("msg-1"), text="hi"), "attachments")
 
 
 # === Keeping ========================================================================
@@ -244,6 +245,6 @@ async def test_without_a_linking_backend_locate_is_none():
 async def test_a_backend_that_fails_to_link_is_logged_and_none(caplog):
     session, view = await driven(backend=_Broken())
     with caplog.at_level(logging.ERROR):
-        assert await session.locate("msg-1", "revenue.html") is None
+        assert await session.locate(MessageID.parse("msg-1"), "revenue.html") is None
     await session.close()
     assert "Linking revenue.html of msg-1 failed" in caplog.text

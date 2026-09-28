@@ -503,9 +503,9 @@ deleted: breaking it changed no test. `markdown-it-py` is named in the `tui` ext
 `chat_log` imports it directly rather than leaning on textual to have brought it.
 
 **The header names the peer**: `21:15 @meteo · 3f9a1c2`. The id after the dot is short, as git
-shortens a commit hash: a message id is `msg-` and 16 random hex characters, unique across
-sessions, and the terminal shows only the first seven — everything it stores, passes or replies to
-stays the full id. `ChatLog` reads the roster through the
+shortens a commit hash: a message id is a `MessageID`, not a string — `str()` gives `msg-` and 16
+random hex characters, unique across sessions — and the terminal shows only its `short`, the first
+seven. Everything the library stores, passes or replies to is the whole `MessageID`. `ChatLog` reads the roster through the
 `peers` grant, the same way it reads the conversation through `context`, and calls it fresh rather
 than holding it — a peer may be registered after the widget was built. `TOOL` is named outright
 because a command is in no roster, and a peer that has since gone falls back to its number: history

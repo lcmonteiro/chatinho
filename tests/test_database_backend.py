@@ -11,13 +11,16 @@ from urllib.parse import unquote, urlparse
 
 import pytest
 
-from chatinho import LOCAL, Attachment, ChatMessage, ChatSession, DatabaseBackend
+from chatinho import LOCAL, Attachment, ChatMessage, ChatSession, DatabaseBackend, MessageID
 from conftest import Driver
 
 
-def message(mid: str, text: str, at: datetime, frm: int = LOCAL) -> ChatMessage:
+mid = MessageID.parse
+
+
+def message(msg_id: MessageID, text: str, at: datetime, frm: int = LOCAL) -> ChatMessage:
     """Builds one message stamped at a given moment."""
-    return ChatMessage(id=mid, text=text, frm=frm, timestamp=at)
+    return ChatMessage(id=msg_id, text=text, frm=frm, timestamp=at)
 
 
 async def heard(archive, *messages) -> None:
@@ -40,41 +43,41 @@ async def archive():
 
 async def test_what_goes_in_comes_back_out(archive):
     now = datetime.now()
-    await heard(archive, message("msg-1", "ola", now), message("msg-2", "adeus", now))
+    await heard(archive, message(mid("msg-1"), "ola", now), message(mid("msg-2"), "adeus", now))
     assert [m.text for m in await archive.load()] == ["ola", "adeus"]
 
 
 async def test_a_message_keeps_its_address_and_its_thread(archive):
     now = datetime.now()
     await heard(archive, 
-        ChatMessage(id="msg-1", text="que tempo?", frm=LOCAL, to=1, timestamp=now),
-        ChatMessage(id="msg-2", text="sol", frm=1, to=LOCAL, reply_to="msg-1",
+        ChatMessage(id=mid("msg-1"), text="que tempo?", frm=LOCAL, to=1, timestamp=now),
+        ChatMessage(id=mid("msg-2"), text="sol", frm=1, to=LOCAL, reply_to=mid("msg-1"),
                     timestamp=now + timedelta(seconds=1)),
     )
     question, answer = await archive.load()
     assert (question.frm, question.to) == (LOCAL, 1)
-    assert (answer.frm, answer.to, answer.reply_to) == (1, LOCAL, "msg-1")
+    assert (answer.frm, answer.to, answer.reply_to) == (1, LOCAL, mid("msg-1"))
 
 
 async def test_hearing_the_same_message_twice_is_not_two_rows(archive):
     """The message id is the primary key, so a re-archive replaces."""
     now = datetime.now()
-    await heard(archive, message("msg-1", "primeira", now))
-    await heard(archive, message("msg-1", "corrigida", now))
+    await heard(archive, message(mid("msg-1"), "primeira", now))
+    await heard(archive, message(mid("msg-1"), "corrigida", now))
     recalled = await archive.load()
-    assert [(m.id, m.text) for m in recalled] == [("msg-1", "corrigida")]
+    assert [(m.id, m.text) for m in recalled] == [(mid("msg-1"), "corrigida")]
 
 
 async def test_load_takes_the_tail_oldest_first(archive):
     base = datetime.now()
-    await heard(archive, *(message("msg-%d" % n, "m%d" % n, base + timedelta(seconds=n))
+    await heard(archive, *(message(mid("msg-%d" % n), "m%d" % n, base + timedelta(seconds=n))
                            for n in range(5)))
     assert [m.text for m in await archive.load(limit=2)] == ["m3", "m4"]
 
 
 async def test_load_narrows_by_time(archive):
     base = datetime.now()
-    await heard(archive, *(message("msg-%d" % n, "m%d" % n, base + timedelta(seconds=n))
+    await heard(archive, *(message(mid("msg-%d" % n), "m%d" % n, base + timedelta(seconds=n))
                            for n in range(5)))
     cut = base + timedelta(seconds=3)
     assert [m.text for m in await archive.load(since=cut)] == ["m3", "m4"]
@@ -82,14 +85,14 @@ async def test_load_narrows_by_time(archive):
 
 async def test_forget_drops_only_what_is_older(archive):
     base = datetime.now()
-    await heard(archive, *(message("msg-%d" % n, "m%d" % n, base + timedelta(seconds=n))
+    await heard(archive, *(message(mid("msg-%d" % n), "m%d" % n, base + timedelta(seconds=n))
                            for n in range(5)))
     assert await archive.forget(before=base + timedelta(seconds=3)) == 3
     assert [m.text for m in await archive.load()] == ["m3", "m4"]
 
 
 async def test_forget_without_a_cut_forgets_everything(archive):
-    await heard(archive, message("msg-1", "ola", datetime.now()))
+    await heard(archive, message(mid("msg-1"), "ola", datetime.now()))
     assert await archive.forget() == 1
     assert await archive.load() == []
 
@@ -97,7 +100,7 @@ async def test_forget_without_a_cut_forgets_everything(archive):
 async def test_using_it_before_initialize_says_so():
     store = DatabaseBackend("sqlite:///:memory:")
     with pytest.raises(RuntimeError, match="not initialized"):
-        await heard(store, message("msg-1", "ola", datetime.now()))
+        await heard(store, message(mid("msg-1"), "ola", datetime.now()))
 
 
 async def test_shutdown_disposes_of_the_engine(archive):
@@ -172,45 +175,45 @@ def content(link: str) -> bytes:
 
 
 async def test_a_kept_attachment_links_to_a_file_with_its_data(archive):
-    await archive.keep("msg-1", [page()])
-    link = await archive.link("msg-1", "revenue.html")
+    await archive.keep(mid("msg-1"), [page()])
+    link = await archive.link(mid("msg-1"), "revenue.html")
     assert link is not None and content(link) == b"<p>up 12%</p>"
 
 
 async def test_a_name_never_kept_has_no_link(archive):
-    await archive.keep("msg-1", [page()])
-    assert await archive.link("msg-1", "other.html") is None
-    assert await archive.link("msg-2", "revenue.html") is None
+    await archive.keep(mid("msg-1"), [page()])
+    assert await archive.link(mid("msg-1"), "other.html") is None
+    assert await archive.link(mid("msg-2"), "revenue.html") is None
 
 
 async def test_keeping_the_same_attachment_twice_is_one_row(archive):
     from chatinho.backends.database import ArchivedAttachment
 
-    await archive.keep("msg-1", [page()])
-    await archive.keep("msg-1", [page()])
+    await archive.keep(mid("msg-1"), [page()])
+    await archive.keep(mid("msg-1"), [page()])
     with archive._session() as session:
         assert session.query(ArchivedAttachment).count() == 1
 
 
 async def test_a_name_that_is_not_a_file_name_still_links(archive):
-    await archive.keep("msg-1", [page("my report/v2.html")])
-    link = await archive.link("msg-1", "my report/v2.html")
+    await archive.keep(mid("msg-1"), [page("my report/v2.html")])
+    link = await archive.link(mid("msg-1"), "my report/v2.html")
     assert link is not None and content(link) == b"<p>up 12%</p>"
 
 
 @pytest.mark.parametrize("name", ["..", "."])
 async def test_a_dot_name_links_to_a_file_not_a_folder(archive, name):
-    await archive.keep("msg-1", [page("revenue.html"), page(name, b"dots")])
-    await archive.link("msg-1", "revenue.html")          # the folders exist first
-    link = await archive.link("msg-1", name)
+    await archive.keep(mid("msg-1"), [page("revenue.html"), page(name, b"dots")])
+    await archive.link(mid("msg-1"), "revenue.html")          # the folders exist first
+    link = await archive.link(mid("msg-1"), name)
     assert link is not None and content(link) == b"dots"
 
 
 async def test_shutdown_removes_the_files_it_wrote():
     store = DatabaseBackend("sqlite:///:memory:")
     store.initialize()
-    await store.keep("msg-1", [page()])
-    link = await store.link("msg-1", "revenue.html")
+    await store.keep(mid("msg-1"), [page()])
+    link = await store.link(mid("msg-1"), "revenue.html")
     assert link is not None
     written = Path(unquote(urlparse(link).path))
     assert written.exists()
@@ -220,22 +223,22 @@ async def test_shutdown_removes_the_files_it_wrote():
 
 async def test_forget_drops_what_the_forgotten_messages_carried(archive):
     now = datetime.now()
-    await heard(archive, message("msg-1", "old", now - timedelta(hours=2)),
-                message("msg-2", "new", now))
-    await archive.keep("msg-1", [page()])
-    await archive.keep("msg-2", [page()])
+    await heard(archive, message(mid("msg-1"), "old", now - timedelta(hours=2)),
+                message(mid("msg-2"), "new", now))
+    await archive.keep(mid("msg-1"), [page()])
+    await archive.keep(mid("msg-2"), [page()])
     await archive.forget(before=now - timedelta(hours=1))
-    assert await archive.link("msg-1", "revenue.html") is None
-    assert await archive.link("msg-2", "revenue.html") is not None
+    assert await archive.link(mid("msg-1"), "revenue.html") is None
+    assert await archive.link(mid("msg-2"), "revenue.html") is not None
 
 
 async def test_forgetting_everything_drops_every_attachment(archive):
-    await heard(archive, message("msg-1", "old", datetime.now()))
-    await archive.keep("msg-1", [page()])
-    await archive.keep("msg-9", [page()])             # kept, even with no message heard
+    await heard(archive, message(mid("msg-1"), "old", datetime.now()))
+    await archive.keep(mid("msg-1"), [page()])
+    await archive.keep(mid("msg-9"), [page()])             # kept, even with no message heard
     await archive.forget()
-    assert await archive.link("msg-1", "revenue.html") is None
-    assert await archive.link("msg-9", "revenue.html") is None
+    assert await archive.link(mid("msg-1"), "revenue.html") is None
+    assert await archive.link(mid("msg-9"), "revenue.html") is None
 
 
 async def test_an_attachment_outlives_the_session_that_said_it(tmp_path):

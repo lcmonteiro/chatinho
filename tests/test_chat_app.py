@@ -20,7 +20,7 @@ from textual.color import Color
 from chatinho.chat_app import ChatApp
 from chatinho.chat_input import NEWLINE_KEYS, CommandInput
 from chatinho.chat_log import chat_markdown, preview_of
-from chatinho.chat_message import short_id
+from chatinho.chat_message import MessageID
 from chatinho import (
     LOCAL,
     Attachment,
@@ -95,7 +95,7 @@ async def test_say_returns_an_id_and_stores():
     async with app.run_test():
         said = await app.say("hello")
         msg = app.messages[0]
-        assert re.fullmatch(r"msg-[0-9a-f]{16}", said) and msg.id == said
+        assert re.fullmatch(r"msg-[0-9a-f]{16}", str(said)) and msg.id == said
         assert (msg.text, msg.frm, msg.to) == ("hello", LOCAL, None)
         assert msg.is_local is True
 
@@ -242,7 +242,7 @@ async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
         citacoes   = [str(w.visual) for w in log.query(".message-quote")]
         assert "@chat" in cabecalhos[0] and "↳ replying" not in cabecalhos[0]
         assert "@tool" in cabecalhos[1] and "↳ replying" in cabecalhos[1]
-        assert citacoes == ["↳ %s: /eco ola…" % short_id(app.messages[0].id)]
+        assert citacoes == ["↳ %s: /eco ola…" % app.messages[0].id.short]
 
 
 async def test_the_log_renders_what_the_history_holds():
@@ -275,7 +275,7 @@ async def test_get_replies_reads_the_thread_back():
         first = await app.say("original")
         reply = await app.say("resposta", reply_to=first)
         assert app.get_replies(first) == [reply]
-        assert app.get_replies("msg-999") == []
+        assert app.get_replies(MessageID.parse("msg-999")) == []
 
 
 async def test_send_pending_reply_uses_the_clicked_target():
@@ -305,8 +305,8 @@ async def test_the_header_shows_the_short_id_and_not_the_full_one():
         said = await app.say("curto")
         await pilot.pause()
         header = str(app._chat_log._msg_widgets[said].query_one(".message-header").render())
-        assert header.endswith("· %s" % said[4:11])
-        assert said not in header
+        assert header.endswith("· %s" % str(said)[4:11])
+        assert str(said) not in header
 
 
 async def test_the_reply_placeholder_names_the_short_id():
@@ -316,7 +316,7 @@ async def test_the_reply_placeholder_names_the_short_id():
         await pilot.pause()
         app._set_reply_target(said)
         await pilot.pause()
-        assert app.query_one(CommandInput).placeholder == "Reply to %s…" % short_id(said)
+        assert app.query_one(CommandInput).placeholder == "Reply to %s…" % said.short
 
 
 async def test_a_reply_still_carries_the_full_id():
@@ -327,7 +327,7 @@ async def test_a_reply_still_carries_the_full_id():
         app._set_reply_target(said)
         reply = await app.send_pending_reply("resposta")
         assert app._find_message(reply).reply_to == said
-        assert re.fullmatch(r"msg-[0-9a-f]{16}", said)
+        assert re.fullmatch(r"msg-[0-9a-f]{16}", str(said))
 
 
 async def test_the_copy_notice_is_titled_with_the_short_id(monkeypatch):
@@ -351,7 +351,7 @@ async def test_the_copy_notice_is_titled_with_the_short_id(monkeypatch):
             if titles:
                 break
 
-        assert titles == ["Copied %s" % short_id(said)]
+        assert titles == ["Copied %s" % said.short]
 
 
 # === The quit key ===============================================================

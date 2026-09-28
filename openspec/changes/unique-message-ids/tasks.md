@@ -15,7 +15,12 @@
 
 - [x] 3.1 In `tests/test_database_backend.py`, add a test where a chat on a database file says a message and closes, a new chat on the same file says another, and the archive then holds both messages with different ids and their own texts. Verify it fails on the old counter (reproduce first) and passes with the new ids.
 
-## 4. Docs and verification
+## 4. MessageID
 
-- [x] 4.1 Update the two `msg-3` examples in `CLAUDE.md` to the short form (for example `21:15 @meteo · 3f9a1c2`), and mention that headers show a git-style short id. Verify `grep -rn "msg-[0-9]\b" CLAUDE.md docs README.md` finds no generated-id examples.
-- [x] 4.2 Run `ruff check src tests examples`, `mypy src/chatinho`, `pytest -q` and `openspec validate --all --strict --no-interactive`, and verify all pass.
+- [x] 4.1 Add `MessageID` to `src/chatinho/chat_message.py` (frozen dataclass over `hex`; `new()`, `parse()`, `short`, `__str__` giving `msg-` + hex), replace `short_id`, type `ChatMessage.id`/`reply_to` and the store with it, and export it from `chatinho`. Verify with tests in `tests/test_message_store.py`: an id is not a `str`, `str()` is `msg-` + hex, `parse` round-trips and refuses non-ids, an id never equals a string, and `short` is 7 characters for a new id and the whole id for `msg-3`.
+- [x] 4.2 Use `MessageID` in `say`, `locate`, the session's pending asks, the terminal's widget map, reply target and callbacks, and `DatabaseBackend` (`str()` into its columns, `parse` on `load`). Convert tests that build ids by hand to `MessageID.parse`. Verify `mypy src/chatinho` is clean and the archive round-trip test gets `MessageID`s back.
+
+## 5. Docs and verification
+
+- [x] 5.1 Update the two `msg-3` examples in `CLAUDE.md` to the short form (for example `21:15 @meteo · 3f9a1c2`), and mention that headers show a git-style short id and that ids are `MessageID`s; update the `say`, `keep`, `link` and `locate` signatures in `docs/SPEC.md`. Verify `grep -rn "msg-[0-9]\b" CLAUDE.md docs README.md` finds no generated-id examples.
+- [x] 5.2 Run `ruff check src tests examples`, `mypy src/chatinho`, `pytest -q` and `openspec validate --all --strict --no-interactive`, and verify all pass.
