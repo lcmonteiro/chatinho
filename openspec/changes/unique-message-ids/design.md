@@ -12,7 +12,6 @@ See proposal.md for motivation. `MessageStore.new_id()` (`chat_message.py`) is t
 
 **Non-Goals:**
 - Migrating ids already in existing archives.
-- A shorter display form of the id in the terminal header.
 - Ids that sort by time; ordering stays the `timestamp`'s job.
 
 ## Decisions
@@ -25,6 +24,15 @@ See proposal.md for motivation. `MessageStore.new_id()` (`chat_message.py`) is t
 - *Alternative: full `uuid4()`.* Unique too, but 32 characters makes every terminal header noticeably wider for no practical gain over 16.
 - *Alternative: 8 hex characters.* Too short: collisions become likely around 65,000 messages.
 
+### A git-style short id, for display only
+
+`chat_message.py` gets `short_id(msg_id: str) -> str`: for an id matching `msg-[0-9a-f]{16}` it returns the first 7 hex characters, as `git log --oneline` does; for anything else it returns the id unchanged, so explicit ids and ids from older archives still read correctly. It lives in the core (standard library only) so any presentation can use it.
+
+The terminal calls it at the four places it shows an id: the header prefix (`ChatLog._render_message`), the reply quote (same method), the copy notice title (`ChatLog._copy_with_a_helper`) and the reply placeholder (`ChatApp._on_reply_target_change`). Nothing else changes: `_msg_widgets`, `reply_target`, `reply_to` and every hook keep full ids, because the terminal never takes an id typed by the user, so there is nothing a short id would need to be resolved from.
+
+- *Alternative: 16 characters everywhere.* Headers get about 14 characters wider on every message, on screens that are often a phone in Termux.
+- *Alternative: resolving short ids back to messages.* Only needed if users typed ids; they don't, so it would be unused code.
+
 ### Keep the `msg-` prefix
 
 It keeps ids recognisable in logs and headers, and code that checks `startswith("msg-")` keeps working.
@@ -32,5 +40,5 @@ It keeps ids recognisable in logs and headers, and code that checks `startswith(
 ## Risks / Trade-offs
 
 - [Existing archives already hold `msg-1`, `msg-2`, …] → New ids never take that form, so they can't collide with old ones; old rows stay as they are.
-- [Wider header in the terminal] → `ChatLog` already sizes the header to its text, so it grows by about 14 characters; a shorter display is a separate change.
+- [Two short ids could look the same] → 7 hex characters (28 bits) make a clash within the screenful of messages the terminal shows (`max_displayed`, 100 by default) very unlikely, and it only affects display: the full ids behind them stay distinct, as in git.
 - [Tests that expect `msg-1`] → Only two do (`tests/test_message_store.py`, `tests/test_chat_app.py`); they assert the format instead.
