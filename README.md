@@ -229,9 +229,7 @@ class Archive:
 
 ### Attachments
 
-A message is Markdown, and it can carry pages, images and files — but only the ones its text links
-to. An unlinked attachment is dropped before anyone hears the message, and a link to a name nothing
-carries raises `ValueError`:
+A message is Markdown, and it can carry pages, images and files that its text links to:
 
 ```python
 from chatinho import Attachment, Reply
@@ -243,9 +241,7 @@ async def answer(self, msg) -> Reply:           # answers and commands attach by
     return Reply("Here: [report](report.html)", (Attachment("report.html", "text/html", page),))
 ```
 
-The terminal opens an attachment link at `<attachment_url>/m/<message id>/<name>`, given
-`build_chat(attachment_url="http://localhost:8765")`. Serving that address is a backend's job; the
-library itself stores nothing. [`docs/SPEC.md`](docs/SPEC.md#attachments) has the whole rule.
+The session passes attachments through untouched; storing and serving them is a backend's job.
 
 ---
 

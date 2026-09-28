@@ -114,7 +114,7 @@ A class that declares only grants is asked for nothing.
 > **grants** `say(text: str, *, reply_to: Optional[str] = None, attachments: Sequence[Attachment] = ()) -> str`
 
 Says *text* to everyone but the speaker. Returns the new message's id. *text* is Markdown, and
-*attachments* travel with it only where it links to them — see [Attachments](#attachments).
+*attachments* travel with it — see [Attachments](#attachments).
 
 ```python
 await self.say("good morning")
@@ -241,7 +241,7 @@ Nothing is owed back. A backend, an audit log and a metrics counter each want al
 > **demands** `async answer(msg: ChatMessage) -> Optional[Union[str, Reply]]`
 
 Someone asked *you*. What you return is the reply, posted by the session in your name. Return a
-`Reply(text, attachments)` to attach what the text links to; a plain string is a reply with none.
+`Reply(text, attachments)` to attach something; a plain string is a reply with none.
 
 ```python
 @connector("weather")
@@ -361,29 +361,16 @@ each: a second frontend is refused like any id already taken.
 ### Attachments
 
 A message is Markdown, and it may carry `Attachment(name, media_type, data)`s — a page, an image, a
-file. **An attachment travels only where the text links to it**, by a relative link or image:
+file. Its text links to them by name:
 
 ```python
 chart = Attachment("revenue.html", "text/html", html.encode())
 await self.say("Revenue is up 12% — see the [chart](revenue.html)", attachments=[chart])
 ```
 
-- **Linked, kept.** `[chart](revenue.html)`, `![plot](./plot.png)` and `<...>`-wrapped targets
-  count; links inside code spans and fenced blocks do not.
-- **Unlinked, dropped** before the message is stored or delivered: no peer ever receives it.
-- **Linked but missing is an error.** `say`, `ask` and `invoke` raise `ValueError` naming the target,
-  and nothing is posted. An `answer` that does it is logged like any failing peer.
-- **Names are one relative segment** — no `/`, no `..` — and unique within the message.
-- Absolute links (`https://…`, `/…`, `//…`), fragments (`#…`) and targets with a query are ordinary
-  links, never attachments.
-
-`answer` and `execute` attach by returning a `Reply`. A command's invocation (`/name args`) is a
-command line and carries none.
-
-Where a link points is one rule, shared by whoever renders and whoever serves:
-`<base>/m/<message id>/<name>`. The terminal takes that base as `build_chat(attachment_url=...)`;
-without it, activating an attachment link says no attachment server is configured. Nothing in the
-core stores or serves attachments — that is a backend's business.
+`say` and `ask` take `attachments`; `answer` and `execute` attach by returning a `Reply`. A command's
+invocation (`/name args`) is a command line and carries none. The session passes attachments through
+as given: checking the links, keeping what matters and serving it are a backend's business.
 
 ### Demands are not exclusive
 

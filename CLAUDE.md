@@ -190,21 +190,13 @@ whatever `ChatSession(recall=…)` pulled back.** Asking for older than that ret
 than reaching down again. Making it reach would make it a coroutine, and the terminal renders its
 log from inside a *synchronous* Textual paint.
 
-## Attachments travel only where the text links
+## Attachments ride on the message, and nothing more
 
-A message is Markdown and may carry `Attachment`s, but **only the ones its text links to** by a
-relative link or image. Unlinked ones are dropped before the message is stored; a link to a name
-nothing carries raises `ValueError` and nothing is posted. The rule is one function,
-`chat_message.attached`, and every door that posts what a peer produced — `say`, `ask`, an
-`answer`'s reply, a command's result — goes through `ChatSession._message`, which applies it before
-`_post`. `answer` and `execute` attach by returning a `Reply`; a plain string still works, and `ask`
-still returns text.
-
-The rule finds links with a regex, not markdown-it, because the core imports nothing outside the
-standard library. Code spans and fenced blocks are removed first, so a code sample is never a link.
-
-Where a link points is `<base>/m/<message id>/<name>` (`chat_message.attachment_url`). The terminal
-takes the base as `attachment_url`; nothing in the core stores or serves attachments.
+A message is Markdown and may carry `Attachment`s its text links to by name. `say` and `ask` take
+them; `answer` and `execute` attach by returning a `Reply`, a plain string still works, and `ask`
+still returns text. Every door goes through `ChatSession._message`, which only unwraps a `Reply`.
+The core checks nothing about attachments: which links resolve, what is kept and how it is served
+belong to a backend.
 
 ## The eleven hooks
 
@@ -309,7 +301,7 @@ src/chatinho/
   chat_session.py  ChatSession: run, peers, commands, queues, routing, context      (545)
   chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (489)
   chat_message.py  ChatMessage (frm/to/reply_to/attachments) + MessageStore, LOCAL, TOOL,
-                   Attachment, Reply, and the attachment rule (attached, attachment_url)
+                   Attachment, Reply
   chat_log.py      ChatLog widget: renders through the granted context reader
   chat_input.py    CommandInput (a multi-line TextArea) + CommandSuggestions
   chat_clipboard.py  OSC 52's second route: a clipboard helper, if the system has one

@@ -54,8 +54,8 @@ class Say(Protocol):
     ) -> str:
         """Adds *text* to the conversation and returns the new message's id.
 
-        Only the *attachments* the Markdown text links to travel with it; a
-        link to a name nothing carries raises ValueError and nothing is said.
+        *attachments* travel with the message; its Markdown text can link to
+        them by name.
         """
         ...
 
@@ -66,7 +66,7 @@ class Ask(Protocol):
     async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
         """Asks peer *to* and waits for the text of the answer it sends back.
 
-        *attachments* follow the same rule as ``say``'s.
+        *attachments* travel with the question, as with ``say``.
         """
         ...
 
@@ -197,7 +197,7 @@ HookAnswer = Hook(
     method="answer",
     # async answer(msg) -> str | Reply | None. Someone asked you; what you
     # return is the reply, and the session posts it in your name. Return a
-    # Reply to attach what its text links to; the asker still gets the text.
+    # Reply to attach something to it; the asker still gets the text.
     #
     # Return None when the answer is not yours to invent yet — a terminal
     # waiting on a person, a connector waiting on a server. The ask stays
@@ -220,7 +220,7 @@ HookExecute = Hook(
     # async execute(args, **kwargs) -> str | Reply | None. What a command is.
     # It is not a peer: no id, no queue, nothing addressed to it. Declare
     # HookSay too and it can write as it works; return a string, or a Reply
-    # that attaches what its text links to, and that goes to whoever ran it.
+    # with attachments, and that goes to whoever ran it.
 )
 
 HookContext = Hook(

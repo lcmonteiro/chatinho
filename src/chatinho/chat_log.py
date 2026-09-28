@@ -18,7 +18,7 @@ from textual.widgets import Markdown, Static
 
 from . import chat_clipboard
 from .chat_hooks import name_of
-from .chat_message import TOOL, ChatMessage, attachment_url, link_target
+from .chat_message import TOOL, ChatMessage
 from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
@@ -274,13 +274,9 @@ class ChatLog(TouchScrollableContainer):
         max_displayed : int = 100,
         style : Optional[ChatStyle] = None,
         on_reply_target_change : Optional[Callable[[Optional[str]], None]] = None,
-        attachment_url : Optional[str] = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
-        # Where attachment links point: <base>/m/<message id>/<name>. None when
-        # no attachment server is configured.
-        self._attachment_base : Optional[str] = attachment_url
         # The same style the stylesheet was rendered from: the header colours
         # are CSS, but the widest a bubble may grow is applied here, because
         # only this knows how wide the text actually is.
@@ -333,32 +329,6 @@ class ChatLog(TouchScrollableContainer):
         if was_at_bottom:
             self.scroll_to_bottom()
 
-    def on_markdown_link_clicked(self, event: Markdown.LinkClicked) -> None:
-        """Opens a link in a message: an attachment under its message, anything else as is.
-
-        A relative link names an attachment of the message it is in, so it
-        opens at ``<base>/m/<message id>/<name>``. Without a base there is no
-        server to open it on, and a message recalled from a backend that kept
-        only text no longer carries the attachment: both say so instead of
-        opening a URL that leads nowhere.
-        """
-        event.stop()
-        if link_target(event.href) is None:
-            self.app.open_url(event.href)
-            return
-        container = next(
-            (node for node in event.markdown.ancestors if isinstance(node, _MessageContainer)), None,
-        )
-        msg = self._find(container.msg_id) if container is not None else None
-        if self._attachment_base is None:
-            self.notify("No attachment server is configured", severity="warning")
-            return
-        url = attachment_url(self._attachment_base, msg, event.href) if msg is not None else None
-        if url is None:
-            self.notify("Attachment not available", severity="warning")
-            return
-        self.app.open_url(url)
-
     def _find(self, msg_id: str) -> Optional[ChatMessage]:
         """Returns the message with *msg_id*, or None."""
         return next((m for m in self._read_context() if m.id == msg_id), None)
@@ -407,11 +377,7 @@ class ChatLog(TouchScrollableContainer):
                 quote = f"↳ {original.id}: {preview}…"
                 parts.append(Static(quote, classes="message-quote"))
 
-        # Links are ours to open: a relative one names an attachment of this
-        # message, and only the log knows which message a body belongs to.
-        parts.append(Markdown(
-            msg.text, classes="message-body", parser_factory=chat_markdown, open_links=False,
-        ))
+        parts.append(Markdown(msg.text, classes="message-body", parser_factory=chat_markdown))
 
         bubble = Vertical(*parts, classes="message-bubble")
         # A bubble is as wide as its widest line and no wider, up to the

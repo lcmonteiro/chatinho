@@ -27,7 +27,6 @@ def build_chat(
     copy_key        : str = "ctrl+y",
     newline_escape  : Optional[str] = NEWLINE_ESCAPE,
     name            : Optional[str] = None,
-    attachment_url  : Optional[str] = None,
 ) -> ChatSession:
     """Builds a chat application from peers and a backend.
 
@@ -64,9 +63,6 @@ def build_chat(
             ``"f10"``, ``"escape"``. Defaults to Textual's own ``"ctrl+q"``,
             which stops quitting when another key is given. ``ctrl+c`` is a
             separate binding and is left alone.
-        attachment_url: The address attachment links open under, as
-            ``<attachment_url>/m/<message id>/<name>``. None (the default)
-            means no attachment server: activating one says so instead.
 
     Returns:
         ChatSession: The session, with the terminal as its ``frontend`` and so
@@ -85,7 +81,6 @@ def build_chat(
         copy_key        = copy_key,
         newline_escape  = newline_escape,
         name            = name,
-        attachment_url  = attachment_url,
     )
     return ChatSession(
         connectors = connectors,

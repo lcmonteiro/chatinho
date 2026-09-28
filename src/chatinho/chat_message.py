@@ -17,12 +17,10 @@ Neither class touches Textual, so both can be exercised without mounting an
 application.
 """
 
-import re
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Sequence, Tuple
-from urllib.parse import quote, unquote
+from typing import Dict, List, Optional, Tuple
 
 #: The chat itself — the user's own id. Every connector is numbered from one.
 LOCAL : int = 0
@@ -35,15 +33,14 @@ TOOL : int = -1
 
 @dataclass(frozen=True)
 class Attachment:
-    """Something a message carries that its text links to by name.
+    """Something a message carries: a page, an image, a file.
 
-    A message is Markdown, and an attachment travels with it only when the
-    text links to it — ``[chart](revenue.html)`` — so an attachment is never
-    something a peer receives without being told what it is.
+    The message's Markdown text can link to it by name —
+    ``[chart](revenue.html)``. Checking those links, keeping attachments and
+    serving them is a backend's business, not the message's.
 
     Attributes:
-        name: One relative path segment, e.g. ``revenue.html``; unique within
-            its message, since it is what the text links to.
+        name: What the text links to, e.g. ``revenue.html``.
         media_type: What the content is, e.g. ``text/html``.
         data: The content itself.
     """
@@ -80,7 +77,7 @@ class ChatMessage:
         to: The id it was addressed to, or None when it went to everyone.
         reply_to: The id of the message this answers, when it answers one.
         timestamp: When it entered the history.
-        attachments: What the text links to; only linked ones are ever kept.
+        attachments: What the message carries, as the speaker attached it.
     """
 
     id          : str
@@ -100,121 +97,6 @@ class ChatMessage:
     def is_local(self) -> bool:
         """Whether the user said it."""
         return self.frm == LOCAL
-
-
-# === Attachments ====================================================================
-
-#: A fenced code block, ``` or ~~~, closed by the same fence or the end of the text.
-_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})[^\n]*\n.*?(?:^ {0,3}\1[ \t]*$|\Z)", re.M | re.S)
-
-#: An inline code span: a run of backticks closed by a run of the same length.
-_CODE_SPAN = re.compile(r"(`+)(?!`).+?(?<!`)\1(?!`)", re.S)
-
-#: An inline link or image: ``[text](target)`` or ``![alt](target "title")``,
-#: where the target may be wrapped in angle brackets.
-_LINK = re.compile(
-    r"!?\[(?:\\.|[^\\\]])*\]"
-    r"\(\s*(?:<([^<>\n]*)>|([^\s()<>]+))(?:\s+(?:\"[^\"]*\"|'[^']*'))?\s*\)"
-)
-
-#: A URL scheme, as in ``https:`` or ``mailto:``.
-_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
-
-
-def _relative_targets(text: str) -> List[str]:
-    """The relative link and image targets in *text*, as names, in order.
-
-    Code is not Markdown that links anywhere, so fenced blocks and code spans
-    are removed first: a sample showing ``[x](y.html)`` is not a link.
-
-    Args:
-        text: A message body.
-
-    Returns:
-        List[str]: Each relative target, ``./`` stripped and unquoted.
-    """
-    prose = _CODE_SPAN.sub("", _FENCE.sub("", text))
-    targets : List[str] = []
-    for match in _LINK.finditer(prose):
-        target = link_target(match.group(1) if match.group(1) is not None else match.group(2))
-        if target is not None:
-            targets.append(target)
-    return targets
-
-
-def link_target(href: str) -> Optional[str]:
-    """The attachment name a link points at, or None when it is an ordinary link.
-
-    Absolute links (a scheme, ``/`` or ``//``), fragments (``#``) and anything
-    with a query are ordinary links. The rest name an attachment of the same
-    message: ``./`` is stripped and percent-escapes are decoded.
-
-    Args:
-        href: A link target, as written in the text.
-
-    Returns:
-        Optional[str]: The attachment name, or None.
-    """
-    href = href.strip()
-    if not href or _SCHEME.match(href) or href.startswith(("/", "#")) or "?" in href:
-        return None
-    if href.startswith("./"):
-        href = href[2:]
-    return unquote(href) or None
-
-
-def _check_name(name: str) -> None:
-    """Raises ValueError unless *name* is one relative path segment."""
-    if not name or name in (".", "..") or "/" in name or "\\" in name:
-        raise ValueError("Attachment name %r must be one relative path segment" % name)
-
-
-def attached(text: str, attachments: Sequence[Attachment]) -> Tuple[Attachment, ...]:
-    """The attachments that travel with *text*: the ones it links to.
-
-    Args:
-        text: The message body, as Markdown.
-        attachments: What the speaker attached.
-
-    Returns:
-        Tuple[Attachment, ...]: The linked attachments, in the order given;
-        unlinked ones are dropped.
-
-    Raises:
-        ValueError: If a name is not one relative path segment, two share a
-            name, or the text links to a relative name nothing carries.
-    """
-    names : Dict[str, Attachment] = {}
-    for item in attachments:
-        _check_name(item.name)
-        if item.name in names:
-            raise ValueError("Two attachments are named %r" % item.name)
-        names[item.name] = item
-    linked = _relative_targets(text)
-    missing = [target for target in linked if target not in names]
-    if missing:
-        raise ValueError("The text links to %s, which is not attached" % ", ".join(
-            repr(target) for target in dict.fromkeys(missing)))
-    wanted = set(linked)
-    return tuple(item for item in attachments if item.name in wanted)
-
-
-def attachment_url(base: Optional[str], msg: ChatMessage, href: str) -> Optional[str]:
-    """Where an attachment link in *msg* points: ``<base>/m/<id>/<name>``.
-
-    Args:
-        base: The attachment server's address, or None when there is none.
-        msg: The message the link is in.
-        href: The link's target, as written.
-
-    Returns:
-        Optional[str]: The URL, or None without a base or when *href* is not
-        a relative link to one of *msg*'s attachments.
-    """
-    name = link_target(href)
-    if base is None or name is None or name not in {item.name for item in msg.attachments}:
-        return None
-    return "%s/m/%s/%s" % (base.rstrip("/"), quote(msg.id, safe=""), quote(name, safe=""))
 
 
 class MessageStore:

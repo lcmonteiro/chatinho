@@ -34,7 +34,7 @@ from .chat_hooks import (
     declared_id,
     name_of,
 )
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageStore, Reply, attached
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageStore, Reply
 
 logger = logging.getLogger(__name__)
 
@@ -279,11 +279,10 @@ class ChatSession:
         reply_to    : Optional[str] = None,
         attachments : Sequence[Attachment] = (),
     ) -> ChatMessage:
-        """Builds a message to post, keeping only the attachments its text links to.
+        """Builds a message to post, with whatever it carries.
 
-        Every door that posts what a peer produced comes through here, so the
-        attachment rule holds for all of them — and it runs before anything is
-        stored or queued, so a message it rejects was never said.
+        Every door that posts what a peer produced comes through here, so a
+        Reply is unwrapped the same way whichever door returned it.
 
         Args:
             said: The text, or a Reply that carries its own attachments.
@@ -294,19 +293,14 @@ class ChatSession:
 
         Returns:
             ChatMessage: The message, with a fresh id.
-
-        Raises:
-            ValueError: If the text links to a name nothing carries, or a name
-                is not one relative path segment, or two share a name.
         """
         if isinstance(said, Reply):
             text, attachments = said.text, said.attachments
         else:
             text = said
-        # The rule first: a rejected message must not use up an id.
-        kept = attached(text, attachments)
         return ChatMessage(
-            id=self._store.new_id(), text=text, frm=frm, to=to, reply_to=reply_to, attachments=kept,
+            id=self._store.new_id(), text=text, frm=frm, to=to, reply_to=reply_to,
+            attachments=tuple(attachments),
         )
 
     def _say_for(self, frm: int):
