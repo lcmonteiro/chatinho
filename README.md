@@ -262,6 +262,19 @@ importing without its extras.
 [`CLAUDE.md`](CLAUDE.md) is the design record — why the library has this shape, and what it was
 before.
 
+### Changes go through OpenSpec
+
+New behavior is planned with [OpenSpec](https://github.com/Fission-AI/OpenSpec) before it is
+built: `openspec/specs/` holds what the library promises, `openspec/changes/` the changes in flight
+and, under `archive/`, the ones that landed. CI's `openspec` job runs
+`openspec validate --all --strict --no-interactive`.
+
+In Claude Code, `/opsx:explore` thinks an idea through, `/opsx:propose "your idea"` writes the
+proposal, specs, design and tasks, `/opsx:apply` implements them and `/opsx:archive` folds the
+specs into `openspec/specs/`. All twelve workflows are installed (`.claude/skills/openspec-*`,
+`.claude/commands/opsx/`); `/opsx:onboard` walks through a whole cycle. The CLI comes from
+`npm install -g @fission-ai/openspec`, which `.claude/hooks/session-start.sh` runs for you.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
