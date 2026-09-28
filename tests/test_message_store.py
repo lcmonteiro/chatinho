@@ -4,18 +4,21 @@ The store holds no UI state, so unlike the application tests these need no
 ``run_test()`` and no event loop.
 """
 
+import re
 import threading
 
-from chatinho.chat_message import ChatMessage, MessageStore
+import pytest
+
+from chatinho.chat_message import ChatMessage, MessageStore, short_id
 
 
 def message(msg_id: str, text: str = "hi", **kwargs) -> ChatMessage:
     return ChatMessage(id=msg_id, text=text, **kwargs)
 
 
-def test_new_id_increments():
+def test_new_id_is_msg_and_sixteen_hex_characters():
     store = MessageStore()
-    assert [store.new_id() for _ in range(3)] == ["msg-1", "msg-2", "msg-3"]
+    assert all(re.fullmatch(r"msg-[0-9a-f]{16}", store.new_id()) for _ in range(100))
 
 
 def test_new_id_is_unique_across_threads():
@@ -24,7 +27,7 @@ def test_new_id_is_unique_across_threads():
     lock = threading.Lock()
 
     def worker():
-        mine = [store.new_id() for _ in range(100)]
+        mine = [store.new_id() for _ in range(1250)]
         with lock:
             ids.extend(mine)
 
@@ -33,8 +36,17 @@ def test_new_id_is_unique_across_threads():
         t.start()
     for t in threads:
         t.join()
-    assert len(ids) == 800
-    assert len(set(ids)) == 800
+    assert len(ids) == 10000
+    assert len(set(ids)) == 10000
+
+
+def test_short_id_is_the_first_seven_hex_characters():
+    assert short_id("msg-3f9a1c2e7b04d5a6") == "3f9a1c2"
+
+
+@pytest.mark.parametrize("msg_id", ["msg-3", "abc", "msg-3f9a1c2e7b04d5a", "msg-3F9A1C2E7B04D5A6"])
+def test_short_id_leaves_other_ids_alone(msg_id):
+    assert short_id(msg_id) == msg_id
 
 
 def test_add_stores_and_indexes():

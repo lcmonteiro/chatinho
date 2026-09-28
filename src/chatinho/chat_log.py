@@ -18,7 +18,7 @@ from textual.widgets import Markdown, Static
 
 from . import chat_clipboard
 from .chat_hooks import name_of
-from .chat_message import TOOL, ChatMessage
+from .chat_message import TOOL, ChatMessage, short_id
 from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
@@ -360,7 +360,7 @@ class ChatLog(TouchScrollableContainer):
     def _render_message(self, msg: ChatMessage) -> Widget:
         """Render a message as a clickable container with header and body."""
         prefix = "%s @%s · %s" % (
-            msg.timestamp.strftime("%H:%M"), self._name_of_peer(msg.frm), msg.id,
+            msg.timestamp.strftime("%H:%M"), self._name_of_peer(msg.frm), short_id(msg.id),
         )
         if msg.reply_to is not None:
             prefix += " ↳ replying"
@@ -374,7 +374,7 @@ class ChatLog(TouchScrollableContainer):
             original = self._find(msg.reply_to)
             if original is not None:
                 preview = " ".join(original.text.split())[:60]
-                quote = f"↳ {original.id}: {preview}…"
+                quote = f"↳ {short_id(original.id)}: {preview}…"
                 parts.append(Static(quote, classes="message-quote"))
 
         parts.append(Markdown(msg.text, classes="message-body", parser_factory=chat_markdown))
@@ -464,7 +464,7 @@ class ChatLog(TouchScrollableContainer):
         routes = "OSC 52" if route is None else "OSC 52 + %s" % route
         self.notify(
             "%s\n\nSent by %s." % (preview_of(text), routes),
-            title   = "Copied %s" % msg_id,
+            title   = "Copied %s" % short_id(msg_id),
             timeout = _CONFIRMATION,
         )
 

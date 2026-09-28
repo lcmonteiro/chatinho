@@ -493,7 +493,10 @@ token markdown-it ever gives children to. A `token.type == "inline"` guard was w
 deleted: breaking it changed no test. `markdown-it-py` is named in the `tui` extra now, since
 `chat_log` imports it directly rather than leaning on textual to have brought it.
 
-**The header names the peer**: `21:15 @meteo · msg-3`. `ChatLog` reads the roster through the
+**The header names the peer**: `21:15 @meteo · 3f9a1c2`. The id after the dot is short, as git
+shortens a commit hash: a message id is `msg-` and 16 random hex characters, unique across
+sessions, and the terminal shows only the first seven — everything it stores, passes or replies to
+stays the full id. `ChatLog` reads the roster through the
 `peers` grant, the same way it reads the conversation through `context`, and calls it fresh rather
 than holding it — a peer may be registered after the widget was built. `TOOL` is named outright
 because a command is in no roster, and a peer that has since gone falls back to its number: history
@@ -602,7 +605,7 @@ system has. Both run every time: over SSH a helper writes the *server's* clipboa
 is looking at, and OSC 52 is what reaches the person at the keyboard. The helper is a subprocess,
 so it runs in a worker rather than stopping the chat, and a failure is logged rather than raised —
 the other route has already been taken, and a clipboard is never worth interrupting a conversation
-for. The notification **names the routes that ran** (`Copied msg-3 (OSC 52 + termux-clipboard-set)`)
+for. The notification **names the routes that ran** (`Copied 3f9a1c2`, `Sent by OSC 52 + termux-clipboard-set.`)
 rather than claiming the text arrived; whether it did is the terminal's business, and saying which
 route was taken is what makes a silent failure diagnosable. `chat_clipboard` imports nothing but
 the standard library, so it is tested without mounting anything.

@@ -154,3 +154,28 @@ async def test_load_is_bounded_by_what_the_session_asks_for(tmp_path):
     await second.start()
     assert [m.text for m in again.context()] == ["m3", "m4"]
     await second.close()
+
+
+async def test_a_reopened_chat_does_not_overwrite_what_it_archived(tmp_path):
+    """Ids are unique across sessions, so a new chat on the same file adds, never replaces."""
+    store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
+
+    first = ChatSession(backend=store)
+    view = Driver()
+    first.add_connector(view, at=LOCAL)
+    await first.start()
+    kept = await view.say("from the first chat")
+    await first.close()
+
+    second = ChatSession(backend=store)
+    again = Driver()
+    second.add_connector(again, at=LOCAL)
+    await second.start()
+    said = await again.say("from the second chat")
+    await second.close()
+
+    store.initialize()
+    archived = {m.id: m.text for m in await store.load()}
+    store.shutdown()
+    assert kept != said
+    assert archived == {kept: "from the first chat", said: "from the second chat"}

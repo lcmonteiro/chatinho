@@ -63,7 +63,7 @@ from .chat_input import (
     validate_escape,
 )
 from .chat_log import ChatLog
-from .chat_message import ChatMessage
+from .chat_message import ChatMessage, short_id
 from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
@@ -486,7 +486,7 @@ class ChatApp(App):
     def _on_reply_target_change(self, msg_id: Optional[str]) -> None:
         """Keeps the input placeholder in step with the log's reply target."""
         inp = self.query_one("#%s" % INPUT_ID, CommandInput)
-        inp.placeholder = self._input_placeholder if msg_id is None else "Reply to %s…" % msg_id
+        inp.placeholder = self._input_placeholder if msg_id is None else "Reply to %s…" % short_id(msg_id)
 
     def _find_message(self, msg_id: str) -> Optional[ChatMessage]:
         return next((m for m in self.context() if m.id == msg_id), None)

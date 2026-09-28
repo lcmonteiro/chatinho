@@ -17,7 +17,8 @@ Neither class touches Textual, so both can be exercised without mounting an
 application.
 """
 
-import threading
+import re
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
@@ -71,7 +72,9 @@ class ChatMessage:
     """One message, addressed.
 
     Attributes:
-        id: Unique within a chat, assigned by the store.
+        id: Unique across every chat that shares an archive: ``msg-`` and 16
+            random hex characters, assigned by the store. The terminal shows
+            its :func:`short_id`.
         text: What was said, as Markdown.
         frm: The id of whoever said it; :data:`LOCAL` for the user.
         to: The id it was addressed to, or None when it went to everyone.
@@ -99,6 +102,27 @@ class ChatMessage:
         return self.frm == LOCAL
 
 
+#: A full id as :meth:`MessageStore.new_id` makes it.
+_FULL_ID = re.compile(r"msg-([0-9a-f]{16})")
+
+
+def short_id(msg_id: str) -> str:
+    """The id to show a person: the first 7 hex characters, as git shortens hashes.
+
+    Only for display — everything the library stores, returns or accepts is the
+    full id. An id not in the ``msg-`` + 16-hex form (one given explicitly, or
+    from an archive older than this form) is shown as it is.
+
+    Args:
+        msg_id: A message id.
+
+    Returns:
+        str: ``3f9a1c2`` for ``msg-3f9a1c2e7b04d5a6``; *msg_id* otherwise.
+    """
+    match = _FULL_ID.fullmatch(msg_id)
+    return match.group(1)[:7] if match else msg_id
+
+
 class MessageStore:
     """The chat's message history: ids, lookup and reply threading.
 
@@ -108,8 +132,6 @@ class MessageStore:
 
     def __init__(self) -> None:
         self._messages     : List[ChatMessage] = []
-        self._next_id      : int = 1
-        self._id_lock      : threading.Lock = threading.Lock()
         self._index        : Dict[str, ChatMessage] = {}
         self._replies      : Dict[str, List[str]] = {}
 
@@ -124,11 +146,14 @@ class MessageStore:
         return list(self._messages)
 
     def new_id(self) -> str:
-        """Returns a fresh message id. Safe to call from any thread."""
-        with self._id_lock:
-            msg_id = "msg-%d" % self._next_id
-            self._next_id += 1
-        return msg_id
+        """Returns a fresh message id: ``msg-`` and 16 random hex characters.
+
+        Random, not counted, so a chat that reopens on an archive never hands
+        out an id already in it — a counter would start at one again. 64 bits
+        make a collision negligible, and there is no state to guard, so it is
+        safe to call from any thread.
+        """
+        return "msg-" + secrets.token_hex(8)
 
     def add(self, msg: ChatMessage) -> ChatMessage:
         """Appends *msg*, indexes it and records it against what it answers.
