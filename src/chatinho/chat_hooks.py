@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
 
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +49,9 @@ class Say(Protocol):
         self,
         text        : str,
         *,
-        reply_to    : Optional[str] = None,
+        reply_to    : Optional[MessageID] = None,
         attachments : Sequence[Attachment] = (),
-    ) -> str:
+    ) -> MessageID:
         """Adds *text* to the conversation and returns the new message's id.
 
         *attachments* go to the backend, kept under the new message's id; its
@@ -78,7 +78,7 @@ class Locate(Protocol):
     it has nothing by that name, the answer is None.
     """
 
-    async def __call__(self, msg_id: str, name: str) -> Optional[str]:
+    async def __call__(self, msg_id: MessageID, name: str) -> Optional[str]:
         """Returns a link to attachment *name* of message *msg_id*, or None."""
         ...
 

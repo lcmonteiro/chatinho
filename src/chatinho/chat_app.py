@@ -65,7 +65,7 @@ from .chat_input import (
     validate_escape,
 )
 from .chat_log import ChatLog
-from .chat_message import ChatMessage
+from .chat_message import ChatMessage, MessageID
 from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
@@ -434,13 +434,13 @@ class ChatApp(App):
         """The full message history, oldest first."""
         return self.context()
 
-    def get_replies(self, msg_id: str) -> List[str]:
+    def get_replies(self, msg_id: MessageID) -> List[MessageID]:
         """Returns the ids of the messages that answer *msg_id*."""
         return [m.id for m in self.context() if m.reply_to == msg_id]
 
     # === Presentation-owned behaviour ===============================================
 
-    async def send_pending_reply(self, text: str) -> Optional[str]:
+    async def send_pending_reply(self, text: str) -> Optional[MessageID]:
         """
         Says *text* as a reply to the selected message, if there is one.
 
@@ -488,23 +488,23 @@ class ChatApp(App):
         except NoMatches:
             pass
 
-    def _on_reply_target_change(self, msg_id: Optional[str]) -> None:
+    def _on_reply_target_change(self, msg_id: Optional[MessageID]) -> None:
         """Keeps the input placeholder in step with the log's reply target."""
         inp = self.query_one("#%s" % INPUT_ID, CommandInput)
-        inp.placeholder = self._input_placeholder if msg_id is None else "Reply to %s…" % msg_id
+        inp.placeholder = self._input_placeholder if msg_id is None else "Reply to %s…" % msg_id.short
 
-    def _find_message(self, msg_id: str) -> Optional[ChatMessage]:
+    def _find_message(self, msg_id: MessageID) -> Optional[ChatMessage]:
         return next((m for m in self.context() if m.id == msg_id), None)
 
     @property
-    def _reply_target(self) -> Optional[str]:
+    def _reply_target(self) -> Optional[MessageID]:
         return self._chat_log.reply_target
 
     @property
-    def _rendered_msg_ids(self) -> List[str]:
+    def _rendered_msg_ids(self) -> List[MessageID]:
         return self._chat_log._rendered_msg_ids
 
-    def _set_reply_target(self, msg_id: str) -> None:
+    def _set_reply_target(self, msg_id: MessageID) -> None:
         self._chat_log.set_reply_target(msg_id)
 
     def _clear_reply_target(self) -> None:

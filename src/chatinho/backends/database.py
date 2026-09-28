@@ -30,7 +30,7 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from ..chat_hooks import HookForget, HookKeep, HookLink, HookListen, HookLoad, backend, require
-from ..chat_message import Attachment, ChatMessage
+from ..chat_message import Attachment, ChatMessage, MessageID
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +42,8 @@ class Base(DeclarativeBase):
 class ArchivedMessage(Base):
     """One archived message, addressed exactly as it was when it was said.
 
-    ``id`` is the message's own id and the primary key: it is unique within a
-    chat, it is what a reply points at, and it is what makes archiving the same
+    ``id`` is the message's own id, as ``str()`` writes it, and the primary
+    key: it is unique across chats, it is what a reply points at, and it is what makes archiving the same
     message twice a no-op rather than a duplicate row.
     """
 
@@ -173,16 +173,16 @@ class DatabaseBackend:
 
     # === What messages carry =========================================================
 
-    async def keep(self, msg_id: str, attachments: Sequence[Attachment]) -> None:
+    async def keep(self, msg_id: MessageID, attachments: Sequence[Attachment]) -> None:
         """Keeps what message *msg_id* carries, before the message is posted.
 
         Args:
             msg_id: The message the attachments belong to.
             attachments: What its speaker attached.
         """
-        await self._off_loop(self._keep, msg_id, tuple(attachments))
+        await self._off_loop(self._keep, str(msg_id), tuple(attachments))
 
-    async def link(self, msg_id: str, name: str) -> Optional[str]:
+    async def link(self, msg_id: MessageID, name: str) -> Optional[str]:
         """A ``file://`` link to attachment *name* of message *msg_id*, or None.
 
         The file is written on the first request, into a directory this backend
@@ -195,7 +195,7 @@ class DatabaseBackend:
         Returns:
             Optional[str]: The link, or None when nothing by that name was kept.
         """
-        return await self._off_loop(self._link, msg_id, name)
+        return await self._off_loop(self._link, str(msg_id), name)
 
     # === Internals ==================================================================
 
@@ -219,8 +219,9 @@ class DatabaseBackend:
         with self._session() as session:
             for msg in messages:
                 session.merge(ArchivedMessage(
-                    id=msg.id, text=msg.text, frm=msg.frm, to=msg.to,
-                    reply_to=msg.reply_to, timestamp=msg.timestamp,
+                    id=str(msg.id), text=msg.text, frm=msg.frm, to=msg.to,
+                    reply_to=None if msg.reply_to is None else str(msg.reply_to),
+                    timestamp=msg.timestamp,
                 ))
             session.commit()
 
@@ -235,8 +236,9 @@ class DatabaseBackend:
             if limit is not None:
                 rows = list(reversed(rows))
             return [
-                ChatMessage(id=r.id, text=r.text, frm=r.frm, to=r.to,
-                            reply_to=r.reply_to, timestamp=r.timestamp)
+                ChatMessage(id=MessageID.parse(r.id), text=r.text, frm=r.frm, to=r.to,
+                            reply_to=None if r.reply_to is None else MessageID.parse(r.reply_to),
+                            timestamp=r.timestamp)
                 for r in rows
             ]
 

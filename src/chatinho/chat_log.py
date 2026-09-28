@@ -19,7 +19,7 @@ from textual.widgets import Markdown, Static
 
 from . import chat_clipboard
 from .chat_hooks import name_of
-from .chat_message import TOOL, ChatMessage
+from .chat_message import TOOL, ChatMessage, MessageID
 from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
@@ -214,9 +214,9 @@ class _MessageContainer(Vertical):
     def __init__(
         self,
         *children: Widget,
-        msg_id: str,
-        on_select: Callable[[str], None],
-        on_copy: Callable[[str], None],
+        msg_id: MessageID,
+        on_select: Callable[[MessageID], None],
+        on_copy: Callable[[MessageID], None],
         **kwargs,
     ) -> None:
         super().__init__(*children, **kwargs)
@@ -295,8 +295,8 @@ class ChatLog(TouchScrollableContainer):
         peers : Optional[Callable[[], Dict[int, object]]] = None,
         max_displayed : int = 100,
         style : Optional[ChatStyle] = None,
-        on_reply_target_change : Optional[Callable[[Optional[str]], None]] = None,
-        locate : Optional[Callable[[str, str], Awaitable[Optional[str]]]] = None,
+        on_reply_target_change : Optional[Callable[[Optional[MessageID]], None]] = None,
+        locate : Optional[Callable[[MessageID, str], Awaitable[Optional[str]]]] = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -315,11 +315,11 @@ class ChatLog(TouchScrollableContainer):
         self._read_peers = peers
         self.max_displayed : int = max_displayed
         self._on_reply_target_change = on_reply_target_change
-        self._msg_widgets : Dict[str, Widget] = {}
+        self._msg_widgets : Dict[MessageID, Widget] = {}
         # IDs of the messages currently rendered, in order
-        self._rendered_msg_ids : List[str] = []
+        self._rendered_msg_ids : List[MessageID] = []
         # Message selected as reply target (via click)
-        self.reply_target : Optional[str] = None
+        self.reply_target : Optional[MessageID] = None
 
     # === Rendering ==================================================================
 
@@ -378,7 +378,7 @@ class ChatLog(TouchScrollableContainer):
             return
         self.app.open_url(link)
 
-    def _find(self, msg_id: str) -> Optional[ChatMessage]:
+    def _find(self, msg_id: MessageID) -> Optional[ChatMessage]:
         """Returns the message with *msg_id*, or None."""
         return next((m for m in self._read_context() if m.id == msg_id), None)
 
@@ -409,7 +409,7 @@ class ChatLog(TouchScrollableContainer):
     def _render_message(self, msg: ChatMessage) -> Widget:
         """Render a message as a clickable container with header and body."""
         prefix = "%s @%s · %s" % (
-            msg.timestamp.strftime("%H:%M"), self._name_of_peer(msg.frm), msg.id,
+            msg.timestamp.strftime("%H:%M"), self._name_of_peer(msg.frm), msg.id.short,
         )
         if msg.reply_to is not None:
             prefix += " ↳ replying"
@@ -423,7 +423,7 @@ class ChatLog(TouchScrollableContainer):
             original = self._find(msg.reply_to)
             if original is not None:
                 preview = " ".join(original.text.split())[:60]
-                quote = f"↳ {original.id}: {preview}…"
+                quote = f"↳ {original.id.short}: {preview}…"
                 parts.append(Static(quote, classes="message-quote"))
 
         # Links are ours to open: a relative one names an attachment of this
@@ -491,7 +491,7 @@ class ChatLog(TouchScrollableContainer):
         widest = max([len(line) for line in lines] + [0]) + _BUBBLE_CHROME
         return min(max(widest, floor + _HEADER_SLACK), self.style.bubble_max_width)
 
-    def copy_message(self, msg_id: str) -> None:
+    def copy_message(self, msg_id: MessageID) -> None:
         """Puts the message's text on the clipboard, by both routes at once.
 
         OSC 52 goes out immediately — it is one escape sequence — and a
@@ -510,27 +510,27 @@ class ChatLog(TouchScrollableContainer):
         self.app.copy_to_clipboard(msg.text)
         self.run_worker(self._copy_with_a_helper(msg.id, msg.text), exclusive=False)
 
-    async def _copy_with_a_helper(self, msg_id: str, text: str) -> None:
+    async def _copy_with_a_helper(self, msg_id: MessageID, text: str) -> None:
         """Runs the clipboard helper off the event loop, then reports both routes."""
         loop  = asyncio.get_running_loop()
         route = await loop.run_in_executor(None, chat_clipboard.put, text)
         routes = "OSC 52" if route is None else "OSC 52 + %s" % route
         self.notify(
             "%s\n\nSent by %s." % (preview_of(text), routes),
-            title   = "Copied %s" % msg_id,
+            title   = "Copied %s" % msg_id.short,
             timeout = _CONFIRMATION,
         )
 
     # === Reply target (click) ======================================================
 
-    def _on_message_clicked(self, msg_id: str) -> None:
+    def _on_message_clicked(self, msg_id: MessageID) -> None:
         """Selects/deselects a message as the reply target."""
         if self.reply_target == msg_id:
             self.clear_reply_target()
         else:
             self.set_reply_target(msg_id)
 
-    def set_reply_target(self, msg_id: str) -> None:
+    def set_reply_target(self, msg_id: MessageID) -> None:
         """Marks *msg_id* as the reply target and highlights it."""
         self.reply_target = msg_id
         self._refresh_reply_target_ui()

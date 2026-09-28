@@ -7,7 +7,7 @@ taskId and contextId sit in the payload is load-bearing, not cosmetic.
 import asyncio
 from unittest.mock import MagicMock
 
-from chatinho import A2AConnector, ChatMessage
+from chatinho import A2AConnector, ChatMessage, MessageID
 
 
 def sent_payload(**kwargs) -> dict:
@@ -17,7 +17,7 @@ def sent_payload(**kwargs) -> dict:
     connector.session.post.return_value = MagicMock(
         status_code=200, json=lambda: {"ok": True}, raise_for_status=lambda: None
     )
-    asyncio.run(connector.answer(ChatMessage(id="msg-1", text="ola"), **kwargs))
+    asyncio.run(connector.answer(ChatMessage(id=MessageID.parse("msg-1"), text="ola"), **kwargs))
     return connector.session.post.call_args.kwargs["json"]
 
 
