@@ -45,7 +45,7 @@ class Reply:
 
 ### Each door builds its message directly
 
-`say` and `ask` build their `ChatMessage` with `attachments=tuple(attachments)`. Where an answer or a command result can come back as a `Reply` (`_deliver` and `_invoke_for`), the code unwraps it in place into text plus attachments before building the message. There's no shared builder: the four sites are short and each reads on its own. The invocation message (`/name args`) is built with no attachments.
+`say` and `ask` build their `ChatMessage` with `attachments=tuple(attachments)`. An answer can come back as a string or a `Reply`, and a command result always comes back as a `Reply`. `_deliver` and `_invoke_for` unwrap it in place into text plus attachments before building the message. There's no shared builder: the four sites are short and each reads on its own. The invocation message (`/name args`) is built with no attachments.
 
 ### A command's `execute` always returns a `Reply`
 
