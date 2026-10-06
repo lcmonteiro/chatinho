@@ -21,9 +21,12 @@ import asyncio
 import logging
 from datetime import datetime
 from inspect import isawaitable
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from .chat_hooks import (
+    CredentialUnavailable,
+    PeerRemoved,
+    SamplingUnavailable,
     HookExecute,
     HookKeep,
     HookLink,
@@ -31,12 +34,14 @@ from .chat_hooks import (
     HookLoad,
     HookAnswer,
     HookListen,
+    HookServeCredential,
+    HookServeSample,
     declares,
     hooks_of,
     declared_id,
     name_of,
 )
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, MessageStore, Reply
+from .chat_message import LOCAL, TOOL, Answer, Attachment, ChatMessage, MessageID, MessageStore, Reply
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +55,7 @@ class ChatSession:
     hook — three the session grants, two it calls:
 
     - ``HookSay``      grants  ``say(text, reply_to=None, attachments=())``.
-    - ``HookAsk``      grants  ``ask(to, text, attachments=())``, which awaits the answer.
+    - ``HookAsk``      grants  ``ask(to, text, attachments=(), detail=False)``, which awaits the answer.
     - ``HookContext``  grants  ``context(since=, start=, limit=)``.
     - ``HookListen``   demands ``listen(msg)`` — every message that crosses.
     - ``HookAnswer``   demands ``answer(msg)`` — someone asked you.
@@ -80,7 +85,11 @@ class ChatSession:
         self._connectors    : Dict[int, Any] = {}
         self._queues   : Dict[int, "asyncio.Queue[ChatMessage]"] = {}
         self._tasks    : Dict[int, asyncio.Task] = {}
-        self._pending  : Dict[MessageID, "asyncio.Future[str]"] = {}
+        self._pending  : Dict[MessageID, "asyncio.Future[Answer]"] = {}
+        #: Who each waiting question was put to, so a peer that leaves fails them.
+        self._asked_of : Dict[MessageID, int] = {}
+        #: What an answer said about itself, between ``answer`` and ``_post``.
+        self._statuses : Dict[MessageID, str] = {}
         self._next_id  : int = 1
         self._started  : bool = False
         self._closed   : bool = False
@@ -149,6 +158,45 @@ class ChatSession:
         self._queues[at] = asyncio.Queue()
         self._grant(connector, at)
         return at
+
+    def remove_connector(self, peer_id: int) -> None:
+        """Detaches a peer from a running or stopped session.
+
+        It hears nothing more, its queue task stops and it leaves the roster.
+        Questions put to it that are still waiting fail with
+        :class:`~chatinho.chat_hooks.PeerRemoved` rather than wait forever.
+        What it already said stays in the conversation, under its id.
+        ``shutdown()`` is called when it has one, as :meth:`close` would.
+
+        Args:
+            peer_id: The id the peer answers to.
+
+        Raises:
+            ValueError: *peer_id* is :data:`LOCAL`, or no peer has it.
+        """
+        if peer_id == LOCAL:
+            raise ValueError("The frontend cannot be removed: it is the chat")
+        if peer_id not in self._connectors:
+            raise ValueError("No peer with id %d" % peer_id)
+        who  = self._connectors.pop(peer_id)
+        self._queues.pop(peer_id, None)
+        task = self._tasks.pop(peer_id, None)
+        if task is not None:
+            task.cancel()
+        self._initialized.discard(id(who))
+        for msg_id, at in list(self._asked_of.items()):
+            if at != peer_id:
+                continue
+            del self._asked_of[msg_id]
+            waiting = self._pending.pop(msg_id, None)
+            if waiting is not None and not waiting.done():
+                waiting.set_exception(PeerRemoved("%s left before answering" % name_of(who)))
+        shutdown = getattr(who, "shutdown", None)
+        if callable(shutdown):
+            try:
+                shutdown()
+            except Exception:
+                logger.error("Shutting %r down failed", name_of(who), exc_info=True)
 
     def add_command(self, cmd: Any) -> str:
         """Registers a command under its declared name and returns it.
@@ -253,6 +301,8 @@ class ChatSession:
             peers   = lambda: self._peers,
             commands= lambda: self._commands,
             locate  = lambda: self.locate,
+            sample  = lambda: self._sample,
+            credential = lambda: self._credential,
         )
         for hook in hooks_of(who):
             for granted in hook.grants:
@@ -292,16 +342,62 @@ class ChatSession:
         return say
 
     def _ask_for(self, frm: int):
-        async def ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
+        async def ask(
+            to          : int,
+            text        : str,
+            *,
+            attachments : Sequence[Attachment] = (),
+            detail      : bool = False,
+        ) -> Union[str, Answer]:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
             await self._kept(msg, attachments)
-            future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
-            self._pending[msg.id] = future
-            await self._post(msg)
-            return await future
+            future : "asyncio.Future[Answer]" = asyncio.get_running_loop().create_future()
+            self._pending[msg.id]  = future
+            self._asked_of[msg.id] = to
+            try:
+                await self._post(msg)
+                answer = await future
+            finally:
+                self._pending.pop(msg.id, None)
+                self._asked_of.pop(msg.id, None)
+            return answer if detail else answer.text
         return ask
+
+    # === Lending to whoever answers ================================================
+
+    async def _sample(
+        self,
+        msg_id     : MessageID,
+        messages   : Sequence[Dict[str, str]],
+        *,
+        max_tokens : Optional[int] = None,
+        system     : Optional[str] = None,
+    ) -> str:
+        """A completion run on behalf of *msg_id*. Granted by ``HookSample``.
+
+        The frontend speaks for whoever asked, so it is the one asked to run it.
+
+        Raises:
+            SamplingUnavailable: The frontend does not declare ``HookServeSample``.
+        """
+        front = self._connectors.get(LOCAL)
+        if front is None or not declares(front, HookServeSample):
+            raise SamplingUnavailable("Nobody serves samples in this chat")
+        return await front.serve_sample(msg_id, list(messages), max_tokens, system)
+
+    async def _credential(self, msg_id: MessageID, name: str) -> str:
+        """The credential *name* lent for *msg_id*. Granted by ``HookCredential``.
+
+        Raises:
+            CredentialUnavailable: The frontend does not declare
+                ``HookServeCredential``, or lent no such credential.
+        """
+        front = self._connectors.get(LOCAL)
+        if front is None or not declares(front, HookServeCredential):
+            raise CredentialUnavailable("Nobody lends credentials in this chat")
+        return await front.serve_credential(msg_id, name)
 
     async def _kept(self, msg: ChatMessage, attachments: Sequence[Attachment]) -> None:
         """Hands what *msg* carries to the backend, before *msg* is posted.
@@ -336,10 +432,11 @@ class ChatSession:
         replies are part of it.
         """
         self._store.add(msg)
+        status   = self._statuses.pop(msg.id, "answered")
         waiting  = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
         resolved = waiting is not None and not waiting.done()
         if resolved:
-            waiting.set_result(msg.text)          # type: ignore[union-attr]
+            waiting.set_result(Answer(msg.text, status, msg.id))   # type: ignore[union-attr]
 
         # You never hear yourself; that is the whole of the loop protection.
         listeners = {at for at, who in self._connectors.items()
@@ -377,6 +474,8 @@ class ChatSession:
         if reply is not None:
             text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
             answered = ChatMessage(id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id)
+            if isinstance(reply, Reply):
+                self._statuses[answered.id] = reply.status
             await self._kept(answered, carried)
             await self._post(answered)
 

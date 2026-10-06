@@ -1,7 +1,7 @@
 # chatinho — the hook specification
 
-Everything a peer can do, and everything it can be asked to do, is one of **fourteen hooks**. This
-document is the reference for all fourteen: what each one demands, what it grants, and what actually
+Everything a peer can do, and everything it can be asked to do, is one of **eighteen hooks**. This
+document is the reference for all eighteen: what each one demands, what it grants, and what actually
 arrives at its door.
 
 Every claim here is executable. `examples/hooks.py` declares one peer per hook and runs a short
@@ -71,7 +71,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 
 ---
 
-## 2. The fourteen hooks at a glance
+## 2. The eighteen hooks at a glance
 
 | hook | demands | grants | declared by |
 |---|---|---|---|
@@ -89,6 +89,10 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 | [`HookKeep`](#hookkeep) | `keep` | — | a backend that keeps attachments |
 | [`HookLink`](#hooklink) | `link` | — | a backend that keeps attachments |
 | [`HookLocate`](#hooklocate) | — | `locate` | a presentation, a peer that opens attachments |
+| [`HookSample`](#hooksample) | — | `sample` | a peer that thinks with the asker's model |
+| [`HookServeSample`](#hookservesample) | `serve_sample` | — | a frontend that runs completions for its askers |
+| [`HookCredential`](#hookcredential) | — | `credential` | a peer that uses a credential lent with the question |
+| [`HookServeCredential`](#hookservecredential) | `serve_credential` | — | a frontend that holds credentials lent by its askers |
 
 **Every hook is one or the other**, never both.
 
@@ -134,14 +138,23 @@ waiting ask by saying the reply with `reply_to` set to the question's id.
 
 ### HookAsk
 
-> **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str`
+> **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = (), detail: bool = False) -> str | Answer`
 
-Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id.
-What comes back is the reply's text. Anything the reply attached went to the backend, under the
-reply's id, where `locate` finds it.
+Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id,
+and `PeerRemoved` if the peer leaves the session before answering. What comes back is the reply's
+text. Anything the reply attached went to the backend, under the reply's id, where `locate` finds it.
 
 ```python
 answer = await self.ask(session.id_of("weather"), "what is the weather?")
+```
+
+With `detail=True` it is an `Answer(text, status, msg_id)` instead: `status` is what the reply said
+about itself — `answered`, `asked` (a question back) or `error`, from `Reply(..., status=…)`, and
+`answered` for a plain string or a reply said late — and `msg_id` is the reply's own id.
+
+```python
+got = await self.ask(at, "draw it", detail=True)
+url = await self.locate(got.msg_id, "chart.svg")
 ```
 
 `ask(LOCAL, ...)` asks the user. It does not block the chat: the awaiting peer's own task is
@@ -365,6 +378,56 @@ url = await self.locate(msg.id, "revenue.html")
 
 The terminal uses it for a message's relative links: it opens what comes back, or says "Not found".
 
+### HookSample
+
+> **grants** `await sample(msg_id: MessageID, messages: Sequence[dict], *, max_tokens: Optional[int] = None, system: Optional[str] = None) -> str`
+
+A completion run on behalf of message *msg_id* — the question being answered — by whoever asked it,
+so the asker's model and key do the work. *messages* are `{"role": "user" | "assistant", "content":
+str}`. The session hands it to the frontend that declares `HookServeSample`; with none, or when the
+asker cannot or will not, it raises `SamplingUnavailable`.
+
+```python
+text = await self.sample(msg.id, [{"role": "user", "content": msg.text}])
+```
+
+### HookCredential
+
+> **grants** `await credential(msg_id: MessageID, name: str) -> str`
+
+The credential *name* lent with message *msg_id*, for answering that message alone. The session
+asks the frontend that declares `HookServeCredential`; with none, or with nothing by that name lent
+for that message, it raises `CredentialUnavailable`. Never put what comes back in a message.
+
+```python
+key = await self.credential(msg.id, "llm")
+```
+
+### HookServeSample
+
+> **demands** `async serve_sample(msg_id: MessageID, messages: list, max_tokens: Optional[int], system: Optional[str]) -> str`
+
+Declared by a frontend that can run completions for the questions it brought in — `McpFrontend`
+relays them to the client the question came from. Raise `SamplingUnavailable` for a message it
+cannot serve.
+
+```python
+async def serve_sample(self, msg_id, messages, max_tokens, system) -> str:
+    raise SamplingUnavailable("nobody behind %s" % msg_id)
+```
+
+### HookServeCredential
+
+> **demands** `async serve_credential(msg_id: MessageID, name: str) -> str`
+
+Declared by a frontend that holds credentials lent with the questions it brought in, for as long as
+each question is being answered. Raise `CredentialUnavailable` when there is none.
+
+```python
+async def serve_credential(self, msg_id, name) -> str:
+    return self.lent[msg_id][name].reveal()
+```
+
 ---
 
 ## 5. Composing them
@@ -443,13 +506,14 @@ both.
 
 ## 6. The session's own surface
 
-`ChatSession` exposes seven members. Everything about the conversation is reached by declaring a
+`ChatSession` exposes eight members. Everything about the conversation is reached by declaring a
 hook, not by calling the session.
 
 | | |
 |---|---|
 | `run()` | owns the loop: `start()`, every peer's `serve()`, then `close()` |
 | `add_connector(connector, at=None) -> int` | registers a peer: an id, a queue, its grants |
+| `remove_connector(peer_id)` | detaches a peer: it hears nothing more, waiting asks to it fail with `PeerRemoved`, its messages stay |
 | `add_command(cmd) -> str` | registers a command: a name, its grants |
 | `await start()` | initializes every peer/command, loads the older context, then starts one task per peer |
 | `await close()` | drains every queue (5s, then a warning), then shuts everything down |

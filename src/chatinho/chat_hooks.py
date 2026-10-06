@@ -35,9 +35,9 @@ Nothing here is inherited: no base class, no ``isinstance``.
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple, Union
 
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID
+from .chat_message import LOCAL, TOOL, Answer, Attachment, ChatMessage, MessageID
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +63,69 @@ class Say(Protocol):
 class Ask(Protocol):
     """Granted by ``HookAsk``: a message for one peer, and its reply."""
 
-    async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
+    async def __call__(
+        self,
+        to          : int,
+        text        : str,
+        *,
+        attachments : Sequence[Attachment] = (),
+        detail      : bool = False,
+    ) -> Union[str, Answer]:
         """Asks peer *to* and waits for the text of the answer it sends back.
 
-        *attachments* go to the backend, as with ``say``.
+        *attachments* go to the backend, as with ``say``. With *detail*, what
+        comes back is an :class:`~chatinho.chat_message.Answer` — the text, its
+        status and the answer's message id — instead of the text alone.
+
+        Raises:
+            PeerRemoved: The peer left the session before it answered.
+        """
+        ...
+
+
+class PeerRemoved(RuntimeError):
+    """An ask whose peer left the session before answering it."""
+
+
+class SamplingUnavailable(RuntimeError):
+    """Nobody can run a completion for that message: no frontend serves samples,
+    or the asker behind it cannot or will not."""
+
+
+class CredentialUnavailable(RuntimeError):
+    """No credential by that name was lent for that message, or no frontend
+    serves credentials."""
+
+
+class Sample(Protocol):
+    """Granted by ``HookSample``: a completion run on behalf of a message."""
+
+    async def __call__(
+        self,
+        msg_id     : MessageID,
+        messages   : Sequence[Dict[str, str]],
+        *,
+        max_tokens : Optional[int] = None,
+        system     : Optional[str] = None,
+    ) -> str:
+        """Asks whoever asked *msg_id* to complete *messages*, and returns the text.
+
+        *messages* are ``{"role": "user" | "assistant", "content": str}``.
+
+        Raises:
+            SamplingUnavailable: Nobody can run it.
+        """
+        ...
+
+
+class Credential(Protocol):
+    """Granted by ``HookCredential``: a credential lent for one message."""
+
+    async def __call__(self, msg_id: MessageID, name: str) -> str:
+        """Returns the credential called *name* lent for *msg_id*.
+
+        Raises:
+            CredentialUnavailable: None by that name was lent for it.
         """
         ...
 
@@ -300,6 +359,41 @@ HookLocate = Hook(
     # None when nobody did. The terminal opens a message's relative links so.
 )
 
+# === Lending to whoever answers =================================================
+#
+# A peer that answers someone may need what that someone has: a model to think
+# with, a key to pay for it. Both are asked for on behalf of the message being
+# answered — the one thing every peer already holds — and the frontend, which
+# speaks for whoever asked, serves them or refuses.
+
+HookSample = Hook(
+    name="HookSample",
+    grants=("sample",),
+    # await sample(msg_id, messages, max_tokens=, system=) -> str. A completion
+    # run by whoever asked msg_id; SamplingUnavailable when nobody can.
+)
+
+HookServeSample = Hook(
+    name="HookServeSample",
+    method="serve_sample",
+    # async serve_sample(msg_id, messages, max_tokens, system) -> str. Declared
+    # by a frontend that can run completions for the questions it brought in.
+)
+
+HookCredential = Hook(
+    name="HookCredential",
+    grants=("credential",),
+    # await credential(msg_id, name) -> str. A credential lent for msg_id alone;
+    # CredentialUnavailable when none was.
+)
+
+HookServeCredential = Hook(
+    name="HookServeCredential",
+    method="serve_credential",
+    # async serve_credential(msg_id, name) -> str. Declared by a frontend that
+    # holds credentials lent with the questions it brought in.
+)
+
 ALL_HOOKS: Tuple[Hook, ...] = (
     HookSay,
     HookListen,
@@ -315,6 +409,10 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookKeep,
     HookLink,
     HookLocate,
+    HookSample,
+    HookServeSample,
+    HookCredential,
+    HookServeCredential,
 )
 
 # Lifecycle is not a hook: initialize() and shutdown() are optional and called

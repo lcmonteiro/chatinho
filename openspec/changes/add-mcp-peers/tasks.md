@@ -2,12 +2,12 @@
 
 ## 1. Core: answers, peers and sampling
 
-- [ ] 1.1 Add `status` to `Reply` (`answered` default, `asked`, `error`; anything else raises `ValueError`) and an `Answer(text, status, msg_id)` type in `chat_message.py`, exported from `chatinho`; verify unit tests for the default, explicit statuses and the invalid one pass
-- [ ] 1.2 Add `detail=True` to the `ask` grant, resolving the pending future with an `Answer` (status from the answering `Reply`, `answered` for strings and for late replies via `say(reply_to=…)`); verify the default text-only `ask` tests still pass and new tests cover detail, statuses and `msg_id` locating an attachment
-- [ ] 1.3 Add `ChatSession.remove_connector(peer_id)`: stop its drain task, drop its queue and entry, fail its pending asks with `PeerRemoved`, keep its messages, refuse `LOCAL` and unknown ids; verify tests for every `peer-lifecycle` scenario, plus one for adding a peer to a running session and calling `start()` again
-- [ ] 1.4 Add `HookSample` (grant `sample`), `HookServeSample` (demands `serve_sample`), their protocols and `SamplingUnavailable`; the session routes `sample` to the frontend or raises; document both hooks in `docs/SPEC.md`; verify the `sampling` scenarios and `tests/test_architecture.py` pass
+- [x] 1.1 Add `status` to `Reply` (`answered` default, `asked`, `error`; anything else raises `ValueError`) and an `Answer(text, status, msg_id)` type in `chat_message.py`, exported from `chatinho`; verify unit tests for the default, explicit statuses and the invalid one pass
+- [x] 1.2 Add `detail=True` to the `ask` grant, resolving the pending future with an `Answer` (status from the answering `Reply`, `answered` for strings and for late replies via `say(reply_to=…)`); verify the default text-only `ask` tests still pass and new tests cover detail, statuses and `msg_id` locating an attachment
+- [x] 1.3 Add `ChatSession.remove_connector(peer_id)`: stop its drain task, drop its queue and entry, fail its pending asks with `PeerRemoved`, keep its messages, refuse `LOCAL` and unknown ids; verify tests for every `peer-lifecycle` scenario, plus one for adding a peer to a running session and calling `start()` again
+- [x] 1.4 Add `HookSample` (grant `sample`), `HookServeSample` (demands `serve_sample`), their protocols and `SamplingUnavailable`; the session routes `sample` to the frontend or raises; document both hooks in `docs/SPEC.md`; verify the `sampling` scenarios and `tests/test_architecture.py` pass
 
-- [ ] 1.5 Add `HookCredential` (grant `credential`), `HookServeCredential` (demands `serve_credential`), their protocols, `CredentialUnavailable` and a `Secret` wrapper with a redacted `repr`; the session routes `credential` to the frontend or raises; document both hooks in `docs/SPEC.md`; verify the credential-hook scenarios and `tests/test_architecture.py` pass
+- [x] 1.5 Add `HookCredential` (grant `credential`), `HookServeCredential` (demands `serve_credential`), their protocols, `CredentialUnavailable` and a `Secret` wrapper with a redacted `repr`; the session routes `credential` to the frontend or raises; document both hooks in `docs/SPEC.md`; verify the credential-hook scenarios and `tests/test_architecture.py` pass
 
 ## 2. Packaging
 

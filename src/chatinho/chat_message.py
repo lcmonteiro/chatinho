@@ -56,20 +56,72 @@ class Attachment:
     data       : bytes
 
 
+#: What an answer can say about itself. ``answered`` is the default and covers
+#: "I don't know" too, said in the text; ``asked`` is a question back to the
+#: asker; ``error`` is a peer that could not answer.
+ANSWER_STATUSES : Tuple[str, ...] = ("answered", "asked", "error")
+
+
 @dataclass(frozen=True)
 class Reply:
-    """What ``answer`` or a command's ``execute`` returns when it attaches.
+    """What ``answer`` or a command's ``execute`` returns when it says more than text.
 
-    Returning a plain string still works; a Reply is only for an answer that
-    carries attachments.
+    Returning a plain string still works; a Reply is for an answer that carries
+    attachments, or that is not a plain answer.
 
     Attributes:
         text: The answer, as Markdown.
         attachments: What the reply attaches; they go to the backend.
+        status: One of :data:`ANSWER_STATUSES`; ``answered`` when left out.
     """
 
     text        : str
     attachments : Tuple[Attachment, ...] = ()
+    status      : str = "answered"
+
+    def __post_init__(self) -> None:
+        if self.status not in ANSWER_STATUSES:
+            raise ValueError("A reply's status is one of %s, got %r"
+                             % (", ".join(ANSWER_STATUSES), self.status))
+
+
+@dataclass(frozen=True)
+class Answer:
+    """What ``ask(..., detail=True)`` returns: the answer, and what it said about itself.
+
+    Attributes:
+        text: The answer's text, what a plain ``ask`` returns.
+        status: One of :data:`ANSWER_STATUSES`. An answer said late, with
+            ``say(reply_to=…)``, is ``answered``.
+        msg_id: The answer's own message id, under which ``locate`` finds
+            what it attached.
+    """
+
+    text   : str
+    status : str
+    msg_id : "MessageID"
+
+
+class Secret:
+    """A value that must never be shown: a credential lent for one question.
+
+    ``repr`` and ``str`` are redacted, so a Secret in a log line, an error or a
+    traceback's locals says nothing. :meth:`reveal` is the one way to the value.
+    """
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str) -> None:
+        self._value = value
+
+    def reveal(self) -> str:
+        """Returns the value itself."""
+        return self._value
+
+    def __repr__(self) -> str:
+        return "Secret('***')"
+
+    __str__ = __repr__
 
 
 @dataclass(frozen=True)

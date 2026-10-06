@@ -12,7 +12,7 @@ each is a pair: the word you call, and the word the other side writes.
     invoke(name, args)     ->  execute(args, by)    a command run by name
 
 Everything is a coroutine and every peer has its own queue, so a slow subsystem
-holds up nobody but itself. ``docs/SPEC.md`` is the reference for all fourteen hooks,
+holds up nobody but itself. ``docs/SPEC.md`` is the reference for all eighteen hooks,
 and ``examples/hooks.py`` is that document executable.
 
 Headless — no terminal, and nothing to install beyond this package::
@@ -55,7 +55,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .connectors import A2AConnector, OpenAIConnector
 
 from .chat_session import ChatSession
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply
+from .chat_message import LOCAL, TOOL, Answer, Attachment, ChatMessage, MessageID, Reply, Secret
 from .chat_hooks import (
     connector,
     tool,
@@ -82,6 +82,13 @@ from .chat_hooks import (
     HookKeep,
     HookLink,
     HookLocate,
+    HookSample,
+    HookServeSample,
+    HookCredential,
+    HookServeCredential,
+    PeerRemoved,
+    SamplingUnavailable,
+    CredentialUnavailable,
     Say,
     Ask,
     Invoke,
@@ -89,6 +96,8 @@ from .chat_hooks import (
     Peers,
     Commands,
     Locate,
+    Sample,
+    Credential,
 )
 from .chat_style import ChatStyle
 from .commands import HelpCommand, TestCommand
@@ -146,6 +155,8 @@ __all__ = [
     "MessageID",
     "Attachment",
     "Reply",
+    "Answer",
+    "Secret",
     "ChatStyle",
     "LOCAL",
     "TOOL",
@@ -178,6 +189,15 @@ __all__ = [
     "HookKeep",
     "HookLink",
     "HookLocate",
+    # lending to whoever answers
+    "HookSample",
+    "HookServeSample",
+    "HookCredential",
+    "HookServeCredential",
+    # what can go wrong
+    "PeerRemoved",
+    "SamplingUnavailable",
+    "CredentialUnavailable",
     # what the grants look like
     "Say",
     "Ask",
@@ -186,6 +206,8 @@ __all__ = [
     "Peers",
     "Commands",
     "Locate",
+    "Sample",
+    "Credential",
     # batteries
     "A2AConnector",
     "OpenAIConnector",
