@@ -7,7 +7,7 @@ Lets a chatinho session reach the peers of another session over MCP through one 
 ## ADDED Requirements
 
 ### Requirement: A connector to a remote session
-chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connector` built from a server to connect to (a command to start over stdio, or an HTTP URL with a bearer token), a `name` and an optional default `peer`. Its name in the chat MUST be the `name` given, or the name the server announces when none is given, and MUST be sent to the server as the client name in the MCP handshake.
+chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connector` built from a server to connect to (a command to start over stdio, or an HTTP URL with a bearer token), a `name`, an optional default `peer` and an optional `deadline` (sent with every question it starts; when not set, the server's default applies). Its name in the chat MUST be the `name` given, or the name the server announces when none is given, and MUST be sent to the server as the client name in the MCP handshake.
 
 #### Scenario: Named by the connector
 - **WHEN** `McpConnector(url=..., token=..., name="lab")` is added to a session
@@ -33,11 +33,15 @@ The connector SHALL reply only to messages addressed to it: a message from the l
 - **THEN** the remote `agent` is asked `draw the login flow`
 
 ### Requirement: Every question gets one answer
-For every message it is addressed by, the connector SHALL post exactly one reply to it: the remote answer's text, with its attachments attached, when the status is `answered`; the text marked as a request for more input for `needs_input`; and a short message naming the status and hop for `unknown`, `error` and `timeout`. Losing the connection MUST also produce a reply saying so.
+For every message it is addressed by, the connector SHALL post exactly one reply to it: the remote answer's text, with its attachments attached, when the status is `answered`; the remote peer's question, marked as a question back to the asker, for `asked`; and a short message naming the status and hop for `error` and `timeout`. Losing the connection MUST also produce a reply saying so.
 
 #### Scenario: Answer with an attachment
 - **WHEN** the remote answer is `answered` with attachment `chart.svg`
 - **THEN** the connector replies with the text and attaches `chart.svg`, so the local backend keeps it
+
+#### Scenario: Answered with a question
+- **WHEN** the remote result is `asked` with "which login flow?"
+- **THEN** the connector replies with that question, marked as a question from the remote peer, and the user's next `@lab/…` message to the same peer continues that conversation
 
 #### Scenario: Remote error
 - **WHEN** the remote result is `error` at hop `office` with "no peer named weather"

@@ -29,7 +29,7 @@ The server SHALL expose these MCP tools and no tool that broadcasts: `ask(route,
 - **THEN** the result is `agent` and `weather`, without the frontend or any asker's proxy
 
 ### Requirement: Exactly one result per question
-Every `ask` SHALL return exactly one result `{status, text, attachments, hop}`, with `status` one of `answered`, `needs_input`, `unknown`, `error` or `timeout`, and `hop` the route of the session that produced it. It MUST return before the request's deadline (the caller's `deadline_ms`, or the frontend's default of 120 seconds); a peer that has not answered by then MUST yield `timeout`. An unknown peer name, a failing peer and a failed sample MUST yield `error` with a message saying what failed. Results of `error` and `timeout` MUST be marked as tool errors in MCP. A peer's plain text answer MUST yield `answered`; a peer MAY instead return `needs_input` or `unknown` explicitly.
+Every `ask` SHALL return exactly one result `{status, text, attachments, hop}`, with `status` one of `answered`, `asked` (answered with a question back to the asker), `error` or `timeout`, and `hop` the route of the session that produced it. It MUST return before the request's deadline: the caller's `deadline_ms`, or else the frontend's default deadline, which is configurable when the frontend is created and is 120 seconds when not set; a peer that has not answered by then MUST yield `timeout`. An unknown peer name, a failing peer and a failed sample MUST yield `error` with a message saying what failed. Results of `error` and `timeout` MUST be marked as tool errors in MCP. A peer's plain text answer MUST yield `answered`; a peer MAY instead return `asked` or `error` explicitly.
 
 #### Scenario: Answered
 - **WHEN** a client asks `weather` and it answers `sunny`
@@ -43,9 +43,13 @@ Every `ask` SHALL return exactly one result `{status, text, attachments, hop}`, 
 - **WHEN** a client asks with a deadline of 1 second and the peer does not answer within it
 - **THEN** the result is `timeout`, returned within the deadline
 
-#### Scenario: Peer asks for more input
-- **WHEN** the peer answers with an explicit `needs_input` asking "which login flow?"
-- **THEN** the result is `needs_input` with that text, and a following `ask` to the same peer continues the same conversation
+#### Scenario: Answered with a question
+- **WHEN** the peer answers with an explicit `asked` status: "which login flow?"
+- **THEN** the result is `asked` with that text, and a following `ask` from the same asker to the same peer continues the same conversation
+
+#### Scenario: Configured default deadline
+- **WHEN** the frontend is created with a default deadline of 30 seconds and a client asks without `deadline_ms`
+- **THEN** a peer that has not answered after 30 seconds yields `timeout`
 
 ### Requirement: One peer per asker
 For each distinct asker, the server SHALL add a proxy peer to the session, with its own id, named by the asker's reverse route: the client's name, as given in the MCP handshake, followed by `/` and the asker's own path when the client relays one (for example `lab/me`). Questions from that asker MUST be asked from its proxy, so peers see them as coming from that name. A proxy MUST be removed when its client disconnects; its messages MUST stay in the conversation.

@@ -21,13 +21,13 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 **Non-Goals:**
 - Broadcasts across the link, notifications, and resource subscriptions.
 - Remote peers mirrored one-to-one in the local roster.
-- Remote peers asking the remote asker a question (MCP elicitation); a proxy answers such questions with `unknown`.
+- Remote peers asking the remote asker a question (MCP elicitation); a proxy answers such questions with `error`. A remote peer that needs more information answers with status `asked` instead, and the asker's next question continues the conversation.
 
 ## Decisions
 
 ### 1. Core additions stay small and generic
 - **`ChatSession.remove_connector(peer_id)`:** cancel the peer's drain task, drop its queue and connector entry, and fail its pending `ask` futures with `PeerRemoved`. Its messages stay in the store. `LOCAL` cannot be removed.
-- **`Reply.status`** (`answered` | `needs_input` | `unknown`, default `answered`) and **`ask(..., detail=True) -> Answer(text, status, msg_id)`.** The session already resolves the pending future from the answer message; with `detail` it resolves it with the `Answer` instead of the text. The default path is untouched.
+- **`Reply.status`** (`answered` | `asked` | `error`, default `answered`; "I don't know" is an `answered` text) and **`ask(..., detail=True) -> Answer(text, status, msg_id)`.** The session already resolves the pending future from the answer message; with `detail` it resolves it with the `Answer` instead of the text. The default path is untouched.
 - **`HookSample` (grant `sample`) and `HookServeSample` (demands `serve_sample`).** `sample(msg_id, messages, *, max_tokens=None, system=None)` is bound to nothing but the session: the session calls the frontend's `serve_sample` if it declares the hook, else raises `SamplingUnavailable`. Sampling is keyed by the message being answered because that is the only thing every peer already has, and it is what identifies whose question it is.
 - *Alternative: pass a model object to each peer.* That would tie the core to an LLM API and could not follow the asker across hops.
 
@@ -40,7 +40,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 
 ### 3. One proxy peer per asker
 - For each `(client connection, asker path)`, the frontend adds an `_AskerProxy` peer, named `"/".join([client_name, *asker])` (for example `lab/me`).
-  - The proxy declares `HookAsk` to ask, and `HookAnswer`, answering any question put to it with `Reply("…cannot be asked…", status="unknown")`.
+  - The proxy declares `HookAsk` to ask, and `HookAnswer`, answering any question put to it with `Reply("…cannot be asked…", status="error")`.
   - It's added with `add_connector` + `start()`.
 - **Bookkeeping:** the frontend maps proxy id → client connection, and connection → proxy ids.
   - **stdio:** a single connection, which ends with `serve()`.
@@ -64,7 +64,7 @@ Every outcome maps to one result:
 | `PeerRemoved` | `error` |
 | Loop, or hop limit reached | `error` |
 
-`hop` is this session's route prefix, joined with whatever the next hop returned. The default deadline is 120 s, and each hop subtracts a 250 ms margin, so inner hops finish first.
+`hop` is this session's route prefix, joined with whatever the next hop returned. The default deadline is configurable (`McpServerFrontend(deadline=…)`, 120 s when not set); `McpConnector(deadline=…)` sends one with every question it starts. Each hop subtracts a 250 ms margin, so inner hops finish first.
 
 ### 5. Attachments
 - With an `Answer.msg_id`, the frontend reads each attachment through `locate` (the backend's `file://` link) and returns its bytes base64-encoded.
@@ -86,8 +86,8 @@ Every outcome maps to one result:
 ### 8. Connection lifecycle
 - `McpConnector` opens its `ClientSession` in `initialize()` and closes it in `shutdown()`. It doesn't implement `serve()`, because a dropped link must not end the local chat.
 - On a lost connection it reconnects lazily on the next question, and answers `error` ("could not reach …") if that fails.
-- **Transports:** `command=[…]` for stdio, or `url=…, token=…` for HTTP with a `Bearer` header.
-- `McpServerFrontend(transport="stdio" | "http", host, port, token)`. Its `serve()` runs `stdio_server` or a Uvicorn app with the Streamable HTTP session manager and a bearer-token check.
+- **Transports:** `command=[…]` for stdio, or `url=…, token=…` for HTTP with a `Bearer` header; `deadline` is optional.
+- `McpServerFrontend(transport="stdio" | "http", host, port, token, deadline)`. Its `serve()` runs `stdio_server` or a Uvicorn app with the Streamable HTTP session manager and a bearer-token check.
 
 ### 9. Packaging
 - `chatinho.mcp` imports `mcp` and is exposed through the lazy `__getattr__` as `McpServerFrontend` and `McpConnector`, with the `mcp` extra in the missing-extra message.

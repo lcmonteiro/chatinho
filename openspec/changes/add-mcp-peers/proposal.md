@@ -9,10 +9,10 @@ A chatinho session today lives on one machine: its peers can only be reached fro
 - Add `McpServerFrontend`, a `@frontend` that turns a headless session into an MCP server. It takes the place of the terminal: MCP clients ask the session's peers and run its commands through it. Several clients may be connected at once.
 - Add `McpConnector`, an ordinary `@connector` that connects to such a server. It appears in the local chat under a name it chooses (for example `@lab`) and forwards questions to the remote session.
 - Messages across the link are directed only: a client asks one named peer, never broadcasts. Addresses are routes, `@lab/office/weather`, consumed one hop at a time, so a question can travel through several sessions.
-- Every question gets exactly one result — `answered`, `needs_input`, `unknown`, `error` or `timeout` — within one end-to-end deadline, with the failing hop named. Attachments travel back with the answer.
+- Every question gets exactly one result — `answered`, `asked` (answered with a question back), `error` or `timeout` — within one end-to-end deadline, configurable and 120 s by default, with the failing hop named. Attachments travel back with the answer.
 - Inside a remote session, each asker appears as its own peer, with its own id, named by the reverse route (`lab/me`, then `office/lab/me` one hop further); it is removed when its client disconnects.
 - Add `HookSample`: a peer that needs an LLM asks for a completion on behalf of the message it is answering. Across MCP links the request is relayed as MCP sampling back to the session where the question started, so that session's model and key do the work; no key is ever sent.
-- Let answers carry a status (`Reply(..., status="needs_input" | "unknown")`) and let askers get it with the answer's message id (`ask(..., detail=True)`), so answers are relayed faithfully, attachments included.
+- Let answers carry a status (`Reply(..., status="asked" | "error")`) and let askers get it with the answer's message id (`ask(..., detail=True)`), so answers are relayed faithfully, attachments included.
 - Add `ChatSession.remove_connector`, so peers can leave a running session. (Adding a peer to a running session already works: `start()` picks up peers attached since.)
 - Loop protection: a hop limit and a list of opaque session ids visited.
 - Package the MCP pieces behind a new `chatinho[mcp]` extra; the core stays standard library only.
