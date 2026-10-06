@@ -36,7 +36,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - **No core change for waiting on a broadcast.** The proxy listens and resolves its own wait (decision 4), so the rule that a `say` is owed to nobody stays true in the core.
 
 ### 2. Wire format: one tool per verb, structured results
-`McpServerFrontend` uses the SDK's low-level `Server`, for full control over tool schemas and per-connection state.
+`McpFrontend` uses the SDK's low-level `Server`, for full control over tool schemas and per-connection state.
 - **Tools:** `ask`, `list_peers`, `list_commands`, `invoke`, `read_attachment`.
 - **`ask` arguments:** `text`, `asker?`, `deadline_ms?`. There is no peer name: the session decides who answers.
 - **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}]}`, also rendered as text for clients that only read text. `error` and `timeout` set `isError`.
@@ -72,7 +72,7 @@ Every outcome maps to one result:
 | The peer raised | `error` |
 | `PeerRemoved` | `error` |
 
-The default deadline is configurable (`McpServerFrontend(deadline=…)`, 120 s when not set); `McpConnector(deadline=…)` sends one with every question.
+The default deadline is configurable (`McpFrontend(deadline=…)`, 120 s when not set); `McpConnector(deadline=…)` sends one with every question.
 
 ### 5. Sampling
 - **On the server, `serve_sample(msg_id, …)`:** look up `msg_id`, the question being answered. If it came from a proxy, by `ask` or by `say`, send `create_message` on that proxy's client connection and return the text. Otherwise raise `SamplingUnavailable`.
@@ -82,7 +82,7 @@ The default deadline is configurable (`McpServerFrontend(deadline=…)`, 120 s w
 ### 6. Credential delegation (opt-in)
 This follows A2A's principle: credentials travel out of band, the server declares what it needs, and a short-lived, scoped credential is preferred to a master key.
 - **Core:** `HookCredential` (grant `credential(msg_id, name)`) and `HookServeCredential` (demands `serve_credential`), mirroring sampling: keyed by the question being answered (the direct question or the broadcast one), served by the frontend, and otherwise raising `CredentialUnavailable`.
-- **Declaration:** `McpServerFrontend(credentials={"llm": "OpenAI-compatible API key"})` announces the names in the initialize result's `capabilities.experimental["chatinho/credentials"]`. Undeclared names are dropped on arrival.
+- **Declaration:** `McpFrontend(credentials={"llm": "OpenAI-compatible API key"})` announces the names in the initialize result's `capabilities.experimental["chatinho/credentials"]`. Undeclared names are dropped on arrival.
 - **Delivery:** `McpConnector(delegate={"llm": value | callable})` puts the declared ones in the `ask` request's `_meta["chatinho/credentials"]`. A callable is called per question, so it can mint short-lived tokens. Over HTTP the connector delegates only to `https` URLs or loopback hosts.
 - **Lifetime:** the server keeps a dict from question message id to credentials, holding values in a `Secret` wrapper whose `repr` is redacted. The entry is popped in the `finally` of `ask`, so it is gone on every outcome, including `timeout`, and with the proxy on disconnect. Nothing goes to the message, the store or logs.
 - **Not passed on:** the credential reaches only the session the connector connects to. A peer that obtained it through `credential` must not delegate it further; a connector only delegates its own `delegate` configuration.
@@ -104,10 +104,10 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - `McpConnector` opens its `ClientSession` in `initialize()` and closes it in `shutdown()`. It doesn't implement `serve()`, because a dropped link must not end the local chat.
 - On a lost connection it reconnects lazily on the next question, and answers `error` ("could not reach …") if that fails.
 - **Transports:** `command=[…]` for stdio, or `url=…, token=…` for HTTP with a `Bearer` header; `deadline` is optional.
-- `McpServerFrontend(transport="stdio" | "http", host, port, token, deadline)`. Its `serve()` runs `stdio_server` or a Uvicorn app with the Streamable HTTP session manager and a bearer-token check.
+- `McpFrontend(name="master", transport="stdio" | "http", host, port, token, deadline)`; the name is the frontend's peer name and the server name in the handshake. Its `serve()` runs `stdio_server` or a Uvicorn app with the Streamable HTTP session manager and a bearer-token check.
 
 ### 10. Packaging
-- `chatinho.mcp` imports `mcp` and is exposed through the lazy `__getattr__` as `McpServerFrontend` and `McpConnector`, with the `mcp` extra in the missing-extra message.
+- `chatinho.mcp` imports `mcp` and is exposed through the lazy `__getattr__` as `McpFrontend` and `McpConnector`, with the `mcp` extra in the missing-extra message.
 - `pyproject.toml` gains `mcp = ["mcp>=2.3"]`, and `all` and `dev` include it.
 - `docs/SPEC.md` documents `HookSample`, `HookServeSample`, `HookCredential` and `HookServeCredential`, and the architecture tests' extras check covers `mcp`.
 

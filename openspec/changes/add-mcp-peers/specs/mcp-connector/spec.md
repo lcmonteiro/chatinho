@@ -14,7 +14,7 @@ chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connecto
 - **THEN** it appears in the chat as `lab`, and the server sees a client named `lab`
 
 #### Scenario: Default name from the server
-- **WHEN** no `name` is given and the server announces itself as `office`
+- **WHEN** no `name` is given and the server's frontend is named `office`
 - **THEN** the connector appears as `office`
 
 ### Requirement: Addressing the remote session

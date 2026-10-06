@@ -7,10 +7,14 @@ Turns a headless chatinho session into an MCP server, so MCP clients — includi
 ## ADDED Requirements
 
 ### Requirement: MCP server as the session's frontend
-chatinho SHALL provide `McpServerFrontend` in `chatinho[mcp]`: a `@frontend` that serves the session over MCP in place of a terminal. Its `serve()` MUST run the MCP server until the transport closes, so `session.run()` ends with it. It MUST support the stdio transport and the Streamable HTTP transport; the HTTP transport MUST require a bearer token configured on the frontend and refuse requests without it. Several clients MAY be connected at once.
+chatinho SHALL provide `McpFrontend` in `chatinho[mcp]`: a `@frontend` that serves the session over MCP in place of a terminal. Its name in the session, which it also announces to clients in the MCP handshake, MUST be `master` unless another name is given. Its `serve()` MUST run the MCP server until the transport closes, so `session.run()` ends with it. It MUST support the stdio transport and the Streamable HTTP transport; the HTTP transport MUST require a bearer token configured on the frontend and refuse requests without it. Several clients MAY be connected at once.
+
+#### Scenario: Named master by default
+- **WHEN** a session is created with `McpFrontend()` and no name
+- **THEN** the frontend appears in the session as `master`, and clients see a server named `master`
 
 #### Scenario: Session ends with the server
-- **WHEN** a session whose frontend is `McpServerFrontend` on stdio is run and its client closes the connection
+- **WHEN** a session whose frontend is `McpFrontend` on stdio is run and its client closes the connection
 - **THEN** `session.run()` returns and every peer is shut down
 
 #### Scenario: HTTP without the token

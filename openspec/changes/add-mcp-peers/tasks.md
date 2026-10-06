@@ -11,12 +11,12 @@
 
 ## 2. Packaging
 
-- [ ] 2.1 Add the `mcp` extra (`mcp>=2.3`) to `pyproject.toml`, include it in `all` and `dev`, refresh `uv.lock`, and register `McpServerFrontend` and `McpConnector` as lazy names with the extra in the missing-extra message; verify `import chatinho` works without `mcp` and the architecture extras test passes
+- [ ] 2.1 Add the `mcp` extra (`mcp>=2.3`) to `pyproject.toml`, include it in `all` and `dev`, refresh `uv.lock`, and register `McpFrontend` and `McpConnector` as lazy names with the extra in the missing-extra message; verify `import chatinho` works without `mcp` and the architecture extras test passes
 
 ## 3. MCP server frontend
 
 - [ ] 3.1 Create `src/chatinho/mcp/` with the wire helpers (result building, asker validation, base64 attachments) and unit tests for them
-- [ ] 3.2 Implement `McpServerFrontend` on the SDK's low-level `Server`: the five tools (`ask` with no peer name), `serve()` over stdio, `list_peers` excluding the frontend and proxies, `invoke`, `read_attachment`, statuses and the configurable default deadline (120 s); verify in-memory MCP tests for no broadcast tool, listing, answered, timeout within the deadline, a configured default deadline, and attachments returned
+- [ ] 3.2 Implement `McpFrontend` (named `master` unless given a name, announced in the handshake) on the SDK's low-level `Server`: the five tools (`ask` with no peer name), `serve()` over stdio, `list_peers` excluding the frontend and proxies, `invoke`, `read_attachment`, statuses and the configurable default deadline (120 s); verify in-memory MCP tests for the default name `master`, no broadcast tool, listing, answered, timeout within the deadline, a configured default deadline, and attachments returned
 - [ ] 3.3 Add per-asker proxy peers named `<client>/<asker>` (asking, saying, listening for replies to their broadcasts, answering `error` when asked), removed when the connection ends; verify tests for an asker appearing by name, two clients as two askers, and proxies leaving on disconnect with history kept
 - [ ] 3.4 Decide who answers: the only answering peer is asked directly; with several, the proxy says the question and the first reply to it is the result, or `error` at once when none of them declares `HookListen`; with none, `error`; a follow-up after `asked` goes to the same peer or is said as a reply to the `asked` answer; verify tests for only one peer, several peers, none listens, first reply wins, no peer, and both follow-up cases
 - [ ] 3.5 Serve `HookServeSample` by relaying to the proxy's client through `create_message`, for direct and broadcast questions, raising `SamplingUnavailable` for messages without a client or when the client declines; verify tests with an in-memory client that samples and one that does not
