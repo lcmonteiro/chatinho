@@ -48,7 +48,7 @@ chatinho SHALL provide `HookCredential`, a grant-only hook that gives a peer `cr
 - **THEN** it is called once for each question asked, and its result is what is delegated
 
 ### Requirement: Alive only while the question is answered
-A delegated credential SHALL be bound to the question it came with and to the asker's proxy, and kept only in memory. The server MUST discard it when that question's result is returned, whatever the status, or when the proxy is removed. It MUST NOT be written to the conversation, the store, attachments or logs, and its representation in errors and tracebacks MUST be redacted.
+A delegated credential SHALL be bound to the question it came with and to the asker's proxy, and kept only in memory; it MUST reach only the session the connector connects to. The server MUST discard it when that question's result is returned, whatever the status, or when the proxy is removed. It MUST NOT be written to the conversation, the store, attachments or logs, and its representation in errors and tracebacks MUST be redacted. A connector MUST NOT delegate a credential it obtained through `credential`; it delegates only its own configured ones.
 
 #### Scenario: Gone after the answer
 - **WHEN** a peer has answered a question that came with `llm`, and then calls `credential` for that question's id
@@ -61,10 +61,3 @@ A delegated credential SHALL be bound to the question it came with and to the as
 #### Scenario: Never in history
 - **WHEN** the conversation context and the store are read after a question with a delegated credential
 - **THEN** the credential's value appears nowhere
-
-### Requirement: Never forwarded across hops
-A credential SHALL reach only the session the asker's connector connects to directly. A connector forwarding a question for another session MUST NOT pass on the credentials it received; it MAY delegate its own configured credentials to the next hop.
-
-#### Scenario: Stays at the first hop
-- **WHEN** `me` asks `@lab/office/weather` with `llm` delegated to `lab`
-- **THEN** the session behind `office` receives no credential from `me`, and its peers fall back to sampling or another credential of `lab`'s own
