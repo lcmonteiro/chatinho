@@ -7,6 +7,8 @@
 - [ ] 1.3 Add `ChatSession.remove_connector(peer_id)`: stop its drain task, drop its queue and entry, fail its pending asks with `PeerRemoved`, keep its messages, refuse `LOCAL` and unknown ids; verify tests for every `peer-lifecycle` scenario, plus one for adding a peer to a running session and calling `start()` again
 - [ ] 1.4 Add `HookSample` (grant `sample`), `HookServeSample` (demands `serve_sample`), their protocols and `SamplingUnavailable`; the session routes `sample` to the frontend or raises; document both hooks in `docs/SPEC.md`; verify the `sampling` scenarios and `tests/test_architecture.py` pass
 
+- [ ] 1.5 Add `HookCredential` (grant `credential`), `HookServeCredential` (demands `serve_credential`), their protocols, `CredentialUnavailable` and a `Secret` wrapper with a redacted `repr`; the session routes `credential` to the frontend or raises; document both hooks in `docs/SPEC.md`; verify the credential-hook scenarios and `tests/test_architecture.py` pass
+
 ## 2. Packaging
 
 - [ ] 2.1 Add the `mcp` extra (`mcp>=2.3`) to `pyproject.toml`, include it in `all` and `dev`, refresh `uv.lock`, and register `McpServerFrontend` and `McpConnector` as lazy names with the extra in the missing-extra message; verify `import chatinho` works without `mcp` and the architecture extras test passes
@@ -18,7 +20,8 @@
 - [ ] 3.3 Add per-asker proxy peers named by client name and asker path, removed when the connection ends; verify tests for an asker appearing by name, two clients as two askers, and proxies leaving on disconnect with history kept
 - [ ] 3.4 Add multi-hop forwarding (`forward` on connectors), visited session ids, hop limit 8 and `hop` naming; verify tests for two hops, loop refused, too many hops, and errors naming the hop
 - [ ] 3.5 Serve `HookServeSample` by relaying to the proxy's client through `create_message`, raising `SamplingUnavailable` for messages without a client or when the client declines; verify tests with an in-memory client that samples and one that does not
-- [ ] 3.6 Add the Streamable HTTP transport with a mandatory bearer token; verify a test that a request without the token is refused and one with it is served
+- [ ] 3.6 Add credential delegation to the server: `credentials=` declared in `capabilities.experimental`, undeclared names dropped, credentials read from `_meta` and kept per question message id, served through `serve_credential`, popped in `finally` and on proxy removal; verify tests for declared in the handshake, undeclared ignored, gone after the answer, gone on timeout, and never in the context or store
+- [ ] 3.7 Add the Streamable HTTP transport with a mandatory bearer token; verify a test that a request without the token is refused and one with it is served
 
 ## 4. MCP connector
 
@@ -27,8 +30,10 @@
 - [ ] 4.3 Reply exactly once per addressed message: text and attachments for `answered`, the remote question for `asked`, and short status messages naming the hop for `error`, `timeout` and lost connections; verify tests for each
 - [ ] 4.4 Serve sampling requests with `sample_with` for local questions, relay through `sample` for forwarded ones, and decline otherwise; verify tests for local model, relayed toward the origin across two hops, and nothing to sample with
 
+- [ ] 4.5 Add `delegate=` to `McpConnector`: send only configured credentials the server declared, in `_meta`, calling callables per question; refuse non-`https` non-loopback URLs; never pass on received credentials when forwarding; verify tests for sent with the question, not declared not sent, plain HTTP refused, token per question, and stays at the first hop across two hops
+
 ## 5. End to end, docs and checks
 
 - [ ] 5.1 Add an end-to-end test of three sessions (A → B → C) over in-memory MCP: `@lab/office/weather` gets C's answer with an attachment in A, C's peer samples through A's `sample_with`, and B and C name the asker `lab/me` and `office/lab/me`
-- [ ] 5.2 Add `examples/mcp_server.py` (a headless session served over stdio) and update `README.md` (extras table, an "MCP peers" section with addressing, sampling and the token) and `CLAUDE.md`; verify the example runs and the README matches the API
+- [ ] 5.2 Add `examples/mcp_server.py` (a headless session served over stdio) and update `README.md` (extras table, an "MCP peers" section with addressing, sampling, opt-in credential delegation with its sub-key advice, and the token) and `CLAUDE.md`; verify the example runs and the README matches the API
 - [ ] 5.3 Run `ruff check src tests examples`, `mypy src/chatinho`, `pytest -q` and `openspec validate --all --strict --no-interactive`; verify all pass

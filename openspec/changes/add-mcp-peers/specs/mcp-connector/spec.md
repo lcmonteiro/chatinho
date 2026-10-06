@@ -63,7 +63,7 @@ The connector SHALL send, with each question, the path of who asked it: the loca
 - **THEN** the next session sees the asker as `office/lab/me`
 
 ### Requirement: Serving samples with the local model
-The connector SHALL answer MCP sampling requests from its server: for a question that started in this session, with a sample function given to the connector (for example one backed by the local LLM); for a question it is forwarding, by relaying the request through its own session's `sample` on behalf of the message it is answering. With no sample function and nothing to relay to, it MUST decline the request. The connector MUST NOT send any API key to the server.
+The connector SHALL answer MCP sampling requests from its server: for a question that started in this session, with a sample function given to the connector (for example one backed by the local LLM); for a question it is forwarding, by relaying the request through its own session's `sample` on behalf of the message it is answering. With no sample function and nothing to relay to, it MUST decline the request. The connector MUST NOT send any API key to the server, except credentials it is configured to delegate (see `credential-delegation`).
 
 #### Scenario: Local model answers the remote peer
 - **WHEN** the connector was given a sample function and the server sends a sampling request for a question the local user asked

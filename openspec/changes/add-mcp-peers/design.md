@@ -15,7 +15,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 
 **Goals:**
 - One peer in the local chat reaches any peer of any session along a route, and always gets one answer back.
-- A remote peer's LLM calls are paid by the session that asked, and no key crosses the link.
+- A remote peer's LLM calls are paid by the session that asked. By default no key crosses the link; delegating one is opt-in and bounded to one question and one hop.
 - Every piece is testable offline, over in-memory MCP streams.
 
 **Non-Goals:**
@@ -76,23 +76,34 @@ Every outcome maps to one result:
 - **In B, `serve_sample(msg_id, …)`:** look up `msg_id`. If the question came from a proxy, send `create_message` on that proxy's client connection and return the text. Otherwise raise `SamplingUnavailable`.
 - **In A, `McpConnector`'s `sampling_callback` for a question it is forwarding:** the request is relayed upward with `self.sample(question_msg_id, …)`, which goes to A's own frontend. The connector keeps a map from its in-flight forward to the local question message.
 - **For a question that started locally:** the connector calls the `sample_with` function it was given, for example orbe's `openai_model()`. With neither available, it declines.
-- Keys never appear in any message.
+- Sampling sends no key, and keys never appear in any message.
 
-### 7. Addressing in the local chat
+### 7. Credential delegation (opt-in)
+This follows A2A's principle: credentials travel out of band, the server declares what it needs, and a short-lived, scoped credential is preferred to a master key.
+- **Core:** `HookCredential` (grant `credential(msg_id, name)`) and `HookServeCredential` (demands `serve_credential`), mirroring sampling: keyed by the message being answered, served by the frontend, and otherwise raising `CredentialUnavailable`.
+- **Declaration:** `McpServerFrontend(credentials={"llm": "OpenAI-compatible API key"})` announces the names in the initialize result's `capabilities.experimental["chatinho/credentials"]`. Undeclared names are dropped on arrival.
+- **Delivery:** `McpConnector(delegate={"llm": value | callable})` puts the declared ones in the `ask` request's `_meta["chatinho/credentials"]`. A callable is called per question, so it can mint short-lived tokens. Over HTTP the connector delegates only to `https` URLs or loopback hosts.
+- **Lifetime:** the server keeps a dict from question message id to credentials, holding values in a `Secret` wrapper whose `repr` is redacted. The entry is popped in the `finally` of `ask`, so it is gone on every outcome, including `timeout`, and with the proxy on disconnect. Nothing goes to the message, the store or logs.
+- **No forwarding:** `forward(...)` takes no credentials argument, so a forwarding connector cannot pass on what it received; it only adds its own `delegate` configuration.
+- **Priority for peers:** a peer (for example orbe's agent) may try `credential` first and fall back to `sample`.
+- *Alternative: put the key in the question text or a session-wide setting.* That leaks into history and outlives the question.
+- *Alternative: forward credentials along the route.* That multiplies who holds the key, which A2A also avoids.
+
+### 8. Addressing in the local chat
 - **Parsing:** `McpConnector` listens to local broadcasts and parses a leading `@<name>(/seg)*` followed by whitespace. A message without its name is ignored.
 - **Direct asks:** for a direct ask to the connector, the same prefix is optional, and the default peer is used without one.
 - **Asker path:** the connector sends the asking peer's name, split on `/`. For the local user that's the frontend's name (for example `me`). For a proxy it's `lab/me`, which the next server prefixes with its client name. This gives the reverse route at every hop with one rule.
 
-### 8. Connection lifecycle
+### 9. Connection lifecycle
 - `McpConnector` opens its `ClientSession` in `initialize()` and closes it in `shutdown()`. It doesn't implement `serve()`, because a dropped link must not end the local chat.
 - On a lost connection it reconnects lazily on the next question, and answers `error` ("could not reach …") if that fails.
 - **Transports:** `command=[…]` for stdio, or `url=…, token=…` for HTTP with a `Bearer` header; `deadline` is optional.
 - `McpServerFrontend(transport="stdio" | "http", host, port, token, deadline)`. Its `serve()` runs `stdio_server` or a Uvicorn app with the Streamable HTTP session manager and a bearer-token check.
 
-### 9. Packaging
+### 10. Packaging
 - `chatinho.mcp` imports `mcp` and is exposed through the lazy `__getattr__` as `McpServerFrontend` and `McpConnector`, with the `mcp` extra in the missing-extra message.
 - `pyproject.toml` gains `mcp = ["mcp>=2.3"]`, and `all` and `dev` include it.
-- `docs/SPEC.md` documents `HookSample` and `HookServeSample`, and the architecture tests' extras check covers `mcp`.
+- `docs/SPEC.md` documents `HookSample`, `HookServeSample`, `HookCredential` and `HookServeCredential`, and the architecture tests' extras check covers `mcp`.
 
 ## Risks / Trade-offs
 
@@ -100,6 +111,7 @@ Every outcome maps to one result:
 - **Attachment bytes through `locate`** depend on a linking backend. → The server documents it and the result says when attachments couldn't be returned. A byte-level grant is a follow-up.
 - **Sampling support varies by client.** → Peers get `SamplingUnavailable` and answer with an error, which is still one result; orbe can fall back to a local model.
 - **The `mcp` extra pulls in pydantic and other compiled packages**, so it's heavy on Termux. → It's optional, and the core stays dependency-free.
+- **A delegated credential is readable by the first hop's code while it answers.** Delegation reduces exposure (one question, one hop, memory only) but cannot prevent a dishonest or buggy remote from copying it. → It's opt-in, HTTPS-only, and the docs recommend a sub-key with a spending limit or a short-lived token. Sampling stays the default.
 - **HTTP exposes every peer.** → The bearer token is mandatory on HTTP. The token and URL are the connector's configuration and are never sent to other hops.
 - **Names are not unique across machines.** → They're used only for display and routing, while loops are detected by random session ids.
 

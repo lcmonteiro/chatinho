@@ -89,7 +89,7 @@ Attachments of an answer SHALL be returned in the result, each with its name, me
 - **THEN** the result carries `chart.svg` with media type `image/svg+xml` and its bytes
 
 ### Requirement: Sampling relayed to the asker
-The server SHALL serve `HookSample` for the session: a sample requested on behalf of a message from an asker's proxy MUST be relayed as an MCP sampling request to the client that asker came through, and its completion returned to the peer. A sample for a message that came from no client, or a client that declines or does not support sampling, MUST raise `SamplingUnavailable` in the peer. The server MUST NOT accept, store or forward API keys.
+The server SHALL serve `HookSample` for the session: a sample requested on behalf of a message from an asker's proxy MUST be relayed as an MCP sampling request to the client that asker came through, and its completion returned to the peer. A sample for a message that came from no client, or a client that declines or does not support sampling, MUST raise `SamplingUnavailable` in the peer. The server MUST NOT accept, store or forward API keys, except credentials delegated as the `credential-delegation` capability allows.
 
 #### Scenario: Peer uses the asker's model
 - **WHEN** client `lab` asks `agent`, and `agent` calls `sample` on behalf of that question
