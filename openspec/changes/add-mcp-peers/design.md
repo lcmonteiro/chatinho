@@ -56,6 +56,7 @@ The answering peers are those in `peers()` that declare `HookAnswer`, excluding 
 - **One peer:** `asyncio.wait_for(proxy.ask(id, text, detail=True), deadline)`.
 - **Several peers:** the proxy `say`s the question and registers a future under the said message id. Its `listen` resolves that future with the first message whose `reply_to` is that id; later replies only stay in the conversation. The wait is `asyncio.wait_for(future, deadline)`.
 - **Follow-up after `asked`:** the proxy remembers the last `asked` answer id. With one peer, the next question is a new `ask` to that peer from the same proxy, so the peer has the history. With several, the next question is said with `reply_to` set to that answer, so the peer that asked sees it's for it.
+- **Several peers, none listening:** a `say` reaches only peers that declare `HookListen`, so if none of the answering peers listens, nobody could ever reply. The result is `error` at once ("several peers and none listens; a peer router is needed") rather than a `timeout` after the whole deadline.
 - **No peer:** `error` at once.
 - *Alternative: let the client name the peer.* That's what a route did; it is dropped to keep one hop and let the remote side own routing, which a peer router will take over.
 
@@ -67,6 +68,7 @@ Every outcome maps to one result:
 | A peer replied to the broadcast | `answered` |
 | `asyncio.TimeoutError` | `timeout` |
 | No answering peer | `error` |
+| Several answering peers, none listening | `error` |
 | The peer raised | `error` |
 | `PeerRemoved` | `error` |
 

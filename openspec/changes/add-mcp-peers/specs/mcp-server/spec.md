@@ -29,15 +29,19 @@ The server SHALL expose these MCP tools and no tool that broadcasts on the clien
 - **THEN** the result is `agent` and `weather`, without the frontend or any asker's proxy
 
 ### Requirement: The session decides who answers
-For each `ask`, the server SHALL count the session's answering peers: peers that declare `HookAnswer`, excluding the frontend and the asker proxies. With exactly one, it MUST ask that peer directly from the asker's proxy. With more than one, it MUST say the question to the room from the asker's proxy and take the first message that replies to it as the answer; later replies stay in the conversation but are not returned. With none, the result MUST be `error`. This rule stands in for a future peer router.
+For each `ask`, the server SHALL count the session's answering peers: peers that declare `HookAnswer`, excluding the frontend and the asker proxies. With exactly one, it MUST ask that peer directly from the asker's proxy. With more than one, it MUST say the question to the room from the asker's proxy and take the first message that replies to it as the answer; later replies stay in the conversation but are not returned. A said question reaches only peers that declare `HookListen`, so when none of the answering peers listens, the result MUST be `error` at once instead of waiting for the deadline. With none, the result MUST be `error`. This rule stands in for a future peer router.
 
 #### Scenario: Only one peer
 - **WHEN** a client asks "will it rain?" of a session whose only answering peer is `weather`
 - **THEN** `weather` is asked directly, and its answer is the result
 
 #### Scenario: Several peers
-- **WHEN** a client asks "draw the login flow" of a session with peers `agent` and `weather`, and `agent` replies to the question
+- **WHEN** a client asks "draw the login flow" of a session with peers `agent` and `weather`, `agent` listens, and `agent` replies to the question
 - **THEN** the question was said to the room, and `agent`'s reply is the result
+
+#### Scenario: None listens
+- **WHEN** a client asks a session with peers `agent` and `weather`, neither of which declares `HookListen`
+- **THEN** the result is `error` at once, saying that several peers could answer and none listens, so a peer router is needed
 
 #### Scenario: First reply wins
 - **WHEN** two peers reply to the same broadcast question
