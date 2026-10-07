@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Turns a headless chatinho session into an MCP server, so MCP clients — including other chatinho sessions — can put questions to it, get exactly one answer per question, and lend their own intelligence to the peers that answer them.
+Turns a headless chatinho session into an MCP server, so MCP clients — including other chatinho sessions — can put questions to it, get exactly one answer per question, and lend credentials with each message to the peers that answer it.
 
 ## ADDED Requirements
 
@@ -52,7 +52,7 @@ For each `say`, the frontend SHALL count the session's answering peers: peers th
 - **THEN** the result is `error` saying no peer can answer
 
 ### Requirement: Exactly one result per question
-Every `say` SHALL return exactly one result `{status, text, attachments}`, with `status` one of `answered`, `asked` (answered with a question back to the asker), `error` or `timeout`. It MUST return before the request's deadline: the caller's `deadline_ms`, or else the frontend's default deadline, which is configurable when the frontend is created and is 120 seconds when not set; a question nobody has answered by then MUST yield `timeout`. A failing peer MUST yield `error` with a message saying what failed. Results of `error` and `timeout` MUST be marked as tool errors in MCP. The result carries the status of the reply's message: the peer's `Reply` status when the lone peer was asked, `answered` for a plain text or a reply said in the room.
+Every `say` SHALL return exactly one result `{status, text, attachments, msg_id}`, where `msg_id` is the reply's message id and is absent when no reply arrived, with `status` one of `answered`, `asked` (answered with a question back to the asker), `error` or `timeout`. It MUST return before the request's deadline: the caller's `deadline_ms`, or else the frontend's default deadline, which is configurable when the frontend is created and is 120 seconds when not set; a question nobody has answered by then MUST yield `timeout`. A failing peer MUST yield `error` with a message saying what failed. Results of `error` and `timeout` MUST be marked as tool errors in MCP. The result carries the status of the reply's message: the peer's `Reply` status when the lone peer was asked, `answered` for a plain text or a reply said in the room.
 
 #### Scenario: Answered
 - **WHEN** the session's only peer `weather` answers `sunny`

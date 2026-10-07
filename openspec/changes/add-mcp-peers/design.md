@@ -5,7 +5,6 @@
 See proposal.md for why. What the code has today, and what shapes the approach:
 
 - A frontend is a peer at `LOCAL` declared with `@frontend`; `ChatApp` gets every capability through grants (`say`, `ask`, `context`, `peers`, `commands`, `invoke`, `locate`). `session.run()` runs every peer's `serve()` and closes when the first one returns, calling `shutdown()` on each peer.
-- `add_connector` works on a running session: calling `start()` again starts the new peer's queue task. There is no way to remove a peer.
 - `ask` returns the answer's text only. `@require(HookAsk, timeout=…)` is documented but not enforced anywhere.
 - Attachments go to the backend that declares `HookKeep`, under the message id; anyone with `locate` can get a link to them. With no keeping backend they are dropped.
 - A `say` is a broadcast, and a reply to it is another `say` with `reply_to`. Nothing is owed back, so nothing resolves for the sayer; a peer that declares `HookListen` hears every message, including those replies.
@@ -21,12 +20,12 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 **Goals:**
 - One peer in the local chat puts a question to a remote session, and always gets one answer back.
 - A remote peer's LLM calls are paid by the session that asked. Paying for them is done by delegating a credential, opt-in and bounded to one question.
-- Every piece is testable offline, over in-memory MCP streams.
+- Every piece is testable offline, with the SDK's in-process MCP client.
 
 **Non-Goals:**
 - Routes through several sessions (multi-hop) and choosing a remote peer from the client.
 - A peer router. Until there is one, the remote session sends a question to its only peer, or says it to the room.
-- Broadcasts from the client, notifications, and resource subscriptions.
+- Notifications and resource subscriptions.
 - Remote peers mirrored one-to-one in the local roster.
 - Remote peers asking the remote asker a question (MCP elicitation); the frontend answers such questions with `error`. A remote peer that needs more information answers with status `asked` instead, and the asker's next question continues the conversation.
 
@@ -45,7 +44,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 `McpFrontend` uses the SDK's low-level `Server` (`on_list_tools`, `on_call_tool`), for full control over the tool schema and the request context.
 - **Tool:** `say` only. The server is a bridge: it publishes what a client says in the session and returns the first reply. There is no tool to list peers or commands, run commands, or read attachments later; attachments come back with the reply.
 - **`say` arguments:** `text`, `asker?`, `deadline_ms?`. There is no peer name: the session decides who replies.
-- **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}]}`, also rendered as text for clients that only read text. `error` and `timeout` set `isError`.
+- **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, where `msg_id` is the reply's message id in the remote session (absent when no reply arrived),, also rendered as text for clients that only read text. `error` and `timeout` set `isError`.
 - **Read back:** `McpConnector` turns the result straight into its local `Reply`: `answered` keeps the text and attachments, `asked` becomes `ReplyStatus.ASKED`, and `error` and `timeout` become `ReplyStatus.ERROR` with the status named in the text.
 - *Alternative: FastMCP decorators.* They're quicker to write but hide the request context needed for client names and lent credentials.
 

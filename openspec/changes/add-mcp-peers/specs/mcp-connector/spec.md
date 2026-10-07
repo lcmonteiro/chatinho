@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Lets a chatinho session put questions to another session over MCP through one ordinary peer, addressed by name, while lending the local model to the remote peers that answer.
+Lets a chatinho session put questions to another session over MCP through one ordinary peer, addressed by name, while lending credentials, with each question, to the remote peers that answer.
 
 ## ADDED Requirements
 
@@ -27,6 +27,10 @@ The connector SHALL send a question only for messages addressed to it: a message
 #### Scenario: Not addressed
 - **WHEN** the user says something that does not start with `@lab`
 - **THEN** the connector sends nothing and says nothing
+
+#### Scenario: The only answering peer here
+- **WHEN** the connector is the only peer in the local chat that answers, and the user says `will it rain?` without `@lab`
+- **THEN** the session asks the connector, by the core rule, and the connector asks the remote session `will it rain?`
 
 ### Requirement: Every question gets one answer
 For every message it is addressed by, the connector SHALL post exactly one reply to it: the remote answer's text, with its attachments attached, when the status is `answered`; the remote peer's question, marked as a question back to the asker, for `asked`; and a short message naming the status for `error` and `timeout`. Losing the connection MUST also produce a reply saying so.
