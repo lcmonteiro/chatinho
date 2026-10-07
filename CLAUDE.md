@@ -790,8 +790,8 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 49 names: `build_chat`, `ChatSession`, `ChatMessage`, `MessageID`, `Attachment`,
-`Reply`, `Secret`, `ChatStyle`, `LOCAL`, `TOOL`; the declaring machinery (`connector`, `tool`,
+`__init__.py` exports 50 names: `build_chat`, `ChatSession`, `ChatMessage`, `MessageID`, `Attachment`,
+`Reply`, `ReplyStatus`, `Secret`, `ChatStyle`, `LOCAL`, `TOOL`; the declaring machinery (`connector`, `tool`,
 `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`, `declared_id`, `name_of`, `Hook`);
 the fourteen `Hook*` constants; the grant protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`,
 `Commands`, `Locate`); and the batteries (`A2AConnector`, `OpenAIConnector`,

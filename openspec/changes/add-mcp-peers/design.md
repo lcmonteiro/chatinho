@@ -33,7 +33,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 ## Decisions
 
 ### 1. Core additions stay small and generic
-- **`Reply.status`** (`answered` | `asked` | `error`, default `answered`; "I don't know" is an `answered` text), carried on the answer's **`ChatMessage.status`**. Whoever hears or reads the reply sees what it said about itself; `ask` still returns the text. The archive does not keep the status.
+- **`Reply.status`**, a `ReplyStatus` `str` enum (`ANSWERED` | `ASKED` | `ERROR`, default `ANSWERED`; "I don't know" is an `answered` text), carried on the answer's **`ChatMessage.status`**. Whoever hears or reads the reply sees what it said about itself; `ask` still returns the text. The archive does not keep the status.
 - **A say in a room with one peer that answers is asked of it.** `say` addresses the message to that peer when it is not a reply, is not from a command, and exactly one peer other than the speaker and the frontend declares `HookAnswer`. Its `answer` is called, and the reply comes back with `reply_to` set to the say. Listeners still hear both. This makes a room with one agent a conversation with it, and it is what lets the MCP bridge use one verb.
 - *Alternative, the earlier draft: `ask(..., detail=True) -> Answer(text, status, msg_id)`.* It gave the frontend the status and the answer's id, but only for its own asks. With the status on the message and a say that asks the lone peer, the frontend just says and listens, and `detail` goes.
 - **Credentials on the message:** `ChatMessage.credentials`, set through `say(..., credentials=…)` (decision 5).
@@ -46,6 +46,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - **Tool:** `say` only. The server is a bridge: it publishes what a client says in the session and returns the first reply. There is no tool to list peers or commands, run commands, or read attachments later; attachments come back with the reply.
 - **`say` arguments:** `text`, `asker?`, `deadline_ms?`. There is no peer name: the session decides who replies.
 - **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}]}`, also rendered as text for clients that only read text. `error` and `timeout` set `isError`.
+- **Read back:** `McpConnector` turns the result straight into its local `Reply`: `answered` keeps the text and attachments, `asked` becomes `ReplyStatus.ASKED`, and `error` and `timeout` become `ReplyStatus.ERROR` with the status named in the text.
 - *Alternative: FastMCP decorators.* They're quicker to write but hide the request context needed for client names and lent credentials.
 
 ### 3. The frontend speaks for every client

@@ -41,7 +41,7 @@ from chatinho.chat_hooks import (
     frontend,
     require,
 )
-from chatinho.chat_message import LOCAL, Attachment, ChatMessage, MessageID, Reply, Secret
+from chatinho.chat_message import LOCAL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +159,7 @@ class McpFrontend:
         """A peer asked the person, and there is none; a reply to what it said is only heard."""
         if msg.reply_to is not None:
             return None
-        return Reply(_NOBODY_HERE, status="error")
+        return Reply(_NOBODY_HERE, status=ReplyStatus.ERROR)
 
     async def listen(self, msg: ChatMessage) -> None:
         """Hands the first reply to a client's message back to that client."""
@@ -256,7 +256,7 @@ class McpFrontend:
         if message.room:
             self._last_heard[message.asker] = reply.id
         attachments = await self._attachments_of(reply.id, reply.text)
-        return _result(reply.status, reply.text, attachments, str(reply.id))
+        return _result(ReplyStatus(reply.status).value, reply.text, attachments, str(reply.id))
 
     def _close(self, message: _Message) -> None:
         """Lets go of everything a message held: its wait and its credentials."""
@@ -320,7 +320,7 @@ def _result(
         ValueError: *status* is not one of :data:`STATUSES`.
     """
     if status not in STATUSES:
-        raise ValueError("A _result's status is one of %s, got %r" % (", ".join(STATUSES), status))
+        raise ValueError("A result's status is one of %s, got %r" % (", ".join(STATUSES), status))
     shown = text if status == "answered" else "[%s] %s" % (status, text)
     return types.CallToolResult(
         content=[types.TextContent(text=shown)],

@@ -18,7 +18,6 @@ import ipaddress
 import logging
 import mimetypes
 from contextlib import AsyncExitStack
-from dataclasses import dataclass
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
 from urllib.parse import urlparse
 
@@ -36,7 +35,7 @@ from chatinho.chat_hooks import (
     name_of,
     require,
 )
-from chatinho.chat_message import TOOL, Attachment, ChatMessage, Reply
+from chatinho.chat_message import TOOL, Attachment, ChatMessage, Reply, ReplyStatus
 
 logger = logging.getLogger(__name__)
 
@@ -53,39 +52,27 @@ DEFAULT_DEADLINE : float = 120.0
 
 # === What comes back from the server ==============================================
 
-@dataclass(frozen=True)
-class _Remote:
-    """One question's result, as the asking side reads it.
+def _reply_from(res: types.CallToolResult, name: str) -> Reply:
+    """The local reply for what ``McpFrontend`` wrote, or the best of a plain result.
 
-    Attributes:
-        status: One of :data:`STATUSES`.
-        text: The answer, the question back, or what went wrong.
-        attachments: What the answer attached, bytes included.
-        msg_id: The answer's message id in the remote session, when there is one.
-    """
-
-    status      : str
-    text        : str
-    attachments : Tuple[Attachment, ...] = ()
-    msg_id      : Optional[str] = None
-
-
-def _read_result(res: types.CallToolResult) -> _Remote:
-    """Reads back what ``McpFrontend`` wrote, or makes the best of a plain result.
-
+    ``answered`` keeps the text and attachments; ``asked`` becomes a question
+    from the remote session; ``error`` and ``timeout`` become a short error.
     A server that is not a chatinho session answers with text alone: that is
-    ``answered``, or ``error`` when the result is marked as one.
+    answered, or an error when the result is marked as one.
     """
     data = res.structured_content
     if isinstance(data, dict) and data.get("status") in STATUSES:
-        return _Remote(
-            status      = data["status"],
-            text        = str(data.get("text", "")),
-            attachments = tuple(_decode(item) for item in data.get("attachments") or ()),
-            msg_id      = data.get("msg_id"),
-        )
-    text = "\n".join(block.text for block in res.content if isinstance(block, types.TextContent))
-    return _Remote("error" if res.is_error else "answered", text)
+        status = data["status"]
+        text   = str(data.get("text", ""))
+    else:
+        status = "error" if res.is_error else "answered"
+        text   = "\n".join(block.text for block in res.content if isinstance(block, types.TextContent))
+        data   = {}
+    if status == "answered":
+        return Reply(text, tuple(_decode(item) for item in data.get("attachments") or ()))
+    if status == "asked":
+        return Reply("%s asks: %s" % (name, text), status=ReplyStatus.ASKED)
+    return Reply("%s: %s — %s" % (name, status, text), status=ReplyStatus.ERROR)
 
 
 def _decode(data: Dict[str, Any]) -> Attachment:
@@ -239,7 +226,8 @@ class McpConnector:
     async def _say_remote(self, text: str, asker: str) -> Reply:
         """Asks the remote session, and turns whatever happens into one reply."""
         if self._delegate and not self._may_delegate():
-            return Reply("%s: lending credentials needs HTTPS; nothing was sent" % self.name, status="error")
+            return Reply("%s: lending credentials needs HTTPS; nothing was sent" % self.name,
+                         status=ReplyStatus.ERROR)
         args : Dict[str, Any] = {"text": text, "asker": asker}
         if self.deadline is not None:
             args["deadline_ms"] = int(self.deadline * 1000)
@@ -249,20 +237,14 @@ class McpConnector:
             meta   = self._lending(client)
             got    = await asyncio.wait_for(client.call_tool("say", args, meta=meta), limit)
         except asyncio.TimeoutError:
-            return Reply("%s: timeout — the remote session never answered" % self.name, status="error")
+            return Reply("%s: timeout — the remote session never answered" % self.name,
+                         status=ReplyStatus.ERROR)
         except Exception as exc:
             logger.warning("%s could not ask its server: %r", self.name, exc)
             self._disconnect()
             return Reply("%s: could not reach the remote session (%s)" % (self.name, type(exc).__name__),
-                         status="error")
-        return self._reply_for(_read_result(got))
-
-    def _reply_for(self, got: _Remote) -> Reply:
-        if got.status == "answered":
-            return Reply(got.text, tuple(got.attachments))
-        if got.status == "asked":
-            return Reply("%s asks: %s" % (self.name, got.text), status="asked")
-        return Reply("%s: %s — %s" % (self.name, got.status, got.text), status="error")
+                         status=ReplyStatus.ERROR)
+        return _reply_from(got, self.name)
 
     # === Lending ====================================================================
 

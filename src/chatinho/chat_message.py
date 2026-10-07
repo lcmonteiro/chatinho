@@ -20,6 +20,7 @@ application.
 import re
 import secrets
 from dataclasses import dataclass, field
+from enum import Enum
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -56,10 +57,19 @@ class Attachment:
     data       : bytes
 
 
-#: What an answer can say about itself. ``answered`` is the default and covers
-#: "I don't know" too, said in the text; ``asked`` is a question back to the
-#: asker; ``error`` is a peer that could not answer.
-ANSWER_STATUSES : Tuple[str, ...] = ("answered", "asked", "error")
+class ReplyStatus(str, Enum):
+    """What an answer says about itself.
+
+    A ``str`` enum, so it compares equal to its value: ``ReplyStatus.ASKED ==
+    "asked"``.
+    """
+
+    #: The default, and it covers "I don't know" too, said in the text.
+    ANSWERED = "answered"
+    #: A question back to the asker, for example when more is needed.
+    ASKED    = "asked"
+    #: The peer could not answer.
+    ERROR    = "error"
 
 
 @dataclass(frozen=True)
@@ -72,17 +82,17 @@ class Reply:
     Attributes:
         text: The answer, as Markdown.
         attachments: What the reply attaches; they go to the backend.
-        status: One of :data:`ANSWER_STATUSES`; ``answered`` when left out.
+        status: What the answer says about itself; ``ANSWERED`` when left out.
+            Its value as a string is accepted too.
     """
 
     text        : str
     attachments : Tuple[Attachment, ...] = ()
-    status      : str = "answered"
+    status      : ReplyStatus = ReplyStatus.ANSWERED
 
     def __post_init__(self) -> None:
-        if self.status not in ANSWER_STATUSES:
-            raise ValueError("A reply's status is one of %s, got %r"
-                             % (", ".join(ANSWER_STATUSES), self.status))
+        # ReplyStatus("maybe") raises ValueError, which is the refusal we want.
+        object.__setattr__(self, "status", ReplyStatus(self.status))
 
 
 class Secret:
@@ -179,9 +189,8 @@ class ChatMessage:
         to: The id it was addressed to, or None when it went to everyone.
         reply_to: The id of the message this answers, when it answers one.
         timestamp: When it entered the history.
-        status: What an answer said about itself — one of
-            :data:`ANSWER_STATUSES`, from the ``Reply`` that made it;
-            ``answered`` for everything else. Not kept by the archive.
+        status: What an answer said about itself, from the ``Reply`` that
+            made it; :attr:`ReplyStatus.ANSWERED` for everything else. Not kept by the archive.
         credentials: Keys lent with this message, by name — for answering it
             and nothing else, so a peer can work with a different key for each
             message. Never in the text, never shown, never kept by the archive;
@@ -194,7 +203,7 @@ class ChatMessage:
     to        : Optional[int] = None
     reply_to  : Optional[MessageID] = None
     timestamp : datetime = field(default_factory=datetime.now)
-    status    : str = "answered"
+    status    : ReplyStatus = ReplyStatus.ANSWERED
     credentials : Dict[str, "Secret"] = field(default_factory=dict, repr=False, compare=False)
 
     @property

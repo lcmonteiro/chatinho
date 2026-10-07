@@ -30,7 +30,7 @@ be peer zero.
 A message says where it came from and where it is going, and that is the whole of the routing:
 
 ```python
-ChatMessage(id, text, frm=0, to=None, reply_to=None, timestamp=..., status="answered", credentials={})
+ChatMessage(id, text, frm=0, to=None, reply_to=None, timestamp=..., status=ReplyStatus.ANSWERED, credentials={})
 ```
 
 `id` and `reply_to` are `MessageID`s, not strings. `str(msg.id)` is `msg-` and 16 random hex
@@ -162,8 +162,9 @@ answer = await self.ask(session.id_of("weather"), "what is the weather?")
 ```
 
 What the reply said about itself is on its message: `msg.status` is `answered`, `asked` (a question
-back) or `error`, from `Reply(..., status=…)`, and `answered` for a plain string. A peer whose
-`answer` fails replies with `status="error"` when nobody is awaiting it — a say asked of it.
+back) or `error` — a `ReplyStatus`, a `str` enum, so `msg.status == "asked"` holds — from
+`Reply(..., status=ReplyStatus.ASKED)`, and `ANSWERED` for a plain string. A peer whose `answer`
+fails replies with `ReplyStatus.ERROR` when nobody is awaiting it — a say asked of it.
 
 `ask(LOCAL, ...)` asks the user. It does not block the chat: the awaiting peer's own task is
 parked, and every other peer carries on.

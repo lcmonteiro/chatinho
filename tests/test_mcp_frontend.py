@@ -6,7 +6,7 @@ import time
 import pytest
 
 from chatinho import LOCAL, Attachment, HookAnswer, HookAsk, Reply, connector, require
-from chatinho.connectors.mcp import _decode, _read_result
+from chatinho.connectors.mcp import _decode
 from chatinho.frontends.mcp import CREDENTIALS_KEY, McpFrontend
 from mcp_kit import Agent, Files, Weather, client, remote, say
 
@@ -37,7 +37,7 @@ async def test_one_tool_say():
         other = await c.call_tool("ask", {"text": "?"})
     assert [t.name for t in tools] == ["say"]
     assert set(tools[0].input_schema["properties"]) == {"text", "asker", "deadline_ms"}
-    assert _read_result(other).status == "error"
+    assert other.is_error and other.structured_content["status"] == "error"
     await session.close()
 
 

@@ -10,6 +10,7 @@ from chatinho import (
     HookListen,
     HookSay,
     Reply,
+    ReplyStatus,
     connector,
     require,
 )
@@ -53,6 +54,12 @@ def test_a_reply_is_answered_unless_it_says_otherwise():
     assert Reply("sunny").status == "answered"
     assert Reply("Which login flow?", status="asked").status == "asked"
     assert Reply("the service is down", status="error").status == "error"
+
+
+def test_a_status_is_an_enum_and_its_value_is_accepted():
+    assert Reply("x", status=ReplyStatus.ASKED).status is ReplyStatus.ASKED
+    assert Reply("x", status="asked").status is ReplyStatus.ASKED
+    assert ReplyStatus.ERROR == "error"
 
 
 def test_an_unknown_status_is_refused():

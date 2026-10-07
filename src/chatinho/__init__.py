@@ -60,7 +60,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .frontends.mcp import McpFrontend
 
 from .chat_session import ChatSession
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, Secret
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
 from .chat_hooks import (
     connector,
     tool,
@@ -153,6 +153,7 @@ __all__ = [
     "MessageID",
     "Attachment",
     "Reply",
+    "ReplyStatus",
     "Secret",
     "ChatStyle",
     "LOCAL",

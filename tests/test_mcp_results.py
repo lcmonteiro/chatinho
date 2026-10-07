@@ -2,19 +2,28 @@
 
 import pytest
 
-from chatinho import Attachment
+from chatinho import Attachment, Reply, ReplyStatus
 from chatinho.connectors import mcp as connector
 from chatinho.frontends import mcp as frontend
 
 
-def test_a_result_reads_back_as_written():
+def test_an_answer_becomes_the_reply_with_its_attachments():
     chart = Attachment("chart.svg", "image/svg+xml", b"<svg/>")
     res   = frontend._result("answered", "here [chart](chart.svg)", [chart], "msg-0123456789abcdef")
-    got   = connector._read_result(res)
-    assert (got.status, got.msg_id) == ("answered", "msg-0123456789abcdef")
-    assert got.text == "here [chart](chart.svg)"
-    assert got.attachments == (chart,)
     assert not res.is_error
+    assert connector._reply_from(res, "lab") == Reply("here [chart](chart.svg)", (chart,))
+
+
+def test_a_question_back_is_marked_asked():
+    got = connector._reply_from(frontend._result("asked", "which city?"), "lab")
+    assert got == Reply("lab asks: which city?", status=ReplyStatus.ASKED)
+
+
+@pytest.mark.parametrize("status", ["error", "timeout"])
+def test_errors_and_timeouts_become_an_error_reply(status):
+    got = connector._reply_from(frontend._result(status, "what went wrong"), "lab")
+    assert got.status is ReplyStatus.ERROR
+    assert got.text == "lab: %s — what went wrong" % status
 
 
 @pytest.mark.parametrize("status", ["error", "timeout"])
@@ -32,9 +41,9 @@ def test_an_unknown_status_is_refused():
 def test_a_plain_result_is_answered_or_an_error():
     import mcp_types as types
     plain = types.CallToolResult(content=[types.TextContent(text="hi")])
-    assert connector._read_result(plain).status == "answered"
+    assert connector._reply_from(plain, "lab") == Reply("hi")
     failed = types.CallToolResult(content=[types.TextContent(text="no")], is_error=True)
-    assert connector._read_result(failed) == connector._Remote("error", "no")
+    assert connector._reply_from(failed, "lab") == Reply("lab: error — no", status=ReplyStatus.ERROR)
 
 
 @pytest.mark.parametrize("raw, name", [
@@ -69,4 +78,5 @@ def test_media_types():
 def test_both_ends_agree_on_the_contract():
     assert frontend.CREDENTIALS_KEY == connector.CREDENTIALS_KEY
     assert frontend.STATUSES == connector.STATUSES
+    assert set(frontend.STATUSES) == {s.value for s in ReplyStatus} | {"timeout"}
     assert frontend.DEFAULT_DEADLINE == connector.DEFAULT_DEADLINE

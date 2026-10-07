@@ -36,7 +36,17 @@ from .chat_hooks import (
     declared_id,
     name_of,
 )
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, MessageStore, Reply, Secret
+from .chat_message import (
+    LOCAL,
+    TOOL,
+    Attachment,
+    ChatMessage,
+    MessageID,
+    MessageStore,
+    Reply,
+    ReplyStatus,
+    Secret,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -408,11 +418,11 @@ class ChatSession:
             else:
                 await self._post(ChatMessage(
                     id=self._store.new_id(), text="%s failed: %s" % (name_of(who), type(exc).__name__),
-                    frm=at, to=msg.frm, reply_to=msg.id, status="error"))
+                    frm=at, to=msg.frm, reply_to=msg.id, status=ReplyStatus.ERROR))
             raise
         if reply is not None:
             text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
-            status   = reply.status if isinstance(reply, Reply) else "answered"
+            status   = reply.status if isinstance(reply, Reply) else ReplyStatus.ANSWERED
             answered = ChatMessage(id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id,
                                    status=status)
             await self._kept(answered, carried)
