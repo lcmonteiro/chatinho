@@ -204,7 +204,7 @@ async def test_not_declared_not_sent():
     lab = McpConnector(server=front.server, name="lab", delegate={"llm": "sk-test"})
     session, view = await _local(lab)
     await view.ask(lab.peer_id, "go")
-    assert agent.keys == ["CredentialUnavailable"]
+    assert agent.keys == [None]
     assert lab._lending(lab._client) is None
     await session.close()
     await remote_session.close()
@@ -247,7 +247,7 @@ async def test_nothing_is_lent_without_delegate():
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
     await view.ask(lab.peer_id, "go")
-    assert agent.keys == ["CredentialUnavailable"]
+    assert agent.keys == [None]
     assert lab._lending(lab._client) is None
     await session.close()
     await remote_session.close()

@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from chatinho import LOCAL, Attachment, CredentialUnavailable, HookAnswer, HookAsk, Reply, connector, require
+from chatinho import LOCAL, Attachment, HookAnswer, HookAsk, Reply, connector, require
 from chatinho.connectors.mcp import _decode, _read_result
 from chatinho.frontends.mcp import CREDENTIALS_KEY, McpFrontend
 from mcp_kit import Agent, Files, Weather, client, remote, say
@@ -242,9 +242,19 @@ async def test_a_credential_is_gone_after_the_reply():
     session, front = await remote(agent, credentials={"llm": "key"})
     async with client(front) as c:
         await _lend(c)
-    said_id = [m for m in session._context() if m.text == "go"][0].id
-    with pytest.raises(CredentialUnavailable):
-        await agent.credential(said_id, "llm")
+    said = [m for m in session._context() if m.text == "go"][0]
+    assert said.credentials == {}
+    await session.close()
+
+
+async def test_each_message_brings_its_own_key():
+    agent = Agent(key=True)
+    session, front = await remote(agent, credentials={"llm": "key"})
+    async with client(front) as c:
+        await _lend(c, value="sk-one")
+        await _lend(c, value="sk-two")
+        await say(c, "no key")
+    assert agent.keys == ["sk-one", "sk-two", None]
     await session.close()
 
 
@@ -254,9 +264,8 @@ async def test_a_credential_is_gone_on_timeout():
     async with client(front) as c:
         got = await _lend(c, deadline_ms=100)
     assert got["status"] == "timeout"
-    said_id = [m for m in session._context() if m.text == "go"][0].id
-    with pytest.raises(CredentialUnavailable):
-        await agent.credential(said_id, "llm")
+    said = [m for m in session._context() if m.text == "go"][0]
+    assert said.credentials == {}                   # cleared at the deadline, while the peer still works
     await session.close()
 
 

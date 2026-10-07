@@ -12,7 +12,7 @@ A chatinho session today lives on one machine: its peers can only be reached fro
 - Messages across the link are always questions: a client cannot broadcast to the remote room on its own.
 - Every question gets exactly one result — `answered`, `asked` (answered with a question back), `error` or `timeout` — within a deadline, configurable and 120 s by default. Attachments travel back with the answer.
 - The frontend handles every client itself. It is a bridge with one MCP tool, `say`: it says what a client sends in the session as its own message, and sends the first reply to that message back to that client. No peer is added or removed per client; inside the remote session, every remote question comes from the frontend (`master`).
-- Add opt-in credential delegation, following A2A's principle: the server declares the credentials its peers may use, a connector configured to delegate sends them out of band (MCP request metadata, HTTPS only), and the remote session keeps each one in memory only while that question is answered. A credential never enters message content or history. Peers get it through `HookCredential`.
+- Add opt-in credential delegation, following A2A's principle: the server declares the credentials its peers may use, a connector configured to delegate sends them out of band (MCP request metadata, HTTPS only), and the remote session keeps each one in memory only while that question is answered. A credential never enters message content or history. It rides on the message as metadata (`msg.credentials`), so the peer that answers uses that message's key for that reply, and one peer can work with a different key per message.
 - Let answers carry a status (`Reply(..., status="asked" | "error")`), kept on the answer's message (`ChatMessage.status`), so replies are relayed faithfully.
 - In any session, a say that is not a reply, in a room where exactly one peer answers, is asked of that peer, and its reply comes back as a reply to the say; a peer that fails there replies `error`.
 - Speak the modern MCP protocol (2026-07-28) only: no initialize handshake, and the client's name arrives with every request. MCP sampling is left out: it is deprecated in this protocol revision (SEP-2577), and credential delegation is how a remote peer borrows the asker's intelligence.
@@ -23,7 +23,7 @@ A chatinho session today lives on one machine: its peers can only be reached fro
 
 ### New Capabilities
 - `answer-details`: answer statuses on `Reply` and on the answer's message, and a say in a room with one peer that answers being asked of it.
-- `credential-delegation`: `HookCredential`, credentials declared by the server, delegated out of band by the connector, and alive only while their question is answered.
+- `credential-delegation`: credentials declared by the server, delegated out of band by the connector, carried on the message (`ChatMessage.credentials`), and alive only while that message is answered.
 - `mcp-server`: `McpFrontend` — the MCP interface of a session, forwarding each client's question and routing the reply back, who answers a question (the only peer, or the first reply in the room), the one-result guarantee and deadlines.
 - `mcp-connector`: `McpConnector` — naming, addressing from the local chat, sending questions, and bringing back answers and attachments.
 
@@ -32,9 +32,9 @@ A chatinho session today lives on one machine: its peers can only be reached fro
 
 ## Impact
 
-- `src/chatinho/chat_session.py`: serving the new `credential` grant; a say asked of the lone peer that answers; a peer whose `answer` raises fails the waiting `ask` or replies `error`.
-- `src/chatinho/chat_message.py`: `Reply.status` and `ChatMessage.status`.
-- `src/chatinho/chat_hooks.py`: `HookCredential`, `HookServeCredential` and their protocol; `docs/SPEC.md` gains their sections (the architecture test requires one per hook).
+- `src/chatinho/chat_session.py`: putting lent credentials on the message said; a say asked of the lone peer that answers; a peer whose `answer` raises fails the waiting `ask` or replies `error`.
+- `src/chatinho/chat_message.py`: `Reply.status`, `ChatMessage.status`, `ChatMessage.credentials` and `Secret`.
+- `src/chatinho/chat_hooks.py`: `say(..., credentials=…)`; `docs/SPEC.md` documents it.
 - New `src/chatinho/frontends/mcp.py` (`McpFrontend`) and `src/chatinho/connectors/mcp.py` (`McpConnector`), exported lazily. `connectors/` and the new `frontends/` import each module on first use, so one battery never needs another's extra.
 - `pyproject.toml`: an `mcp` extra (the official `mcp` SDK), also added to `all` and `dev`; `uv.lock` updated.
 - `README.md`, `CLAUDE.md`, an example under `examples/` for a headless MCP session.

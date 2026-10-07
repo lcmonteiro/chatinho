@@ -182,6 +182,10 @@ class ChatMessage:
         status: What an answer said about itself — one of
             :data:`ANSWER_STATUSES`, from the ``Reply`` that made it;
             ``answered`` for everything else. Not kept by the archive.
+        credentials: Keys lent with this message, by name — for answering it
+            and nothing else, so a peer can work with a different key for each
+            message. Never in the text, never shown, never kept by the archive;
+            whoever lent them clears them once the message is answered.
     """
 
     id        : MessageID
@@ -191,6 +195,7 @@ class ChatMessage:
     reply_to  : Optional[MessageID] = None
     timestamp : datetime = field(default_factory=datetime.now)
     status    : str = "answered"
+    credentials : Dict[str, "Secret"] = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def is_broadcast(self) -> bool:

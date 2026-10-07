@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
 
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Secret
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +51,14 @@ class Say(Protocol):
         *,
         reply_to    : Optional[MessageID] = None,
         attachments : Sequence[Attachment] = (),
+        credentials : Optional[Dict[str, Secret]] = None,
     ) -> MessageID:
         """Adds *text* to the conversation and returns the new message's id.
 
         *attachments* go to the backend, kept under the new message's id; its
         Markdown text can link to them by name. The message itself is text.
+        *credentials* ride on the message, for whoever answers it; the message
+        keeps that very mapping, so whoever lent them can clear it.
         """
         ...
 
@@ -70,23 +73,6 @@ class Ask(Protocol):
 
         Raises:
             Exception: Whatever the peer's ``answer`` raised, when it failed.
-        """
-        ...
-
-
-class CredentialUnavailable(RuntimeError):
-    """No credential by that name was lent for that message, or no frontend
-    serves credentials."""
-
-
-class Credential(Protocol):
-    """Granted by ``HookCredential``: a credential lent for one message."""
-
-    async def __call__(self, msg_id: MessageID, name: str) -> str:
-        """Returns the credential called *name* lent for *msg_id*.
-
-        Raises:
-            CredentialUnavailable: None by that name was lent for it.
         """
         ...
 
@@ -326,27 +312,6 @@ HookLocate = Hook(
     # None when nobody did. The terminal opens a message's relative links so.
 )
 
-# === Lending to whoever answers =================================================
-#
-# A peer that answers someone may need what that someone has: a key to pay for
-# a model with. It is asked for on behalf of the message being answered — the
-# one thing every peer already holds — and the frontend, which speaks for
-# whoever asked, serves it or refuses.
-
-HookCredential = Hook(
-    name="HookCredential",
-    grants=("credential",),
-    # await credential(msg_id, name) -> str. A credential lent for msg_id alone;
-    # CredentialUnavailable when none was.
-)
-
-HookServeCredential = Hook(
-    name="HookServeCredential",
-    method="serve_credential",
-    # async serve_credential(msg_id, name) -> str. Declared by a frontend that
-    # holds credentials lent with the questions it brought in.
-)
-
 ALL_HOOKS: Tuple[Hook, ...] = (
     HookSay,
     HookListen,
@@ -362,8 +327,6 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookKeep,
     HookLink,
     HookLocate,
-    HookCredential,
-    HookServeCredential,
 )
 
 # Lifecycle is not a hook: initialize() and shutdown() are optional and called

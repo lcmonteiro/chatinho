@@ -1,57 +1,61 @@
-"""HookCredential: what the frontend lends to whoever answers."""
+"""Credentials ride on the message, for whoever answers it."""
 
-import pytest
+import asyncio
 
-from chatinho import (
-    ChatSession,
-    CredentialUnavailable,
-    HookCredential,
-    HookServeCredential,
-    MessageID,
-    Secret,
-    connector,
-    frontend,
-    require,
-)
+from chatinho import HookAnswer, HookSay, Secret, connector, require
 from conftest import driven
 
 
 @connector("pensador")
-@require(HookCredential)
+@require(HookAnswer)
 class _Pensador:
+    """Remembers the key each message brought."""
+
+    def __init__(self):
+        self.keys = []
+
+    async def answer(self, msg):
+        lent = msg.credentials.get("llm")
+        self.keys.append(lent.reveal() if lent is not None else None)
+        return "ok"
+
+
+@connector("lender")
+@require(HookSay)
+class _Lender:
     pass
 
 
-@frontend("lender")
-@require(HookServeCredential)
-class _Lender:
-    def __init__(self):
-        self.lent  = {}
-
-    async def serve_credential(self, msg_id, name):
-        try:
-            return self.lent[msg_id][name].reveal()
-        except KeyError:
-            raise CredentialUnavailable(name) from None
-
-
-async def test_a_lent_credential_is_served_for_its_message_only():
-    lender, peer = _Lender(), _Pensador()
-    session = ChatSession(frontend=lender, connectors=[peer])
-    await session.start()
-    msg_id = MessageID.new()
-    lender.lent[msg_id] = {"llm": Secret("sk-test")}
-    assert await peer.credential(msg_id, "llm") == "sk-test"
-    with pytest.raises(CredentialUnavailable):
-        await peer.credential(MessageID.new(), "llm")
+async def test_each_message_brings_its_own_key():
+    peer, lender = _Pensador(), _Lender()
+    session, _ = await driven(connectors=[peer, lender])
+    await lender.say("one", credentials={"llm": Secret("sk-one")})
+    await lender.say("two", credentials={"llm": Secret("sk-two")})
+    await lender.say("three")
+    await asyncio.sleep(0.05)
+    assert peer.keys == ["sk-one", "sk-two", None]
     await session.close()
 
 
-async def test_nobody_lends_credentials():
-    peer = _Pensador()
-    session, _ = await driven(connectors=[peer])
-    with pytest.raises(CredentialUnavailable):
-        await peer.credential(MessageID.new(), "llm")
+async def test_the_message_keeps_the_lenders_mapping_so_it_can_be_cleared():
+    peer, lender = _Pensador(), _Lender()
+    session, view = await driven(connectors=[peer, lender])
+    lent = {"llm": Secret("sk-one")}
+    said = await lender.say("one", credentials=lent)
+    await asyncio.sleep(0.05)
+    lent.clear()
+    msg = [m for m in view.context() if m.id == said][0]
+    assert msg.credentials == {}
+    await session.close()
+
+
+async def test_a_key_never_shows():
+    peer, lender = _Pensador(), _Lender()
+    session, view = await driven(connectors=[peer, lender])
+    said = await lender.say("one", credentials={"llm": Secret("sk-hidden")})
+    await asyncio.sleep(0.05)
+    msg = [m for m in view.context() if m.id == said][0]
+    assert "sk-hidden" not in repr(msg) and "sk-hidden" not in msg.text
     await session.close()
 
 

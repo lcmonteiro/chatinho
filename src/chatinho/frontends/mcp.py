@@ -8,7 +8,8 @@ peer; when several do, it is said to the room.
 
 It speaks the modern MCP protocol (2026-07-28) over Streamable HTTP, with a
 bearer token on every request. The protocol is stateless: every request names
-its client, and may carry credentials the client lends for that message. No
+its client, and may carry credentials the client lends for that message; they
+ride on the message said in the session, for whichever peer answers it. No
 peer is added per client: messages are told apart by their ids.
 """
 
@@ -28,13 +29,11 @@ import mcp_types as types
 from mcp.server.lowlevel.server import Server
 
 from chatinho.chat_hooks import (
-    CredentialUnavailable,
     HookAnswer,
     HookListen,
     HookLocate,
     HookPeers,
     HookSay,
-    HookServeCredential,
     Locate,
     Peers,
     Say,
@@ -103,7 +102,6 @@ _SAY = types.Tool(
 @require(HookAnswer)
 @require(HookPeers)
 @require(HookLocate)
-@require(HookServeCredential)
 class McpFrontend:
     """Bridges MCP clients into a session, in place of a terminal.
 
@@ -186,15 +184,6 @@ class McpFrontend:
         for message in list(self._open.values()):
             self._close(message)
 
-    # === Lending to whoever answers =================================================
-
-    async def serve_credential(self, msg_id: MessageID, name: str) -> str:
-        """The credential *name* lent with message *msg_id*, while it waits for its reply."""
-        message = self._open.get(msg_id)
-        if message is None or message.closed or name not in message.credentials:
-            raise CredentialUnavailable("No credential %r was lent for %s" % (name, msg_id))
-        return message.credentials[name].reveal()
-
     # === MCP ========================================================================
 
     async def _list_tools(self, ctx: Any, params: Any) -> types.ListToolsResult:
@@ -252,7 +241,7 @@ class McpFrontend:
         # In the room, a follow-up replies to the asker's last reply; to a lone
         # peer it must not be a reply, or the session would not ask it.
         reply_to       = self._last_heard.get(message.asker) if room else None
-        message.msg_id = await self.say(text, reply_to=reply_to)
+        message.msg_id = await self.say(text, reply_to=reply_to, credentials=message.credentials)
         self._open[message.msg_id] = message
         return message
 

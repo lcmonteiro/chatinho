@@ -204,7 +204,7 @@ Opening one is `locate(msg_id, name)` (`HookLocate`), which the session routes t
 system; the terminal only asks, then opens the answer or says "Not found". `DatabaseBackend` keeps
 them as rows and writes a file on the first `link`, into a temp directory it removes at `shutdown`.
 
-## The sixteen hooks
+## The fourteen hooks
 
 The reference is [`docs/SPEC.md`](docs/SPEC.md) — every hook with an example, what it costs, and
 the rules that hold across all of them. `examples/hooks.py` is that document executable: one peer
@@ -226,13 +226,11 @@ per conversation hook, in a chat with no terminal. This section is the summary.
 | `HookKeep` | `keep` | — |
 | `HookLink` | `link` | — |
 | `HookLocate` | — | `locate` |
-| `HookCredential` | — | `credential` |
-| `HookServeCredential` | `serve_credential` | — |
 
-The last two lend to whoever answers: a peer asks for a credential lent with the message it is
-answering, and the frontend — which speaks for whoever asked — serves it or raises
-`CredentialUnavailable`. `McpFrontend` serves it, for one question at a time. MCP sampling was tried
-and dropped: it is deprecated in the modern protocol, and delegation covers the same need.
+A credential is not a hook: it rides on the message (`msg.credentials`), for whoever answers that
+message, so a peer can work with a different key for each one. `McpFrontend` puts a client's lent
+keys there and clears them once the message is answered. MCP sampling was tried and dropped: it is
+deprecated in the modern protocol, and lending a key covers the same need.
 
 Eleven became ten when the second way of hearing was folded into the first. `HookInvoke` and
 `HookExecute` are still two hooks where a single one used to serve, badly — that is the honest
@@ -328,7 +326,7 @@ src/chatinho/
   connectors/      a2a.py, openai.py, mcp.py (McpConnector: asking a remote session over MCP)
                    — plain classes, no base; each imported on first use, behind its own extra
   frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
-docs/              SPEC.md — the sixteen hooks, with an example and a cost for each
+docs/              SPEC.md — the fourteen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
                    agent_inbox.py (HTTP, inbound), mcp_server.py (served over MCP)
@@ -749,7 +747,7 @@ is a boundary that rots. It parses the core modules and fails if:
   `openai`, `sqlalchemy`, `requests` and `mcp` all blocked, and each of the six lazy names has to
   report its own extra;
 - **`docs/SPEC.md` disagrees with the hook constants** — its summary table has to name the same
-  sixteen, with the same demanded method and the same grants, and each one has to have its own
+  fourteen, with the same demanded method and the same grants, and each one has to have its own
   section. A spec nothing checks is a spec that rots, so adding a hook without documenting it
   fails the suite. Both halves were proved by breaking them.
 
@@ -765,7 +763,7 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 ## Packaging: the core installs nothing
 
-`dependencies = []`. `ChatSession`, the sixteen hooks, `HelpCommand` and `TestCommand` import nothing
+`dependencies = []`. `ChatSession`, the fourteen hooks, `HelpCommand` and `TestCommand` import nothing
 but the standard library — which the fitness tests already enforced, so the packaging now says it
 too. Six names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
@@ -792,11 +790,11 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 53 names: `build_chat`, `ChatSession`, `ChatMessage`, `MessageID`, `Attachment`,
+`__init__.py` exports 49 names: `build_chat`, `ChatSession`, `ChatMessage`, `MessageID`, `Attachment`,
 `Reply`, `Secret`, `ChatStyle`, `LOCAL`, `TOOL`; the declaring machinery (`connector`, `tool`,
 `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`, `declared_id`, `name_of`, `Hook`);
-the sixteen `Hook*` constants; what can go wrong (`CredentialUnavailable`); the grant protocols (`Say`,
-`Ask`, `Invoke`, `Context`, `Peers`, `Commands`, `Locate`, `Credential`); and the batteries (`A2AConnector`, `OpenAIConnector`,
+the fourteen `Hook*` constants; the grant protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`,
+`Commands`, `Locate`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `McpFrontend`, `McpConnector`, `HelpCommand`, `TestCommand`).
 
 `ChatApp` is not exported, even though it no longer carries the underscore that used to say so:

@@ -105,7 +105,7 @@ Four rules hold everywhere: **you never hear yourself**; **nothing blocks** (one
 per peer); **hearing is queued**, so a listener sees a message shortly after it was said; and
 **everything that crosses is in the context**.
 
-[`docs/SPEC.md`](docs/SPEC.md) is the reference for all sixteen hooks — what each demands, what it
+[`docs/SPEC.md`](docs/SPEC.md) is the reference for all fourteen hooks — what each demands, what it
 grants, an example, and what it costs. [`examples/hooks.py`](examples/hooks.py) is that document
 executable.
 
@@ -231,11 +231,13 @@ build_chat(connectors=[lab]).run()
   its own, and sends the reply to that message back to the client that sent it — several clients at
   once, told apart by message id. No peer is added per client, so remote peers see every
   question coming from `master`.
-- **Lending intelligence is lending a credential**, the way A2A delegates them, and it is opt-in: `McpFrontend(credentials={"llm": "API key"})` declares what its
-  peers may use, `McpConnector(delegate={"llm": key_or_function})` sends it out of band, over HTTPS
-  or to this machine only, and a peer reads it with `HookCredential` while that one question is
-  open. Without `delegate`, no key leaves the asking machine. Lend a sub-key with a spending limit or
-  a short-lived token — never your main key.
+- **Lending intelligence is lending a credential**, the way A2A delegates them, and it is opt-in:
+  `McpFrontend(credentials={"llm": "API key"})` declares what its peers may use, and
+  `McpConnector(delegate={"llm": key_or_function})` sends it out of band, over HTTPS or to this
+  machine only. It rides on the message said in the remote session, as `msg.credentials`, and the
+  peer that answers uses it for that message alone — so one peer can work with a different key for
+  each message. It is cleared once the message is answered. Without `delegate`, no key leaves the
+  asking machine. Lend a sub-key with a spending limit or a short-lived token — never your main key.
 - **Over Streamable HTTP only, with a bearer token** — required — and anyone holding it can ask every
   peer of the session. There is no stdio transport.
 

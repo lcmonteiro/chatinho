@@ -11,7 +11,6 @@ from chatinho import (
     LOCAL,
     ChatSession,
     HookAnswer,
-    HookCredential,
     HookKeep,
     HookLink,
     HookListen,
@@ -66,12 +65,11 @@ class Weather:
 @require(HookAnswer)
 @require(HookListen)
 @require(HookSay)
-@require(HookCredential)
 @require(HookPeers)
 class Agent:
     """Answers questions asked to it, and replies to questions said to the room.
 
-    With ``key``, it reads the lent credential ``llm`` first.
+    With ``key``, it reads the credential ``llm`` the message carries, or None.
     """
 
     def __init__(self, name: str = "agent", replies: bool = True, key: bool = False,
@@ -86,10 +84,8 @@ class Agent:
 
     async def _respond(self, msg) -> Reply:
         if self.key:
-            try:
-                self.keys.append(await self.credential(msg.id, "llm"))
-            except Exception as exc:
-                self.keys.append(type(exc).__name__)
+            lent = msg.credentials.get("llm")
+            self.keys.append(lent.reveal() if lent is not None else None)
         if self.delay:
             await asyncio.sleep(self.delay)
         text = "%s: %s" % (self.name, msg.text)

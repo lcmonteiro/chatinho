@@ -24,7 +24,6 @@ from inspect import isawaitable
 from typing import Any, Dict, List, Optional, Sequence
 
 from .chat_hooks import (
-    CredentialUnavailable,
     HookExecute,
     HookKeep,
     HookLink,
@@ -32,13 +31,12 @@ from .chat_hooks import (
     HookLoad,
     HookAnswer,
     HookListen,
-    HookServeCredential,
     declares,
     hooks_of,
     declared_id,
     name_of,
 )
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, MessageStore, Reply
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, MessageStore, Reply, Secret
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +253,6 @@ class ChatSession:
             peers   = lambda: self._peers,
             commands= lambda: self._commands,
             locate  = lambda: self.locate,
-            credential = lambda: self._credential,
         )
         for hook in hooks_of(who):
             for granted in hook.grants:
@@ -288,8 +285,11 @@ class ChatSession:
             *,
             reply_to    : Optional[MessageID] = None,
             attachments : Sequence[Attachment] = (),
+            credentials : Optional[Dict[str, Secret]] = None,
         ) -> MessageID:
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=None, reply_to=reply_to)
+            if credentials is not None:
+                msg.credentials = credentials     # the lender's own mapping, so it can clear it
             if reply_to is None and frm != TOOL:
                 msg.to = self._only_answerer(frm)
             await self._kept(msg, attachments)
@@ -325,20 +325,6 @@ class ChatSession:
             finally:
                 self._pending.pop(msg.id, None)
         return ask
-
-    # === Lending to whoever answers ================================================
-
-    async def _credential(self, msg_id: MessageID, name: str) -> str:
-        """The credential *name* lent for *msg_id*. Granted by ``HookCredential``.
-
-        Raises:
-            CredentialUnavailable: The frontend does not declare
-                ``HookServeCredential``, or lent no such credential.
-        """
-        front = self._connectors.get(LOCAL)
-        if front is None or not declares(front, HookServeCredential):
-            raise CredentialUnavailable("Nobody lends credentials in this chat")
-        return await front.serve_credential(msg_id, name)
 
     async def _kept(self, msg: ChatMessage, attachments: Sequence[Attachment]) -> None:
         """Hands what *msg* carries to the backend, before *msg* is posted.

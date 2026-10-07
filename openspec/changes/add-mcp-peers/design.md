@@ -36,7 +36,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - **`Reply.status`** (`answered` | `asked` | `error`, default `answered`; "I don't know" is an `answered` text), carried on the answer's **`ChatMessage.status`**. Whoever hears or reads the reply sees what it said about itself; `ask` still returns the text. The archive does not keep the status.
 - **A say in a room with one peer that answers is asked of it.** `say` addresses the message to that peer when it is not a reply, is not from a command, and exactly one peer other than the speaker and the frontend declares `HookAnswer`. Its `answer` is called, and the reply comes back with `reply_to` set to the say. Listeners still hear both. This makes a room with one agent a conversation with it, and it is what lets the MCP bridge use one verb.
 - *Alternative, the earlier draft: `ask(..., detail=True) -> Answer(text, status, msg_id)`.* It gave the frontend the status and the answer's id, but only for its own asks. With the status on the message and a say that asks the lone peer, the frontend just says and listens, and `detail` goes.
-- **`HookCredential` and `HookServeCredential`** (decision 5).
+- **Credentials on the message:** `ChatMessage.credentials`, set through `say(..., credentials=…)` (decision 5).
 - *Alternative: MCP sampling, relaying each completion back to the asker.* It was in an earlier draft. It is dropped: it is deprecated in the modern protocol, it costs a round trip per completion, and credential delegation covers the same need.
 - **A failing `answer` is a reply.** Today a peer that raises in `answer` leaves its asker waiting forever. The session now sets the exception on a waiting ask, and when nobody awaits the message (a say asked of the lone peer) it posts an `error` reply to it, so the bridge ends in `error` at once.
 - **No peer per client.** The frontend listens and resolves its own waits (decisions 3 and 4), and adds or removes no peer.
@@ -80,12 +80,13 @@ The default deadline is configurable (`McpFrontend(deadline=…)`, 120 s when no
 
 ### 5. Credential delegation (opt-in)
 This follows A2A's principle: credentials travel out of band, the server declares what it needs, and a short-lived, scoped credential is preferred to a master key.
-- **Core:** `HookCredential` (grant `credential(msg_id, name)`) and `HookServeCredential` (demands `serve_credential`), keyed by the question being answered (the direct question or the broadcast one), served by the frontend, and otherwise raising `CredentialUnavailable`.
+- **Core:** the credentials ride on the message as metadata, `ChatMessage.credentials` (keys by name, each a `Secret`), set by `say(..., credentials=…)`. The peer that answers a message reads them from that message, so the key it uses belongs to the message, and one peer can work with a different key for each message.
+- *Alternative, the earlier draft: a `HookCredential` grant served by the frontend (`credential(msg_id, name)`).* It worked, but it was a second path to what the message itself can carry.
 - **Declaration:** `McpFrontend(credentials={"llm": "OpenAI-compatible API key"})` announces the names in its `server/discover` result, as the capability extension `chatinho/credentials` (SEP-2133 `capabilities.extensions`). Undeclared names are dropped on arrival.
 - **Delivery:** `McpConnector(delegate={"llm": value | callable})` discovers the server first, then puts the declared credentials in the `say` request's `_meta["chatinho/credentials"]`. A callable is called per question, so it can mint short-lived tokens. Over HTTP the connector delegates only to `https` URLs or loopback hosts.
-- **Lifetime:** the server keeps a dict from question message id to credentials, holding values in a `Secret` wrapper whose `repr` is redacted. The entry is popped in the `finally` of `say`, so it is gone on every outcome, including `timeout`. Nothing goes to the message, the store or logs.
-- **Not passed on:** the credential reaches only the session the connector connects to. A peer that obtained it through `credential` must not delegate it further; a connector only delegates its own `delegate` configuration.
-- **Using it:** a peer (for example orbe's agent) reads `credential(msg.id, "llm")` and builds its model with that key for this answer only; without one, it answers without a model or with its own.
+- **Lifetime:** the frontend builds the mapping of `Secret`s from the request, says the message with it, and clears that same mapping in the `finally` of the `say` call, so it is gone on every outcome, including `timeout`. The text, the store and logs never hold it, and `ChatMessage`'s `repr` leaves it out.
+- **Not passed on:** the credential reaches only the session the connector connects to. A peer that found it on a message must not delegate it further; a connector only delegates its own `delegate` configuration.
+- **Using it:** a peer (for example orbe's agent) reads `msg.credentials.get("llm")` and builds its model with that key for this message only; without one, it answers without a model or with its own.
 - *Alternative: put the key in the question text or a session-wide setting.* That leaks into history and outlives the question.
 
 ### 6. Attachments
@@ -110,7 +111,7 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - `McpConnector` lives in `chatinho/connectors/mcp.py` and `McpFrontend` in a new `chatinho/frontends/mcp.py`, next to the other batteries of their kind. Each end keeps its own half of the wire format — the frontend writes the result, the connector reads it — and a test checks they agree. They import `mcp` and are exposed through the lazy `__getattr__`, with the `mcp` extra in the missing-extra message.
 - `connectors/__init__.py` and `frontends/__init__.py` resolve their names on first use (PEP 562). Before this, importing any connector imported all of them, so `McpConnector` would have needed `requests` and `openai` too.
 - `pyproject.toml` gains `mcp = ["mcp>=2.3"]`, and `all` and `dev` include it.
-- `docs/SPEC.md` documents `HookCredential` and `HookServeCredential`, and the architecture tests' extras check covers `mcp`.
+- `docs/SPEC.md` documents `msg.credentials` under `HookSay`, and the architecture tests' extras check covers `mcp`.
 
 ## Risks / Trade-offs
 
@@ -119,6 +120,7 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - **Attachment bytes through `locate`** depend on a linking backend. → The server documents it and the result says when attachments couldn't be returned. A byte-level grant is a follow-up.
 - **Client names are self-declared.** Any client can claim to be `lab`, and on a stateless protocol nothing ties a request to an earlier one. → On HTTP every client already holds the same bearer token, so names only group follow-ups; they are not trusted.
 - **The `mcp` extra pulls in pydantic and other compiled packages**, so it's heavy on Termux. → It's optional, and the core stays dependency-free.
+- **A message's credentials are visible to every peer that hears it**, not only the one that answers: listeners get the same message. → They are cleared once the message is answered; a session that lends keys should trust its own peers.
 - **A delegated credential is readable by the remote session's code while it answers.** Delegation reduces exposure (one question, memory only) but cannot prevent a dishonest or buggy remote from copying it. → It's opt-in, HTTPS-only, and the docs recommend a sub-key with a spending limit or a short-lived token.
 - **HTTP exposes every peer.** → The bearer token is mandatory on HTTP. The token and URL are the connector's configuration and are never sent to the server's peers.
 - **With several peers, the first reply wins, whoever it is.** A chatty peer can answer before the right one. → The others still reply into the conversation, and a peer router is the planned fix.

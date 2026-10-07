@@ -1,7 +1,7 @@
 # chatinho — the hook specification
 
-Everything a peer can do, and everything it can be asked to do, is one of **sixteen hooks**. This
-document is the reference for all sixteen: what each one demands, what it grants, and what actually
+Everything a peer can do, and everything it can be asked to do, is one of **fourteen hooks**. This
+document is the reference for all fourteen: what each one demands, what it grants, and what actually
 arrives at its door.
 
 Every claim here is executable. `examples/hooks.py` declares one peer per hook and runs a short
@@ -30,7 +30,7 @@ be peer zero.
 A message says where it came from and where it is going, and that is the whole of the routing:
 
 ```python
-ChatMessage(id, text, frm=0, to=None, reply_to=None, timestamp=..., status="answered")
+ChatMessage(id, text, frm=0, to=None, reply_to=None, timestamp=..., status="answered", credentials={})
 ```
 
 `id` and `reply_to` are `MessageID`s, not strings. `str(msg.id)` is `msg-` and 16 random hex
@@ -71,7 +71,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 
 ---
 
-## 2. The sixteen hooks at a glance
+## 2. The fourteen hooks at a glance
 
 | hook | demands | grants | declared by |
 |---|---|---|---|
@@ -89,8 +89,6 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 | [`HookKeep`](#hookkeep) | `keep` | — | a backend that keeps attachments |
 | [`HookLink`](#hooklink) | `link` | — | a backend that keeps attachments |
 | [`HookLocate`](#hooklocate) | — | `locate` | a presentation, a peer that opens attachments |
-| [`HookCredential`](#hookcredential) | — | `credential` | a peer that uses a credential lent with the question |
-| [`HookServeCredential`](#hookservecredential) | `serve_credential` | — | a frontend that holds credentials lent by its askers |
 
 **Every hook is one or the other**, never both.
 
@@ -120,7 +118,7 @@ A class that declares only grants is asked for nothing.
 
 ### HookSay
 
-> **grants** `say(text: str, *, reply_to: Optional[MessageID] = None, attachments: Sequence[Attachment] = ()) -> MessageID`
+> **grants** `say(text: str, *, reply_to: Optional[MessageID] = None, attachments: Sequence[Attachment] = (), credentials: Optional[Dict[str, Secret]] = None) -> MessageID`
 
 Says *text* to everyone but the speaker. Returns the new message's id. *text* is Markdown;
 *attachments* go to the backend under the new message's id — see [Attachments](#attachments).
@@ -133,6 +131,17 @@ await self.say("echo: good morning", reply_to=msg.id)   # a reply to a say is an
 `reply_to` does two things at once, and the second is easy to miss: it marks the reply in the log,
 **and** it is how an ask is answered late. A peer that returned `None` from `answer` resolves the
 waiting ask by saying the reply with `reply_to` set to the question's id.
+
+*credentials* ride on the message — `msg.credentials`, keys by name wrapped in `Secret` — for whoever
+answers it, and nothing else: a peer can work with a different key for each message. They never
+enter the text, never show in a `repr`, and the archive does not keep them; the message keeps the
+very mapping it was given, so whoever lent it clears it once the message is answered.
+
+```python
+async def answer(self, msg) -> str:
+    key = msg.credentials.get("llm")              # a Secret, or None
+    model = make_model(key.reveal()) if key else self.default_model
+```
 
 **A room with one peer that answers is a conversation with it.** A say that is not a reply, said by
 a peer — not by a command — when exactly one peer declares `HookAnswer` besides the speaker and the
@@ -376,30 +385,6 @@ url = await self.locate(msg.id, "revenue.html")
 ```
 
 The terminal uses it for a message's relative links: it opens what comes back, or says "Not found".
-
-### HookCredential
-
-> **grants** `await credential(msg_id: MessageID, name: str) -> str`
-
-The credential *name* lent with message *msg_id*, for answering that message alone. The session
-asks the frontend that declares `HookServeCredential`; with none, or with nothing by that name lent
-for that message, it raises `CredentialUnavailable`. Never put what comes back in a message.
-
-```python
-key = await self.credential(msg.id, "llm")
-```
-
-### HookServeCredential
-
-> **demands** `async serve_credential(msg_id: MessageID, name: str) -> str`
-
-Declared by a frontend that holds credentials lent with the questions it brought in, for as long as
-each question is being answered. Raise `CredentialUnavailable` when there is none.
-
-```python
-async def serve_credential(self, msg_id, name) -> str:
-    return self.lent[msg_id][name].reveal()
-```
 
 ---
 
