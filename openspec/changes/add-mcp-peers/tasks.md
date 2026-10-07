@@ -13,7 +13,7 @@
 
 ## 3. MCP server frontend
 
-- [x] 3.1 Create `src/chatinho/mcp_wire.py` with the wire helpers (result building, asker validation, base64 attachments) and unit tests for them
+- [x] 3.1 Add the wire helpers to each end (the result `McpFrontend` writes, and what `McpConnector` reads back) (result building, asker validation, base64 attachments) and unit tests for them
 - [x] 3.2 Implement `McpFrontend` (named `master` unless given a name, used as the server's name) on the SDK's low-level `Server`, modern protocol (2026-07-28): the one tool `say` (no peer name), `serve()` over Streamable HTTP with a required token, statuses and the configurable default deadline (120 s); verify in-process modern `Client` tests for the default name `master`, one tool `say`, answered, timeout within the deadline, a configured default deadline, and attachments returned
 - [x] 3.3 Have the frontend bridge every client: say each message as its own, map the said id to that client's call, send the first reply back on that call, keep follow-ups per `(client, asker)`, and answer `error` when a peer asks it; no peer is added or removed per client; verify tests for the reply going back to its client, two clients at once, and a peer asking the frontend
 - [x] 3.4 Decide who answers: the only answering peer is asked the say by the session; with several, it is said to the room and the first reply to it is the result, or `error` at once when none of them declares `HookListen`; with none, `error`; a follow-up goes to the same peer, or in the room is said as a reply to the asker's last answer there; verify tests for only one peer, several peers, none listens, first reply wins, no peer, and both follow-up cases

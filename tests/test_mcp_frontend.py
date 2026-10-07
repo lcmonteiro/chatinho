@@ -6,8 +6,8 @@ import time
 import pytest
 
 from chatinho import LOCAL, Attachment, CredentialUnavailable, HookAnswer, HookAsk, Reply, connector, require
-from chatinho import mcp_wire as wire
-from chatinho.frontends.mcp import McpFrontend
+from chatinho.connectors.mcp import _decode, _read_result
+from chatinho.frontends.mcp import CREDENTIALS_KEY, McpFrontend
 from mcp_kit import Agent, Files, Weather, client, remote, say
 
 
@@ -37,7 +37,7 @@ async def test_one_tool_say():
         other = await c.call_tool("ask", {"text": "?"})
     assert [t.name for t in tools] == ["say"]
     assert set(tools[0].input_schema["properties"]) == {"text", "asker", "deadline_ms"}
-    assert wire.read_result(other).status == "error"
+    assert _read_result(other).status == "error"
     await session.close()
 
 
@@ -92,7 +92,7 @@ async def test_attachments_come_back(tmp_path):
     async with client(front) as c:
         got = await say(c, "draw it")
     assert got["status"] == "answered"
-    assert [wire.decode(a) for a in got["attachments"]] == [chart]
+    assert [_decode(a) for a in got["attachments"]] == [chart]
     await session.close()
 
 
@@ -214,7 +214,7 @@ async def test_a_follow_up_in_the_room_replies_to_the_last_reply():
 # === Credentials ===================================================================
 
 async def _lend(c, value="sk-test", **args):
-    lent = {wire.CREDENTIALS_KEY: {"llm": value, "cloud": "x"}}
+    lent = {CREDENTIALS_KEY: {"llm": value, "cloud": "x"}}
     res  = await c.call_tool("say", {"text": "go", **args}, meta=lent)
     return res.structured_content
 
@@ -223,7 +223,7 @@ async def test_declared_at_discovery():
     session, front = await remote(Weather(), credentials={"llm": "OpenAI-compatible API key"})
     async with client(front) as c:
         found = c.session.discover_result.capabilities.extensions
-    assert found[wire.CREDENTIALS_KEY] == {"llm": "OpenAI-compatible API key"}
+    assert found[CREDENTIALS_KEY] == {"llm": "OpenAI-compatible API key"}
     await session.close()
 
 
@@ -233,7 +233,7 @@ async def test_a_lent_credential_reaches_the_peer_and_undeclared_ones_do_not():
     async with client(front) as c:
         await _lend(c)
     assert agent.keys == ["sk-test"]
-    assert front._lent({wire.CREDENTIALS_KEY: {"cloud": "x"}}) == {}
+    assert front._lent({CREDENTIALS_KEY: {"cloud": "x"}}) == {}
     await session.close()
 
 
@@ -266,5 +266,5 @@ async def test_a_credential_is_never_in_the_conversation():
     async with client(front) as c:
         await _lend(c, value="sk-very-secret")
     assert all("sk-very-secret" not in m.text for m in session._context())
-    assert "sk-very-secret" not in repr(front._lent({wire.CREDENTIALS_KEY: {"llm": "sk-very-secret"}}))
+    assert "sk-very-secret" not in repr(front._lent({CREDENTIALS_KEY: {"llm": "sk-very-secret"}}))
     await session.close()

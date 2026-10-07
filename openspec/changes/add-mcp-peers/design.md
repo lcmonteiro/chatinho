@@ -107,7 +107,7 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - *Alternative: stdio as well.* Dropped: a session served over MCP is reached from another machine, and one transport, always behind a token, keeps both ends simpler.
 
 ### 9. Packaging
-- `McpConnector` lives in `chatinho/connectors/mcp.py` and `McpFrontend` in a new `chatinho/frontends/mcp.py`, next to the other batteries of their kind; `chatinho/mcp_wire.py` holds what both ends share. They import `mcp` and are exposed through the lazy `__getattr__`, with the `mcp` extra in the missing-extra message.
+- `McpConnector` lives in `chatinho/connectors/mcp.py` and `McpFrontend` in a new `chatinho/frontends/mcp.py`, next to the other batteries of their kind. Each end keeps its own half of the wire format — the frontend writes the result, the connector reads it — and a test checks they agree. They import `mcp` and are exposed through the lazy `__getattr__`, with the `mcp` extra in the missing-extra message.
 - `connectors/__init__.py` and `frontends/__init__.py` resolve their names on first use (PEP 562). Before this, importing any connector imported all of them, so `McpConnector` would have needed `requests` and `openai` too.
 - `pyproject.toml` gains `mcp = ["mcp>=2.3"]`, and `all` and `dev` include it.
 - `docs/SPEC.md` documents `HookCredential` and `HookServeCredential`, and the architecture tests' extras check covers `mcp`.

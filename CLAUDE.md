@@ -328,7 +328,6 @@ src/chatinho/
   connectors/      a2a.py, openai.py, mcp.py (McpConnector: asking a remote session over MCP)
                    — plain classes, no base; each imported on first use, behind its own extra
   frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
-  mcp_wire.py      what crosses an MCP link: results, names, attachments — behind chatinho[mcp]
 docs/              SPEC.md — the sixteen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),

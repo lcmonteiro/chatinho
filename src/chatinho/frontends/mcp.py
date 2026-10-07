@@ -13,11 +13,16 @@ peer is added per client: messages are told apart by their ids.
 """
 
 import asyncio
+import base64
 import hmac
 import logging
+import mimetypes
+import re
 import secrets
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+from urllib.parse import unquote, urlparse
+from urllib.request import url2pathname
 
 import mcp_types as types
 from mcp.server.lowlevel.server import Server
@@ -38,9 +43,20 @@ from chatinho.chat_hooks import (
     require,
 )
 from chatinho.chat_message import LOCAL, Attachment, ChatMessage, MessageID, Reply, Secret
-from chatinho import mcp_wire as wire
 
 logger = logging.getLogger(__name__)
+
+#: Every result a say can end in; exactly one per message.
+STATUSES : Tuple[str, ...] = ("answered", "asked", "error", "timeout")
+
+#: Where a client puts the credentials it lends, in a request's ``_meta``, and
+#: the capability extension a server declares the ones it accepts under.
+CREDENTIALS_KEY : str = "chatinho/credentials"
+
+#: How long a message may wait for its reply when nobody says otherwise, in seconds.
+DEFAULT_DEADLINE : float = 120.0
+
+_LINK = re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 
 #: What a peer is told when it asks the person this frontend stands in for.
 _NOBODY_HERE = "Nobody is at this session's terminal: it is served over MCP"
@@ -116,7 +132,7 @@ class McpFrontend:
         token       : str,
         host        : str = "127.0.0.1",
         port        : int = 8000,
-        deadline    : float = wire.DEFAULT_DEADLINE,
+        deadline    : float = DEFAULT_DEADLINE,
         credentials : Optional[Dict[str, str]] = None,
     ) -> None:
         if not token:
@@ -132,7 +148,7 @@ class McpFrontend:
         #: The MCP server itself; an in-process client can connect to it directly.
         self.server : Server[Any] = Server(name, on_list_tools=self._list_tools, on_call_tool=self._call_tool)
         if self.credentials:
-            self.server.extensions[wire.CREDENTIALS_KEY] = dict(self.credentials)
+            self.server.extensions[CREDENTIALS_KEY] = dict(self.credentials)
         #: Messages waiting for their reply, by the id the frontend said them under.
         self._open : Dict[MessageID, _Message] = {}
         #: Each asker's last reply in the room, so its next message there replies to it.
@@ -186,14 +202,14 @@ class McpFrontend:
 
     async def _call_tool(self, ctx: Any, params: types.CallToolRequestParams) -> Any:
         if params.name != "say":
-            return wire.result("error", "No tool named %r; this session only takes say" % params.name)
+            return _result("error", "No tool named %r; this session only takes say" % params.name)
         meta   = dict(ctx.meta or {})
         info   = meta.get(types.CLIENT_INFO_META_KEY) or {}
-        client = wire.safe_name(info.get("name") if isinstance(info, dict) else None, "client")
+        client = _safe_name(info.get("name") if isinstance(info, dict) else None, "client")
         args   = params.arguments or {}
         text   = args.get("text")
         if not isinstance(text, str) or not text.strip():
-            return wire.result("error", "say needs a text")
+            return _result("error", "say needs a text")
         deadline = args.get("deadline_ms")
         seconds  = deadline / 1000.0 if isinstance(deadline, int) and deadline > 0 else self.deadline
         try:
@@ -206,7 +222,7 @@ class McpFrontend:
                 self._close(message)          # however the call ended, even cancelled
         except Exception as exc:
             logger.error("say failed for %s", client, exc_info=True)
-            return wire.result("error", "say failed: %s" % type(exc).__name__)
+            return _result("error", "say failed: %s" % type(exc).__name__)
 
     # === One message ================================================================
 
@@ -216,17 +232,17 @@ class McpFrontend:
         """Says *text* in the session for *client*; an error result if nobody could reply."""
         answering = self._answering()
         if not answering:
-            return wire.result("error", "No peer in this session can answer")
+            return _result("error", "No peer in this session can answer")
         room = len(answering) > 1
         if room and not any(declares(who, HookListen) for _, who in answering):
-            return wire.result(
+            return _result(
                 "error", "Several peers could answer and none listens to the room; a peer router is needed")
 
         loop    = asyncio.get_running_loop()
         message = _Message(
             token       = secrets.token_urlsafe(18),
             client      = client,
-            asker       = (client, wire.safe_name(asker, "")),
+            asker       = (client, _safe_name(asker, "")),
             deadline    = loop.time() + seconds,
             seconds     = seconds,
             credentials = self._lent(meta),
@@ -246,12 +262,12 @@ class McpFrontend:
         if remaining > 0:
             await asyncio.wait({message.reply}, timeout=remaining)
         if not message.reply.done():
-            return wire.result("timeout", "No reply within %g seconds" % message.seconds)
+            return _result("timeout", "No reply within %g seconds" % message.seconds)
         reply = message.reply.result()
         if message.room:
             self._last_heard[message.asker] = reply.id
         attachments = await self._attachments_of(reply.id, reply.text)
-        return wire.result(reply.status, reply.text, attachments, str(reply.id))
+        return _result(reply.status, reply.text, attachments, str(reply.id))
 
     def _close(self, message: _Message) -> None:
         """Lets go of everything a message held: its wait and its credentials."""
@@ -273,7 +289,7 @@ class McpFrontend:
 
     def _lent(self, meta: Dict[str, Any]) -> Dict[str, Secret]:
         """The declared credentials lent with a message, wrapped so they never show."""
-        lent = meta.get(wire.CREDENTIALS_KEY)
+        lent = meta.get(CREDENTIALS_KEY)
         if not isinstance(lent, dict):
             return {}
         return {name: Secret(value) for name, value in lent.items()
@@ -282,11 +298,110 @@ class McpFrontend:
     async def _attachments_of(self, msg_id: MessageID, text: str) -> List[Attachment]:
         """What a reply attached: each name it links to that the backend can read back."""
         found: List[Attachment] = []
-        for name in wire.linked_names(text):
-            data = wire.read_link(await self.locate(msg_id, name))
+        for name in _linked_names(text):
+            data = _read_link(await self.locate(msg_id, name))
             if data is not None:
-                found.append(Attachment(name, wire.media_type_of(name), data))
+                found.append(Attachment(name, _media_type_of(name), data))
         return found
+
+
+# === What goes back to the client ================================================
+
+def _result(
+    status      : str,
+    text        : str,
+    attachments : Sequence[Attachment] = (),
+    msg_id      : Optional[str] = None,
+) -> types.CallToolResult:
+    """Builds the tool _result for one question.
+
+    The structured content is what a chatinho client reads; the text block is
+    for clients that only read text. ``error`` and ``timeout`` are tool errors.
+
+    Args:
+        status: One of :data:`STATUSES`.
+        text: What to say.
+        attachments: What the answer attached.
+        msg_id: The answer's message id, for ``read_attachment``.
+
+    Returns:
+        types.CallToolResult: Ready to return from ``tools/call``.
+
+    Raises:
+        ValueError: *status* is not one of :data:`STATUSES`.
+    """
+    if status not in STATUSES:
+        raise ValueError("A _result's status is one of %s, got %r" % (", ".join(STATUSES), status))
+    shown = text if status == "answered" else "[%s] %s" % (status, text)
+    return types.CallToolResult(
+        content=[types.TextContent(text=shown)],
+        structured_content={
+            "status"      : status,
+            "text"        : text,
+            "attachments" : [_encode(item) for item in attachments],
+            "msg_id"      : msg_id,
+        },
+        is_error=status in ("error", "timeout"),
+    )
+
+
+def _safe_name(raw: Any, default: str) -> str:
+    """A name that can stand in a peer path: non-empty, with no ``/``.
+
+    Args:
+        raw: What the other side called itself; anything.
+        default: What to use when *raw* gives nothing usable.
+    """
+    if not isinstance(raw, str):
+        return default
+    name = " ".join(raw.replace("/", "-").split())
+    return name or default
+
+
+def _linked_names(text: str) -> List[str]:
+    """The relative link targets in a Markdown *text*, in order, each once.
+
+    In chatinho a message links its attachments by name — ``[chart](chart.svg)``
+    — and that is the only list of them there is. Absolute URLs, paths and
+    anchors are not attachments.
+    """
+    names: List[str] = []
+    for target in _LINK.findall(text or ""):
+        if ":" in target or target.startswith(("/", "#")):
+            continue
+        name = unquote(target)
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def _read_link(url: Optional[str]) -> Optional[bytes]:
+    """The bytes behind a ``file://`` link, or None for anything else or nothing there."""
+    if not url:
+        return None
+    parsed = urlparse(url)
+    if parsed.scheme != "file":
+        return None
+    try:
+        with open(url2pathname(parsed.path), "rb") as handle:
+            return handle.read()
+    except OSError:
+        return None
+
+
+def _media_type_of(name: str) -> str:
+    """The media type a file called *name* most likely holds."""
+    return mimetypes.guess_type(name)[0] or "application/octet-stream"
+
+
+def _encode(item: Attachment) -> Dict[str, str]:
+    """An attachment as JSON: its name, media type and base64 content."""
+    return {
+        "name"       : item.name,
+        "media_type" : item.media_type,
+        "data_b64"   : base64.b64encode(item.data).decode("ascii"),
+    }
+
 
 
 class _BearerOnly:

@@ -13,10 +13,13 @@ only one the server declared, and only over HTTPS or to this machine. Without
 """
 
 import asyncio
+import base64
 import ipaddress
 import logging
+import mimetypes
 from contextlib import AsyncExitStack
-from typing import Any, Callable, Dict, Mapping, Optional, Union
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import mcp_types as types
@@ -33,10 +36,83 @@ from chatinho.chat_hooks import (
     name_of,
     require,
 )
-from chatinho.chat_message import TOOL, ChatMessage, Reply
-from chatinho import mcp_wire as wire
+from chatinho.chat_message import TOOL, Attachment, ChatMessage, Reply
 
 logger = logging.getLogger(__name__)
+
+#: Every result a say can end in; exactly one per message.
+STATUSES : Tuple[str, ...] = ("answered", "asked", "error", "timeout")
+
+#: Where a client puts the credentials it lends, in a request's ``_meta``, and
+#: the capability extension a server declares the ones it accepts under.
+CREDENTIALS_KEY : str = "chatinho/credentials"
+
+#: How long a message may wait for its reply when nobody says otherwise, in seconds.
+DEFAULT_DEADLINE : float = 120.0
+
+
+# === What comes back from the server ==============================================
+
+@dataclass(frozen=True)
+class _Remote:
+    """One question's result, as the asking side reads it.
+
+    Attributes:
+        status: One of :data:`STATUSES`.
+        text: The answer, the question back, or what went wrong.
+        attachments: What the answer attached, bytes included.
+        msg_id: The answer's message id in the remote session, when there is one.
+    """
+
+    status      : str
+    text        : str
+    attachments : Tuple[Attachment, ...] = ()
+    msg_id      : Optional[str] = None
+
+
+def _read_result(res: types.CallToolResult) -> _Remote:
+    """Reads back what ``McpFrontend`` wrote, or makes the best of a plain result.
+
+    A server that is not a chatinho session answers with text alone: that is
+    ``answered``, or ``error`` when the result is marked as one.
+    """
+    data = res.structured_content
+    if isinstance(data, dict) and data.get("status") in STATUSES:
+        return _Remote(
+            status      = data["status"],
+            text        = str(data.get("text", "")),
+            attachments = tuple(_decode(item) for item in data.get("attachments") or ()),
+            msg_id      = data.get("msg_id"),
+        )
+    text = "\n".join(block.text for block in res.content if isinstance(block, types.TextContent))
+    return _Remote("error" if res.is_error else "answered", text)
+
+
+def _decode(data: Dict[str, Any]) -> Attachment:
+    """Reads back an attachment as ``McpFrontend`` encoded it."""
+    return Attachment(
+        name       = str(data["name"]),
+        media_type = str(data.get("media_type") or _media_type_of(str(data["name"]))),
+        data       = base64.b64decode(data.get("data_b64") or ""),
+    )
+
+
+def _safe_name(raw: Any, default: str) -> str:
+    """A name that can stand in a peer path: non-empty, with no ``/``.
+
+    Args:
+        raw: What the other side called itself; anything.
+        default: What to use when *raw* gives nothing usable.
+    """
+    if not isinstance(raw, str):
+        return default
+    name = " ".join(raw.replace("/", "-").split())
+    return name or default
+
+
+def _media_type_of(name: str) -> str:
+    """The media type a file called *name* most likely holds."""
+    return mimetypes.guess_type(name)[0] or "application/octet-stream"
 
 #: How much longer than its deadline a question may take before the link is
 #: taken to be hung. The server answers within the deadline; this only guards
@@ -96,7 +172,7 @@ class McpConnector:
         self._token      = token
         self._server     = server
         self._named      = name is not None
-        self.name        = wire.safe_name(name, "mcp") if name is not None else "mcp"
+        self.name        = _safe_name(name, "mcp") if name is not None else "mcp"
         self.deadline    = deadline
         self._delegate   = dict(delegate or {})
         self._client     : Any = None
@@ -117,7 +193,7 @@ class McpConnector:
             logger.warning("%s could not reach its server: %s", self.name, exc)
             return
         if not self._named and client.server_info is not None:
-            self.name   = wire.safe_name(client.server_info.name, self.name)
+            self.name   = _safe_name(client.server_info.name, self.name)
             self._named = True
             # The server saw the placeholder name; the next requests carry the real one.
             self._disconnect()
@@ -167,7 +243,7 @@ class McpConnector:
         args : Dict[str, Any] = {"text": text, "asker": asker}
         if self.deadline is not None:
             args["deadline_ms"] = int(self.deadline * 1000)
-        limit = (self.deadline or wire.DEFAULT_DEADLINE * 5) + _GRACE
+        limit = (self.deadline or DEFAULT_DEADLINE * 5) + _GRACE
         try:
             client = await self._connect()
             meta   = self._lending(client)
@@ -179,9 +255,9 @@ class McpConnector:
             self._disconnect()
             return Reply("%s: could not reach the remote session (%s)" % (self.name, type(exc).__name__),
                          status="error")
-        return self._reply_for(wire.read_result(got))
+        return self._reply_for(_read_result(got))
 
-    def _reply_for(self, got: wire.RemoteAnswer) -> Reply:
+    def _reply_for(self, got: _Remote) -> Reply:
         if got.status == "answered":
             return Reply(got.text, tuple(got.attachments))
         if got.status == "asked":
@@ -210,10 +286,10 @@ class McpConnector:
         if not self._delegate:
             return None
         found    = client.session.discover_result
-        declared = ((found.capabilities.extensions or {}).get(wire.CREDENTIALS_KEY) or {}) if found else {}
+        declared = ((found.capabilities.extensions or {}).get(CREDENTIALS_KEY) or {}) if found else {}
         lent     = {name: (value() if callable(value) else value)
                     for name, value in self._delegate.items() if name in declared}
-        return {wire.CREDENTIALS_KEY: lent} if lent else None
+        return {CREDENTIALS_KEY: lent} if lent else None
 
     # === The link ===================================================================
 
