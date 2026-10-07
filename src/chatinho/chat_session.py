@@ -25,7 +25,6 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 from .chat_hooks import (
     CredentialUnavailable,
-    PeerRemoved,
     SamplingUnavailable,
     HookExecute,
     HookKeep,
@@ -86,8 +85,6 @@ class ChatSession:
         self._queues   : Dict[int, "asyncio.Queue[ChatMessage]"] = {}
         self._tasks    : Dict[int, asyncio.Task] = {}
         self._pending  : Dict[MessageID, "asyncio.Future[Answer]"] = {}
-        #: Who each waiting question was put to, so a peer that leaves fails them.
-        self._asked_of : Dict[MessageID, int] = {}
         #: What an answer said about itself, between ``answer`` and ``_post``.
         self._statuses : Dict[MessageID, str] = {}
         self._next_id  : int = 1
@@ -158,45 +155,6 @@ class ChatSession:
         self._queues[at] = asyncio.Queue()
         self._grant(connector, at)
         return at
-
-    def remove_connector(self, peer_id: int) -> None:
-        """Detaches a peer from a running or stopped session.
-
-        It hears nothing more, its queue task stops and it leaves the roster.
-        Questions put to it that are still waiting fail with
-        :class:`~chatinho.chat_hooks.PeerRemoved` rather than wait forever.
-        What it already said stays in the conversation, under its id.
-        ``shutdown()`` is called when it has one, as :meth:`close` would.
-
-        Args:
-            peer_id: The id the peer answers to.
-
-        Raises:
-            ValueError: *peer_id* is :data:`LOCAL`, or no peer has it.
-        """
-        if peer_id == LOCAL:
-            raise ValueError("The frontend cannot be removed: it is the chat")
-        if peer_id not in self._connectors:
-            raise ValueError("No peer with id %d" % peer_id)
-        who  = self._connectors.pop(peer_id)
-        self._queues.pop(peer_id, None)
-        task = self._tasks.pop(peer_id, None)
-        if task is not None:
-            task.cancel()
-        self._initialized.discard(id(who))
-        for msg_id, at in list(self._asked_of.items()):
-            if at != peer_id:
-                continue
-            del self._asked_of[msg_id]
-            waiting = self._pending.pop(msg_id, None)
-            if waiting is not None and not waiting.done():
-                waiting.set_exception(PeerRemoved("%s left before answering" % name_of(who)))
-        shutdown = getattr(who, "shutdown", None)
-        if callable(shutdown):
-            try:
-                shutdown()
-            except Exception:
-                logger.error("Shutting %r down failed", name_of(who), exc_info=True)
 
     def add_command(self, cmd: Any) -> str:
         """Registers a command under its declared name and returns it.
@@ -354,14 +312,12 @@ class ChatSession:
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
             await self._kept(msg, attachments)
             future : "asyncio.Future[Answer]" = asyncio.get_running_loop().create_future()
-            self._pending[msg.id]  = future
-            self._asked_of[msg.id] = to
+            self._pending[msg.id] = future
             try:
                 await self._post(msg)
                 answer = await future
             finally:
                 self._pending.pop(msg.id, None)
-                self._asked_of.pop(msg.id, None)
             return answer if detail else answer.text
         return ask
 

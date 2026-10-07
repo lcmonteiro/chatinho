@@ -337,7 +337,7 @@ examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (std
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_a2a_payload.py,
-                   test_clipboard.py, test_answer_details.py, test_peer_lifecycle.py,
+                   test_clipboard.py, test_answer_details.py,
                    test_lending.py, test_mcp_*.py with mcp_kit.py (no terminal)
 ```
 
@@ -794,10 +794,10 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 59 names: `build_chat`, `ChatSession`, `ChatMessage`, `MessageID`, `Attachment`,
+`__init__.py` exports 58 names: `build_chat`, `ChatSession`, `ChatMessage`, `MessageID`, `Attachment`,
 `Reply`, `Answer`, `Secret`, `ChatStyle`, `LOCAL`, `TOOL`; the declaring machinery (`connector`, `tool`,
 `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`, `declared_id`, `name_of`, `Hook`);
-the eighteen `Hook*` constants; what can go wrong (`PeerRemoved`, `SamplingUnavailable`,
+the eighteen `Hook*` constants; what can go wrong (`SamplingUnavailable`,
 `CredentialUnavailable`); the grant protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`, `Commands`,
 `Locate`, `Sample`, `Credential`); and the batteries (`A2AConnector`, `OpenAIConnector`,
 `DatabaseBackend`, `McpFrontend`, `McpConnector`, `HelpCommand`, `TestCommand`).
@@ -818,9 +818,8 @@ lazy `__getattr__` hands them `Any` instead.
 For a chat without a terminal, build a `ChatSession` and attach your own presentation —
 `examples/headless.py` is exactly that, in about forty lines.
 
-`ChatSession`'s own public surface is eight members: `run`, `add_connector`, `remove_connector`,
-`add_command`, `start`, `close`, `id_of`, `forget`. `remove_connector` detaches a running peer: it hears
-nothing more, asks waiting on it fail with `PeerRemoved`, and what it said stays. `run()` is the entry point for a program whose job *is* the chat;
+`ChatSession`'s own public surface is seven members: `run`, `add_connector`, `add_command`, `start`,
+`close`, `id_of`, `forget`. `run()` is the entry point for a program whose job *is* the chat;
 `start`/`close` are for driving it from inside a loop you already own.
 Everything about the conversation is reached by declaring a hook — which is what
 [`docs/SPEC.md`](docs/SPEC.md) specifies, hook by hook.

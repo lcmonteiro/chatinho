@@ -41,9 +41,17 @@ async def test_named_by_the_connector():
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
     assert lab.name == "lab"
+    seen = []
+    opening = front._open_question
+
+    async def spying(client, asker, *args):
+        seen.append((client, asker))
+        return await opening(client, asker, *args)
+
+    front._open_question = spying
     await view.say("@lab rain?")
     await _replies(view, 2)
-    assert remote_session._peers()[weather.asked[0].frm].name == "lab/driver"
+    assert seen == [("lab", "driver")]
     await session.close()
     await remote_session.close()
 

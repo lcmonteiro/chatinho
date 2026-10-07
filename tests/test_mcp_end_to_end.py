@@ -3,6 +3,7 @@
 import asyncio
 
 from chatinho import (
+    LOCAL,
     Attachment,
     ChatSession,
     Context,
@@ -61,8 +62,8 @@ async def test_a_question_crosses_samples_back_and_returns_with_its_drawing(tmp_
     assert reply.text.startswith("agent: LOCAL<draw the login flow 0>")
     assert "[chart](chart.svg)" in reply.text
     assert (tmp_path / "here" / str(reply.id) / "chart.svg").read_bytes() == b"<svg>login</svg>"
-    asker = [m for m in there._context() if m.text == "draw the login flow"][0].frm
-    assert there._peers()[asker].name == "lab/me"
+    asked = [m for m in there._context() if m.text == "draw the login flow"][0]
+    assert asked.frm == LOCAL and asked.to == agent.peer_id
 
     await here.close()
     await there.close()
@@ -81,7 +82,7 @@ async def test_with_two_peers_the_question_is_said_in_the_remote_room():
 
     assert reply.text == "agent: who can draw?"
     said = [m for m in there._context() if m.text == "who can draw?"][0]
-    assert said.is_broadcast and there._peers()[said.frm].name == "lab/me"
+    assert said.is_broadcast and said.frm == LOCAL
 
     await here.close()
     await there.close()

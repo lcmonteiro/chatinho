@@ -22,7 +22,7 @@ chatinho SHALL provide `McpFrontend` in `chatinho[mcp]`: a `@frontend` that serv
 - **THEN** it is refused and no peer is asked anything
 
 ### Requirement: Questions only, to the session
-The server SHALL expose these MCP tools and no tool that broadcasts on the client's behalf: `ask(text, asker?, deadline_ms?)`, `list_peers()`, `list_commands()`, `invoke(name, args)` and `read_attachment(msg_id, name)`. `ask` MUST NOT take a peer name: the session decides who answers. `list_peers` MUST return the names of the session's answering peers, excluding the frontend and the asker proxies.
+The server SHALL expose these MCP tools and no tool that broadcasts on the client's behalf: `ask(text, asker?, deadline_ms?)`, `list_peers()`, `list_commands()`, `invoke(name, args)` and `read_attachment(msg_id, name)`. `ask` MUST NOT take a peer name: the session decides who answers. `list_peers` MUST return the names of the session's answering peers, excluding the frontend.
 
 #### Scenario: No broadcast tool
 - **WHEN** a client lists the server's tools
@@ -30,10 +30,10 @@ The server SHALL expose these MCP tools and no tool that broadcasts on the clien
 
 #### Scenario: Listing peers
 - **WHEN** a client calls `list_peers` on a session with peers `agent` and `weather`
-- **THEN** the result is `agent` and `weather`, without the frontend or any asker's proxy
+- **THEN** the result is `agent` and `weather`, without the frontend
 
 ### Requirement: The session decides who answers
-For each `ask`, the server SHALL count the session's answering peers: peers that declare `HookAnswer`, excluding the frontend and the asker proxies. With exactly one, it MUST ask that peer directly from the asker's proxy. With more than one, it MUST say the question to the room from the asker's proxy and take the first message that replies to it as the answer; later replies stay in the conversation but are not returned. A said question reaches only peers that declare `HookListen`, so when none of the answering peers listens, the result MUST be `error` at once instead of waiting for the deadline. With none, the result MUST be `error`. This rule stands in for a future peer router.
+For each `ask`, the server SHALL count the session's answering peers: peers that declare `HookAnswer`, excluding the frontend. With exactly one, the frontend MUST ask that peer directly. With more than one, the frontend MUST say the question to the room and take the first message that replies to it as the answer; later replies stay in the conversation but are not returned. A said question reaches only peers that declare `HookListen`, so when none of the answering peers listens, the result MUST be `error` at once instead of waiting for the deadline. With none, the result MUST be `error`. This rule stands in for a future peer router.
 
 #### Scenario: Only one peer
 - **WHEN** a client asks "will it rain?" of a session whose only answering peer is `weather`
@@ -76,22 +76,22 @@ Every `ask` SHALL return exactly one result `{status, text, attachments}`, with 
 
 #### Scenario: Follow-up from the same asker
 - **WHEN** an asker got an answer, for example a question back, and asks again
-- **THEN** with one peer, that peer is asked again from the same proxy; with several, the new question is said as a reply to the asker's last answer in the room (a reply there always reads `answered`, so a question back cannot be told apart), and the peer that answered sees it is for it
+- **THEN** with one peer, that peer is asked again by the frontend; with several, the new question is said as a reply to the asker's last answer in the room (a reply there always reads `answered`, so a question back cannot be told apart), and the peer that answered sees it is for it
 
-### Requirement: One peer per asker
-For each distinct asker, the server SHALL add a proxy peer to the session, with its own id, named by the client's name, as given with the request, followed by `/` and the asker's name when the client sends one (for example `lab/me`). Questions from that asker MUST be asked or said from its proxy, so peers see them as coming from that name. A proxy asked a question MUST answer `error`. Since the protocol has no connection to end, a proxy MUST be removed once it has had no question in flight for the frontend's idle time (configurable, 10 minutes when not set); its messages MUST stay in the conversation, and the same asker coming back gets a new proxy with the same name.
+### Requirement: The frontend speaks for every client
+The frontend SHALL handle every client itself, without adding a peer per client: for each question it receives, it MUST forward the text into the session as its own message — an `ask` to the only answering peer, or a `say` to the room — remember which client's question that message is, and send the reply to that message back to that client alone. Questions from several clients MAY be open at once, and each reply MUST reach only the client whose question it answers. A peer that asks the frontend a question MUST get `error`, since nobody is at its terminal.
 
-#### Scenario: Asker appears by name
-- **WHEN** a client named `lab` sends a question from `me`
-- **THEN** the remote peers see it coming from a peer named `lab/me`, which `peers()` lists while `lab` is connected
+#### Scenario: The reply goes back to its client
+- **WHEN** a client asks "will it rain?" and the session's only peer answers "sunny"
+- **THEN** the peer was asked by the frontend, and that client's result is "sunny"
 
-#### Scenario: Two clients are two askers
-- **WHEN** clients `lab` and `home` each ask the same session
-- **THEN** the questions come from two different peer ids, `lab/…` and `home/…`
+#### Scenario: Two clients at once
+- **WHEN** clients `lab` and `home` each ask a different question while the other's is still open
+- **THEN** each gets the answer to its own question, and no peer was added to the session
 
-#### Scenario: Idle proxy leaves
-- **WHEN** asker `lab/me` has had no question in flight for the idle time
-- **THEN** its proxy peers are removed from the session and their earlier messages remain in the context
+#### Scenario: Asking the frontend
+- **WHEN** a peer asks the frontend a question
+- **THEN** it gets an `error` reply saying nobody is at the terminal
 
 ### Requirement: Attachments come back with the answer
 Attachments of an answer SHALL be returned in the result, each with its name, media type and content, so the asking side can keep them; `read_attachment(msg_id, name)` MUST return an attachment of an earlier answer through the session's backend, or an error when there is none.
@@ -101,7 +101,7 @@ Attachments of an answer SHALL be returned in the result, each with its name, me
 - **THEN** the result carries `chart.svg` with media type `image/svg+xml` and its bytes
 
 ### Requirement: Sampling relayed to the asker
-The server SHALL serve `HookSample` for the session: a sample requested on behalf of a question from an asker's proxy MUST be relayed to the client that asker came through, as a sampling request embedded in an `InputRequiredResult` for that question's `ask` call; when the client retries with the completion, it MUST be returned to the peer and the call MUST go on waiting for the answer. A sample for a message that came from no client, a client that did not declare the sampling capability, a client that declines, or a question that ended before the client answered, MUST raise `SamplingUnavailable` in the peer. The server MUST NOT accept, store or forward API keys, except credentials delegated as the `credential-delegation` capability allows.
+The server SHALL serve `HookSample` for the session: a sample requested on behalf of a question the frontend forwarded for a client MUST be relayed to that client, as a sampling request embedded in an `InputRequiredResult` for that question's `ask` call; when the client retries with the completion, it MUST be returned to the peer and the call MUST go on waiting for the answer. A sample for a message that was not forwarded for a client, a client that did not declare the sampling capability, a client that declines, or a question that ended before the client answered, MUST raise `SamplingUnavailable` in the peer. The server MUST NOT accept, store or forward API keys, except credentials delegated as the `credential-delegation` capability allows.
 
 #### Scenario: Peer uses the asker's model
 - **WHEN** client `lab` asks, and the answering peer calls `sample` on behalf of that question

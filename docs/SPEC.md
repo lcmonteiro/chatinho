@@ -141,8 +141,7 @@ waiting ask by saying the reply with `reply_to` set to the question's id.
 > **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = (), detail: bool = False) -> str | Answer`
 
 Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id,
-`PeerRemoved` if the peer leaves the session before answering, and whatever the peer's `answer`
-raised if it failed. What comes back is the reply's
+and whatever the peer's `answer` raised if it failed. What comes back is the reply's
 text. Anything the reply attached went to the backend, under the reply's id, where `locate` finds it.
 
 ```python
@@ -507,14 +506,13 @@ both.
 
 ## 6. The session's own surface
 
-`ChatSession` exposes eight members. Everything about the conversation is reached by declaring a
+`ChatSession` exposes seven members. Everything about the conversation is reached by declaring a
 hook, not by calling the session.
 
 | | |
 |---|---|
 | `run()` | owns the loop: `start()`, every peer's `serve()`, then `close()` |
 | `add_connector(connector, at=None) -> int` | registers a peer: an id, a queue, its grants |
-| `remove_connector(peer_id)` | detaches a peer: it hears nothing more, waiting asks to it fail with `PeerRemoved`, its messages stay |
 | `add_command(cmd) -> str` | registers a command: a name, its grants |
 | `await start()` | initializes every peer/command, loads the older context, then starts one task per peer |
 | `await close()` | drains every queue (5s, then a warning), then shuts everything down |

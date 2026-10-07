@@ -6,7 +6,7 @@ import time
 import mcp_types as types
 import pytest
 
-from chatinho import Attachment, Reply
+from chatinho import LOCAL, Attachment, HookAnswer, HookAsk, Reply, connector, require
 from chatinho.mcp import McpFrontend, wire
 from mcp_kit import Agent, Files, Weather, ask, client, remote, sampling
 
@@ -122,53 +122,48 @@ async def test_commands_run_from_the_client():
     await session.close()
 
 
-# === One peer per asker ============================================================
+# === The frontend speaks for every client ==========================================
 
-def _names(session):
-    return {getattr(who, "name", "") for who in session._peers().values()}
+@connector("echo")
+@require(HookAnswer)
+class _Echo:
+    """Answers each question with itself, a little later."""
+
+    async def answer(self, msg):
+        await asyncio.sleep(0.1)
+        return "echo: %s" % msg.text
 
 
-async def test_an_asker_appears_by_name():
-    weather = Weather()
+async def test_the_reply_goes_back_to_its_client():
+    weather = Weather("sunny")
     session, front = await remote(weather)
     async with client(front, "lab") as c:
-        await ask(c, "rain?", asker="me")
-    assert "lab/me" in _names(session)
-    assert session._peers()[weather.asked[0].frm].name == "lab/me"
+        got = await ask(c, "will it rain?", asker="me")
+    assert got["text"] == "sunny"
+    assert weather.asked[0].frm == LOCAL
     await session.close()
 
 
-async def test_two_clients_are_two_askers():
-    weather = Weather()
-    session, front = await remote(weather)
+async def test_two_clients_at_once():
+    session, front = await remote(_Echo())
+    before = set(session._peers())
     async with client(front, "lab") as one, client(front, "home") as two:
-        await ask(one, "rain?")
-        await ask(two, "rain?")
-    askers = [session._peers()[m.frm].name for m in weather.asked]
-    assert askers == ["lab", "home"]
-    assert weather.asked[0].frm != weather.asked[1].frm
+        first, second = await asyncio.gather(ask(one, "from lab"), ask(two, "from home"))
+    assert (first["text"], second["text"]) == ("echo: from lab", "echo: from home")
+    assert set(session._peers()) == before
     await session.close()
 
 
-async def test_an_idle_proxy_leaves_and_its_words_stay():
-    session, front = await remote(Weather(), idle=0.05)
-    async with client(front, "lab") as c:
-        await ask(c, "rain?", asker="me")
-    assert "lab/me" in _names(session)
-    await asyncio.sleep(0.3)
-    assert "lab/me" not in _names(session)
-    assert "rain?" in [m.text for m in session._context()]
-    await session.close()
+async def test_asking_the_frontend():
+    @connector("curious")
+    @require(HookAsk)
+    class _Curious:
+        pass
 
-
-async def test_a_proxy_cannot_be_asked():
-    weather = Weather()
-    session, front = await remote(weather)
-    async with client(front, "lab") as c:
-        await ask(c, "rain?")
-    proxy = session._peers()[weather.asked[0].frm]
-    reply = await proxy.answer(type("M", (), {"reply_to": None})())
-    assert reply.status == "error"
+    curious = _Curious()
+    session, front = await remote(Weather(), curious)
+    got = await curious.ask(LOCAL, "anyone there?", detail=True)
+    assert got.status == "error" and "Nobody" in got.text
     await session.close()
 
 
@@ -227,7 +222,7 @@ async def test_a_follow_up_goes_to_the_same_peer():
         assert (await ask(c, "rain?", asker="me"))["status"] == "asked"
         await ask(c, "Lisbon", asker="me")
     assert [m.text for m in weather.asked] == ["rain?", "Lisbon"]
-    assert weather.asked[0].frm == weather.asked[1].frm
+    assert weather.asked[0].frm == weather.asked[1].frm == LOCAL
     await session.close()
 
 

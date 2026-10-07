@@ -8,6 +8,7 @@ import mcp_types as types
 from mcp import Client
 
 from chatinho import (
+    LOCAL,
     ChatSession,
     HookAnswer,
     HookCredential,
@@ -118,11 +119,11 @@ class Agent:
         return await self._respond(msg)
 
     async def listen(self, msg):
-        """Replies to a question a remote asker said to the room."""
+        """Replies to a question the frontend said to the room for a client."""
         self.heard.append(msg)
         if not self.replies or not msg.is_broadcast:
             return
-        if type(self.peers().get(msg.frm)).__name__ != "_AskerProxy":
+        if msg.frm != LOCAL:                     # only what the frontend forwarded
             return
         reply = await self._respond(msg)
         await self.say(reply.text, reply_to=msg.id, attachments=reply.attachments)

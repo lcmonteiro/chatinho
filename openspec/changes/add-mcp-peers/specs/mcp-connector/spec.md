@@ -48,11 +48,11 @@ For every message it is addressed by, the connector SHALL post exactly one reply
 - **THEN** the connector replies that the remote session could not be reached
 
 ### Requirement: The asker travels with the question
-The connector SHALL send, with each question, the name of the local peer that asked it, so the remote session can show the asker as `<connector name>/<asker>`.
+The connector SHALL send, with each question, the name of the local peer that asked it, so the remote frontend can keep each asker's follow-ups together.
 
 #### Scenario: Local user asks
 - **WHEN** the local user `me` asks through connector `lab`
-- **THEN** the remote session sees the asker as `lab/me`
+- **THEN** the question reaches the remote frontend from client `lab` with asker `me`
 
 ### Requirement: Serving samples with the local model
 The connector SHALL answer the sampling requests its server embeds in an `InputRequiredResult` with a sample function given to the connector (for example one backed by the local LLM), and retry the question with the completions, for as many rounds as the question needs within its deadline. With no sample function, it MUST decline the request. The connector MUST NOT send any API key to the server, except credentials it is configured to delegate (see `credential-delegation`).

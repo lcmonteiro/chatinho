@@ -89,7 +89,6 @@ from .chat_hooks import (
     HookServeSample,
     HookCredential,
     HookServeCredential,
-    PeerRemoved,
     SamplingUnavailable,
     CredentialUnavailable,
     Say,
@@ -200,7 +199,6 @@ __all__ = [
     "HookCredential",
     "HookServeCredential",
     # what can go wrong
-    "PeerRemoved",
     "SamplingUnavailable",
     "CredentialUnavailable",
     # what the grants look like

@@ -78,13 +78,9 @@ class Ask(Protocol):
         status and the answer's message id — instead of the text alone.
 
         Raises:
-            PeerRemoved: The peer left the session before it answered.
+            Exception: Whatever the peer's ``answer`` raised, when it failed.
         """
         ...
-
-
-class PeerRemoved(RuntimeError):
-    """An ask whose peer left the session before answering it."""
 
 
 class SamplingUnavailable(RuntimeError):

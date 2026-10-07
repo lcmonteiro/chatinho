@@ -48,7 +48,7 @@ chatinho SHALL provide `HookCredential`, a grant-only hook that gives a peer `cr
 - **THEN** it is called once for each question asked, and its result is what is delegated
 
 ### Requirement: Alive only while the question is answered
-A delegated credential SHALL be bound to the question it came with and to the asker's proxy, and kept only in memory; it MUST reach only the session the connector connects to. The server MUST discard it when that question's result is returned, whatever the status, or when the proxy is removed. It MUST NOT be written to the conversation, the store, attachments or logs, and its representation in errors and tracebacks MUST be redacted. A connector MUST NOT delegate a credential it obtained through `credential`; it delegates only its own configured ones.
+A delegated credential SHALL be bound to the question it came with, and kept only in memory; it MUST reach only the session the connector connects to. The server MUST discard it when that question's result is returned, whatever the status. It MUST NOT be written to the conversation, the store, attachments or logs, and its representation in errors and tracebacks MUST be redacted. A connector MUST NOT delegate a credential it obtained through `credential`; it delegates only its own configured ones.
 
 #### Scenario: Gone after the answer
 - **WHEN** a peer has answered a question that came with `llm`, and then calls `credential` for that question's id

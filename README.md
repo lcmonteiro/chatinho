@@ -228,8 +228,10 @@ build_chat(connectors=[lab]).run()
 - **One reply, always.** Every question ends in exactly one of `answered`, `asked` (a question back),
   `error` or `timeout`, within a deadline — 120 s unless the frontend or the connector sets another.
   Attachments come back with the answer and the local backend keeps them.
-- **Who asked.** Inside the remote session each asker is its own peer, named `<client>/<asker>` —
-  `lab/me` — and it leaves after ten idle minutes; what it said stays.
+- **The frontend speaks for every client.** It forwards each question into the remote session as its
+  own `ask` or `say`, and sends the reply to that message back to the client that asked — several
+  clients at once, told apart by message id. No peer is added per client, so remote peers see every
+  question coming from `master`.
 - **Lending intelligence.** A remote peer that declares `HookSample` calls
   `await self.sample(msg.id, messages)`; the request travels back to the asking session, which runs
   it with `sample_with`. The key that pays for it never leaves the asker's machine. MCP sampling is
