@@ -2,9 +2,8 @@
 
 :class:`McpFrontend` is the session's peer zero, as a terminal would be, but
 nobody types into it: MCP clients put questions to the session through it. It
-speaks the modern MCP protocol (2026-07-28), which is stateless — every request
-names its client — and asks for input mid-call by returning an
-``InputRequiredResult`` that the client fulfils and retries.
+speaks the modern MCP protocol (2026-07-28), which is stateless: every request
+names its client, and may carry credentials the client lends for that question.
 
 The frontend speaks for every client itself. It receives a question, forwards
 it into the session as its own message — an ask to the only peer that can
@@ -17,8 +16,8 @@ import asyncio
 import hmac
 import logging
 import secrets
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
 import mcp_types as types
 from mcp.server.lowlevel.server import Server
@@ -38,11 +37,9 @@ from ..chat_hooks import (
     HookPeers,
     HookSay,
     HookServeCredential,
-    HookServeSample,
     Invoke,
     Locate,
     Peers,
-    SamplingUnavailable,
     Say,
     declares,
     frontend,
@@ -59,27 +56,18 @@ _NOBODY_HERE = "Nobody is at this session's terminal: it is served over MCP"
 
 @dataclass(eq=False)
 class _Question:
-    """One question in flight, across however many rounds its ``ask`` takes."""
+    """One question in flight, from its ``ask`` call to its one result."""
 
     token       : str
     client      : str
     asker       : Tuple[str, str]
     deadline    : float
-    can_sample  : bool
     credentials : Dict[str, Secret]
     answer      : "asyncio.Future[Tuple[str, str, Optional[MessageID]]]"
     seconds     : float = 0.0
     msg_id      : Optional[MessageID] = None
     task        : Optional["asyncio.Task[Any]"] = None
-    #: Samples peers asked for that the client has not been sent yet.
-    queued      : Dict[str, Tuple[types.CreateMessageRequest, "asyncio.Future[str]"]] = field(
-        default_factory=dict)
-    #: Samples sent to the client, waiting for its retry.
-    sent        : Dict[str, "asyncio.Future[str]"] = field(default_factory=dict)
-    wake        : asyncio.Event = field(default_factory=asyncio.Event)
     closed      : bool = False
-    timer       : Optional[asyncio.TimerHandle] = None
-    count       : int = 0
 
 
 _TOOLS = [
@@ -144,7 +132,6 @@ _TOOLS = [
 @require(HookContext)
 @require(HookLocate)
 @require(HookAnswer)
-@require(HookServeSample)
 @require(HookServeCredential)
 class McpFrontend:
     """Serves a session over MCP, in place of a terminal.
@@ -201,7 +188,7 @@ class McpFrontend:
         self.server : Server[Any] = Server(name, on_list_tools=self._list_tools, on_call_tool=self._call_tool)
         if self.credentials:
             self.server.extensions[wire.CREDENTIALS_KEY] = dict(self.credentials)
-        #: Open questions, by the token their client retries with.
+        #: Open questions, so shutting down can close them.
         self._open    : Dict[str, _Question] = {}
         #: Open questions, by the id of the message the frontend forwarded them as.
         self._by_msg  : Dict[MessageID, _Question] = {}
@@ -251,31 +238,6 @@ class McpFrontend:
 
     # === Lending to whoever answers =================================================
 
-    async def serve_sample(
-        self,
-        msg_id     : MessageID,
-        messages   : Sequence[Dict[str, str]],
-        max_tokens : Optional[int],
-        system     : Optional[str],
-    ) -> str:
-        """Asks the client behind *msg_id* for a completion, in the question's next round."""
-        question = self._question_of(msg_id)
-        if question is None or question.closed:
-            raise SamplingUnavailable("No remote asker is waiting on %s" % msg_id)
-        if not question.can_sample:
-            raise SamplingUnavailable("%s does not run completions" % question.client)
-        request = types.CreateMessageRequest(params=types.CreateMessageRequestParams(
-            messages=[types.SamplingMessage(role=_role(m), content=types.TextContent(text=str(m["content"])))
-                      for m in messages],
-            max_tokens=max_tokens or 1024,
-            system_prompt=system,
-        ))
-        question.count += 1
-        future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
-        question.queued["sample-%d" % question.count] = (request, future)
-        question.wake.set()
-        return await future
-
     async def serve_credential(self, msg_id: MessageID, name: str) -> str:
         """The credential *name* lent with the question *msg_id*, while it is open."""
         question = self._question_of(msg_id)
@@ -315,13 +277,6 @@ class McpFrontend:
     async def _tool_ask(
         self, client: str, args: Dict[str, Any], params: types.CallToolRequestParams, meta: Dict[str, Any],
     ) -> Any:
-        if params.request_state is not None:
-            question = self._open.get(params.request_state)
-            if question is None or question.closed or question.client != client:
-                return wire.result("error", "That question is no longer open")
-            self._take(question, params.input_responses or {})
-            return await self._wait(question)
-
         text = args.get("text")
         if not isinstance(text, str) or not text.strip():
             return wire.result("error", "ask needs a text")
@@ -330,7 +285,10 @@ class McpFrontend:
         opened   = await self._open_question(client, args.get("asker"), text, seconds, meta)
         if isinstance(opened, types.CallToolResult):
             return opened
-        return await self._wait(opened)
+        try:
+            return await self._wait(opened)
+        finally:
+            self._close(opened)               # however the call ended, even cancelled
 
     async def _tool_invoke(self, client: str, args: Dict[str, Any]) -> types.CallToolResult:
         name = args.get("name")
@@ -366,20 +324,16 @@ class McpFrontend:
                 "error", "Several peers could answer and none listens to the room; a peer router is needed")
 
         loop     = asyncio.get_running_loop()
-        caps     = meta.get(types.CLIENT_CAPABILITIES_META_KEY) or {}
         question = _Question(
             token       = secrets.token_urlsafe(18),
             client      = client,
             asker       = (client, wire.safe_name(asker, "")),
             deadline    = loop.time() + seconds,
-            can_sample  = isinstance(caps, dict) and caps.get("sampling") is not None,
             credentials = self._lent(meta),
             answer      = loop.create_future(),
             seconds     = seconds,
         )
         self._open[question.token] = question
-        # A client that never comes back for its answer must not hold it forever.
-        question.timer = loop.call_at(question.deadline + 1.0, self._close, question)
 
         async with self._opening:
             if len(answering) == 1:
@@ -399,45 +353,12 @@ class McpFrontend:
                 self._by_msg[question.msg_id] = question
         return question
 
-    async def _wait(self, question: _Question) -> Any:
-        """Waits for the answer, a sample to send, or the deadline — whichever is first."""
-        loop = asyncio.get_running_loop()
-        while True:
-            if question.answer.done():
-                return await self._finish(question)
-            if question.queued:
-                return self._input_required(question)
-            remaining = question.deadline - loop.time()
-            if remaining <= 0:
-                return await self._finish(question, timed_out=True)
-            question.wake.clear()
-            woken : "asyncio.Future[Any]" = asyncio.ensure_future(question.wake.wait())
-            pending : set = {question.answer, woken}
-            try:
-                await asyncio.wait(pending, timeout=remaining, return_when=asyncio.FIRST_COMPLETED)
-            finally:
-                woken.cancel()
-
-    def _input_required(self, question: _Question) -> types.InputRequiredResult:
-        """Sends every queued sample to the client in one round."""
-        requests: Dict[str, Any] = {}
-        for key, (request, future) in question.queued.items():
-            requests[key] = request
-            question.sent[key] = future
-        question.queued.clear()
-        return types.InputRequiredResult(input_requests=requests, request_state=question.token)
-
-    def _take(self, question: _Question, responses: Dict[str, Any]) -> None:
-        """Resolves the samples the client answered; the rest it did not send are refused."""
-        for key, future in list(question.sent.items()):
-            del question.sent[key]
-            if future.done():
-                continue
-            text = _completion(responses.get(key))
-            if text is None:
-                future.set_exception(SamplingUnavailable("%s sent no completion" % question.client))
-            else:
-                future.set_result(text)
+    async def _wait(self, question: _Question) -> types.CallToolResult:
+        """Waits for the answer or the deadline, whichever is first."""
+        remaining = question.deadline - asyncio.get_running_loop().time()
+        if remaining > 0:
+            await asyncio.wait({question.answer}, timeout=remaining)
+        return await self._finish(question, timed_out=not question.answer.done())
 
     async def _finish(self, question: _Question, timed_out: bool = False) -> types.CallToolResult:
         """Ends the question and builds its one result."""
@@ -454,7 +375,7 @@ class McpFrontend:
         return wire.result(status, text, attachments, str(msg_id) if msg_id is not None else None)
 
     def _close(self, question: _Question) -> None:
-        """Lets go of everything a question held: its wait, its samples, its credentials."""
+        """Lets go of everything a question held: its wait and its credentials."""
         if question.closed:
             return
         question.closed = True
@@ -462,16 +383,8 @@ class McpFrontend:
         if question.msg_id is not None:
             self._by_msg.pop(question.msg_id, None)
             self._waiting.pop(question.msg_id, None)
-        if question.timer is not None:
-            question.timer.cancel()
         if question.task is not None and not question.task.done():
             question.task.cancel()
-        for _, future in list(question.queued.values()):
-            _refuse(future)
-        for future in list(question.sent.values()):
-            _refuse(future)
-        question.queued.clear()
-        question.sent.clear()
         question.credentials.clear()
 
     # === Helpers ====================================================================
@@ -536,29 +449,6 @@ def _settle_broadcast(question: _Question, waiting: "asyncio.Future[ChatMessage]
         return
     reply = waiting.result()
     question.answer.set_result(("answered", reply.text, reply.id))
-
-
-def _refuse(future: "asyncio.Future[str]") -> None:
-    if not future.done():
-        future.set_exception(SamplingUnavailable("The question ended before the client answered"))
-
-
-def _role(message: Dict[str, str]) -> Any:
-    role = message.get("role")
-    if role not in ("user", "assistant"):
-        raise ValueError("A sampling message's role is 'user' or 'assistant', got %r" % (role,))
-    return role
-
-
-def _completion(response: Any) -> Optional[str]:
-    """The text of a client's completion, or None when it sent none."""
-    content = getattr(response, "content", None)
-    if isinstance(content, types.TextContent):
-        return content.text
-    if isinstance(content, list):
-        texts = [block.text for block in content if isinstance(block, types.TextContent)]
-        return "".join(texts) if texts else None
-    return None
 
 
 def _listing(key: str, items: List[Any]) -> types.CallToolResult:

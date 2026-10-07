@@ -1,4 +1,4 @@
-"""HookSample and HookCredential: what the frontend lends to whoever answers."""
+"""HookCredential: what the frontend lends to whoever answers."""
 
 import pytest
 
@@ -7,10 +7,7 @@ from chatinho import (
     CredentialUnavailable,
     HookCredential,
     HookServeCredential,
-    HookSample,
-    HookServeSample,
     MessageID,
-    SamplingUnavailable,
     Secret,
     connector,
     frontend,
@@ -20,48 +17,22 @@ from conftest import driven
 
 
 @connector("pensador")
-@require(HookSample)
 @require(HookCredential)
 class _Pensador:
     pass
 
 
 @frontend("lender")
-@require(HookServeSample)
 @require(HookServeCredential)
 class _Lender:
     def __init__(self):
-        self.calls = []
         self.lent  = {}
-
-    async def serve_sample(self, msg_id, messages, max_tokens, system):
-        self.calls.append((msg_id, messages, max_tokens, system))
-        return "completed"
 
     async def serve_credential(self, msg_id, name):
         try:
             return self.lent[msg_id][name].reveal()
         except KeyError:
             raise CredentialUnavailable(name) from None
-
-
-async def test_the_frontend_serves_the_sample():
-    lender, peer = _Lender(), _Pensador()
-    session = ChatSession(frontend=lender, connectors=[peer])
-    await session.start()
-    msg_id  = MessageID.new()
-    text    = await peer.sample(msg_id, [{"role": "user", "content": "hi"}], max_tokens=5)
-    assert text == "completed"
-    assert lender.calls == [(msg_id, [{"role": "user", "content": "hi"}], 5, None)]
-    await session.close()
-
-
-async def test_nobody_serves_samples():
-    peer = _Pensador()
-    session, _ = await driven(connectors=[peer])
-    with pytest.raises(SamplingUnavailable):
-        await peer.sample(MessageID.new(), [{"role": "user", "content": "hi"}])
-    await session.close()
 
 
 async def test_a_lent_credential_is_served_for_its_message_only():

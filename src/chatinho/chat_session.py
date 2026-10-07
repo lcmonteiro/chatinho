@@ -25,7 +25,6 @@ from typing import Any, Dict, List, Optional, Sequence, Union
 
 from .chat_hooks import (
     CredentialUnavailable,
-    SamplingUnavailable,
     HookExecute,
     HookKeep,
     HookLink,
@@ -34,7 +33,6 @@ from .chat_hooks import (
     HookAnswer,
     HookListen,
     HookServeCredential,
-    HookServeSample,
     declares,
     hooks_of,
     declared_id,
@@ -259,7 +257,6 @@ class ChatSession:
             peers   = lambda: self._peers,
             commands= lambda: self._commands,
             locate  = lambda: self.locate,
-            sample  = lambda: self._sample,
             credential = lambda: self._credential,
         )
         for hook in hooks_of(who):
@@ -322,26 +319,6 @@ class ChatSession:
         return ask
 
     # === Lending to whoever answers ================================================
-
-    async def _sample(
-        self,
-        msg_id     : MessageID,
-        messages   : Sequence[Dict[str, str]],
-        *,
-        max_tokens : Optional[int] = None,
-        system     : Optional[str] = None,
-    ) -> str:
-        """A completion run on behalf of *msg_id*. Granted by ``HookSample``.
-
-        The frontend speaks for whoever asked, so it is the one asked to run it.
-
-        Raises:
-            SamplingUnavailable: The frontend does not declare ``HookServeSample``.
-        """
-        front = self._connectors.get(LOCAL)
-        if front is None or not declares(front, HookServeSample):
-            raise SamplingUnavailable("Nobody serves samples in this chat")
-        return await front.serve_sample(msg_id, list(messages), max_tokens, system)
 
     async def _credential(self, msg_id: MessageID, name: str) -> str:
         """The credential *name* lent for *msg_id*. Granted by ``HookCredential``.

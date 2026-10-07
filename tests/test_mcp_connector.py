@@ -158,34 +158,6 @@ async def test_an_unreachable_server_still_gets_a_reply():
     await session.close()
 
 
-# === Lending the local model =======================================================
-
-async def test_the_local_model_answers_the_remote_peer():
-    seen = []
-
-    async def model(messages, *, max_tokens, system):
-        seen.append(messages)
-        return "LOCAL"
-
-    remote_session, front = await remote(Agent(think=1))
-    lab = McpConnector(server=front.server, name="lab", sample_with=model)
-    session, view = await _local(lab)
-    assert await view.ask(lab.peer_id, "draw it") == "agent: LOCAL"
-    assert seen == [[{"role": "user", "content": "draw it 0"}]]
-    await session.close()
-    await remote_session.close()
-
-
-async def test_nothing_to_sample_with():
-    remote_session, front = await remote(Agent(think=1))
-    lab = McpConnector(server=front.server, name="lab")
-    session, view = await _local(lab)
-    got = await view.ask(lab.peer_id, "draw it", detail=True)
-    assert got.status == "error" and "SamplingUnavailable" in got.text
-    await session.close()
-    await remote_session.close()
-
-
 # === Lending credentials ===========================================================
 
 async def test_a_credential_is_sent_with_the_question():
@@ -239,6 +211,18 @@ async def test_a_token_per_question():
     await view.ask(lab.peer_id, "one")
     await view.ask(lab.peer_id, "two")
     assert agent.keys == ["tok-0", "tok-1"] == minted
+    await session.close()
+    await remote_session.close()
+
+
+async def test_nothing_is_lent_without_delegate():
+    agent = Agent(key=True)
+    remote_session, front = await remote(agent, credentials={"llm": "key"})
+    lab = McpConnector(server=front.server, name="lab")
+    session, view = await _local(lab)
+    await view.ask(lab.peer_id, "go")
+    assert agent.keys == ["CredentialUnavailable"]
+    assert lab._lending(lab._client) is None
     await session.close()
     await remote_session.close()
 

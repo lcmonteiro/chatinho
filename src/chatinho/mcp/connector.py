@@ -6,17 +6,16 @@ rain?`` — becomes one ``ask`` to the remote session, which decides who answers
 Exactly one reply comes back for every such message.
 
 It speaks the modern MCP protocol (2026-07-28). When a remote peer needs an LLM,
-the server asks for a completion mid-call, and the connector runs it with the
-local model it was given: the key that pays for it never leaves this machine,
-unless the connector is told to lend one.
+the connector can lend it a credential for that one question — out of band,
+only one the server declared, and only over HTTPS or to this machine. Without
+``delegate``, no key ever leaves this machine.
 """
 
 import asyncio
-import inspect
 import ipaddress
 import logging
 from contextlib import AsyncExitStack
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Union
 from urllib.parse import urlparse
 
 import mcp_types as types
@@ -28,19 +27,10 @@ from . import wire
 
 logger = logging.getLogger(__name__)
 
-#: How many rounds one question may take; each completion a remote peer asks for is one.
-_MAX_ROUNDS : int = 64
-
 #: How much longer than its deadline a question may take before the link is
 #: taken to be hung. The server answers within the deadline; this only guards
 #: against a server that never does.
 _GRACE : float = 30.0
-
-SampleWith = Callable[..., Union[str, Any]]
-"""``sample_with(messages, *, max_tokens, system) -> str``, or a coroutine function.
-
-*messages* are ``{"role": "user" | "assistant", "content": str}``; *system* may be None.
-"""
 
 
 @connector("mcp")
@@ -65,8 +55,6 @@ class McpConnector:
             server's name when left out.
         deadline: How long the remote session may take for each question, in
             seconds; the server's own default when left out.
-        sample_with: The local model, run when a remote peer asks for a
-            completion; without it, those requests are declined.
         delegate: Credentials to lend, by name: a value, or a function returning
             one for each question. Only the ones the server declares are sent,
             and only over HTTPS or to this machine.
@@ -88,7 +76,6 @@ class McpConnector:
         server      : Any = None,
         name        : Optional[str] = None,
         deadline    : Optional[float] = None,
-        sample_with : Optional[SampleWith] = None,
         delegate    : Optional[Mapping[str, Union[str, Callable[[], str]]]] = None,
     ) -> None:
         if sum(given is not None for given in (command, url, server)) != 1:
@@ -104,7 +91,6 @@ class McpConnector:
         self._named      = name is not None
         self.name        = wire.safe_name(name, "mcp") if name is not None else "mcp"
         self.deadline    = deadline
-        self.sample_with = sample_with
         self._delegate   = dict(delegate or {})
         self._client     : Any = None
         self._runner     : Optional["asyncio.Task[None]"] = None
@@ -222,26 +208,6 @@ class McpConnector:
                     for name, value in self._delegate.items() if name in declared}
         return {wire.CREDENTIALS_KEY: lent} if lent else None
 
-    async def _sample(self, ctx: Any, params: types.CreateMessageRequestParams) -> Any:
-        """Runs a remote peer's completion with the local model."""
-        if self.sample_with is None:
-            return types.ErrorData(code=-32601, message="%s does not run completions" % self.name)
-        messages : List[Dict[str, str]] = []
-        for message in params.messages:
-            content = message.content
-            blocks  = content if isinstance(content, list) else [content]
-            text    = "".join(b.text for b in blocks if isinstance(b, types.TextContent))
-            messages.append({"role": message.role, "content": text})
-        try:
-            out = self.sample_with(messages, max_tokens=params.max_tokens, system=params.system_prompt)
-            if inspect.isawaitable(out):
-                out = await out
-        except Exception as exc:
-            logger.warning("%s: the local model failed: %r", self.name, exc)
-            return types.ErrorData(code=-32603, message="The local model failed")
-        return types.CreateMessageResult(role="assistant", content=types.TextContent(text=str(out)),
-                                         model=self.name)
-
     # === The link ===================================================================
 
     async def _connect(self) -> Any:
@@ -280,12 +246,9 @@ class McpConnector:
     def _make_client(self, stack: AsyncExitStack) -> Any:
         from mcp import Client, StdioServerParameters
         options : Dict[str, Any] = dict(
-            mode                      = "auto",
-            client_info               = types.Implementation(name=self.name, version="chatinho"),
-            input_required_max_rounds = _MAX_ROUNDS,
+            mode        = "auto",
+            client_info = types.Implementation(name=self.name, version="chatinho"),
         )
-        if self.sample_with is not None:
-            options["sampling_callback"] = self._sample
         if self._server is not None:
             return Client(self._server, **options)
         if self._command is not None:

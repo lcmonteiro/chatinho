@@ -1,7 +1,7 @@
 # chatinho — the hook specification
 
-Everything a peer can do, and everything it can be asked to do, is one of **eighteen hooks**. This
-document is the reference for all eighteen: what each one demands, what it grants, and what actually
+Everything a peer can do, and everything it can be asked to do, is one of **sixteen hooks**. This
+document is the reference for all sixteen: what each one demands, what it grants, and what actually
 arrives at its door.
 
 Every claim here is executable. `examples/hooks.py` declares one peer per hook and runs a short
@@ -71,7 +71,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 
 ---
 
-## 2. The eighteen hooks at a glance
+## 2. The sixteen hooks at a glance
 
 | hook | demands | grants | declared by |
 |---|---|---|---|
@@ -89,8 +89,6 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 | [`HookKeep`](#hookkeep) | `keep` | — | a backend that keeps attachments |
 | [`HookLink`](#hooklink) | `link` | — | a backend that keeps attachments |
 | [`HookLocate`](#hooklocate) | — | `locate` | a presentation, a peer that opens attachments |
-| [`HookSample`](#hooksample) | — | `sample` | a peer that thinks with the asker's model |
-| [`HookServeSample`](#hookservesample) | `serve_sample` | — | a frontend that runs completions for its askers |
 | [`HookCredential`](#hookcredential) | — | `credential` | a peer that uses a credential lent with the question |
 | [`HookServeCredential`](#hookservecredential) | `serve_credential` | — | a frontend that holds credentials lent by its askers |
 
@@ -378,19 +376,6 @@ url = await self.locate(msg.id, "revenue.html")
 
 The terminal uses it for a message's relative links: it opens what comes back, or says "Not found".
 
-### HookSample
-
-> **grants** `await sample(msg_id: MessageID, messages: Sequence[dict], *, max_tokens: Optional[int] = None, system: Optional[str] = None) -> str`
-
-A completion run on behalf of message *msg_id* — the question being answered — by whoever asked it,
-so the asker's model and key do the work. *messages* are `{"role": "user" | "assistant", "content":
-str}`. The session hands it to the frontend that declares `HookServeSample`; with none, or when the
-asker cannot or will not, it raises `SamplingUnavailable`.
-
-```python
-text = await self.sample(msg.id, [{"role": "user", "content": msg.text}])
-```
-
 ### HookCredential
 
 > **grants** `await credential(msg_id: MessageID, name: str) -> str`
@@ -401,19 +386,6 @@ for that message, it raises `CredentialUnavailable`. Never put what comes back i
 
 ```python
 key = await self.credential(msg.id, "llm")
-```
-
-### HookServeSample
-
-> **demands** `async serve_sample(msg_id: MessageID, messages: list, max_tokens: Optional[int], system: Optional[str]) -> str`
-
-Declared by a frontend that can run completions for the questions it brought in — `McpFrontend`
-relays them to the client the question came from. Raise `SamplingUnavailable` for a message it
-cannot serve.
-
-```python
-async def serve_sample(self, msg_id, messages, max_tokens, system) -> str:
-    raise SamplingUnavailable("nobody behind %s" % msg_id)
 ```
 
 ### HookServeCredential

@@ -54,13 +54,9 @@ The connector SHALL send, with each question, the name of the local peer that as
 - **WHEN** the local user `me` asks through connector `lab`
 - **THEN** the question reaches the remote frontend from client `lab` with asker `me`
 
-### Requirement: Serving samples with the local model
-The connector SHALL answer the sampling requests its server embeds in an `InputRequiredResult` with a sample function given to the connector (for example one backed by the local LLM), and retry the question with the completions, for as many rounds as the question needs within its deadline. With no sample function, it MUST decline the request. The connector MUST NOT send any API key to the server, except credentials it is configured to delegate (see `credential-delegation`).
+### Requirement: No key leaves without delegation
+The connector MUST NOT send any API key or credential to the server, except the credentials it is configured to delegate (see `credential-delegation`).
 
-#### Scenario: Local model answers the remote peer
-- **WHEN** the connector was given a sample function and the server sends a sampling request for a question the local user asked
-- **THEN** the sample function is called and its completion is returned to the server
-
-#### Scenario: Nothing to sample with
-- **WHEN** the connector has no sample function
-- **THEN** the sampling request is declined, and the remote peer gets `SamplingUnavailable`
+#### Scenario: Nothing configured
+- **WHEN** a connector without `delegate` asks a server that declared credentials
+- **THEN** the request carries no credential

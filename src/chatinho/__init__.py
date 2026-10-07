@@ -12,7 +12,7 @@ each is a pair: the word you call, and the word the other side writes.
     invoke(name, args)     ->  execute(args, by)    a command run by name
 
 Everything is a coroutine and every peer has its own queue, so a slow subsystem
-holds up nobody but itself. ``docs/SPEC.md`` is the reference for all eighteen hooks,
+holds up nobody but itself. ``docs/SPEC.md`` is the reference for all sixteen hooks,
 and ``examples/hooks.py`` is that document executable.
 
 Headless — no terminal, and nothing to install beyond this package::
@@ -85,11 +85,8 @@ from .chat_hooks import (
     HookKeep,
     HookLink,
     HookLocate,
-    HookSample,
-    HookServeSample,
     HookCredential,
     HookServeCredential,
-    SamplingUnavailable,
     CredentialUnavailable,
     Say,
     Ask,
@@ -98,7 +95,6 @@ from .chat_hooks import (
     Peers,
     Commands,
     Locate,
-    Sample,
     Credential,
 )
 from .chat_style import ChatStyle
@@ -194,12 +190,9 @@ __all__ = [
     "HookLink",
     "HookLocate",
     # lending to whoever answers
-    "HookSample",
-    "HookServeSample",
     "HookCredential",
     "HookServeCredential",
     # what can go wrong
-    "SamplingUnavailable",
     "CredentialUnavailable",
     # what the grants look like
     "Say",
@@ -209,7 +202,6 @@ __all__ = [
     "Peers",
     "Commands",
     "Locate",
-    "Sample",
     "Credential",
     # batteries
     "A2AConnector",

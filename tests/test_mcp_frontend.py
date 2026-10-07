@@ -3,12 +3,11 @@
 import asyncio
 import time
 
-import mcp_types as types
 import pytest
 
 from chatinho import LOCAL, Attachment, HookAnswer, HookAsk, Reply, connector, require
 from chatinho.mcp import McpFrontend, wire
-from mcp_kit import Agent, Files, Weather, ask, client, remote, sampling
+from mcp_kit import Agent, Files, Weather, ask, client, remote
 
 
 # === The frontend itself ===========================================================
@@ -249,52 +248,6 @@ def _once(reply, then):
         calls.append(msg)
         return reply if len(calls) == 1 else await then(msg)
     return respond
-
-
-# === Sampling ======================================================================
-
-async def test_a_peer_thinks_with_the_askers_model():
-    session, front = await remote(Agent(think=1))
-    async with client(front, sampling=sampling) as c:
-        got = await ask(c, "draw it")
-    assert got["text"] == "agent: DRAW IT 0"
-    await session.close()
-
-
-async def test_a_broadcast_question_samples_too():
-    session, front = await remote(Agent(think=1), Weather())
-    async with client(front, sampling=sampling) as c:
-        got = await ask(c, "draw it")
-    assert got["text"] == "agent: DRAW IT 0"
-    await session.close()
-
-
-async def test_several_samples_in_one_question():
-    session, front = await remote(Agent(think=3))
-    async with client(front, sampling=sampling) as c:
-        got = await ask(c, "go")
-    assert got["text"] == "agent: GO 0 | GO 1 | GO 2"
-    await session.close()
-
-
-async def test_a_client_that_does_not_sample():
-    session, front = await remote(Agent(think=1))
-    async with client(front) as c:
-        got = await ask(c, "draw it")
-    assert got["status"] == "error" and "SamplingUnavailable" in got["text"]
-    await session.close()
-
-
-async def test_a_foreign_request_state_is_refused():
-    session, front = await remote(Agent(think=1))
-    async with client(front, "lab", sampling=sampling) as lab, client(front, "home") as home:
-        first = await lab.session.call_tool("ask", {"text": "go", "deadline_ms": 300},
-                                           allow_input_required=True)
-        assert isinstance(first, types.InputRequiredResult)
-        stolen = await home.session.call_tool("ask", {"text": "go"}, request_state=first.request_state,
-                                              input_responses={}, allow_input_required=True)
-    assert wire.read_result(stolen).status == "error"
-    await session.close()
 
 
 # === Credentials ===================================================================

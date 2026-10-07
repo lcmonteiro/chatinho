@@ -83,35 +83,9 @@ class Ask(Protocol):
         ...
 
 
-class SamplingUnavailable(RuntimeError):
-    """Nobody can run a completion for that message: no frontend serves samples,
-    or the asker behind it cannot or will not."""
-
-
 class CredentialUnavailable(RuntimeError):
     """No credential by that name was lent for that message, or no frontend
     serves credentials."""
-
-
-class Sample(Protocol):
-    """Granted by ``HookSample``: a completion run on behalf of a message."""
-
-    async def __call__(
-        self,
-        msg_id     : MessageID,
-        messages   : Sequence[Dict[str, str]],
-        *,
-        max_tokens : Optional[int] = None,
-        system     : Optional[str] = None,
-    ) -> str:
-        """Asks whoever asked *msg_id* to complete *messages*, and returns the text.
-
-        *messages* are ``{"role": "user" | "assistant", "content": str}``.
-
-        Raises:
-            SamplingUnavailable: Nobody can run it.
-        """
-        ...
 
 
 class Credential(Protocol):
@@ -357,24 +331,10 @@ HookLocate = Hook(
 
 # === Lending to whoever answers =================================================
 #
-# A peer that answers someone may need what that someone has: a model to think
-# with, a key to pay for it. Both are asked for on behalf of the message being
-# answered — the one thing every peer already holds — and the frontend, which
-# speaks for whoever asked, serves them or refuses.
-
-HookSample = Hook(
-    name="HookSample",
-    grants=("sample",),
-    # await sample(msg_id, messages, max_tokens=, system=) -> str. A completion
-    # run by whoever asked msg_id; SamplingUnavailable when nobody can.
-)
-
-HookServeSample = Hook(
-    name="HookServeSample",
-    method="serve_sample",
-    # async serve_sample(msg_id, messages, max_tokens, system) -> str. Declared
-    # by a frontend that can run completions for the questions it brought in.
-)
+# A peer that answers someone may need what that someone has: a key to pay for
+# a model with. It is asked for on behalf of the message being answered — the
+# one thing every peer already holds — and the frontend, which speaks for
+# whoever asked, serves it or refuses.
 
 HookCredential = Hook(
     name="HookCredential",
@@ -405,8 +365,6 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookKeep,
     HookLink,
     HookLocate,
-    HookSample,
-    HookServeSample,
     HookCredential,
     HookServeCredential,
 )

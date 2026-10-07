@@ -56,7 +56,7 @@ For each `ask`, the server SHALL count the session's answering peers: peers that
 - **THEN** the result is `error` saying no peer can answer
 
 ### Requirement: Exactly one result per question
-Every `ask` SHALL return exactly one result `{status, text, attachments}`, with `status` one of `answered`, `asked` (answered with a question back to the asker), `error` or `timeout`. It MUST return before the request's deadline: the caller's `deadline_ms`, or else the frontend's default deadline, which is configurable when the frontend is created and is 120 seconds when not set; a question nobody has answered by then MUST yield `timeout`. A failing peer and a failed sample MUST yield `error` with a message saying what failed. Results of `error` and `timeout` MUST be marked as tool errors in MCP. A direct answer carries the status of the peer's `Reply` (`answered` for plain text); a reply to a broadcast question MUST yield `answered`.
+Every `ask` SHALL return exactly one result `{status, text, attachments}`, with `status` one of `answered`, `asked` (answered with a question back to the asker), `error` or `timeout`. It MUST return before the request's deadline: the caller's `deadline_ms`, or else the frontend's default deadline, which is configurable when the frontend is created and is 120 seconds when not set; a question nobody has answered by then MUST yield `timeout`. A failing peer MUST yield `error` with a message saying what failed. Results of `error` and `timeout` MUST be marked as tool errors in MCP. A direct answer carries the status of the peer's `Reply` (`answered` for plain text); a reply to a broadcast question MUST yield `answered`.
 
 #### Scenario: Answered
 - **WHEN** the session's only peer `weather` answers `sunny`
@@ -100,17 +100,9 @@ Attachments of an answer SHALL be returned in the result, each with its name, me
 - **WHEN** the answering peer attaches `chart.svg`
 - **THEN** the result carries `chart.svg` with media type `image/svg+xml` and its bytes
 
-### Requirement: Sampling relayed to the asker
-The server SHALL serve `HookSample` for the session: a sample requested on behalf of a question the frontend forwarded for a client MUST be relayed to that client, as a sampling request embedded in an `InputRequiredResult` for that question's `ask` call; when the client retries with the completion, it MUST be returned to the peer and the call MUST go on waiting for the answer. A sample for a message that was not forwarded for a client, a client that did not declare the sampling capability, a client that declines, or a question that ended before the client answered, MUST raise `SamplingUnavailable` in the peer. The server MUST NOT accept, store or forward API keys, except credentials delegated as the `credential-delegation` capability allows.
+### Requirement: No key held by default
+The server MUST NOT accept, store or forward API keys, except credentials delegated as the `credential-delegation` capability allows.
 
-#### Scenario: Peer uses the asker's model
-- **WHEN** client `lab` asks, and the answering peer calls `sample` on behalf of that question
-- **THEN** `lab`'s `ask` call returns an `InputRequiredResult` with the sampling request; when `lab` retries with a completion, that completion is what `sample` returns, and the retried call goes on to return the answer
-
-#### Scenario: Sampling for a broadcast question
-- **WHEN** the question was said to the room and a peer replying to it calls `sample` on behalf of it
-- **THEN** the request is relayed to the asker's client, as for a direct question
-
-#### Scenario: No client behind the message
-- **WHEN** a peer calls `sample` on behalf of a message said by another local peer
-- **THEN** `sample` raises `SamplingUnavailable`
+#### Scenario: A client lends nothing
+- **WHEN** a client asks without delegating a credential
+- **THEN** no peer can obtain one for that question

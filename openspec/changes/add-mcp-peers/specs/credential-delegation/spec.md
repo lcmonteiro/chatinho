@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Lets an asker lend a credential (for example an LLM API key or a short-lived token) to the remote session that answers its question, following A2A's principle: the server declares what it needs, the credential travels out of band, never in message content, and lives only while that one question is being answered. It is opt-in; sampling stays the default way to lend intelligence.
+Lets an asker lend a credential (for example an LLM API key or a short-lived token) to the remote session that answers its question, following A2A's principle: the server declares what it needs, the credential travels out of band, never in message content, and lives only while that one question is being answered. It is opt-in, and it is how a remote peer borrows the asker's intelligence.
 
 ## ADDED Requirements
 

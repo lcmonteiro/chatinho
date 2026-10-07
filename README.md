@@ -105,7 +105,7 @@ Four rules hold everywhere: **you never hear yourself**; **nothing blocks** (one
 per peer); **hearing is queued**, so a listener sees a message shortly after it was said; and
 **everything that crosses is in the context**.
 
-[`docs/SPEC.md`](docs/SPEC.md) is the reference for all eighteen hooks — what each demands, what it
+[`docs/SPEC.md`](docs/SPEC.md) is the reference for all sixteen hooks — what each demands, what it
 grants, an example, and what it costs. [`examples/hooks.py`](examples/hooks.py) is that document
 executable.
 
@@ -217,7 +217,7 @@ On the machine that asks, `McpConnector` is an ordinary peer with a name it choo
 from chatinho.mcp import McpConnector
 
 lab = McpConnector(url="https://lab.example/mcp", token="s3cret", name="lab",
-                   sample_with=my_model)          # or command=["python", "serve.py"] for stdio
+                   delegate={"llm": my_sub_key})  # or command=["python", "serve.py"] for stdio
 build_chat(connectors=[lab]).run()
 ```
 
@@ -232,14 +232,11 @@ build_chat(connectors=[lab]).run()
   own `ask` or `say`, and sends the reply to that message back to the client that asked — several
   clients at once, told apart by message id. No peer is added per client, so remote peers see every
   question coming from `master`.
-- **Lending intelligence.** A remote peer that declares `HookSample` calls
-  `await self.sample(msg.id, messages)`; the request travels back to the asking session, which runs
-  it with `sample_with`. The key that pays for it never leaves the asker's machine. MCP sampling is
-  deprecated in this protocol revision but still part of it.
-- **Lending a credential** is opt-in: `McpFrontend(credentials={"llm": "API key"})` declares what its
+- **Lending intelligence is lending a credential**, the way A2A delegates them, and it is opt-in: `McpFrontend(credentials={"llm": "API key"})` declares what its
   peers may use, `McpConnector(delegate={"llm": key_or_function})` sends it out of band, over HTTPS
   or to this machine only, and a peer reads it with `HookCredential` while that one question is
-  open. Lend a sub-key with a spending limit or a short-lived token — never your main key.
+  open. Without `delegate`, no key leaves the asking machine. Lend a sub-key with a spending limit or
+  a short-lived token — never your main key.
 - **HTTP needs a bearer token**, and anyone holding it can ask every peer of the session.
 
 ### Writing your own

@@ -16,7 +16,6 @@ from chatinho import (
     HookLink,
     HookListen,
     HookPeers,
-    HookSample,
     HookSay,
     Reply,
     backend,
@@ -34,23 +33,15 @@ async def remote(*peers: Any, backend: Any = None, **options: Any):
     return session, front
 
 
-def client(front: McpFrontend, name: str = "lab", sampling: Any = None) -> Client:
+def client(front: McpFrontend, name: str = "lab") -> Client:
     """A modern MCP client onto *front*, in-process."""
-    return Client(front.server, mode="auto", sampling_callback=sampling,
-                  client_info=types.Implementation(name=name, version="1"))
+    return Client(front.server, mode="auto", client_info=types.Implementation(name=name, version="1"))
 
 
 async def ask(c: Client, text: str, **args: Any) -> dict:
     """Calls the ask tool and returns its structured result."""
     res = await c.call_tool("ask", {"text": text, **args})
     return res.structured_content
-
-
-async def sampling(ctx: Any, params: Any) -> Any:
-    """A client model that answers every completion with what it was asked, upper-cased."""
-    text = params.messages[-1].content.text
-    return types.CreateMessageResult(role="assistant", content=types.TextContent(text=text.upper()),
-                                     model="m")
 
 
 @connector("weather")
@@ -74,21 +65,18 @@ class Weather:
 @require(HookAnswer)
 @require(HookListen)
 @require(HookSay)
-@require(HookSample)
 @require(HookCredential)
 @require(HookPeers)
 class Agent:
     """Answers questions asked to it, and replies to questions said to the room.
 
-    With ``think``, it samples the asker's model first; with ``key``, it reads
-    the lent credential ``llm``.
+    With ``key``, it reads the lent credential ``llm`` first.
     """
 
-    def __init__(self, name: str = "agent", replies: bool = True, think: int = 0, key: bool = False,
+    def __init__(self, name: str = "agent", replies: bool = True, key: bool = False,
                  delay: float = 0.0, attach: Optional[Any] = None) -> None:
         self.name    = name
         self.replies = replies
-        self.think   = think
         self.key     = key
         self.delay   = delay
         self.attach  = attach
@@ -96,13 +84,6 @@ class Agent:
         self.keys    : List[Any] = []
 
     async def _respond(self, msg) -> Reply:
-        thoughts = []
-        for i in range(self.think):
-            try:
-                asked = [{"role": "user", "content": "%s %d" % (msg.text, i)}]
-                thoughts.append(await self.sample(msg.id, asked))
-            except Exception as exc:
-                return Reply("could not think: %s" % type(exc).__name__, status="error")
         if self.key:
             try:
                 self.keys.append(await self.credential(msg.id, "llm"))
@@ -110,7 +91,7 @@ class Agent:
                 self.keys.append(type(exc).__name__)
         if self.delay:
             await asyncio.sleep(self.delay)
-        text = "%s: %s" % (self.name, " | ".join(thoughts) or msg.text)
+        text = "%s: %s" % (self.name, msg.text)
         if self.attach is not None:
             return Reply(text + " [chart](chart.svg)", (self.attach,))
         return Reply(text)

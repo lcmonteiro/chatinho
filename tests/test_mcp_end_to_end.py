@@ -40,26 +40,24 @@ async def _until(me: Me, count: int) -> list:
     return me.context()
 
 
-async def _thinks_locally(messages, *, max_tokens, system) -> str:
-    return "LOCAL<%s>" % messages[-1]["content"]
-
-
-async def test_a_question_crosses_samples_back_and_returns_with_its_drawing(tmp_path):
+async def test_a_question_crosses_with_a_lent_key_and_returns_with_its_drawing(tmp_path):
     chart  = Attachment("chart.svg", "image/svg+xml", b"<svg>login</svg>")
-    agent  = Agent(think=1, attach=chart)
-    front  = McpFrontend()
+    agent  = Agent(key=True, attach=chart)
+    front  = McpFrontend(credentials={"llm": "OpenAI-compatible API key"})
     there  = ChatSession(frontend=front, connectors=[agent], backend=Files(tmp_path / "there"))
     await there.start()
 
     me     = Me()
-    lab    = McpConnector(server=front.server, name="lab", sample_with=_thinks_locally)
+    lab    = McpConnector(server=front.server, name="lab", delegate={"llm": "sk-lent"})
     here   = ChatSession(frontend=me, backend=Files(tmp_path / "here"), connectors=[lab])
     await here.start()
 
     await me.say("@lab draw the login flow")
     reply = (await _until(me, 2))[-1]
 
-    assert reply.text.startswith("agent: LOCAL<draw the login flow 0>")
+    assert reply.text.startswith("agent: draw the login flow")
+    assert agent.keys == ["sk-lent"]
+    assert all("sk-lent" not in m.text for m in there._context() + me.context())
     assert "[chart](chart.svg)" in reply.text
     assert (tmp_path / "here" / str(reply.id) / "chart.svg").read_bytes() == b"<svg>login</svg>"
     asked = [m for m in there._context() if m.text == "draw the login flow"][0]
