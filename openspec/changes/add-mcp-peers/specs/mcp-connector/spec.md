@@ -7,7 +7,7 @@ Lets a chatinho session put questions to another session over MCP through one or
 ## ADDED Requirements
 
 ### Requirement: A connector to a remote session
-chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connector` built from a server to connect to (a command to start over stdio, or an HTTP URL with a bearer token), a `name` and an optional `deadline` (sent with every question it sends; when not set, the server's default applies). It MUST speak the modern MCP protocol (2026-07-28). Its name in the chat MUST be the `name` given, or the server's name when none is given, and MUST be sent to the server as the client name with every request.
+chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connector` built from a server to connect to (an HTTP URL with a bearer token, or an in-process server), a `name` and an optional `deadline` (sent with every question it sends; when not set, the server's default applies). It MUST speak the modern MCP protocol (2026-07-28). Its name in the chat MUST be the `name` given, or the server's name when none is given, and MUST be sent to the server as the client name with every request.
 
 #### Scenario: Named by the connector
 - **WHEN** `McpConnector(url=..., token=..., name="lab")` is added to a session

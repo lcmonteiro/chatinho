@@ -7,15 +7,15 @@ Turns a headless chatinho session into an MCP server, so MCP clients — includi
 ## ADDED Requirements
 
 ### Requirement: MCP server as the session's frontend
-chatinho SHALL provide `McpFrontend` in `chatinho[mcp]`: a `@frontend` that serves the session over the modern MCP protocol (2026-07-28) in place of a terminal. Its name in the session, which it also gives as the server's name, MUST be `master` unless another name is given. Its `serve()` MUST run the MCP server until the transport closes, so `session.run()` ends with it. It MUST support the stdio transport and the Streamable HTTP transport; the HTTP transport MUST require a bearer token configured on the frontend and refuse requests without it. Several clients MAY use it at once; each request names its client.
+chatinho SHALL provide `McpFrontend` in `chatinho[mcp]`: a `@frontend` that serves the session over the modern MCP protocol (2026-07-28) in place of a terminal. Its name in the session, which it also gives as the server's name, MUST be `master` unless another name is given. Its `serve()` MUST run the MCP server over Streamable HTTP until it stops, so `session.run()` ends with it. There is no stdio transport. The frontend MUST be created with a bearer token, and MUST refuse every request without it. Several clients MAY use it at once; each request names its client.
 
 #### Scenario: Named master by default
-- **WHEN** a session is created with `McpFrontend()` and no name
+- **WHEN** a session is created with `McpFrontend(token=…)` and no name
 - **THEN** the frontend appears in the session as `master`, and clients see a server named `master`
 
-#### Scenario: Session ends with the server
-- **WHEN** a session whose frontend is `McpFrontend` on stdio is run and its client closes the stream
-- **THEN** `session.run()` returns and every peer is shut down
+#### Scenario: No token, no frontend
+- **WHEN** code creates an `McpFrontend` without a token
+- **THEN** it is refused
 
 #### Scenario: HTTP without the token
 - **WHEN** an HTTP request reaches the server without the configured bearer token

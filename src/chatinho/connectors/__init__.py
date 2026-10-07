@@ -10,11 +10,11 @@ round.
 
 from typing import Any
 
-#: name -> the module, relative to this package, that defines it.
+#: name -> the module that defines it.
 _WHERE = {
-    "A2AConnector"    : ".a2a",
-    "OpenAIConnector" : ".openai",
-    "McpConnector"    : ".mcp",
+    "A2AConnector"    : "chatinho.connectors.a2a",
+    "OpenAIConnector" : "chatinho.connectors.openai",
+    "McpConnector"    : "chatinho.connectors.mcp",
 }
 
 __all__ = sorted(_WHERE)
@@ -25,4 +25,4 @@ def __getattr__(name: str) -> Any:
     if name not in _WHERE:
         raise AttributeError("module %r has no attribute %r" % (__name__, name))
     from importlib import import_module
-    return getattr(import_module(_WHERE[name], __name__), name)
+    return getattr(import_module(_WHERE[name]), name)

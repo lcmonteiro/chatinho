@@ -44,7 +44,7 @@ async def _until(me: Me, count: int) -> list:
 async def test_a_question_crosses_with_a_lent_key_and_returns_with_its_drawing(tmp_path):
     chart  = Attachment("chart.svg", "image/svg+xml", b"<svg>login</svg>")
     agent  = Agent(key=True, attach=chart)
-    front  = McpFrontend(credentials={"llm": "OpenAI-compatible API key"})
+    front  = McpFrontend(token="t", credentials={"llm": "OpenAI-compatible API key"})
     there  = ChatSession(frontend=front, connectors=[agent], backend=Files(tmp_path / "there"))
     await there.start()
 
@@ -69,7 +69,7 @@ async def test_a_question_crosses_with_a_lent_key_and_returns_with_its_drawing(t
 
 
 async def test_with_two_peers_the_question_is_said_in_the_remote_room():
-    front  = McpFrontend()
+    front  = McpFrontend(token="t")
     there  = ChatSession(frontend=front, connectors=[Agent("agent"), Weather()])
     await there.start()
     me     = Me()

@@ -2,7 +2,8 @@
 
 :class:`McpFrontend` is the session's peer zero, as a terminal would be, but
 nobody types into it: MCP clients put questions to the session through it. It
-speaks the modern MCP protocol (2026-07-28), which is stateless: every request
+speaks the modern MCP protocol (2026-07-28) over Streamable HTTP, with a bearer
+token on every request. The protocol is stateless: every request
 names its client, and may carry credentials the client lends for that question.
 
 The frontend speaks for every client itself. It receives a question, forwards
@@ -22,7 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import mcp_types as types
 from mcp.server.lowlevel.server import Server
 
-from ..chat_hooks import (
+from chatinho.chat_hooks import (
     Ask,
     Commands,
     Context,
@@ -45,8 +46,8 @@ from ..chat_hooks import (
     frontend,
     require,
 )
-from ..chat_message import LOCAL, Answer, Attachment, ChatMessage, MessageID, Reply, Secret
-from .. import mcp_wire as wire
+from chatinho.chat_message import LOCAL, Answer, Attachment, ChatMessage, MessageID, Reply, Secret
+from chatinho import mcp_wire as wire
 
 logger = logging.getLogger(__name__)
 
@@ -138,18 +139,16 @@ class McpFrontend:
 
     Args:
         name: Its name in the session, and the server's name; ``master`` by default.
-        transport: ``"stdio"`` or ``"http"`` (Streamable HTTP).
-        host: Where the HTTP transport listens.
-        port: The HTTP transport's port.
-        token: The bearer token every HTTP request must carry; required for HTTP.
+        token: The bearer token every request must carry; required.
+        host: Where the server listens.
+        port: The server's port.
         deadline: How long a question may take when its client does not say,
             in seconds.
         credentials: The credentials the session's peers may use, by name, each
             with a short description; announced at discovery. Others are dropped.
 
     Raises:
-        ValueError: An unknown transport, HTTP without a token, or a
-            non-positive deadline.
+        ValueError: No token, or a non-positive deadline.
     """
 
     ask      : Ask
@@ -164,21 +163,17 @@ class McpFrontend:
         self,
         name        : str = "master",
         *,
-        transport   : str = "stdio",
+        token       : str,
         host        : str = "127.0.0.1",
         port        : int = 8000,
-        token       : Optional[str] = None,
         deadline    : float = wire.DEFAULT_DEADLINE,
         credentials : Optional[Dict[str, str]] = None,
     ) -> None:
-        if transport not in ("stdio", "http"):
-            raise ValueError("transport is 'stdio' or 'http', got %r" % (transport,))
-        if transport == "http" and not token:
-            raise ValueError("The HTTP transport needs a bearer token")
+        if not token:
+            raise ValueError("McpFrontend needs a bearer token")
         if deadline <= 0:
             raise ValueError("deadline must be positive")
         self.name        = name
-        self.transport   = transport
         self.host        = host
         self.port        = port
         self.deadline    = float(deadline)
@@ -217,14 +212,9 @@ class McpFrontend:
             waiting.set_result(msg)
 
     async def serve(self) -> None:
-        """Serves MCP until the transport closes, which ends the chat."""
-        if self.transport == "stdio":
-            from mcp.server.stdio import stdio_server
-            async with stdio_server() as (read, write):
-                await self.server.run(read, write, self.server.create_initialization_options())
-            return
+        """Serves MCP over HTTP until the server stops, which ends the chat."""
         import uvicorn
-        app    = _BearerOnly(self.server.streamable_http_app(host=self.host), self._token or "")
+        app    = _BearerOnly(self.server.streamable_http_app(host=self.host), self._token)
         config = uvicorn.Config(app, host=self.host, port=self.port, log_level="warning")
         self._http = uvicorn.Server(config)
         await self._http.serve()

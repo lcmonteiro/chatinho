@@ -1,17 +1,12 @@
 """A chat with no terminal, served over MCP: another session can ask it questions.
 
-``McpFrontend`` takes the terminal's place as peer zero. Its only peer here,
-``agent``, uses an LLM key only when the asker lends one for that question —
-declared as ``llm``, delegated out of band, and gone once the answer is sent —
-and answers plainly when nobody lends one.
+``McpFrontend`` takes the terminal's place as peer zero, over Streamable HTTP
+with a bearer token every request must carry. Its only peer here, ``agent``,
+uses an LLM key only when the asker lends one for that question — declared as
+``llm``, delegated out of band, and gone once the answer is sent — and answers
+plainly when nobody lends one.
 
-Over stdio (what ``McpConnector(command=[...])`` starts):
-
-    python examples/mcp_server.py
-
-Over Streamable HTTP, with a bearer token every request must carry:
-
-    CHATINHO_MCP_TOKEN=s3cret python examples/mcp_server.py --http 8000
+    CHATINHO_MCP_TOKEN=s3cret python examples/mcp_server.py 8000
 
 and, from another chat:
 
@@ -44,14 +39,10 @@ class Agent:
 
 
 def main() -> None:
-    """Serves the session over stdio, or over HTTP with --http PORT."""
-    lends = {"llm": "OpenAI-compatible API key"}
-    if "--http" in sys.argv:
-        port  = int(sys.argv[sys.argv.index("--http") + 1])
-        front = McpFrontend(transport="http", port=port, token=os.environ["CHATINHO_MCP_TOKEN"],
-                            credentials=lends)
-    else:
-        front = McpFrontend(credentials=lends)
+    """Serves the session over HTTP on the port given, 8000 by default."""
+    port  = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    front = McpFrontend(token=os.environ["CHATINHO_MCP_TOKEN"], port=port,
+                        credentials={"llm": "OpenAI-compatible API key"})
     ChatSession(frontend=front, connectors=[Agent()]).run()
 
 

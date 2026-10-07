@@ -15,15 +15,25 @@ import asyncio
 import ipaddress
 import logging
 from contextlib import AsyncExitStack
-from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Mapping, Optional, Union
 from urllib.parse import urlparse
 
 import mcp_types as types
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
-from ..chat_hooks import HookAnswer, HookListen, HookPeers, HookSay, Peers, Say, connector, name_of, require
-from ..chat_message import TOOL, ChatMessage, Reply
-from .. import mcp_wire as wire
+from chatinho.chat_hooks import (
+    HookAnswer,
+    HookListen,
+    HookPeers,
+    HookSay,
+    Peers,
+    Say,
+    connector,
+    name_of,
+    require,
+)
+from chatinho.chat_message import TOOL, ChatMessage, Reply
+from chatinho import mcp_wire as wire
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +51,11 @@ _GRACE : float = 30.0
 class McpConnector:
     """Puts questions to a remote chatinho session.
 
-    Give it exactly one server: a ``command`` to start over stdio, an HTTP
-    ``url`` with its bearer ``token``, or a ``server`` object (an in-process
-    ``mcp`` ``Server``, or an ``McpFrontend``'s ``.server``).
+    Give it exactly one server: an HTTP ``url`` with its bearer ``token``, or
+    a ``server`` object (an in-process ``mcp`` ``Server``, or an
+    ``McpFrontend``'s ``.server``).
 
     Args:
-        command: The command line that starts the server, e.g.
-            ``["python", "serve.py"]``.
         url: The Streamable HTTP endpoint, e.g. ``https://lab.example/mcp``.
         token: The bearer token the server requires; needed with *url*.
         server: An in-process server, for tests and embedding.
@@ -70,7 +78,6 @@ class McpConnector:
     def __init__(
         self,
         *,
-        command     : Optional[Sequence[str]] = None,
         url         : Optional[str] = None,
         token       : Optional[str] = None,
         server      : Any = None,
@@ -78,13 +85,12 @@ class McpConnector:
         deadline    : Optional[float] = None,
         delegate    : Optional[Mapping[str, Union[str, Callable[[], str]]]] = None,
     ) -> None:
-        if sum(given is not None for given in (command, url, server)) != 1:
-            raise ValueError("Give exactly one of command, url or server")
+        if (url is None) == (server is None):
+            raise ValueError("Give exactly one of url or server")
         if url is not None and not token:
             raise ValueError("An HTTP server needs its bearer token")
         if deadline is not None and deadline <= 0:
             raise ValueError("deadline must be positive")
-        self._command    = list(command) if command is not None else None
         self._url        = url
         self._token      = token
         self._server     = server
@@ -244,15 +250,13 @@ class McpConnector:
         self._client = None
 
     def _make_client(self, stack: AsyncExitStack) -> Any:
-        from mcp import Client, StdioServerParameters
+        from mcp import Client
         options : Dict[str, Any] = dict(
             mode        = "auto",
             client_info = types.Implementation(name=self.name, version="chatinho"),
         )
         if self._server is not None:
             return Client(self._server, **options)
-        if self._command is not None:
-            return Client(StdioServerParameters(command=self._command[0], args=self._command[1:]), **options)
         import httpx2
         from mcp.client.streamable_http import streamable_http_client
         http = httpx2.AsyncClient(

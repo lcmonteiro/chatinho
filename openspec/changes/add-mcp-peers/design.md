@@ -102,8 +102,9 @@ This follows A2A's principle: credentials travel out of band, the server declare
 ### 8. Connection lifecycle
 - `McpConnector` opens an SDK `Client` in modern mode (`mode="auto"`, which probes `server/discover`) in `initialize()`, and closes it in `shutdown()`. It doesn't implement `serve()`, because a dropped link must not end the local chat.
 - The connector refuses a server that only speaks the handshake era. Each request is independent; a failed call answers `error` ("could not reach …"), and the client is reopened lazily on the next question.
-- **Transports:** `command=[…]` for stdio, or `url=…, token=…` for HTTP with a `Bearer` header; `deadline` is optional.
-- `McpFrontend(name="master", transport="stdio" | "http", host, port, token, deadline, credentials)`; the name is the frontend's peer name and the server's name. Its `serve()` runs the server over `stdio_server`, or a Uvicorn app with the SDK's Streamable HTTP app and a bearer-token check.
+- **Transport:** Streamable HTTP only, `url=…, token=…` with a `Bearer` header, or `server=…` for an in-process server in tests and embedding; `deadline` is optional. There is no stdio transport on either side.
+- `McpFrontend(name="master", *, token, host, port, deadline, credentials)`; the token is required, and the name is the frontend's peer name and the server's name. Its `serve()` runs a Uvicorn app with the SDK's Streamable HTTP app behind a bearer-token check, and `shutdown()` stops it.
+- *Alternative: stdio as well.* Dropped: a session served over MCP is reached from another machine, and one transport, always behind a token, keeps both ends simpler.
 
 ### 9. Packaging
 - `McpConnector` lives in `chatinho/connectors/mcp.py` and `McpFrontend` in a new `chatinho/frontends/mcp.py`, next to the other batteries of their kind; `chatinho/mcp_wire.py` holds what both ends share. They import `mcp` and are exposed through the lazy `__getattr__`, with the `mcp` extra in the missing-extra message.

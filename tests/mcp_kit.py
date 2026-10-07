@@ -27,6 +27,7 @@ from chatinho.frontends.mcp import McpFrontend
 
 async def remote(*peers: Any, backend: Any = None, **options: Any):
     """A started session served by an McpFrontend, with *peers* in it."""
+    options.setdefault("token", "t")
     front   = McpFrontend(**options)
     session = ChatSession(frontend=front, connectors=list(peers), backend=backend)
     await session.start()

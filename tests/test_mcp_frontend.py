@@ -23,11 +23,11 @@ async def test_named_master_by_default():
     await session.close()
 
 
-def test_http_needs_a_token():
+def test_a_token_is_required():
     with pytest.raises(ValueError):
-        McpFrontend(transport="http")
-    with pytest.raises(ValueError):
-        McpFrontend(transport="carrier-pigeon")
+        McpFrontend(token="")
+    with pytest.raises(TypeError):
+        McpFrontend()                                   # type: ignore[call-arg]
 
 
 async def test_no_tool_broadcasts_and_ask_names_no_peer():
@@ -108,7 +108,7 @@ async def test_attachments_come_back(tmp_path):
 
 async def test_commands_run_from_the_client():
     from chatinho import HelpCommand
-    front   = McpFrontend()
+    front   = McpFrontend(token="t")
     from chatinho import ChatSession
     session = ChatSession(frontend=front, connectors=[Weather()], commands=[HelpCommand()])
     await session.start()

@@ -206,9 +206,7 @@ and nobody types into it:
 from chatinho import ChatSession
 from chatinho.frontends import McpFrontend
 
-ChatSession(frontend=McpFrontend(), connectors=[Agent()]).run()                  # over stdio
-ChatSession(frontend=McpFrontend(transport="http", port=8000, token="s3cret"),   # over HTTP
-            connectors=[Agent()]).run()
+ChatSession(frontend=McpFrontend(token="s3cret", port=8000), connectors=[Agent()]).run()
 ```
 
 On the machine that asks, `McpConnector` is an ordinary peer with a name it chooses:
@@ -217,7 +215,7 @@ On the machine that asks, `McpConnector` is an ordinary peer with a name it choo
 from chatinho.connectors import McpConnector
 
 lab = McpConnector(url="https://lab.example/mcp", token="s3cret", name="lab",
-                   delegate={"llm": my_sub_key})  # or command=["python", "serve.py"] for stdio
+                   delegate={"llm": my_sub_key})
 build_chat(connectors=[lab]).run()
 ```
 
@@ -237,7 +235,8 @@ build_chat(connectors=[lab]).run()
   or to this machine only, and a peer reads it with `HookCredential` while that one question is
   open. Without `delegate`, no key leaves the asking machine. Lend a sub-key with a spending limit or
   a short-lived token — never your main key.
-- **HTTP needs a bearer token**, and anyone holding it can ask every peer of the session.
+- **Over Streamable HTTP only, with a bearer token** — required — and anyone holding it can ask every
+  peer of the session. There is no stdio transport.
 
 ### Writing your own
 

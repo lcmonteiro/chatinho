@@ -28,7 +28,7 @@ def test_exactly_one_server():
     with pytest.raises(ValueError):
         McpConnector()
     with pytest.raises(ValueError):
-        McpConnector(command=["x"], url="https://y")
+        McpConnector(server=object(), url="https://y", token="t")
     with pytest.raises(ValueError):
         McpConnector(url="https://lab.example/mcp")          # no token
 

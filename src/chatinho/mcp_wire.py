@@ -15,7 +15,7 @@ from urllib.request import url2pathname
 
 import mcp_types as types
 
-from .chat_message import Attachment
+from chatinho.chat_message import Attachment
 
 #: Every result an ``ask`` can end in; exactly one per question.
 STATUSES : Tuple[str, ...] = ("answered", "asked", "error", "timeout")

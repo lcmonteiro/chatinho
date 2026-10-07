@@ -31,7 +31,7 @@ async def _serving(front: McpFrontend) -> asyncio.Task:
 
 
 async def test_http_refuses_requests_without_the_token_and_serves_those_with_it():
-    front   = McpFrontend(transport="http", port=_free_port(), token="s3cret")
+    front   = McpFrontend(port=_free_port(), token="s3cret")
     session = ChatSession(frontend=front, connectors=[Weather("sunny")])
     await session.start()
     serving = await _serving(front)
