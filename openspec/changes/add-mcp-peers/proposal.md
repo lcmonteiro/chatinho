@@ -34,7 +34,7 @@ A chatinho session today lives on one machine: its peers can only be reached fro
 - `src/chatinho/chat_session.py`: serving the new `credential` grant; a peer whose `answer` raises fails the waiting `ask`.
 - `src/chatinho/chat_message.py`: `Reply.status` and the `Answer` type.
 - `src/chatinho/chat_hooks.py`: `HookCredential`, `HookServeCredential` and their protocol; `ask(..., detail=True)`; `docs/SPEC.md` gains their sections (the architecture test requires one per hook).
-- New `src/chatinho/mcp/` package (`frontend.py`, `connector.py`, wire helpers), exported lazily as `McpFrontend` and `McpConnector`.
+- New `src/chatinho/frontends/mcp.py` (`McpFrontend`), `src/chatinho/connectors/mcp.py` (`McpConnector`) and `src/chatinho/mcp_wire.py` (what both ends exchange), exported lazily. `connectors/` and the new `frontends/` import each module on first use, so one battery never needs another's extra.
 - `pyproject.toml`: an `mcp` extra (the official `mcp` SDK), also added to `all` and `dev`; `uv.lock` updated.
 - `README.md`, `CLAUDE.md`, an example under `examples/` for a headless MCP session.
 - Security: an HTTP server lets clients put questions to every peer of the session; the HTTP transport requires a bearer token. With delegation, which is opt-in, the remote session holds a credential in memory for one question — so the docs recommend a sub-key with a spending limit or a short-lived token, never the main key.

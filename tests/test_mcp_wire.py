@@ -3,7 +3,7 @@
 import pytest
 
 from chatinho import Attachment
-from chatinho.mcp import wire
+from chatinho import mcp_wire as wire
 
 
 def test_a_result_reads_back_as_written():

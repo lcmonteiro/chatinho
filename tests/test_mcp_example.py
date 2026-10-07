@@ -3,7 +3,7 @@
 import pathlib
 import sys
 
-from chatinho.mcp import McpConnector
+from chatinho.connectors.mcp import McpConnector
 from conftest import driven
 
 EXAMPLE = pathlib.Path(__file__).resolve().parent.parent / "examples" / "mcp_server.py"

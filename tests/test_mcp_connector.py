@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from chatinho import Attachment, ChatSession, Reply
-from chatinho.mcp import McpConnector
+from chatinho.connectors.mcp import McpConnector
 from conftest import driven
 from mcp_kit import Agent, Files, Weather, remote
 

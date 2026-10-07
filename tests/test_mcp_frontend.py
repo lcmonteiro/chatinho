@@ -6,7 +6,8 @@ import time
 import pytest
 
 from chatinho import LOCAL, Attachment, HookAnswer, HookAsk, Reply, connector, require
-from chatinho.mcp import McpFrontend, wire
+from chatinho import mcp_wire as wire
+from chatinho.frontends.mcp import McpFrontend
 from mcp_kit import Agent, Files, Weather, ask, client, remote
 
 

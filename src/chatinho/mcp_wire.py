@@ -1,7 +1,8 @@
 """What crosses an MCP link: results, names and attachments.
 
-Both ends share this module, so what :class:`~chatinho.mcp.McpFrontend` writes
-is exactly what :class:`~chatinho.mcp.McpConnector` reads back.
+Both ends share this module, so what :class:`~chatinho.frontends.mcp.McpFrontend`
+writes is exactly what :class:`~chatinho.connectors.mcp.McpConnector` reads back.
+It needs ``chatinho[mcp]``.
 """
 
 import base64
@@ -14,7 +15,7 @@ from urllib.request import url2pathname
 
 import mcp_types as types
 
-from ..chat_message import Attachment
+from .chat_message import Attachment
 
 #: Every result an ``ask`` can end in; exactly one per question.
 STATUSES : Tuple[str, ...] = ("answered", "asked", "error", "timeout")

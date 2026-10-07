@@ -23,7 +23,7 @@ from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
 from ..chat_hooks import HookAnswer, HookListen, HookPeers, HookSay, Peers, Say, connector, name_of, require
 from ..chat_message import TOOL, ChatMessage, Reply
-from . import wire
+from .. import mcp_wire as wire
 
 logger = logging.getLogger(__name__)
 

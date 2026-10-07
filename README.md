@@ -204,7 +204,7 @@ and nobody types into it:
 
 ```python
 from chatinho import ChatSession
-from chatinho.mcp import McpFrontend
+from chatinho.frontends import McpFrontend
 
 ChatSession(frontend=McpFrontend(), connectors=[Agent()]).run()                  # over stdio
 ChatSession(frontend=McpFrontend(transport="http", port=8000, token="s3cret"),   # over HTTP
@@ -214,7 +214,7 @@ ChatSession(frontend=McpFrontend(transport="http", port=8000, token="s3cret"),  
 On the machine that asks, `McpConnector` is an ordinary peer with a name it chooses:
 
 ```python
-from chatinho.mcp import McpConnector
+from chatinho.connectors import McpConnector
 
 lab = McpConnector(url="https://lab.example/mcp", token="s3cret", name="lab",
                    delegate={"llm": my_sub_key})  # or command=["python", "serve.py"] for stdio

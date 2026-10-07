@@ -22,7 +22,7 @@ from chatinho import (
     connector,
     require,
 )
-from chatinho.mcp import McpFrontend
+from chatinho.frontends.mcp import McpFrontend
 
 
 async def remote(*peers: Any, backend: Any = None, **options: Any):

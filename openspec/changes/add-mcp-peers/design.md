@@ -106,7 +106,8 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - `McpFrontend(name="master", transport="stdio" | "http", host, port, token, deadline, credentials)`; the name is the frontend's peer name and the server's name. Its `serve()` runs the server over `stdio_server`, or a Uvicorn app with the SDK's Streamable HTTP app and a bearer-token check.
 
 ### 9. Packaging
-- `chatinho.mcp` imports `mcp` and is exposed through the lazy `__getattr__` as `McpFrontend` and `McpConnector`, with the `mcp` extra in the missing-extra message.
+- `McpConnector` lives in `chatinho/connectors/mcp.py` and `McpFrontend` in a new `chatinho/frontends/mcp.py`, next to the other batteries of their kind; `chatinho/mcp_wire.py` holds what both ends share. They import `mcp` and are exposed through the lazy `__getattr__`, with the `mcp` extra in the missing-extra message.
+- `connectors/__init__.py` and `frontends/__init__.py` resolve their names on first use (PEP 562). Before this, importing any connector imported all of them, so `McpConnector` would have needed `requests` and `openai` too.
 - `pyproject.toml` gains `mcp = ["mcp>=2.3"]`, and `all` and `dev` include it.
 - `docs/SPEC.md` documents `HookCredential` and `HookServeCredential`, and the architecture tests' extras check covers `mcp`.
 

@@ -9,7 +9,7 @@ from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
 
 from chatinho import ChatSession
-from chatinho.mcp import McpFrontend
+from chatinho.frontends.mcp import McpFrontend
 from mcp_kit import Weather
 
 

@@ -25,7 +25,7 @@ import os
 import sys
 
 from chatinho import ChatSession, CredentialUnavailable, HookAnswer, HookCredential, connector, require
-from chatinho.mcp import McpFrontend
+from chatinho.frontends.mcp import McpFrontend
 
 
 @connector("agent")

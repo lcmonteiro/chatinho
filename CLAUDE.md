@@ -322,13 +322,13 @@ src/chatinho/
   chat_input.py    CommandInput (a multi-line TextArea) + CommandSuggestions
   chat_clipboard.py  OSC 52's second route: a clipboard helper, if the system has one
   chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
-  connectors/      a2a.py, openai.py — plain classes, no base
   commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
                    attachments
-  mcp/             frontend.py (McpFrontend: the session served over MCP, asker proxies),
-                   connector.py (McpConnector: asking a remote session), wire.py (results,
-                   names, attachments) — behind chatinho[mcp]
+  connectors/      a2a.py, openai.py, mcp.py (McpConnector: asking a remote session over MCP)
+                   — plain classes, no base; each imported on first use, behind its own extra
+  frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
+  mcp_wire.py      what crosses an MCP link: results, names, attachments — behind chatinho[mcp]
 docs/              SPEC.md — the sixteen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),

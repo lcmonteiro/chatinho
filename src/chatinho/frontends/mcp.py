@@ -46,7 +46,7 @@ from ..chat_hooks import (
     require,
 )
 from ..chat_message import LOCAL, Answer, Attachment, ChatMessage, MessageID, Reply, Secret
-from . import wire
+from .. import mcp_wire as wire
 
 logger = logging.getLogger(__name__)
 

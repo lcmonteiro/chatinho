@@ -54,8 +54,10 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     # Importing them here restores that without importing anything at run time.
     from .backends import DatabaseBackend
     from .chat_builder import build_chat
-    from .connectors import A2AConnector, OpenAIConnector
-    from .mcp import McpConnector, McpFrontend
+    from .connectors.a2a import A2AConnector
+    from .connectors.mcp import McpConnector
+    from .connectors.openai import OpenAIConnector
+    from .frontends.mcp import McpFrontend
 
 from .chat_session import ChatSession
 from .chat_message import LOCAL, TOOL, Answer, Attachment, ChatMessage, MessageID, Reply, Secret
@@ -105,11 +107,11 @@ __version__ = "0.1.0"
 #: The names that live behind an extra: attribute -> (module, distribution).
 _BEHIND_AN_EXTRA = {
     "build_chat"      : (".chat_builder", "tui",    "textual"),
-    "OpenAIConnector" : (".connectors",   "openai", "openai"),
-    "A2AConnector"    : (".connectors",   "a2a",    "requests"),
+    "OpenAIConnector" : (".connectors.openai", "openai", "openai"),
+    "A2AConnector"    : (".connectors.a2a",    "a2a",    "requests"),
     "DatabaseBackend" : (".backends",     "sql",    "sqlalchemy"),
-    "McpFrontend"     : (".mcp",          "mcp",    "mcp"),
-    "McpConnector"    : (".mcp",          "mcp",    "mcp"),
+    "McpFrontend"     : (".frontends.mcp",     "mcp",    "mcp"),
+    "McpConnector"    : (".connectors.mcp",    "mcp",    "mcp"),
 }
 
 
