@@ -204,7 +204,7 @@ Opening one is `locate(msg_id, name)` (`HookLocate`), which the session routes t
 system; the terminal only asks, then opens the answer or says "Not found". `DatabaseBackend` keeps
 them as rows and writes a file on the first `link`, into a temp directory it removes at `shutdown`.
 
-## The fourteen hooks
+## The eighteen hooks
 
 The reference is [`docs/SPEC.md`](docs/SPEC.md) — every hook with an example, what it costs, and
 the rules that hold across all of them. `examples/hooks.py` is that document executable: one peer
@@ -226,6 +226,14 @@ per conversation hook, in a chat with no terminal. This section is the summary.
 | `HookKeep` | `keep` | — |
 | `HookLink` | `link` | — |
 | `HookLocate` | — | `locate` |
+| `HookSample` | — | `sample` |
+| `HookServeSample` | `serve_sample` | — |
+| `HookCredential` | — | `credential` |
+| `HookServeCredential` | `serve_credential` | — |
+
+The last four lend to whoever answers: a peer asks for a completion, or a lent credential, on behalf
+of the message it is answering, and the frontend — which speaks for whoever asked — serves it or
+raises `SamplingUnavailable` / `CredentialUnavailable`. `McpFrontend` is the one that serves both.
 
 Eleven became ten when the second way of hearing was folded into the first. `HookInvoke` and
 `HookExecute` are still two hooks where a single one used to serve, badly — that is the honest
@@ -319,14 +327,18 @@ src/chatinho/
   commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
                    attachments
-docs/              SPEC.md — the fourteen hooks, with an example and a cost for each
+  mcp/             frontend.py (McpFrontend: the session served over MCP, asker proxies),
+                   connector.py (McpConnector: asking a remote session), wire.py (results,
+                   names, attachments) — behind chatinho[mcp]
+docs/              SPEC.md — the eighteen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
-                   agent_inbox.py (HTTP, inbound)
+                   agent_inbox.py (HTTP, inbound), mcp_server.py (served over MCP)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_a2a_payload.py,
-                   test_clipboard.py (no terminal)
+                   test_clipboard.py, test_answer_details.py, test_peer_lifecycle.py,
+                   test_lending.py, test_mcp_*.py with mcp_kit.py (no terminal)
 ```
 
 The split follows one rule: **anything that does not need Textual moves out**, because that is
@@ -727,7 +739,7 @@ with `ctrl+g` now.
 `tests/test_architecture.py` is not documentation, it is enforcement — a boundary nothing checks
 is a boundary that rots. It parses the core modules and fails if:
 
-- `textual` appears in their imports, or `openai`, `sqlalchemy`, `requests`, `httpx`;
+- `textual` appears in their imports, or `openai`, `sqlalchemy`, `requests`, `httpx`, `mcp`;
 - anything but the presentation layer imports Textual;
 - the session imports the app;
 - **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
@@ -736,10 +748,10 @@ is a boundary that rots. It parses the core modules and fails if:
   import under `if TYPE_CHECKING`, or PEP 562 hands a consumer's mypy `Any` and the `py.typed` this
   package ships means nothing for it;
 - **`import chatinho` needs one of the batteries** — a subprocess imports it with `textual`,
-  `openai`, `sqlalchemy` and `requests` all blocked, and each of the four lazy names has to report
-  its own extra;
+  `openai`, `sqlalchemy`, `requests` and `mcp` all blocked, and each of the six lazy names has to
+  report its own extra;
 - **`docs/SPEC.md` disagrees with the hook constants** — its summary table has to name the same
-  fourteen, with the same demanded method and the same grants, and each one has to have its own
+  eighteen, with the same demanded method and the same grants, and each one has to have its own
   section. A spec nothing checks is a spec that rots, so adding a hook without documenting it
   fails the suite. Both halves were proved by breaking them.
 
@@ -755,9 +767,9 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 ## Packaging: the core installs nothing
 
-`dependencies = []`. `ChatSession`, the fourteen hooks, `HelpCommand` and `TestCommand` import nothing
+`dependencies = []`. `ChatSession`, the eighteen hooks, `HelpCommand` and `TestCommand` import nothing
 but the standard library — which the fitness tests already enforced, so the packaging now says it
-too. Four names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
+too. Six names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
 | name | extra | brings |
 |---|---|---|
@@ -765,8 +777,10 @@ too. Four names live behind an extra and are resolved on first use with PEP 562 
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
+| `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `mcp` (the official SDK, 2.3+) |
 
-`chatinho[all]` is all four; `chatinho[dev]` is those plus pytest, ruff and mypy, which is what CI
+`chatinho[mcp]` brings pydantic, starlette and uvicorn with it, so it is the heavy one — on Termux
+especially. `chatinho[all]` is all five; `chatinho[dev]` is those plus pytest, ruff and mypy, which is what CI
 installs and what `setup.sh` syncs. A missing extra raises an `ImportError` that names it, rather
 than surfacing as somebody else's `ModuleNotFoundError`.
 
@@ -780,11 +794,13 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 39 names: `build_chat`, `ChatSession`, `ChatMessage`, `ChatStyle`, `LOCAL`, `TOOL`;
-the declaring machinery (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`,
-`declares`, `declared_id`, `name_of`, `Hook`); the ten `Hook*` constants; the grant protocols (`Say`, `Ask`,
-`Invoke`, `Context`, `Peers`); and the batteries (`A2AConnector`, `OpenAIConnector`,
-`DatabaseBackend`, `HelpCommand`, `TestCommand`).
+`__init__.py` exports 59 names: `build_chat`, `ChatSession`, `ChatMessage`, `MessageID`, `Attachment`,
+`Reply`, `Answer`, `Secret`, `ChatStyle`, `LOCAL`, `TOOL`; the declaring machinery (`connector`, `tool`,
+`frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`, `declared_id`, `name_of`, `Hook`);
+the eighteen `Hook*` constants; what can go wrong (`PeerRemoved`, `SamplingUnavailable`,
+`CredentialUnavailable`); the grant protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`, `Commands`,
+`Locate`, `Sample`, `Credential`); and the batteries (`A2AConnector`, `OpenAIConnector`,
+`DatabaseBackend`, `McpFrontend`, `McpConnector`, `HelpCommand`, `TestCommand`).
 
 `ChatApp` is not exported, even though it no longer carries the underscore that used to say so:
 `build_chat` is the way to build one, in `chat_builder.py`, and the class itself lives in
@@ -802,8 +818,9 @@ lazy `__getattr__` hands them `Any` instead.
 For a chat without a terminal, build a `ChatSession` and attach your own presentation —
 `examples/headless.py` is exactly that, in about forty lines.
 
-`ChatSession`'s own public surface is seven members: `run`, `attach`, `add_command`, `start`,
-`close`, `id_of`, `forget`. `run()` is the entry point for a program whose job *is* the chat;
+`ChatSession`'s own public surface is eight members: `run`, `add_connector`, `remove_connector`,
+`add_command`, `start`, `close`, `id_of`, `forget`. `remove_connector` detaches a running peer: it hears
+nothing more, asks waiting on it fail with `PeerRemoved`, and what it said stays. `run()` is the entry point for a program whose job *is* the chat;
 `start`/`close` are for driving it from inside a loop you already own.
 Everything about the conversation is reached by declaring a hook — which is what
 [`docs/SPEC.md`](docs/SPEC.md) specifies, hook by hook.

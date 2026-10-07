@@ -57,7 +57,7 @@ pip install -e /path/to/chatinho
 
 **The core has no dependencies at all.** `ChatSession`, the hooks, `HelpCommand` and `TestCommand`
 need nothing beyond the standard library, and `tests/test_architecture.py` fails if that stops being
-true. Four names live behind an extra:
+true. Six names live behind an extra:
 
 | you want | install | it brings |
 |---|---|---|
@@ -65,7 +65,8 @@ true. Four names live behind an extra:
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
-| all of them | `chatinho[all]` | all four |
+| `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `mcp` |
+| all of them | `chatinho[all]` | all five |
 
 They are resolved on first use, so `import chatinho` never drags in a terminal for a script that
 wanted a session. A missing extra reports itself:
@@ -104,7 +105,7 @@ Four rules hold everywhere: **you never hear yourself**; **nothing blocks** (one
 per peer); **hearing is queued**, so a listener sees a message shortly after it was said; and
 **everything that crosses is in the context**.
 
-[`docs/SPEC.md`](docs/SPEC.md) is the reference for all fourteen hooks — what each demands, what it
+[`docs/SPEC.md`](docs/SPEC.md) is the reference for all eighteen hooks — what each demands, what it
 grants, an example, and what it costs. [`examples/hooks.py`](examples/hooks.py) is that document
 executable.
 
@@ -195,6 +196,50 @@ build_chat(
 
 Needs `chatinho[all]`, or whichever extras those three names ask for.
 
+### Across machines — `pip install 'chatinho[mcp]'`
+
+One session can put questions to another over MCP (the modern protocol, 2026-07-28). On the machine
+that answers, `McpFrontend` takes the terminal's place — it is peer zero, named `master` by default,
+and nobody types into it:
+
+```python
+from chatinho import ChatSession
+from chatinho.mcp import McpFrontend
+
+ChatSession(frontend=McpFrontend(), connectors=[Agent()]).run()                  # over stdio
+ChatSession(frontend=McpFrontend(transport="http", port=8000, token="s3cret"),   # over HTTP
+            connectors=[Agent()]).run()
+```
+
+On the machine that asks, `McpConnector` is an ordinary peer with a name it chooses:
+
+```python
+from chatinho.mcp import McpConnector
+
+lab = McpConnector(url="https://lab.example/mcp", token="s3cret", name="lab",
+                   sample_with=my_model)          # or command=["python", "serve.py"] for stdio
+build_chat(connectors=[lab]).run()
+```
+
+- **Addressing.** `@lab will it rain?` sends the rest of the line to the remote session. The client
+  never names a remote peer: with one peer that can answer, the session asks it directly; with
+  several, it says the question to its room and the first reply is the answer. With several and
+  none listening, that is an error — a peer router is the planned fix.
+- **One reply, always.** Every question ends in exactly one of `answered`, `asked` (a question back),
+  `error` or `timeout`, within a deadline — 120 s unless the frontend or the connector sets another.
+  Attachments come back with the answer and the local backend keeps them.
+- **Who asked.** Inside the remote session each asker is its own peer, named `<client>/<asker>` —
+  `lab/me` — and it leaves after ten idle minutes; what it said stays.
+- **Lending intelligence.** A remote peer that declares `HookSample` calls
+  `await self.sample(msg.id, messages)`; the request travels back to the asking session, which runs
+  it with `sample_with`. The key that pays for it never leaves the asker's machine. MCP sampling is
+  deprecated in this protocol revision but still part of it.
+- **Lending a credential** is opt-in: `McpFrontend(credentials={"llm": "API key"})` declares what its
+  peers may use, `McpConnector(delegate={"llm": key_or_function})` sends it out of band, over HTTPS
+  or to this machine only, and a peer reads it with `HookCredential` while that one question is
+  open. Lend a sub-key with a spending limit or a short-lived token — never your main key.
+- **HTTP needs a bearer token**, and anyone holding it can ask every peer of the session.
+
 ### Writing your own
 
 A frontend, a connector, a command and a backend are all plain classes; the difference is what
@@ -260,6 +305,7 @@ content: an HTML attachment runs its scripts when your browser opens it.
 | [`examples/demo.py`](examples/demo.py) | the full TUI: Markdown, code blocks, autocomplete, replies |
 | [`examples/headless.py`](examples/headless.py) | the same chat wired to stdin/stdout |
 | [`examples/agent_inbox.py`](examples/agent_inbox.py) | inbound: an agent asks over HTTP, you answer |
+| [`examples/mcp_server.py`](examples/mcp_server.py) | a chat with no terminal, served over MCP for another session to ask |
 
 ---
 

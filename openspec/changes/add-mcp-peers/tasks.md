@@ -25,14 +25,14 @@
 
 ## 4. MCP connector
 
-- [ ] 4.1 Implement `McpConnector` (stdio `command` or HTTP `url` + `token`, `name`, optional `deadline`, `sample_with`): open an SDK `Client` in modern mode in `initialize()`, close it in `shutdown()`, reopen lazily, name from the server when not given, client name sent with every request; verify the naming scenarios against an in-process server
-- [ ] 4.2 Take `@name` addressing from local broadcasts and direct asks, ignore messages not addressed to it, and send the rest of the text with the asker's name; verify tests for addressed by name, not addressed, and the local asker appearing as `lab/me`
-- [ ] 4.3 Reply exactly once per addressed message: text and attachments for `answered`, the remote question for `asked`, and short status messages for `error`, `timeout` and lost connections; verify tests for each
-- [ ] 4.4 Serve sampling requests embedded in `InputRequiredResult` with `sample_with` (raising the client's round limit), and decline without one; verify tests for the local model answering and nothing to sample with
-- [ ] 4.5 Add `delegate=` to `McpConnector`: discover the server's declared credentials, send only configured ones it declared, in `_meta`, calling callables per question; refuse non-`https` non-loopback URLs; never delegate a credential obtained through `credential`; verify tests for sent with the question, not declared not sent, plain HTTP refused, and token per question
+- [x] 4.1 Implement `McpConnector` (stdio `command` or HTTP `url` + `token`, `name`, optional `deadline`, `sample_with`): open an SDK `Client` in modern mode in `initialize()`, close it in `shutdown()`, reopen lazily, name from the server when not given, client name sent with every request; verify the naming scenarios against an in-process server
+- [x] 4.2 Take `@name` addressing from local broadcasts and direct asks, ignore messages not addressed to it, and send the rest of the text with the asker's name; verify tests for addressed by name, not addressed, and the local asker appearing as `lab/me`
+- [x] 4.3 Reply exactly once per addressed message: text and attachments for `answered`, the remote question for `asked`, and short status messages for `error`, `timeout` and lost connections; verify tests for each
+- [x] 4.4 Serve sampling requests embedded in `InputRequiredResult` with `sample_with` (raising the client's round limit), and decline without one; verify tests for the local model answering and nothing to sample with
+- [x] 4.5 Add `delegate=` to `McpConnector`: discover the server's declared credentials, send only configured ones it declared, in `_meta`, calling callables per question; refuse non-`https` non-loopback URLs; never delegate a credential obtained through `credential`; verify tests for sent with the question, not declared not sent, plain HTTP refused, and token per question
 
 ## 5. End to end, docs and checks
 
-- [ ] 5.1 Add an end-to-end test of two sessions over the modern protocol, in-process: `@lab draw the login flow` from A reaches B's only peer and comes back with an attachment; with two peers in B, the question is said in B's room and the first reply returns; B's peer samples through A's `sample_with`; B names the asker `lab/me`
-- [ ] 5.2 Add `examples/mcp_server.py` (a headless session served over stdio) and update `README.md` (extras table, an "MCP peers" section with addressing, who answers, sampling, opt-in credential delegation with its sub-key advice, and the token) and `CLAUDE.md`; verify the example runs and the README matches the API
-- [ ] 5.3 Run `ruff check src tests examples`, `mypy src/chatinho`, `pytest -q` and `openspec validate --all --strict --no-interactive`; verify all pass
+- [x] 5.1 Add an end-to-end test of two sessions over the modern protocol, in-process: `@lab draw the login flow` from A reaches B's only peer and comes back with an attachment; with two peers in B, the question is said in B's room and the first reply returns; B's peer samples through A's `sample_with`; B names the asker `lab/me`
+- [x] 5.2 Add `examples/mcp_server.py` (a headless session served over stdio) and update `README.md` (extras table, an "MCP peers" section with addressing, who answers, sampling, opt-in credential delegation with its sub-key advice, and the token) and `CLAUDE.md`; verify the example runs and the README matches the API
+- [x] 5.3 Run `ruff check src tests examples`, `mypy src/chatinho`, `pytest -q` and `openspec validate --all --strict --no-interactive`; verify all pass
