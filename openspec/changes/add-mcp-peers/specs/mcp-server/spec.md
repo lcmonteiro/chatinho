@@ -21,53 +21,49 @@ chatinho SHALL provide `McpFrontend` in `chatinho[mcp]`: a `@frontend` that serv
 - **WHEN** an HTTP request reaches the server without the configured bearer token
 - **THEN** it is refused and no peer is asked anything
 
-### Requirement: Questions only, to the session
-The server SHALL expose these MCP tools and no tool that broadcasts on the client's behalf: `ask(text, asker?, deadline_ms?)`, `list_peers()`, `list_commands()`, `invoke(name, args)` and `read_attachment(msg_id, name)`. `ask` MUST NOT take a peer name: the session decides who answers. `list_peers` MUST return the names of the session's answering peers, excluding the frontend.
+### Requirement: One tool, say
+The server SHALL expose exactly one MCP tool, `say(text, asker?, deadline_ms?)`, which works as a bridge: the frontend says the text in the session as its own message and returns the first reply to it. `say` MUST NOT take a peer name: the session decides who replies. Any other tool name MUST yield `error`.
 
-#### Scenario: No broadcast tool
+#### Scenario: One tool
 - **WHEN** a client lists the server's tools
-- **THEN** there is no tool that says something to everyone, and `ask` has no peer parameter
+- **THEN** the only tool is `say`, and it has no peer parameter
 
-#### Scenario: Listing peers
-- **WHEN** a client calls `list_peers` on a session with peers `agent` and `weather`
-- **THEN** the result is `agent` and `weather`, without the frontend
-
-### Requirement: The session decides who answers
-For each `ask`, the server SHALL count the session's answering peers: peers that declare `HookAnswer`, excluding the frontend. With exactly one, the frontend MUST ask that peer directly. With more than one, the frontend MUST say the question to the room and take the first message that replies to it as the answer; later replies stay in the conversation but are not returned. A said question reaches only peers that declare `HookListen`, so when none of the answering peers listens, the result MUST be `error` at once instead of waiting for the deadline. With none, the result MUST be `error`. This rule stands in for a future peer router.
+### Requirement: The session decides who replies
+For each `say`, the frontend SHALL count the session's answering peers: peers that declare `HookAnswer`, excluding the frontend. With exactly one, the session asks it the say (see `answer-details`). With more than one, the say goes to the room and the first message that replies to it is the result; later replies stay in the conversation but are not returned. A said message reaches only peers that declare `HookListen`, so when several peers answer and none of them listens, the result MUST be `error` at once instead of waiting for the deadline. With none, the result MUST be `error`. This rule stands in for a future peer router.
 
 #### Scenario: Only one peer
-- **WHEN** a client asks "will it rain?" of a session whose only answering peer is `weather`
-- **THEN** `weather` is asked directly, and its answer is the result
+- **WHEN** a client says "will it rain?" to a session whose only answering peer is `weather`
+- **THEN** `weather` is asked it, and its answer is the result
 
 #### Scenario: Several peers
-- **WHEN** a client asks "draw the login flow" of a session with peers `agent` and `weather`, `agent` listens, and `agent` replies to the question
-- **THEN** the question was said to the room, and `agent`'s reply is the result
+- **WHEN** a client says "draw the login flow" to a session with peers `agent` and `weather`, `agent` listens, and `agent` replies to it
+- **THEN** it was said to the room, and `agent`'s reply is the result
 
 #### Scenario: None listens
-- **WHEN** a client asks a session with peers `agent` and `weather`, neither of which declares `HookListen`
+- **WHEN** a client says something to a session with peers `agent` and `weather`, neither of which declares `HookListen`
 - **THEN** the result is `error` at once, saying that several peers could answer and none listens, so a peer router is needed
 
 #### Scenario: First reply wins
-- **WHEN** two peers reply to the same broadcast question
+- **WHEN** two peers reply to the same message in the room
 - **THEN** the result is the first reply, and the second one stays in the conversation
 
 #### Scenario: No peer
-- **WHEN** a client asks a session with no answering peer
+- **WHEN** a client says something to a session with no answering peer
 - **THEN** the result is `error` saying no peer can answer
 
 ### Requirement: Exactly one result per question
-Every `ask` SHALL return exactly one result `{status, text, attachments}`, with `status` one of `answered`, `asked` (answered with a question back to the asker), `error` or `timeout`. It MUST return before the request's deadline: the caller's `deadline_ms`, or else the frontend's default deadline, which is configurable when the frontend is created and is 120 seconds when not set; a question nobody has answered by then MUST yield `timeout`. A failing peer MUST yield `error` with a message saying what failed. Results of `error` and `timeout` MUST be marked as tool errors in MCP. A direct answer carries the status of the peer's `Reply` (`answered` for plain text); a reply to a broadcast question MUST yield `answered`.
+Every `say` SHALL return exactly one result `{status, text, attachments}`, with `status` one of `answered`, `asked` (answered with a question back to the asker), `error` or `timeout`. It MUST return before the request's deadline: the caller's `deadline_ms`, or else the frontend's default deadline, which is configurable when the frontend is created and is 120 seconds when not set; a question nobody has answered by then MUST yield `timeout`. A failing peer MUST yield `error` with a message saying what failed. Results of `error` and `timeout` MUST be marked as tool errors in MCP. The result carries the status of the reply's message: the peer's `Reply` status when the lone peer was asked, `answered` for a plain text or a reply said in the room.
 
 #### Scenario: Answered
 - **WHEN** the session's only peer `weather` answers `sunny`
 - **THEN** the result is `answered` with text `sunny`
 
 #### Scenario: Nobody answers in time
-- **WHEN** a client asks with a deadline of 1 second and no answer comes within it
+- **WHEN** a client says something with a deadline of 1 second and no reply comes within it
 - **THEN** the result is `timeout`, returned within the deadline
 
 #### Scenario: Configured default deadline
-- **WHEN** the frontend is created with a default deadline of 30 seconds and a client asks without `deadline_ms`
+- **WHEN** the frontend is created with a default deadline of 30 seconds and a client says something without `deadline_ms`
 - **THEN** a question not answered after 30 seconds yields `timeout`
 
 #### Scenario: Answered with a question
@@ -76,25 +72,25 @@ Every `ask` SHALL return exactly one result `{status, text, attachments}`, with 
 
 #### Scenario: Follow-up from the same asker
 - **WHEN** an asker got an answer, for example a question back, and asks again
-- **THEN** with one peer, that peer is asked again by the frontend; with several, the new question is said as a reply to the asker's last answer in the room (a reply there always reads `answered`, so a question back cannot be told apart), and the peer that answered sees it is for it
+- **THEN** with one peer, that peer is asked again; with several, the new question is said as a reply to the asker's last answer in the room (a reply there always reads `answered`, so a question back cannot be told apart), and the peer that answered sees it is for it
 
 ### Requirement: The frontend speaks for every client
-The frontend SHALL handle every client itself, without adding a peer per client: for each question it receives, it MUST forward the text into the session as its own message — an `ask` to the only answering peer, or a `say` to the room — remember which client's question that message is, and send the reply to that message back to that client alone. Questions from several clients MAY be open at once, and each reply MUST reach only the client whose question it answers. A peer that asks the frontend a question MUST get `error`, since nobody is at its terminal.
+The frontend SHALL handle every client itself, without adding a peer per client: for each message it receives, it MUST say the text in the session as its own message, remember which client's message that is, and send the reply to that message back to that client alone. Questions from several clients MAY be open at once, and each reply MUST reach only the client whose question it answers. A peer that asks the frontend a question MUST get `error`, since nobody is at its terminal.
 
 #### Scenario: The reply goes back to its client
-- **WHEN** a client asks "will it rain?" and the session's only peer answers "sunny"
-- **THEN** the peer was asked by the frontend, and that client's result is "sunny"
+- **WHEN** a client says "will it rain?" and the session's only peer answers "sunny"
+- **THEN** the peer was asked it by the frontend, and that client's result is "sunny"
 
 #### Scenario: Two clients at once
-- **WHEN** clients `lab` and `home` each ask a different question while the other's is still open
-- **THEN** each gets the answer to its own question, and no peer was added to the session
+- **WHEN** clients `lab` and `home` each say something while the other's message still waits
+- **THEN** each gets the reply to its own message, and no peer was added to the session
 
 #### Scenario: Asking the frontend
 - **WHEN** a peer asks the frontend a question
 - **THEN** it gets an `error` reply saying nobody is at the terminal
 
 ### Requirement: Attachments come back with the answer
-Attachments of an answer SHALL be returned in the result, each with its name, media type and content, so the asking side can keep them; `read_attachment(msg_id, name)` MUST return an attachment of an earlier answer through the session's backend, or an error when there is none.
+Attachments of an answer SHALL be returned in the result, each with its name, media type and content, so the asking side can keep them.
 
 #### Scenario: Drawing returned
 - **WHEN** the answering peer attaches `chart.svg`
@@ -104,5 +100,5 @@ Attachments of an answer SHALL be returned in the result, each with its name, me
 The server MUST NOT accept, store or forward API keys, except credentials delegated as the `credential-delegation` capability allows.
 
 #### Scenario: A client lends nothing
-- **WHEN** a client asks without delegating a credential
-- **THEN** no peer can obtain one for that question
+- **WHEN** a client says something without delegating a credential
+- **THEN** no peer can obtain one for that message

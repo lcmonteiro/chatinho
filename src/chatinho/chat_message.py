@@ -85,23 +85,6 @@ class Reply:
                              % (", ".join(ANSWER_STATUSES), self.status))
 
 
-@dataclass(frozen=True)
-class Answer:
-    """What ``ask(..., detail=True)`` returns: the answer, and what it said about itself.
-
-    Attributes:
-        text: The answer's text, what a plain ``ask`` returns.
-        status: One of :data:`ANSWER_STATUSES`. An answer said late, with
-            ``say(reply_to=…)``, is ``answered``.
-        msg_id: The answer's own message id, under which ``locate`` finds
-            what it attached.
-    """
-
-    text   : str
-    status : str
-    msg_id : "MessageID"
-
-
 class Secret:
     """A value that must never be shown: a credential lent for one question.
 
@@ -196,6 +179,9 @@ class ChatMessage:
         to: The id it was addressed to, or None when it went to everyone.
         reply_to: The id of the message this answers, when it answers one.
         timestamp: When it entered the history.
+        status: What an answer said about itself — one of
+            :data:`ANSWER_STATUSES`, from the ``Reply`` that made it;
+            ``answered`` for everything else. Not kept by the archive.
     """
 
     id        : MessageID
@@ -204,6 +190,7 @@ class ChatMessage:
     to        : Optional[int] = None
     reply_to  : Optional[MessageID] = None
     timestamp : datetime = field(default_factory=datetime.now)
+    status    : str = "answered"
 
     @property
     def is_broadcast(self) -> bool:

@@ -2,7 +2,8 @@
 
 :class:`McpConnector` is an ordinary connector: it appears in the chat under a
 name it chooses (``@lab``), and a message addressed to it — ``@lab will it
-rain?`` — becomes one ``ask`` to the remote session, which decides who answers.
+rain?`` — is said in the remote session through its one ``say`` tool, and the
+first reply to it comes back.
 Exactly one reply comes back for every such message.
 
 It speaks the modern MCP protocol (2026-07-28). When a remote peer needs an LLM,
@@ -134,13 +135,13 @@ class McpConnector:
         text = self._addressed(msg.text)
         if text is None:
             return
-        reply = await self._ask_remote(text, self._asker(msg.frm))
+        reply = await self._say_remote(text, self._asker(msg.frm))
         await self.say(reply.text, reply_to=msg.id, attachments=reply.attachments)
 
     async def answer(self, msg: ChatMessage) -> Reply:
         """A question asked to it directly; the ``@<its name>`` prefix is optional."""
         text = self._addressed(msg.text)
-        return await self._ask_remote(text if text is not None else msg.text, self._asker(msg.frm))
+        return await self._say_remote(text if text is not None else msg.text, self._asker(msg.frm))
 
     def _addressed(self, text: str) -> Optional[str]:
         """The rest of *text* when it starts with ``@<name>`` and whitespace, else None."""
@@ -159,7 +160,7 @@ class McpConnector:
 
     # === One question ===============================================================
 
-    async def _ask_remote(self, text: str, asker: str) -> Reply:
+    async def _say_remote(self, text: str, asker: str) -> Reply:
         """Asks the remote session, and turns whatever happens into one reply."""
         if self._delegate and not self._may_delegate():
             return Reply("%s: lending credentials needs HTTPS; nothing was sent" % self.name, status="error")
@@ -170,7 +171,7 @@ class McpConnector:
         try:
             client = await self._connect()
             meta   = self._lending(client)
-            got    = await asyncio.wait_for(client.call_tool("ask", args, meta=meta), limit)
+            got    = await asyncio.wait_for(client.call_tool("say", args, meta=meta), limit)
         except asyncio.TimeoutError:
             return Reply("%s: timeout — the remote session never answered" % self.name, status="error")
         except Exception as exc:

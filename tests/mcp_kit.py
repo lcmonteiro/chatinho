@@ -39,9 +39,9 @@ def client(front: McpFrontend, name: str = "lab") -> Client:
     return Client(front.server, mode="auto", client_info=types.Implementation(name=name, version="1"))
 
 
-async def ask(c: Client, text: str, **args: Any) -> dict:
-    """Calls the ask tool and returns its structured result."""
-    res = await c.call_tool("ask", {"text": text, **args})
+async def say(c: Client, text: str, **args: Any) -> dict:
+    """Calls the say tool and returns its structured result."""
+    res = await c.call_tool("say", {"text": text, **args})
     return res.structured_content
 
 

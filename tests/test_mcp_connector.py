@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from chatinho import Attachment, ChatSession, Reply
+from chatinho import Attachment, ChatSession, HookAnswer, Reply, connector, require
 from chatinho.connectors.mcp import McpConnector
 from conftest import driven
 from mcp_kit import Agent, Files, Weather, remote
@@ -13,6 +13,21 @@ from mcp_kit import Agent, Files, Weather, remote
 async def _local(connector, **kwargs):
     """A local chat with the connector in it."""
     return await driven(connectors=[connector], **kwargs)
+
+
+@connector("quiet")
+@require(HookAnswer)
+class _Quiet:
+    """A second local peer that answers, so what the user says stays a broadcast."""
+
+    async def answer(self, msg):
+        return None
+
+
+async def _asked(view, lab, text):
+    """Asks the connector directly and returns its reply message, status included."""
+    await view.ask(lab.peer_id, text)
+    return view.context()[-1]
 
 
 async def _replies(view, count: int, timeout: float = 5.0):
@@ -42,13 +57,13 @@ async def test_named_by_the_connector():
     session, view = await _local(lab)
     assert lab.name == "lab"
     seen = []
-    opening = front._open_question
+    forwarding = front._forward
 
     async def spying(client, asker, *args):
         seen.append((client, asker))
-        return await opening(client, asker, *args)
+        return await forwarding(client, asker, *args)
 
-    front._open_question = spying
+    front._forward = spying
     await view.say("@lab rain?")
     await _replies(view, 2)
     assert seen == [("lab", "driver")]
@@ -86,10 +101,21 @@ async def test_addressed_by_name():
 async def test_not_addressed(said):
     weather = Weather()
     remote_session, front = await remote(weather)
-    session, view = await _local(McpConnector(server=front.server, name="lab"))
+    session, view = await driven(connectors=[McpConnector(server=front.server, name="lab"), _Quiet()])
     await view.say(said)
     await asyncio.sleep(0.2)
     assert weather.asked == [] and len(view.context()) == 1
+
+
+async def test_the_only_peer_here_gets_everything_said():
+    weather = Weather()
+    remote_session, front = await remote(weather)
+    session, view = await _local(McpConnector(server=front.server, name="lab"))
+    await view.say("will it rain?")
+    await _replies(view, 2)
+    assert [m.text for m in weather.asked] == ["will it rain?"]
+    await session.close()
+    await remote_session.close()
     await session.close()
     await remote_session.close()
 
@@ -123,7 +149,7 @@ async def test_a_question_back_is_marked():
     remote_session, front = await remote(Weather(Reply("which city?", status="asked")))
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
-    got = await view.ask(lab.peer_id, "rain?", detail=True)
+    got = await _asked(view, lab, "rain?")
     assert (got.status, got.text) == ("asked", "lab asks: which city?")
     await session.close()
     await remote_session.close()
@@ -133,7 +159,7 @@ async def test_a_remote_error_is_said_briefly():
     remote_session, front = await remote()
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
-    got = await view.ask(lab.peer_id, "rain?", detail=True)
+    got = await _asked(view, lab, "rain?")
     assert got.status == "error" and got.text.startswith("lab: error") and "No peer" in got.text
     await session.close()
     await remote_session.close()
@@ -143,7 +169,7 @@ async def test_a_remote_timeout_is_said_briefly():
     remote_session, front = await remote(Weather(delay=0.6))
     lab = McpConnector(server=front.server, name="lab", deadline=0.1)
     session, view = await _local(lab)
-    got = await view.ask(lab.peer_id, "rain?", detail=True)
+    got = await _asked(view, lab, "rain?")
     assert got.status == "error" and got.text.startswith("lab: timeout")
     await session.close()
     await remote_session.close()
@@ -187,7 +213,7 @@ async def test_not_declared_not_sent():
 async def test_plain_http_is_refused():
     lab = McpConnector(url="http://lab.example:8000/mcp", token="t", name="lab", delegate={"llm": "sk"})
     session, view = await _local(lab)
-    got = await view.ask(lab.peer_id, "go", detail=True)
+    got = await _asked(view, lab, "go")
     assert got.status == "error" and "HTTPS" in got.text
     await session.close()
 

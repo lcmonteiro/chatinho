@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Lets a peer say more about its answer than its text — that it answers with a question of its own, or that it failed — and lets the asker get that status and the answer's message id, so answers can be relayed faithfully, attachments included.
+Lets a peer say more about its answer than its text — that it answers with a question of its own, or that it failed — and carries that on the answer's message. Makes a room with one peer that answers behave as a conversation with it: a say there is asked of that peer.
 
 ## ADDED Requirements
 
@@ -25,13 +25,32 @@ Lets a peer say more about its answer than its text — that it answers with a q
 - **WHEN** code creates `Reply("x", status="maybe")`
 - **THEN** it raises `ValueError`
 
-### Requirement: Detailed answers for the asker
-The `ask` grant SHALL accept `detail=True`, which returns an `Answer` with the answer's `text`, `status` and `msg_id` (the id of the answer message in the conversation) instead of the text alone. Without `detail`, `ask` MUST keep returning the text, unchanged. A peer that answers later by saying a reply to the question MUST yield status `answered`.
+### Requirement: The status travels on the message
+`ChatMessage` SHALL carry a `status`, `answered` by default. The message the session posts for a peer's answer MUST carry the status of the `Reply` it came from, so anyone who hears or reads it knows what the answer said about itself. `ask` MUST keep returning the answer's text. The archive need not keep the status.
 
-#### Scenario: Text only by default
-- **WHEN** a peer asks with `ask(to, "weather?")`
-- **THEN** it gets the answer's text, as before
+#### Scenario: Status on the answer message
+- **WHEN** a peer answers with `Reply("which city?", status="asked")`
+- **THEN** the answer's message in the conversation has status `asked`
 
-#### Scenario: Detail requested
-- **WHEN** a peer asks with `ask(to, "draw it", detail=True)` and the answer attaches `chart.svg`
-- **THEN** it gets an `Answer` whose `msg_id` lets it `locate` `chart.svg`, and whose status is `answered`
+#### Scenario: Ask returns the text
+- **WHEN** a peer asks with `ask(to, "weather?")` and the answer is `sunny`
+- **THEN** `ask` returns `sunny`
+
+### Requirement: A say in a room with one peer that answers is asked of it
+When a peer says something that is not a reply (`reply_to` is not set), and exactly one peer other than the speaker and the frontend declares `HookAnswer`, the session SHALL address the say to that peer: its `answer` MUST be called, and its reply posted with `reply_to` set to the say. Everyone who listens MUST still hear the say. What a command writes, a say that is a reply, and a say in a room with no such peer or with several MUST stay a broadcast. When the peer's `answer` raises and no `ask` waits on the message, the session MUST post an `error` reply to it.
+
+#### Scenario: One peer answers
+- **WHEN** a peer says "will it rain?" and the only other peer that answers is `weather`
+- **THEN** `weather`'s `answer` is called with it, and its reply comes back with `reply_to` set to the say
+
+#### Scenario: Several peers answer
+- **WHEN** a peer says something in a room where two peers answer
+- **THEN** the say is a broadcast, and neither peer's `answer` is called
+
+#### Scenario: A reply stays a reply
+- **WHEN** a peer says something with `reply_to` set
+- **THEN** it is a broadcast, even with one peer that answers
+
+#### Scenario: A lone peer fails
+- **WHEN** a say is asked of the lone peer and its `answer` raises
+- **THEN** an `error` reply to the say is posted in that peer's name

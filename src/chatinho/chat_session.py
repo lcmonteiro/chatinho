@@ -21,7 +21,7 @@ import asyncio
 import logging
 from datetime import datetime
 from inspect import isawaitable
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence
 
 from .chat_hooks import (
     CredentialUnavailable,
@@ -38,7 +38,7 @@ from .chat_hooks import (
     declared_id,
     name_of,
 )
-from .chat_message import LOCAL, TOOL, Answer, Attachment, ChatMessage, MessageID, MessageStore, Reply
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, MessageStore, Reply
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class ChatSession:
     hook — three the session grants, two it calls:
 
     - ``HookSay``      grants  ``say(text, reply_to=None, attachments=())``.
-    - ``HookAsk``      grants  ``ask(to, text, attachments=(), detail=False)``, which awaits the answer.
+    - ``HookAsk``      grants  ``ask(to, text, attachments=())``, which awaits the answer.
     - ``HookContext``  grants  ``context(since=, start=, limit=)``.
     - ``HookListen``   demands ``listen(msg)`` — every message that crosses.
     - ``HookAnswer``   demands ``answer(msg)`` — someone asked you.
@@ -82,9 +82,7 @@ class ChatSession:
         self._connectors    : Dict[int, Any] = {}
         self._queues   : Dict[int, "asyncio.Queue[ChatMessage]"] = {}
         self._tasks    : Dict[int, asyncio.Task] = {}
-        self._pending  : Dict[MessageID, "asyncio.Future[Answer]"] = {}
-        #: What an answer said about itself, between ``answer`` and ``_post``.
-        self._statuses : Dict[MessageID, str] = {}
+        self._pending  : Dict[MessageID, "asyncio.Future[str]"] = {}
         self._next_id  : int = 1
         self._started  : bool = False
         self._closed   : bool = False
@@ -292,9 +290,21 @@ class ChatSession:
             attachments : Sequence[Attachment] = (),
         ) -> MessageID:
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=None, reply_to=reply_to)
+            if reply_to is None and frm != TOOL:
+                msg.to = self._only_answerer(frm)
             await self._kept(msg, attachments)
             return await self._post(msg)
         return say
+
+    def _only_answerer(self, frm: int) -> Optional[int]:
+        """The one peer a say is asked of: the only one that answers, or None.
+
+        The speaker and the frontend do not count — the frontend speaks for the
+        person, and a say must not turn into a question put to them.
+        """
+        answering = [at for at, who in self._connectors.items()
+                     if at not in (frm, LOCAL) and declares(who, HookAnswer)]
+        return answering[0] if len(answering) == 1 else None
 
     def _ask_for(self, frm: int):
         async def ask(
@@ -302,20 +312,18 @@ class ChatSession:
             text        : str,
             *,
             attachments : Sequence[Attachment] = (),
-            detail      : bool = False,
-        ) -> Union[str, Answer]:
+        ) -> str:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
             await self._kept(msg, attachments)
-            future : "asyncio.Future[Answer]" = asyncio.get_running_loop().create_future()
+            future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
             try:
                 await self._post(msg)
-                answer = await future
+                return await future
             finally:
                 self._pending.pop(msg.id, None)
-            return answer if detail else answer.text
         return ask
 
     # === Lending to whoever answers ================================================
@@ -365,11 +373,10 @@ class ChatSession:
         replies are part of it.
         """
         self._store.add(msg)
-        status   = self._statuses.pop(msg.id, "answered")
         waiting  = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
         resolved = waiting is not None and not waiting.done()
         if resolved:
-            waiting.set_result(Answer(msg.text, status, msg.id))   # type: ignore[union-attr]
+            waiting.set_result(msg.text)          # type: ignore[union-attr]
 
         # You never hear yourself; that is the whole of the loop protection.
         listeners = {at for at, who in self._connectors.items()
@@ -406,17 +413,22 @@ class ChatSession:
         try:
             reply = await who.answer(msg)
         except Exception as exc:
-            # The asker is owed one reply, and a failure is one: it raises in
-            # the ask rather than leaving it waiting forever. _drain logs it.
+            # The asker is owed one reply, and a failure is one. An ask that is
+            # waiting raises; a say that was asked of this peer gets an error
+            # reply, so whoever waits on it hears. _drain logs it either way.
             waiting = self._pending.pop(msg.id, None)
             if waiting is not None and not waiting.done():
                 waiting.set_exception(exc)
+            else:
+                await self._post(ChatMessage(
+                    id=self._store.new_id(), text="%s failed: %s" % (name_of(who), type(exc).__name__),
+                    frm=at, to=msg.frm, reply_to=msg.id, status="error"))
             raise
         if reply is not None:
             text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
-            answered = ChatMessage(id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id)
-            if isinstance(reply, Reply):
-                self._statuses[answered.id] = reply.status
+            status   = reply.status if isinstance(reply, Reply) else "answered"
+            answered = ChatMessage(id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id,
+                                   status=status)
             await self._kept(answered, carried)
             await self._post(answered)
 

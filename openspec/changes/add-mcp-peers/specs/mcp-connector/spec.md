@@ -18,7 +18,7 @@ chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connecto
 - **THEN** the connector appears as `office`
 
 ### Requirement: Addressing the remote session
-The connector SHALL send a question only for messages addressed to it: a message starting with `@<name>` (its own name) followed by whitespace, or a question asked to it directly. The rest of the text MUST be sent as one `ask` to the remote session, without naming a remote peer; the remote session decides who answers.
+The connector SHALL send a question only for messages addressed to it: a message starting with `@<name>` (its own name) followed by whitespace, or a question asked to it directly. The rest of the text MUST be sent as one `say` to the remote session, without naming a remote peer; the remote session decides who answers.
 
 #### Scenario: Addressed by name
 - **WHEN** the user says `@lab will it rain?`

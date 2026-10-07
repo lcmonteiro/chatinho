@@ -219,16 +219,17 @@ lab = McpConnector(url="https://lab.example/mcp", token="s3cret", name="lab",
 build_chat(connectors=[lab]).run()
 ```
 
-- **Addressing.** `@lab will it rain?` sends the rest of the line to the remote session. The client
-  never names a remote peer: with one peer that can answer, the session asks it directly; with
-  several, it says the question to its room and the first reply is the answer. With several and
-  none listening, that is an error — a peer router is the planned fix.
+- **A bridge with one tool, `say`.** `@lab will it rain?` sends the rest of the line to the remote
+  session, where `McpFrontend` says it and sends the first reply back. The client never names a
+  remote peer. In any chatinho session, a say in a room where exactly one peer answers is asked of
+  that peer; with several, it is said to the room. With several and none listening, that is an
+  error — a peer router is the planned fix.
 - **One reply, always.** Every question ends in exactly one of `answered`, `asked` (a question back),
   `error` or `timeout`, within a deadline — 120 s unless the frontend or the connector sets another.
   Attachments come back with the answer and the local backend keeps them.
-- **The frontend speaks for every client.** It forwards each question into the remote session as its
-  own `ask` or `say`, and sends the reply to that message back to the client that asked — several
-  clients at once, told apart by message id. No peer is added per client, so remote peers see every
+- **The frontend speaks for every client.** It says each client's message in the remote session as
+  its own, and sends the reply to that message back to the client that sent it — several clients at
+  once, told apart by message id. No peer is added per client, so remote peers see every
   question coming from `master`.
 - **Lending intelligence is lending a credential**, the way A2A delegates them, and it is opt-in: `McpFrontend(credentials={"llm": "API key"})` declares what its
   peers may use, `McpConnector(delegate={"llm": key_or_function})` sends it out of band, over HTTPS

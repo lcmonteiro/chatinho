@@ -46,7 +46,7 @@ async def test_http_refuses_requests_without_the_token_and_serves_those_with_it(
         async with Client(streamable_http_client(url, http_client=http), mode="auto",
                           client_info=types.Implementation(name="lab", version="1")) as c:
             version = c.session.protocol_version
-            res     = await c.call_tool("ask", {"text": "rain?"})
+            res     = await c.call_tool("say", {"text": "rain?"})
         await http.aclose()
         assert res.structured_content["text"] == "sunny"
         assert version == "2026-07-28"

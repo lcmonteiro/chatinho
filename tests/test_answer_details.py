@@ -1,17 +1,15 @@
-"""Answer statuses on Reply, and ask(..., detail=True)."""
+"""Answer statuses on Reply and on the message, and a say asked of the lone peer that answers."""
 
 import asyncio
 
 import pytest
 
 from chatinho import (
-    Answer,
-    Attachment,
+    TOOL,
     HookAnswer,
-    HookKeep,
-    HookLink,
+    HookListen,
+    HookSay,
     Reply,
-    backend,
     connector,
     require,
 )
@@ -21,27 +19,35 @@ from conftest import driven
 @connector("eco")
 @require(HookAnswer)
 class _Eco:
-    def __init__(self, reply):
+    def __init__(self, reply="sunny"):
         self.reply = reply
+        self.asked = []
 
     async def answer(self, msg):
+        self.asked.append(msg)
+        if isinstance(self.reply, Exception):
+            raise self.reply
         return self.reply
 
 
-@backend("cofre")
-@require(HookKeep)
-@require(HookLink)
-class _Cofre:
+@connector("falador")
+@require(HookSay)
+@require(HookListen)
+class _Falador:
+    """Says things; hears everything."""
+
     def __init__(self):
-        self.kept = {}
+        self.heard = []
 
-    async def keep(self, msg_id, attachments):
-        for item in attachments:
-            self.kept[(msg_id, item.name)] = item
+    async def listen(self, msg):
+        self.heard.append(msg)
 
-    async def link(self, msg_id, name):
-        return "file:///%s/%s" % (msg_id, name) if (msg_id, name) in self.kept else None
 
+async def _settle():
+    await asyncio.sleep(0.05)
+
+
+# === Statuses ======================================================================
 
 def test_a_reply_is_answered_unless_it_says_otherwise():
     assert Reply("sunny").status == "answered"
@@ -54,50 +60,95 @@ def test_an_unknown_status_is_refused():
         Reply("x", status="maybe")
 
 
-async def test_ask_returns_the_text_by_default():
-    session, view = await driven(connectors=[_Eco("sunny")])
-    assert await view.ask(view.id_of("eco"), "weather?") == "sunny"
-    await session.close()
-
-
 @pytest.mark.parametrize("reply, status", [
     ("sunny", "answered"),
     (Reply("Which login flow?", status="asked"), "asked"),
     (Reply("the service is down", status="error"), "error"),
 ])
-async def test_detail_carries_the_status(reply, status):
+async def test_the_answer_message_carries_the_status(reply, status):
     session, view = await driven(connectors=[_Eco(reply)])
-    got = await view.ask(view.id_of("eco"), "q", detail=True)
-    assert isinstance(got, Answer)
-    assert got.status == status
-    assert got.text == (reply if isinstance(reply, str) else reply.text)
+    await view.ask(view.id_of("eco"), "q")
+    assert view.context()[-1].status == status
     await session.close()
 
 
-async def test_detail_gives_the_answer_id_that_locates_its_attachment():
-    chart = Attachment("chart.svg", "image/svg+xml", b"<svg/>")
-    session, view = await driven(connectors=[_Eco(Reply("[chart](chart.svg)", (chart,)))],
-                                 backend=_Cofre())
-    got = await view.ask(view.id_of("eco"), "draw it", detail=True)
-    assert got.status == "answered"
-    assert await session.locate(got.msg_id, "chart.svg") is not None
-    assert [m.id for m in view.context()][-1] == got.msg_id
+async def test_ask_still_returns_the_text():
+    session, view = await driven(connectors=[_Eco("sunny")])
+    assert await view.ask(view.id_of("eco"), "weather?") == "sunny"
     await session.close()
 
 
-async def test_an_answer_said_late_is_answered():
-    @connector("tarde")
-    @require(HookAnswer)
-    class _Tarde:
-        async def answer(self, msg):
-            return None
+# === A say, asked of the lone peer that answers =====================================
 
-    tarde   = _Tarde()
-    session, view = await driven(connectors=[tarde])
-    asking  = asyncio.create_task(view.ask(view.id_of("tarde"), "q", detail=True))
-    await asyncio.sleep(0.05)
-    question = view.context()[-1]
-    await session._say_for(tarde.peer_id)("later", reply_to=question.id)
-    got = await asking
-    assert (got.text, got.status) == ("later", "answered")
+async def test_a_say_is_asked_of_the_only_peer_that_answers():
+    eco, falador = _Eco("sunny"), _Falador()
+    session, view = await driven(connectors=[eco, falador])
+    said_id = await falador.say("will it rain?")
+    await _settle()
+    assert [m.text for m in eco.asked] == ["will it rain?"]
+    said  = [m for m in view.context() if m.id == said_id][0]
+    reply = view.context()[-1]
+    assert said.to == eco.peer_id
+    assert (reply.text, reply.reply_to, reply.to) == ("sunny", said_id, falador.peer_id)
+    assert said in view.heard                       # listeners still hear it
+    await session.close()
+
+
+async def test_the_user_saying_asks_the_lone_peer():
+    eco = _Eco("sunny")
+    session, view = await driven(connectors=[eco])
+    await view.say("hello")
+    await _settle()
+    assert [m.text for m in eco.asked] == ["hello"]
+    await session.close()
+
+
+async def test_a_reply_stays_a_broadcast():
+    eco, falador = _Eco(), _Falador()
+    session, view = await driven(connectors=[eco, falador])
+    first = await view.say("hello")
+    await _settle()
+    await falador.say("me too", reply_to=first)
+    await _settle()
+    assert [m.text for m in eco.asked] == ["hello"]
+    await session.close()
+
+
+async def test_with_two_peers_that_answer_a_say_is_a_broadcast():
+    one, two, falador = _Eco(), _Eco(), _Falador()
+    session, view = await driven(connectors=[one, two, falador])
+    said_id = await falador.say("anyone?")
+    await _settle()
+    assert one.asked == two.asked == []
+    assert [m for m in view.context() if m.id == said_id][0].is_broadcast
+    await session.close()
+
+
+async def test_the_speaker_and_the_frontend_do_not_count():
+    eco = _Eco()
+    session, view = await driven(connectors=[eco])
+    said_id = await session._say_for(eco.peer_id)("talking to myself")
+    await _settle()
+    assert eco.asked == [] and view.asked == []
+    assert [m for m in view.context() if m.id == said_id][0].is_broadcast
+    await session.close()
+
+
+async def test_what_a_command_writes_is_not_asked():
+    eco = _Eco()
+    session, view = await driven(connectors=[eco])
+    await session._say_for(TOOL)("usage: /help")
+    await _settle()
+    assert eco.asked == []
+    await session.close()
+
+
+async def test_a_lone_peer_that_fails_replies_with_an_error():
+    eco, falador = _Eco(RuntimeError("boom")), _Falador()
+    session, view = await driven(connectors=[eco, falador])
+    said_id = await falador.say("will it rain?")
+    await _settle()
+    reply = view.context()[-1]
+    assert (reply.reply_to, reply.status) == (said_id, "error")
+    assert "RuntimeError" in reply.text and reply.frm == eco.peer_id
     await session.close()

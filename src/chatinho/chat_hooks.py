@@ -35,9 +35,9 @@ Nothing here is inherited: no base class, no ``isinstance``.
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
 
-from .chat_message import LOCAL, TOOL, Answer, Attachment, ChatMessage, MessageID
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID
 
 logger = logging.getLogger(__name__)
 
@@ -63,19 +63,10 @@ class Say(Protocol):
 class Ask(Protocol):
     """Granted by ``HookAsk``: a message for one peer, and its reply."""
 
-    async def __call__(
-        self,
-        to          : int,
-        text        : str,
-        *,
-        attachments : Sequence[Attachment] = (),
-        detail      : bool = False,
-    ) -> Union[str, Answer]:
+    async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
         """Asks peer *to* and waits for the text of the answer it sends back.
 
-        *attachments* go to the backend, as with ``say``. With *detail*, what
-        comes back is an :class:`~chatinho.chat_message.Answer` — the text, its
-        status and the answer's message id — instead of the text alone.
+        *attachments* go to the backend, as with ``say``.
 
         Raises:
             Exception: Whatever the peer's ``answer`` raised, when it failed.
@@ -209,6 +200,12 @@ HookSay = Hook(
     # say(text, reply_to=None) -> id. Reaches every peer but the sender.
     # A reply to a say is another say: a broadcast is owed to nobody, so there
     # is no fourth verb for answering one.
+    #
+    # One exception, so a room with one peer that answers behaves like a
+    # conversation with it: a say that is not itself a reply, said by a peer
+    # (not a command) in a room where exactly one peer answers — besides the
+    # speaker and the frontend — is asked of that peer. Everyone who listens
+    # still hears it; the answer comes back as a reply to it.
 )
 
 HookAsk = Hook(

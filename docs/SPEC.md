@@ -30,7 +30,7 @@ be peer zero.
 A message says where it came from and where it is going, and that is the whole of the routing:
 
 ```python
-ChatMessage(id, text, frm=0, to=None, reply_to=None, timestamp=...)
+ChatMessage(id, text, frm=0, to=None, reply_to=None, timestamp=..., status="answered")
 ```
 
 `id` and `reply_to` are `MessageID`s, not strings. `str(msg.id)` is `msg-` and 16 random hex
@@ -134,9 +134,15 @@ await self.say("echo: good morning", reply_to=msg.id)   # a reply to a say is an
 **and** it is how an ask is answered late. A peer that returned `None` from `answer` resolves the
 waiting ask by saying the reply with `reply_to` set to the question's id.
 
+**A room with one peer that answers is a conversation with it.** A say that is not a reply, said by
+a peer — not by a command — when exactly one peer declares `HookAnswer` besides the speaker and the
+frontend, is asked of that peer: it goes out addressed to it, its `answer` is called, and the reply
+comes back with `reply_to` set to the say. Everyone who listens still hears both. With two or more
+such peers, or none, a say is a broadcast, as before.
+
 ### HookAsk
 
-> **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = (), detail: bool = False) -> str | Answer`
+> **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str`
 
 Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id,
 and whatever the peer's `answer` raised if it failed. What comes back is the reply's
@@ -146,14 +152,9 @@ text. Anything the reply attached went to the backend, under the reply's id, whe
 answer = await self.ask(session.id_of("weather"), "what is the weather?")
 ```
 
-With `detail=True` it is an `Answer(text, status, msg_id)` instead: `status` is what the reply said
-about itself — `answered`, `asked` (a question back) or `error`, from `Reply(..., status=…)`, and
-`answered` for a plain string or a reply said late — and `msg_id` is the reply's own id.
-
-```python
-got = await self.ask(at, "draw it", detail=True)
-url = await self.locate(got.msg_id, "chart.svg")
-```
+What the reply said about itself is on its message: `msg.status` is `answered`, `asked` (a question
+back) or `error`, from `Reply(..., status=…)`, and `answered` for a plain string. A peer whose
+`answer` fails replies with `status="error"` when nobody is awaiting it — a say asked of it.
 
 `ask(LOCAL, ...)` asks the user. It does not block the chat: the awaiting peer's own task is
 parked, and every other peer carries on.

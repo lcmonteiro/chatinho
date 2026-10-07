@@ -11,9 +11,10 @@ A chatinho session today lives on one machine: its peers can only be reached fro
 - One hop only: the client sends the question to the remote session, not to a named remote peer, and the remote session decides who answers. With exactly one peer able to answer, the question is asked to it directly. With several, the question is said to the room (a `say` from the asker) and the first reply to it is the answer; a peer router can replace this later.
 - Messages across the link are always questions: a client cannot broadcast to the remote room on its own.
 - Every question gets exactly one result — `answered`, `asked` (answered with a question back), `error` or `timeout` — within a deadline, configurable and 120 s by default. Attachments travel back with the answer.
-- The frontend handles every client itself. It receives a question, forwards it into the session as its own `ask` or `say` (depending on how many peers can answer), and sends the reply to that message back to the client that asked. No peer is added or removed per client; inside the remote session, every remote question comes from the frontend (`master`).
+- The frontend handles every client itself. It is a bridge with one MCP tool, `say`: it says what a client sends in the session as its own message, and sends the first reply to that message back to that client. No peer is added or removed per client; inside the remote session, every remote question comes from the frontend (`master`).
 - Add opt-in credential delegation, following A2A's principle: the server declares the credentials its peers may use, a connector configured to delegate sends them out of band (MCP request metadata, HTTPS only), and the remote session keeps each one in memory only while that question is answered. A credential never enters message content or history. Peers get it through `HookCredential`.
-- Let answers carry a status (`Reply(..., status="asked" | "error")`) and let askers get it with the answer's message id (`ask(..., detail=True)`), so answers are relayed faithfully, attachments included.
+- Let answers carry a status (`Reply(..., status="asked" | "error")`), kept on the answer's message (`ChatMessage.status`), so replies are relayed faithfully.
+- In any session, a say that is not a reply, in a room where exactly one peer answers, is asked of that peer, and its reply comes back as a reply to the say; a peer that fails there replies `error`.
 - Speak the modern MCP protocol (2026-07-28) only: no initialize handshake, and the client's name arrives with every request. MCP sampling is left out: it is deprecated in this protocol revision (SEP-2577), and credential delegation is how a remote peer borrows the asker's intelligence.
 - Package the MCP pieces behind a new `chatinho[mcp]` extra; the core stays standard library only.
 - Out of scope: routes through several sessions (multi-hop), choosing a remote peer from the client, a peer router, broadcasts from the client, sending API keys implicitly or in message content, and mirroring each remote peer as its own peer in the local roster.
@@ -21,7 +22,7 @@ A chatinho session today lives on one machine: its peers can only be reached fro
 ## Capabilities
 
 ### New Capabilities
-- `answer-details`: answer statuses on `Reply`, and `ask(..., detail=True)` returning the text, status and answer message id.
+- `answer-details`: answer statuses on `Reply` and on the answer's message, and a say in a room with one peer that answers being asked of it.
 - `credential-delegation`: `HookCredential`, credentials declared by the server, delegated out of band by the connector, and alive only while their question is answered.
 - `mcp-server`: `McpFrontend` — the MCP interface of a session, forwarding each client's question and routing the reply back, who answers a question (the only peer, or the first reply in the room), the one-result guarantee and deadlines.
 - `mcp-connector`: `McpConnector` — naming, addressing from the local chat, sending questions, and bringing back answers and attachments.
@@ -31,9 +32,9 @@ A chatinho session today lives on one machine: its peers can only be reached fro
 
 ## Impact
 
-- `src/chatinho/chat_session.py`: serving the new `credential` grant; a peer whose `answer` raises fails the waiting `ask`.
-- `src/chatinho/chat_message.py`: `Reply.status` and the `Answer` type.
-- `src/chatinho/chat_hooks.py`: `HookCredential`, `HookServeCredential` and their protocol; `ask(..., detail=True)`; `docs/SPEC.md` gains their sections (the architecture test requires one per hook).
+- `src/chatinho/chat_session.py`: serving the new `credential` grant; a say asked of the lone peer that answers; a peer whose `answer` raises fails the waiting `ask` or replies `error`.
+- `src/chatinho/chat_message.py`: `Reply.status` and `ChatMessage.status`.
+- `src/chatinho/chat_hooks.py`: `HookCredential`, `HookServeCredential` and their protocol; `docs/SPEC.md` gains their sections (the architecture test requires one per hook).
 - New `src/chatinho/frontends/mcp.py` (`McpFrontend`), `src/chatinho/connectors/mcp.py` (`McpConnector`) and `src/chatinho/mcp_wire.py` (what both ends exchange), exported lazily. `connectors/` and the new `frontends/` import each module on first use, so one battery never needs another's extra.
 - `pyproject.toml`: an `mcp` extra (the official `mcp` SDK), also added to `all` and `dev`; `uv.lock` updated.
 - `README.md`, `CLAUDE.md`, an example under `examples/` for a headless MCP session.
