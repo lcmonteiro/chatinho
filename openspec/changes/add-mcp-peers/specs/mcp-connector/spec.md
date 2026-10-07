@@ -7,11 +7,11 @@ Lets a chatinho session put questions to another session over MCP through one or
 ## ADDED Requirements
 
 ### Requirement: A connector to a remote session
-chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connector` built from a server to connect to (a command to start over stdio, or an HTTP URL with a bearer token), a `name` and an optional `deadline` (sent with every question it sends; when not set, the server's default applies). Its name in the chat MUST be the `name` given, or the name the server announces when none is given, and MUST be sent to the server as the client name in the MCP handshake.
+chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connector` built from a server to connect to (a command to start over stdio, or an HTTP URL with a bearer token), a `name` and an optional `deadline` (sent with every question it sends; when not set, the server's default applies). It MUST speak the modern MCP protocol (2026-07-28). Its name in the chat MUST be the `name` given, or the server's name when none is given, and MUST be sent to the server as the client name with every request.
 
 #### Scenario: Named by the connector
 - **WHEN** `McpConnector(url=..., token=..., name="lab")` is added to a session
-- **THEN** it appears in the chat as `lab`, and the server sees a client named `lab`
+- **THEN** it appears in the chat as `lab`, and the server sees requests from a client named `lab`
 
 #### Scenario: Default name from the server
 - **WHEN** no `name` is given and the server's frontend is named `office`
@@ -55,7 +55,7 @@ The connector SHALL send, with each question, the name of the local peer that as
 - **THEN** the remote session sees the asker as `lab/me`
 
 ### Requirement: Serving samples with the local model
-The connector SHALL answer MCP sampling requests from its server with a sample function given to the connector (for example one backed by the local LLM). With no sample function, it MUST decline the request. The connector MUST NOT send any API key to the server, except credentials it is configured to delegate (see `credential-delegation`).
+The connector SHALL answer the sampling requests its server embeds in an `InputRequiredResult` with a sample function given to the connector (for example one backed by the local LLM), and retry the question with the completions, for as many rounds as the question needs within its deadline. With no sample function, it MUST decline the request. The connector MUST NOT send any API key to the server, except credentials it is configured to delegate (see `credential-delegation`).
 
 #### Scenario: Local model answers the remote peer
 - **WHEN** the connector was given a sample function and the server sends a sampling request for a question the local user asked

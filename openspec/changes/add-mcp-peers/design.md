@@ -10,7 +10,12 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - Attachments go to the backend that declares `HookKeep`, under the message id; anyone with `locate` can get a link to them. With no keeping backend they are dropped.
 - A `say` is a broadcast, and a reply to it is another `say` with `reply_to`. Nothing is owed back, so nothing resolves for the sayer; a peer that declares `HookListen` hears every message, including those replies.
 - The core is standard library only; batteries are lazy names behind extras, and `tests/test_architecture.py` checks that (and that `docs/SPEC.md` documents every hook).
-- The official `mcp` SDK (2.3) provides what is needed: a low-level `Server`, `ServerSession.create_message` (sampling) and `client_params` (the client's name), a `ClientSession` with `sampling_callback` and `client_info`, stdio and Streamable HTTP transports, and in-memory streams for tests.
+- The official `mcp` SDK (2.3) speaks two protocol eras. The handshake era (2025-11-25) has `initialize`, a session per connection and server-to-client requests. The modern era (2026-07-28), which this change targets, is stateless:
+  - `server/discover` replaces the handshake.
+  - Every request carries the client's info and capabilities in `_meta` (`io.modelcontextprotocol/clientInfo`, `…/clientCapabilities`).
+  - A server that needs input mid-call returns an `InputRequiredResult` with embedded requests (sampling among them) and an opaque `request_state`. The client fulfils them and retries the call with `input_responses`.
+  - The SDK's high-level `Client` drives that loop itself through its `sampling_callback`, up to `input_required_max_rounds`. It can also connect to a `Server` in-process, which the tests use.
+- Sampling is deprecated in 2026-07-28 (SEP-2577) but still in it, and the SDK still carries it.
 
 ## Goals / Non-Goals
 
@@ -36,20 +41,22 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - **No core change for waiting on a broadcast.** The proxy listens and resolves its own wait (decision 4), so the rule that a `say` is owed to nobody stays true in the core.
 
 ### 2. Wire format: one tool per verb, structured results
-`McpFrontend` uses the SDK's low-level `Server`, for full control over tool schemas and per-connection state.
+`McpFrontend` uses the SDK's low-level `Server` (`on_list_tools`, `on_call_tool`), for full control over tool schemas and the multi-round `ask`.
 - **Tools:** `ask`, `list_peers`, `list_commands`, `invoke`, `read_attachment`.
 - **`ask` arguments:** `text`, `asker?`, `deadline_ms?`. There is no peer name: the session decides who answers.
 - **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}]}`, also rendered as text for clients that only read text. `error` and `timeout` set `isError`.
+- **Rounds:** while a question is open, `ask` may instead return an `InputRequiredResult`. Its `request_state` is a random token naming the open question, bound to the client name that opened it. A retry with that token resumes the same question; an unknown or foreign token is `error`.
 - *Alternative: FastMCP decorators.* They're quicker to write but hide the per-session hooks needed for proxies and sampling.
 
 ### 3. One proxy peer per asker
-- For each `(client connection, asker)`, the frontend adds an `_AskerProxy` peer, named `client_name` or `client_name/asker` (for example `lab/me`).
+- For each `(client name, asker)`, the frontend adds an `_AskerProxy` peer, named `client_name` or `client_name/asker` (for example `lab/me`).
   - The proxy declares `HookAsk` and `HookSay` to put questions, `HookListen` to catch replies to its broadcasts, and `HookAnswer`, answering any question put to it with `Reply("…cannot be asked…", status="error")`.
   - It's added with `add_connector` + `start()`.
-- **Bookkeeping:** the frontend maps proxy id → client connection, and connection → proxy ids.
-  - **stdio:** a single connection, which ends with `serve()`.
-  - **HTTP:** connections are tracked through the session manager's lifecycle. When a connection ends, its proxies are removed with `remove_connector`.
-- The client name comes from `ServerSession.client_params.clientInfo.name`, made safe (no `/`, non-empty).
+- **Bookkeeping:** the frontend maps `(client name, asker)` → proxy, and keeps each proxy's last activity.
+  - A sweeper task removes, with `remove_connector`, the proxies with no open question for longer than `idle` (600 s by default).
+  - On stdio the whole session also ends with the stream.
+- The client name comes from each request's `_meta` `clientInfo.name`, made safe (no `/`, non-empty, `client` when missing).
+- *Alternative: remove proxies on disconnect.* The modern protocol has no connection lifecycle to hook, so idle expiry stands in for it.
 
 ### 4. Who answers, deadlines and the one-result guarantee
 The answering peers are those in `peers()` that declare `HookAnswer`, excluding the frontend and every proxy.
@@ -75,16 +82,24 @@ Every outcome maps to one result:
 The default deadline is configurable (`McpFrontend(deadline=…)`, 120 s when not set); `McpConnector(deadline=…)` sends one with every question.
 
 ### 5. Sampling
-- **On the server, `serve_sample(msg_id, …)`:** look up `msg_id`, the question being answered. If it came from a proxy, by `ask` or by `say`, send `create_message` on that proxy's client connection and return the text. Otherwise raise `SamplingUnavailable`.
-- **On the client, `McpConnector`'s `sampling_callback`:** it calls the `sample_with` function it was given, for example orbe's `openai_model()`. Without one, it declines.
+- **On the server, `serve_sample(msg_id, …)`:**
+  - Look up `msg_id`, the question being answered. Raise `SamplingUnavailable` if it came from no proxy, if its client did not declare the sampling capability, or if the question is no longer open.
+  - Otherwise, queue a `CreateMessageRequest` on the open question under a fresh key, and await its future.
+- **The `ask` call** waits on whichever comes first:
+  - the answer;
+  - queued sample requests: it returns them all in one `InputRequiredResult`;
+  - the deadline.
+- **On a retry,** the `input_responses` resolve the matching futures (an error response fails them with `SamplingUnavailable`), and the call waits again.
+- **When a question ends,** for any reason, its unresolved sample futures fail with `SamplingUnavailable`.
+- **On the client, `McpConnector`'s `sampling_callback`:** it calls the `sample_with` function it was given, for example orbe's `openai_model()`. Without one, it declines. The connector raises the `Client`'s `input_required_max_rounds` (to 64), because an agent may sample many times for one question.
 - Sampling sends no key, and keys never appear in any message.
 
 ### 6. Credential delegation (opt-in)
 This follows A2A's principle: credentials travel out of band, the server declares what it needs, and a short-lived, scoped credential is preferred to a master key.
 - **Core:** `HookCredential` (grant `credential(msg_id, name)`) and `HookServeCredential` (demands `serve_credential`), mirroring sampling: keyed by the question being answered (the direct question or the broadcast one), served by the frontend, and otherwise raising `CredentialUnavailable`.
-- **Declaration:** `McpFrontend(credentials={"llm": "OpenAI-compatible API key"})` announces the names in the initialize result's `capabilities.experimental["chatinho/credentials"]`. Undeclared names are dropped on arrival.
-- **Delivery:** `McpConnector(delegate={"llm": value | callable})` puts the declared ones in the `ask` request's `_meta["chatinho/credentials"]`. A callable is called per question, so it can mint short-lived tokens. Over HTTP the connector delegates only to `https` URLs or loopback hosts.
-- **Lifetime:** the server keeps a dict from question message id to credentials, holding values in a `Secret` wrapper whose `repr` is redacted. The entry is popped in the `finally` of `ask`, so it is gone on every outcome, including `timeout`, and with the proxy on disconnect. Nothing goes to the message, the store or logs.
+- **Declaration:** `McpFrontend(credentials={"llm": "OpenAI-compatible API key"})` announces the names in its `server/discover` result, as the capability extension `chatinho/credentials` (SEP-2133 `capabilities.extensions`). Undeclared names are dropped on arrival.
+- **Delivery:** `McpConnector(delegate={"llm": value | callable})` discovers the server first, then puts the declared credentials in the `ask` request's `_meta["chatinho/credentials"]`. The SDK repeats that `_meta` on each retry round; the server takes the credentials from the first call only. A callable is called per question, so it can mint short-lived tokens. Over HTTP the connector delegates only to `https` URLs or loopback hosts.
+- **Lifetime:** the server keeps a dict from question message id to credentials, holding values in a `Secret` wrapper whose `repr` is redacted. The entry is popped in the `finally` of `ask`, so it is gone on every outcome, including `timeout`, and with the proxy when it expires. Nothing goes to the message, the store or logs.
 - **Not passed on:** the credential reaches only the session the connector connects to. A peer that obtained it through `credential` must not delegate it further; a connector only delegates its own `delegate` configuration.
 - **Priority for peers:** a peer (for example orbe's agent) may try `credential` first and fall back to `sample`.
 - *Alternative: put the key in the question text or a session-wide setting.* That leaks into history and outlives the question.
@@ -101,10 +116,10 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - **Asker:** the connector sends the asking peer's name; the server names the proxy `<client>/<asker>`.
 
 ### 9. Connection lifecycle
-- `McpConnector` opens its `ClientSession` in `initialize()` and closes it in `shutdown()`. It doesn't implement `serve()`, because a dropped link must not end the local chat.
-- On a lost connection it reconnects lazily on the next question, and answers `error` ("could not reach …") if that fails.
+- `McpConnector` opens an SDK `Client` in modern mode (`mode="auto"`, which probes `server/discover`) in `initialize()`, and closes it in `shutdown()`. It doesn't implement `serve()`, because a dropped link must not end the local chat.
+- The connector refuses a server that only speaks the handshake era. Each request is independent; a failed call answers `error` ("could not reach …"), and the client is reopened lazily on the next question.
 - **Transports:** `command=[…]` for stdio, or `url=…, token=…` for HTTP with a `Bearer` header; `deadline` is optional.
-- `McpFrontend(name="master", transport="stdio" | "http", host, port, token, deadline)`; the name is the frontend's peer name and the server name in the handshake. Its `serve()` runs `stdio_server` or a Uvicorn app with the Streamable HTTP session manager and a bearer-token check.
+- `McpFrontend(name="master", transport="stdio" | "http", host, port, token, deadline, idle, credentials)`; the name is the frontend's peer name and the server's name. `idle` sets the proxy expiry. Its `serve()` runs the server over `stdio_server`, or a Uvicorn app with the SDK's Streamable HTTP app and a bearer-token check.
 
 ### 10. Packaging
 - `chatinho.mcp` imports `mcp` and is exposed through the lazy `__getattr__` as `McpFrontend` and `McpConnector`, with the `mcp` extra in the missing-extra message.
@@ -115,6 +130,8 @@ This follows A2A's principle: credentials travel out of band, the server declare
 
 - **Pending futures on removal:** removing a proxy while a peer is answering its question. → The future fails with `PeerRemoved`, so nothing hangs; the answer message, if it comes, is still posted.
 - **Attachment bytes through `locate`** depend on a linking backend. → The server documents it and the result says when attachments couldn't be returned. A byte-level grant is a follow-up.
+- **Sampling is deprecated in the modern protocol (SEP-2577).** It still works, but a later revision may drop it. → Credential delegation already covers lending intelligence without sampling, and the frontend keeps sampling behind one hook, `HookServeSample`, so it can change in one place.
+- **Client names are self-declared.** Any client can claim to be `lab`, and on a stateless protocol nothing ties a request to an earlier one. → On HTTP every client already holds the same bearer token, so naming is for display and grouping, not trust. `request_state` tokens are random and bound to the name that opened them.
 - **Sampling support varies by client.** → Peers get `SamplingUnavailable` and answer with an error, which is still one result; orbe can fall back to a local model.
 - **The `mcp` extra pulls in pydantic and other compiled packages**, so it's heavy on Termux. → It's optional, and the core stays dependency-free.
 - **A delegated credential is readable by the remote session's code while it answers.** Delegation reduces exposure (one question, memory only) but cannot prevent a dishonest or buggy remote from copying it. → It's opt-in, HTTPS-only, and the docs recommend a sub-key with a spending limit or a short-lived token. Sampling stays the default.

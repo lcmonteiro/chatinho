@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Lets peers join and leave a session while it runs, so that peers standing for remote askers can come and go with their connections.
+Lets peers join and leave a session while it runs, so that peers standing for remote askers can come and go as they ask and fall idle.
 
 ## ADDED Requirements
 

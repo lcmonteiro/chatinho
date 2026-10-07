@@ -18,10 +18,10 @@ chatinho SHALL provide `HookCredential`, a grant-only hook that gives a peer `cr
 - **THEN** it raises `CredentialUnavailable`
 
 ### Requirement: The server declares what it needs
-`McpFrontend` SHALL accept the names of the credentials its peers may use, each with a short description, and announce them to clients in the MCP handshake. It MUST NOT accept a delegated credential whose name it did not declare. With nothing declared, the server MUST ignore every delegated credential.
+`McpFrontend` SHALL accept the names of the credentials its peers may use, each with a short description, and announce them to clients in its `server/discover` result, as the capability extension `chatinho/credentials`. It MUST NOT accept a delegated credential whose name it did not declare. With nothing declared, the server MUST ignore every delegated credential.
 
-#### Scenario: Declared in the handshake
-- **WHEN** a server is created declaring `llm` ("OpenAI-compatible API key") and a client connects
+#### Scenario: Declared at discovery
+- **WHEN** a server is created declaring `llm` ("OpenAI-compatible API key") and a client discovers it
 - **THEN** the client sees `llm` and its description among the server's declared credentials
 
 #### Scenario: Undeclared credential ignored
