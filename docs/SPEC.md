@@ -141,7 +141,8 @@ waiting ask by saying the reply with `reply_to` set to the question's id.
 > **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = (), detail: bool = False) -> str | Answer`
 
 Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id,
-and `PeerRemoved` if the peer leaves the session before answering. What comes back is the reply's
+`PeerRemoved` if the peer leaves the session before answering, and whatever the peer's `answer`
+raised if it failed. What comes back is the reply's
 text. Anything the reply attached went to the backend, under the reply's id, where `locate` finds it.
 
 ```python

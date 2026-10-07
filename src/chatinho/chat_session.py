@@ -470,7 +470,15 @@ class ChatSession:
         if not declares(who, HookAnswer):
             logger.warning("%r was asked but does not declare %s", name_of(who), HookAnswer)
             return
-        reply = await who.answer(msg)
+        try:
+            reply = await who.answer(msg)
+        except Exception as exc:
+            # The asker is owed one reply, and a failure is one: it raises in
+            # the ask rather than leaving it waiting forever. _drain logs it.
+            waiting = self._pending.pop(msg.id, None)
+            if waiting is not None and not waiting.done():
+                waiting.set_exception(exc)
+            raise
         if reply is not None:
             text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
             answered = ChatMessage(id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id)

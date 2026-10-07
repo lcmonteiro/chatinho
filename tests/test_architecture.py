@@ -58,7 +58,7 @@ def test_core_modules_do_not_import_the_ui_framework(module):
 def test_core_modules_do_not_import_adapter_libraries(module):
     """Policy must not reach out to a concrete transport or database driver."""
     roots = imported_roots(SRC / module)
-    forbidden = roots & {"openai", "sqlalchemy", "requests", "httpx"}
+    forbidden = roots & {"openai", "sqlalchemy", "requests", "httpx", "mcp", "mcp_types"}
     assert not forbidden, f"{module} must not depend on {sorted(forbidden)}"
 
 
@@ -214,7 +214,7 @@ _WITHOUT_THE_EXTRAS = """
 import builtins, sys
 real = builtins.__import__
 def blocked(name, *a, **k):
-    if name.split(".")[0] in {"textual", "openai", "sqlalchemy", "requests"}:
+    if name.split(".")[0] in {"textual", "openai", "sqlalchemy", "requests", "mcp", "mcp_types"}:
         raise ImportError("No module named %r" % name)
     return real(name, *a, **k)
 builtins.__import__ = blocked
@@ -222,7 +222,8 @@ builtins.__import__ = blocked
 import chatinho
 from chatinho import ChatSession, HelpCommand, TestCommand, ChatMessage, require, HookListen
 print("core-ok")
-for name in ("build_chat", "OpenAIConnector", "A2AConnector", "DatabaseBackend"):
+for name in ("build_chat", "OpenAIConnector", "A2AConnector", "DatabaseBackend",
+             "McpFrontend", "McpConnector"):
     try:
         getattr(chatinho, name)
     except ImportError as exc:
@@ -245,7 +246,7 @@ def test_the_core_imports_with_none_of_the_batteries_installed():
     assert done.returncode == 0, done.stderr
     lines = done.stdout.split()
     assert "core-ok" in done.stdout, done.stdout
-    assert lines.count("True") == 4, "an extra is not named in its own error:\n%s" % done.stdout
+    assert lines.count("True") == 6, "an extra is not named in its own error:\n%s" % done.stdout
 
 
 def test_the_declared_extras_are_the_ones_the_package_asks_for():

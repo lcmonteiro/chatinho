@@ -74,9 +74,9 @@ Every `ask` SHALL return exactly one result `{status, text, attachments}`, with 
 - **WHEN** the answering peer returns `Reply("which login flow?", status="asked")`
 - **THEN** the result is `asked` with that text
 
-#### Scenario: Follow-up after a question back
-- **WHEN** the previous result for an asker was `asked`, and the same asker asks again
-- **THEN** with one peer, that peer is asked again from the same proxy; with several, the new question is said as a reply to the `asked` answer, so the peer that asked sees it is for it
+#### Scenario: Follow-up from the same asker
+- **WHEN** an asker got an answer, for example a question back, and asks again
+- **THEN** with one peer, that peer is asked again from the same proxy; with several, the new question is said as a reply to the asker's last answer in the room (a reply there always reads `answered`, so a question back cannot be told apart), and the peer that answered sees it is for it
 
 ### Requirement: One peer per asker
 For each distinct asker, the server SHALL add a proxy peer to the session, with its own id, named by the client's name, as given with the request, followed by `/` and the asker's name when the client sends one (for example `lab/me`). Questions from that asker MUST be asked or said from its proxy, so peers see them as coming from that name. A proxy asked a question MUST answer `error`. Since the protocol has no connection to end, a proxy MUST be removed once it has had no question in flight for the frontend's idle time (configurable, 10 minutes when not set); its messages MUST stay in the conversation, and the same asker coming back gets a new proxy with the same name.

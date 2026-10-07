@@ -33,12 +33,14 @@ With a terminal, which needs ``pip install chatinho[tui]``::
 
 The application class itself is private: ``build_chat`` builds one.
 
-Four names need an extra, and say so if it is missing:
+Six names need an extra, and say so if it is missing:
 
     build_chat         chatinho[tui]      textual
     OpenAIConnector    chatinho[openai]   openai
     A2AConnector       chatinho[a2a]      requests
     DatabaseBackend    chatinho[sql]      sqlalchemy
+    McpFrontend        chatinho[mcp]      mcp
+    McpConnector       chatinho[mcp]      mcp
 
 Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand`` —
 imports nothing but the standard library.
@@ -47,12 +49,13 @@ imports nothing but the standard library.
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:                       # never executed; read by type checkers
-    # The four names below are resolved lazily at runtime, which hands a type
+    # The six names below are resolved lazily at runtime, which hands a type
     # checker ``Any`` and quietly undoes the ``py.typed`` this package ships.
     # Importing them here restores that without importing anything at run time.
     from .backends import DatabaseBackend
     from .chat_builder import build_chat
     from .connectors import A2AConnector, OpenAIConnector
+    from .mcp import McpConnector, McpFrontend
 
 from .chat_session import ChatSession
 from .chat_message import LOCAL, TOOL, Answer, Attachment, ChatMessage, MessageID, Reply, Secret
@@ -110,6 +113,8 @@ _BEHIND_AN_EXTRA = {
     "OpenAIConnector" : (".connectors",   "openai", "openai"),
     "A2AConnector"    : (".connectors",   "a2a",    "requests"),
     "DatabaseBackend" : (".backends",     "sql",    "sqlalchemy"),
+    "McpFrontend"     : (".mcp",          "mcp",    "mcp"),
+    "McpConnector"    : (".mcp",          "mcp",    "mcp"),
 }
 
 
@@ -117,7 +122,7 @@ def __getattr__(name: str) -> Any:
     """Imports the batteries only when one is asked for (PEP 562).
 
     ``import chatinho`` must not drag in a terminal, an HTTP client and an ORM
-    for a script that wanted a ``ChatSession``. These four are resolved on first
+    for a script that wanted a ``ChatSession``. These six are resolved on first
     use instead, and a missing extra is reported as itself rather than as
     somebody else's ``ModuleNotFoundError``.
 
@@ -212,6 +217,8 @@ __all__ = [
     "A2AConnector",
     "OpenAIConnector",
     "DatabaseBackend",
+    "McpFrontend",
+    "McpConnector",
     "HelpCommand",
     "TestCommand",
 ]
