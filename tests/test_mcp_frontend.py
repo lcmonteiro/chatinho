@@ -1,14 +1,14 @@
-"""McpFrontend: a bridge with one tool, say, over the modern MCP protocol."""
+"""McpFrontend: what a terminal can do, as MCP tools, over the modern MCP protocol."""
 
 import asyncio
 import time
 
 import pytest
 
-from chatinho import LOCAL, Attachment, HookAnswer, HookAsk, Reply, connector, require
+from chatinho import LOCAL, Attachment, HookAnswer, HookAsk, HookExecute, Reply, connector, require, tool
 from chatinho.connectors.mcp import _decode
 from chatinho.frontends.mcp import CREDENTIALS_KEY, McpFrontend
-from mcp_kit import Agent, Files, Weather, client, remote, say
+from mcp_kit import Agent, Files, Weather, call, client, remote, say
 
 
 # === The frontend itself ===========================================================
@@ -30,13 +30,15 @@ def test_a_token_is_required():
         McpFrontend()                                   # type: ignore[call-arg]
 
 
-async def test_one_tool_say():
+async def test_what_a_terminal_can_do():
     session, front = await remote(Weather())
     async with client(front) as c:
-        tools = (await c.list_tools()).tools
-        other = await c.call_tool("ask", {"text": "?"})
-    assert [t.name for t in tools] == ["say"]
-    assert set(tools[0].input_schema["properties"]) == {"text", "asker", "deadline_ms"}
+        tools = {t.name: t for t in (await c.list_tools()).tools}
+        other = await c.call_tool("forget", {})
+    assert list(tools) == ["say", "ask", "peers", "tools", "run"]
+    assert set(tools["say"].input_schema["properties"]) == {"text", "asker", "deadline_ms"}
+    assert set(tools["ask"].input_schema["properties"]) == {"peer", "text", "deadline_ms"}
+    assert set(tools["run"].input_schema["properties"]) == {"name", "args", "deadline_ms"}
     assert other.is_error and other.structured_content["status"] == "error"
     await session.close()
 
@@ -208,6 +210,135 @@ async def test_a_follow_up_in_the_room_replies_to_the_last_reply():
     said  = [m for m in session._context() if m.text == "Lisbon"][0]
     first = [m for m in session._context() if m.text == got["text"]][0]
     assert said.reply_to == first.id
+    await session.close()
+
+
+# === Asking one peer ===============================================================
+
+async def test_ask_a_peer_by_name():
+    agent, weather = Agent(), Weather("sunny")
+    session, front = await remote(agent, weather)
+    async with client(front) as c:
+        got = await call(c, "ask", peer="weather", text="rain?")
+    assert (got["status"], got["text"]) == ("answered", "sunny")
+    assert [m.text for m in weather.asked] == ["rain?"]
+    assert weather.asked[0].to == weather.peer_id
+    assert not any(m.text == "rain?" for m in agent.heard if m.to is None)
+    await session.close()
+
+
+async def test_ask_keeps_the_status():
+    session, front = await remote(Agent(), Weather(Reply("which city?", status="asked")))
+    async with client(front) as c:
+        got = await call(c, "ask", peer="weather", text="rain?")
+    assert (got["status"], got["text"]) == ("asked", "which city?")
+    await session.close()
+
+
+async def test_ask_a_peer_that_fails():
+    session, front = await remote(Agent(), Weather(RuntimeError("boom")))
+    async def boom(msg):
+        raise RuntimeError("boom")
+    session._peers()[2].answer = boom
+    async with client(front) as c:
+        got = await call(c, "ask", peer="weather", text="?")
+    assert got["status"] == "error" and "failed" in got["text"]
+    await session.close()
+
+
+async def test_ask_in_time():
+    session, front = await remote(Weather(delay=0.6))
+    async with client(front) as c:
+        got = await call(c, "ask", peer="weather", text="slow?", deadline_ms=100)
+    assert got["status"] == "timeout"
+    await session.close()
+
+
+@connector("mute")
+class _Mute:
+    """In the session, but answers nothing."""
+
+
+@pytest.mark.parametrize("peers, peer, says", [
+    ((Weather(),), "nobody", "No peer named"),
+    ((Weather(), _Mute()), "mute", "does not answer"),
+    ((Weather(), Weather()), "weather", "Several peers"),
+    ((Weather(),), "master", "No peer named"),
+])
+async def test_ask_who_cannot_answer(peers, peer, says):
+    session, front = await remote(*peers)
+    async with client(front) as c:
+        got = await call(c, "ask", peer=peer, text="?")
+    assert got["status"] == "error" and says in got["text"]
+    await session.close()
+
+
+async def test_ask_lends_credentials():
+    agent = Agent(key=True)
+    session, front = await remote(agent, Weather(), credentials={"llm": "key"})
+    async with client(front) as c:
+        await c.call_tool("ask", {"peer": "agent", "text": "go"}, meta={CREDENTIALS_KEY: {"llm": "sk-a"}})
+    assert agent.keys == ["sk-a"]
+    assert [m for m in session._context() if m.text == "go"][0].credentials == {}
+    await session.close()
+
+
+# === The roster and the tools =======================================================
+
+@tool("eco", "Repeats what it is given")
+@require(HookExecute)
+class _EcoTool:
+    def __init__(self, delay=0.0):
+        self.delay = delay
+
+    async def execute(self, args="", by=LOCAL, **kwargs):
+        await asyncio.sleep(self.delay)
+        return Reply("eco: %s" % args)
+
+
+async def test_peers():
+    session, front = await remote(Agent(), Weather(), _Mute())
+    async with client(front) as c:
+        got = await call(c, "peers")
+    assert got["peers"] == [{"name": "agent", "answers": True}, {"name": "weather", "answers": True},
+                            {"name": "mute", "answers": False}]
+    assert "mute (does not answer)" in got["text"]
+    await session.close()
+
+
+async def test_tools():
+    session, front = await remote(Weather(), commands=[_EcoTool()])
+    async with client(front) as c:
+        got = await call(c, "tools")
+    assert got["tools"] == [{"name": "eco", "description": "Repeats what it is given"}]
+    assert got["text"] == "/eco - Repeats what it is given"
+    await session.close()
+
+
+async def test_run_a_tool():
+    session, front = await remote(Weather(), commands=[_EcoTool()])
+    async with client(front) as c:
+        got   = await call(c, "run", name="eco", args="hi")
+        slash = await call(c, "run", name="/eco")
+    assert (got["status"], got["text"]) == ("answered", "eco: hi")
+    assert slash["text"] == "eco: "
+    assert "/eco hi" in [m.text for m in session._context()]
+    await session.close()
+
+
+async def test_run_a_tool_that_does_not_exist():
+    session, front = await remote(Weather())
+    async with client(front) as c:
+        got = await call(c, "run", name="nope")
+    assert got["status"] == "error" and "No tool named" in got["text"]
+    await session.close()
+
+
+async def test_run_in_time():
+    session, front = await remote(Weather(), commands=[_EcoTool(delay=0.6)])
+    async with client(front) as c:
+        got = await call(c, "run", name="eco", deadline_ms=100)
+    assert got["status"] == "timeout"
     await session.close()
 
 

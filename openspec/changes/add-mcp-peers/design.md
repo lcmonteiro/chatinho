@@ -23,7 +23,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - Every piece is testable offline, with the SDK's in-process MCP client.
 
 **Non-Goals:**
-- Routes through several sessions (multi-hop) and choosing a remote peer from the client.
+- Routes through several sessions (multi-hop), and `McpConnector` choosing a remote peer (an MCP client can, with `ask`).
 - A peer router. Until there is one, the remote session sends a question to its only peer, or says it to the room.
 - Notifications and resource subscriptions.
 - Remote peers mirrored one-to-one in the local roster.
@@ -40,17 +40,21 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - **A failing `answer` is a reply.** Today a peer that raises in `answer` leaves its asker waiting forever. The session now sets the exception on a waiting ask, and when nobody awaits the message (a say asked of the lone peer) it posts an `error` reply to it, so the bridge ends in `error` at once.
 - **No peer per client.** The frontend listens and resolves its own waits (decisions 3 and 4), and adds or removes no peer.
 
-### 2. Wire format: one tool, a bridge
+### 2. Wire format: the terminal's tools
 `McpFrontend` uses the SDK's low-level `Server` (`on_list_tools`, `on_call_tool`), for full control over the tool schema and the request context.
-- **Tool:** `say` only. The server is a bridge: it publishes what a client says in the session and returns the first reply. There is no tool to list peers or commands, run commands, or read attachments later; attachments come back with the reply.
-- **`say` arguments:** `text`, `asker?`, `deadline_ms?`. There is no peer name: the session decides who replies.
-- **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, where `msg_id` is the reply's message id in the remote session (absent when no reply arrived),, also rendered as text for clients that only read text. `error` and `timeout` set `isError`.
+- **Tools:** what a person at the terminal can do, mirroring `ChatApp`'s grants. There is no tool to read attachments later; attachments come back with the reply.
+  - `say(text, asker?, deadline_ms?)`: the bridge. The frontend says the text in the session and returns the first reply; there is no peer name, so the session decides who replies (decision 4).
+  - `ask(peer, text, deadline_ms?)`: the frontend says the text addressed to the peer of that name (`say(..., to=)`), so it is asked of that peer, and returns its answer. An unknown name, a name several peers share, the frontend's own name, or a peer that does not declare `HookAnswer` is `error` at once.
+  - `peers()`: every peer but the frontend, as `peers: [{name, answers}]`, and a line each in the text.
+  - `tools()`: the session's commands, as `tools: [{name, description}]`, and `/name - description` lines in the text.
+  - `run(name, args?, deadline_ms?)`: runs a command through `invoke` (a leading `/` is accepted) and returns its answer as `answered`; an unknown command is `error`, and one that outlasts the deadline is `timeout`.
+- **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, where `msg_id` is the reply's message id in the remote session (absent when no reply arrived), also rendered as text for clients that only read text. `error` and `timeout` set `isError`.
 - **Read back:** `McpConnector` turns the result straight into its local `Reply`: `answered` keeps the text and attachments, `asked` becomes `ReplyStatus.ASKED`, and `error` and `timeout` become `ReplyStatus.ERROR` with the status named in the text.
 - *Alternative: FastMCP decorators.* They're quicker to write but hide the request context needed for client names and lent credentials.
 
 ### 3. The frontend speaks for every client
 The frontend is the session's peer zero, as a terminal is, and it handles every client itself.
-- **Receive:** a `say` tool call arrives, carrying its client's name in `_meta` `clientInfo.name`, made safe (no `/`, non-empty, `client` when missing).
+- **Receive:** a `say` or `ask` tool call arrives, carrying its client's name in `_meta` `clientInfo.name`, made safe (no `/`, non-empty, `client` when missing).
 - **Forward:** the frontend says the text in the session as its own message (decision 4).
 - **Route back:** it maps that message's id to the open question, which belongs to that client's call. The reply to that message resolves that question alone, and the result goes back on that client's call.
 - **Several clients:** their messages wait at once, each under its own message id, which `say` returns straight away.
@@ -64,7 +68,7 @@ The answering peers are those in `peers()` that declare `HookAnswer`, excluding 
 - **Follow-ups:** with one peer, the next message is a new say, asked of that peer, so the peer has the history. With several, the frontend remembers each asker's last reply in the room and says the next message with `reply_to` set to it, so the peer that replied sees it is for it. With one peer the follow-up must not be a reply, or the session would not ask it.
 - **Several peers, none listening:** a `say` reaches only peers that declare `HookListen`, so if none of the answering peers listens, nobody could ever reply. The result is `error` at once ("several peers and none listens; a peer router is needed") rather than a `timeout` after the whole deadline.
 - **No peer:** `error` at once.
-- *Alternative: let the client name the peer.* That's what a route did; it is dropped to keep one hop and let the remote side own routing, which a peer router will take over.
+- **Naming the peer:** `say` never names one, so the remote side owns routing until a peer router takes over; a client that knows whom it wants uses `ask`, which is one hop as well. An addressed say (`say(text, to=peer)`) is asked of that peer without waiting, so `ask` shares `say`'s machinery: the status, attachments, lent credentials, deadline and error reply.
 
 Every outcome maps to one result:
 
@@ -134,4 +138,3 @@ This is additive except for one rule: in a room where exactly one peer answers, 
 ## Open Questions
 
 - **Peer router:** how a remote session should pick the answering peer when it has several; this change only leaves room for it.
-- **Listing peers or commands over MCP:** dropped to keep the bridge to one tool; it can come back as a second tool if clients need it.

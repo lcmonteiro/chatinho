@@ -293,14 +293,17 @@ class ChatSession:
         async def say(
             text        : str,
             *,
+            to          : Optional[int] = None,
             reply_to    : Optional[MessageID] = None,
             attachments : Sequence[Attachment] = (),
             credentials : Optional[Dict[str, Secret]] = None,
         ) -> MessageID:
-            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=None, reply_to=reply_to)
+            if to is not None and (to not in self._connectors or to == frm):
+                raise ValueError("No other peer with id %d" % to)
+            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, reply_to=reply_to)
             if credentials is not None:
                 msg.credentials = credentials     # the lender's own mapping, so it can clear it
-            if reply_to is None and frm != TOOL:
+            if to is None and reply_to is None and frm != TOOL:
                 msg.to = self._only_answerer(frm)
             await self._kept(msg, attachments)
             return await self._post(msg)

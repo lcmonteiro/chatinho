@@ -118,7 +118,7 @@ A class that declares only grants is asked for nothing.
 
 ### HookSay
 
-> **grants** `say(text: str, *, reply_to: Optional[MessageID] = None, attachments: Sequence[Attachment] = (), credentials: Optional[Dict[str, Secret]] = None) -> MessageID`
+> **grants** `say(text: str, *, to: Optional[int] = None, reply_to: Optional[MessageID] = None, attachments: Sequence[Attachment] = (), credentials: Optional[Dict[str, Secret]] = None) -> MessageID`
 
 Says *text* to everyone but the speaker. Returns the new message's id. *text* is Markdown;
 *attachments* go to the backend under the new message's id — see [Attachments](#attachments).
@@ -131,6 +131,10 @@ await self.say("echo: good morning", reply_to=msg.id)   # a reply to a say is an
 `reply_to` does two things at once, and the second is easy to miss: it marks the reply in the log,
 **and** it is how an ask is answered late. A peer that returned `None` from `answer` resolves the
 waiting ask by saying the reply with `reply_to` set to the question's id.
+
+`to` addresses the message to one peer: it is asked of that peer, as an ask would be, but nobody
+waits on it — the answer comes back as a reply to it, and every listener still hears both. A `to`
+that is not another peer in the chat raises `ValueError`.
 
 *credentials* ride on the message — `msg.credentials`, keys by name wrapped in `Secret` — for whoever
 answers it, and nothing else: a peer can work with a different key for each message. They never

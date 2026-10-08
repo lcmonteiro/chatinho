@@ -36,8 +36,19 @@ Lets a peer say more about its answer than its text — that it answers with a q
 - **WHEN** a peer asks with `ask(to, "weather?")` and the answer is `sunny`
 - **THEN** `ask` returns `sunny`
 
+### Requirement: An addressed say is asked of its peer
+`say` SHALL take an optional `to`, a peer id. A say with `to` MUST be addressed to that peer: its `answer` is called, nobody waits on it, and its reply is posted with `reply_to` set to the say; everyone who listens still hears the say. A `to` that is not another peer in the chat MUST raise `ValueError`.
+
+#### Scenario: Said to one peer
+- **WHEN** a peer says "will it rain?" with `to` set to `eco`, in a room where two peers answer
+- **THEN** only `eco` is asked, and its answer replies to the say
+
+#### Scenario: Said to nobody
+- **WHEN** a peer says something with `to` set to an id that is not in the chat, or to itself
+- **THEN** `say` raises `ValueError`
+
 ### Requirement: A say in a room with one peer that answers is asked of it
-When a peer says something that is not a reply (`reply_to` is not set), and exactly one peer other than the speaker and the frontend declares `HookAnswer`, the session SHALL address the say to that peer: its `answer` MUST be called, and its reply posted with `reply_to` set to the say. Everyone who listens MUST still hear the say. What a command writes, a say that is a reply, and a say in a room with no such peer or with several MUST stay a broadcast. When the peer's `answer` raises and no `ask` waits on the message, the session MUST post an `error` reply to it.
+When a peer says something that is neither addressed (`to` is not set) nor a reply (`reply_to` is not set), and exactly one peer other than the speaker and the frontend declares `HookAnswer`, the session SHALL address the say to that peer: its `answer` MUST be called, and its reply posted with `reply_to` set to the say. Everyone who listens MUST still hear the say. What a command writes, a say that is a reply, and a say in a room with no such peer or with several MUST stay a broadcast. When the peer's `answer` raises and no `ask` waits on the message, the session MUST post an `error` reply to it.
 
 #### Scenario: One peer answers
 - **WHEN** a peer says "will it rain?" and the only other peer that answers is `weather`

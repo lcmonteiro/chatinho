@@ -150,6 +150,28 @@ async def test_what_a_command_writes_is_not_asked():
     await session.close()
 
 
+async def test_an_addressed_say_is_asked_of_that_peer():
+    one, two, falador = _Eco("sunny"), _Eco("rainy"), _Falador()
+    session, view = await driven(connectors=[one, two, falador])
+    said_id = await falador.say("will it rain?", to=two.peer_id)
+    await _settle()
+    assert one.asked == [] and [m.text for m in two.asked] == ["will it rain?"]
+    reply = view.context()[-1]
+    assert (reply.text, reply.reply_to) == ("rainy", said_id)
+    assert [m for m in view.context() if m.id == said_id][0] in view.heard
+    await session.close()
+
+
+async def test_a_say_to_nobody_is_refused():
+    falador = _Falador()
+    session, view = await driven(connectors=[_Eco(), falador])
+    with pytest.raises(ValueError):
+        await falador.say("?", to=99)
+    with pytest.raises(ValueError):
+        await falador.say("?", to=falador.peer_id)
+    await session.close()
+
+
 async def test_a_lone_peer_that_fails_replies_with_an_error():
     eco, falador = _Eco(RuntimeError("boom")), _Falador()
     session, view = await driven(connectors=[eco, falador])

@@ -49,11 +49,16 @@ class Say(Protocol):
         self,
         text        : str,
         *,
+        to          : Optional[int] = None,
         reply_to    : Optional[MessageID] = None,
         attachments : Sequence[Attachment] = (),
         credentials : Optional[Dict[str, Secret]] = None,
     ) -> MessageID:
         """Adds *text* to the conversation and returns the new message's id.
+
+        With *to*, the message is addressed: it is asked of that peer, without
+        waiting, and its answer comes back as a reply to it. Raises
+        ``ValueError`` when *to* is not another peer in the chat.
 
         *attachments* go to the backend, kept under the new message's id; its
         Markdown text can link to them by name. The message itself is text.
@@ -192,6 +197,9 @@ HookSay = Hook(
     # (not a command) in a room where exactly one peer answers — besides the
     # speaker and the frontend — is asked of that peer. Everyone who listens
     # still hears it; the answer comes back as a reply to it.
+    #
+    # say(text, to=peer) does that on purpose: an addressed say is asked of
+    # that peer and nobody waits on it — the answer is a reply like any other.
 )
 
 HookAsk = Hook(

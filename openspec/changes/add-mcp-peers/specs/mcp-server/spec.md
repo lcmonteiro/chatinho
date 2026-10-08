@@ -21,12 +21,34 @@ chatinho SHALL provide `McpFrontend` in `chatinho[mcp]`: a `@frontend` that serv
 - **WHEN** an HTTP request reaches the server without the configured bearer token
 - **THEN** it is refused and no peer is asked anything
 
-### Requirement: One tool, say
-The server SHALL expose exactly one MCP tool, `say(text, asker?, deadline_ms?)`, which works as a bridge: the frontend says the text in the session as its own message and returns the first reply to it. `say` MUST NOT take a peer name: the session decides who replies. Any other tool name MUST yield `error`.
+### Requirement: The terminal's tools
+The server SHALL expose the MCP tools `say`, `ask`, `peers`, `tools` and `run`: what a person at the terminal can do. `say(text, asker?, deadline_ms?)` works as a bridge: the frontend says the text in the session as its own message and returns the first reply to it; it MUST NOT take a peer name, so the session decides who replies. Any other tool name MUST yield `error`.
 
-#### Scenario: One tool
+#### Scenario: The tools
 - **WHEN** a client lists the server's tools
-- **THEN** the only tool is `say`, and it has no peer parameter
+- **THEN** they are `say`, `ask`, `peers`, `tools` and `run`, and `say` has no peer parameter
+
+### Requirement: Asking one peer
+`ask(peer, text, deadline_ms?)` SHALL say the text in the session addressed to the peer of that name, so it is asked of that peer, and return its answer under the same one-result rule as `say`, with the same deadline and lent credentials. When no peer other than the frontend has that name, several do, or the peer does not declare `HookAnswer`, the result MUST be `error` at once.
+
+#### Scenario: Asked by name
+- **WHEN** a client asks `weather` "rain?" in a session with peers `agent` and `weather`
+- **THEN** only `weather` is asked, and its answer is the result
+
+#### Scenario: Nobody by that name
+- **WHEN** a client asks a peer name that is not in the session
+- **THEN** the result is `error` saying no peer has that name
+
+### Requirement: The roster and the tools
+`peers()` SHALL list every peer but the frontend, each with its name and whether it answers. `tools()` SHALL list the session's commands, each with its name and description. `run(name, args?, deadline_ms?)` SHALL run the named command, with or without a leading `/`, and return what it answered as `answered`; an unknown command MUST yield `error`, and a command still running at the deadline MUST yield `timeout`.
+
+#### Scenario: Listing peers
+- **WHEN** a client calls `peers` in a session with `agent` and a peer `mute` that does not answer
+- **THEN** the result lists `agent` as answering and `mute` as not
+
+#### Scenario: Running a tool
+- **WHEN** a client runs `eco` with `hi` and the command answers `eco: hi`
+- **THEN** the result is `answered` with text `eco: hi`
 
 ### Requirement: The session decides who replies
 For each `say`, the frontend SHALL count the session's answering peers: peers that declare `HookAnswer`, excluding the frontend. With exactly one, the session asks it the say (see `answer-details`). With more than one, the say goes to the room and the first message that replies to it is the result; later replies stay in the conversation but are not returned. A said message reaches only peers that declare `HookListen`, so when several peers answer and none of them listens, the result MUST be `error` at once instead of waiting for the deadline. With none, the result MUST be `error`. This rule stands in for a future peer router.

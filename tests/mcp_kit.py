@@ -24,11 +24,11 @@ from chatinho import (
 from chatinho.frontends.mcp import McpFrontend
 
 
-async def remote(*peers: Any, backend: Any = None, **options: Any):
-    """A started session served by an McpFrontend, with *peers* in it."""
+async def remote(*peers: Any, backend: Any = None, commands: Any = (), **options: Any):
+    """A started session served by an McpFrontend, with *peers* and *commands* in it."""
     options.setdefault("token", "t")
     front   = McpFrontend(**options)
-    session = ChatSession(frontend=front, connectors=list(peers), backend=backend)
+    session = ChatSession(frontend=front, connectors=list(peers), commands=list(commands), backend=backend)
     await session.start()
     return session, front
 
@@ -41,6 +41,12 @@ def client(front: McpFrontend, name: str = "lab") -> Client:
 async def say(c: Client, text: str, **args: Any) -> dict:
     """Calls the say tool and returns its structured result."""
     res = await c.call_tool("say", {"text": text, **args})
+    return res.structured_content
+
+
+async def call(c: Client, tool: str, **args: Any) -> dict:
+    """Calls any of the frontend's tools and returns its structured result."""
+    res = await c.call_tool(tool, args)
     return res.structured_content
 
 

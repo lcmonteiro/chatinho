@@ -2,7 +2,7 @@
 
 :class:`McpConnector` is an ordinary connector: it appears in the chat under a
 name it chooses (``@lab``), and a message addressed to it — ``@lab will it
-rain?`` — is said in the remote session through its one ``say`` tool, and the
+rain?`` — is said in the remote session through its ``say`` tool, and the
 first reply to it comes back.
 Exactly one reply comes back for every such message.
 
