@@ -24,37 +24,23 @@ import hmac
 import logging
 import re
 from dataclasses import dataclass
-from typing import Annotated, Any, Dict, List, Optional, Sequence, Tuple
+from typing import Annotated, Any, Dict, List, Optional, Tuple
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 import mcp_types as types
 from fastmcp import Context, FastMCP
+from fastmcp.exceptions import ToolError
 from fastmcp.server.auth import AccessToken, TokenVerifier
 from fastmcp.server.extensions import ServerExtension
-from fastmcp.tools.base import ToolResult
 from pydantic import BaseModel, Field
 
-from chatinho.chat_hooks import (
-    HookAnswer,
-    HookCommands,
-    HookInvoke,
-    HookListen,
-    HookLocate,
-    HookPeers,
-    HookSay,
-    Commands,
-    Invoke,
-    Locate,
-    Peers,
-    Say,
-    declares,
-    frontend,
-    name_of,
-    require,
-)
+from chatinho.chat_hooks import HookAnswer, HookCommands, HookInvoke, HookListen, HookLocate, HookPeers
+from chatinho.chat_hooks import HookSay
+from chatinho.chat_hooks import Commands, Invoke, Locate, Peers, Say
+from chatinho.chat_hooks import declares, frontend, name_of, require
 from chatinho.chat_message import LOCAL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
-from chatinho.helpers.mcp import CREDENTIALS_KEY, encode, media_type_of, safe_name
+from chatinho.helpers.mcp import CREDENTIALS_KEY, encode, media_type_of
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +64,16 @@ class _Message:
 
 
 _Text = Annotated[str, Field(description="What to say.")]
+
+
+class Answer(BaseModel):
+    """What ``say``, ``ask`` and ``run`` return; a failure is a tool error instead."""
+
+    status      : ReplyStatus = Field(description="answered, or asked: a question back to you.")
+    text        : str
+    #: Each attachment as ``{name, media_type, data_b64}``.
+    attachments : List[Dict[str, str]] = Field(default_factory=list)
+    msg_id      : Optional[str] = Field(default=None, description="The reply's message id in this session.")
 
 
 class PeerInfo(BaseModel):
@@ -191,31 +187,29 @@ class McpFrontend:
         text        : _Text,
         ctx         : Context,
         asker       : Annotated[Optional[str], Field(description="Who says it, for follow-ups.")] = None,
-    ) -> ToolResult:
+    ) -> Answer:
         """Say something in this chatinho session, and get the first reply to it.
 
         When one peer answers in the session, it is asked of that peer; when
-        several do, it is said to the room. The result is exactly one of:
-        answered, asked (a question back to you) or error.
+        several do, it is said to the room. The answer is answered or asked (a
+        question back to you); a failure is a tool error.
         """
-        def send(client: str, meta: Dict[str, Any]) -> Any:
-            return self._forward(client, asker, text, meta)
-        return await self._bridged("say", ctx, text, send)
+        client, meta = _caller(ctx)
+        return await self._wait(await self._forward(client, asker, text, meta))
 
     async def _ask(
         self,
         peer        : Annotated[str, Field(description="The peer's name.")],
         text        : _Text,
         ctx         : Context,
-    ) -> ToolResult:
+    ) -> Answer:
         """Ask one peer of this session, by name (see peers), and get its answer.
 
-        The result is exactly one of: answered, asked (a question back to you)
-        or error.
+        The answer is answered or asked (a question back to you); a failure is a
+        tool error.
         """
-        def send(client: str, meta: Dict[str, Any]) -> Any:
-            return self._asked(client, peer, text, meta)
-        return await self._bridged("ask", ctx, text, send)
+        client, meta = _caller(ctx)
+        return await self._wait(await self._asked(client, peer, text, meta))
 
     async def _peers(self) -> List[PeerInfo]:
         """Lists the peers in this session, and whether each one answers what it is asked."""
@@ -231,54 +225,28 @@ class McpFrontend:
         self,
         name        : Annotated[str, Field(description="The tool's name, without the slash.")],
         args        : Annotated[str, Field(description="Its arguments, as typed after its name.")] = "",
-    ) -> ToolResult:
+    ) -> Answer:
         """Runs one of this session's tools (see tools) and returns what it answered."""
         name = name.lstrip("/")
         if name not in self.commands():
-            return _result(ReplyStatus.ERROR, "No tool named %r in this session" % name)
-        try:
-            said = await self.invoke(name, args)
-        except Exception as exc:
-            logger.error("run /%s failed", name, exc_info=True)
-            return _result(ReplyStatus.ERROR, "/%s failed: %s" % (name, type(exc).__name__))
-        return _result(ReplyStatus.ANSWERED, said or "")
-
-    # === One call ===================================================================
-
-    async def _bridged(self, tool: str, ctx: Context, text: str, send: Any) -> ToolResult:
-        """Sends one message for a ``say`` or ``ask`` call, and waits for its one result."""
-        meta   = dict(ctx.request_context.meta or {}) if ctx.request_context is not None else {}
-        info   = meta.get(types.CLIENT_INFO_META_KEY) or {}
-        client = safe_name(info.get("name") if isinstance(info, dict) else None, "client")
-        if not text.strip():
-            return _result(ReplyStatus.ERROR, "%s needs a text" % tool)
-        try:
-            message = await send(client, meta)
-            if isinstance(message, ToolResult):
-                return message
-            try:
-                return await self._wait(message)
-            finally:
-                self._close(message)          # however the call ended, even cancelled
-        except Exception as exc:
-            logger.error("%s failed for %s", tool, client, exc_info=True)
-            return _result(ReplyStatus.ERROR, "%s failed: %s" % (tool, type(exc).__name__))
+            raise ToolError("No tool named %r in this session" % name)
+        return Answer(status=ReplyStatus.ANSWERED, text=await self.invoke(name, args) or "")
 
     # === One message ================================================================
 
     async def _asked(
         self, client: str, peer: str, text: str, meta: Dict[str, Any],
-    ) -> Any:
-        """Asks *text* of the peer named *peer* for *client*; an error result if it cannot answer."""
+    ) -> _Message:
+        """Asks *text* of the peer named *peer* for *client*."""
         named = [(at, who) for at, who in sorted(self.peers().items())
                  if at != LOCAL and name_of(who) == peer]
         if not named:
-            return _result(ReplyStatus.ERROR, "No peer named %r in this session" % (peer,))
+            raise ToolError("No peer named %r in this session" % (peer,))
         if len(named) > 1:
-            return _result(ReplyStatus.ERROR, "Several peers are named %r; ask with say instead" % peer)
+            raise ToolError("Several peers are named %r; ask with say instead" % peer)
         at, who = named[0]
         if not declares(who, HookAnswer):
-            return _result(ReplyStatus.ERROR, "%s does not answer what it is asked" % peer)
+            raise ToolError("%s does not answer what it is asked" % peer)
         message = self._message(client, "", meta)
         message.msg_id = await self.say(text, to=at, credentials=message.credentials)
         self._open[message.msg_id] = message
@@ -286,15 +254,14 @@ class McpFrontend:
 
     async def _forward(
         self, client: str, asker: Any, text: str, meta: Dict[str, Any],
-    ) -> Any:
-        """Says *text* in the session for *client*; an error result if nobody could reply."""
+    ) -> _Message:
+        """Says *text* in the session for *client*."""
         answering = self._answering()
         if not answering:
-            return _result(ReplyStatus.ERROR, "No peer in this session can answer")
+            raise ToolError("No peer in this session can answer")
         room = len(answering) > 1
         if room and not any(declares(who, HookListen) for _, who in answering):
-            return _result(ReplyStatus.ERROR,
-                           "Several peers could answer and none listens to the room; a peer router is needed")
+            raise ToolError("Several peers could answer and none listens; a peer router is needed")
 
         message      = self._message(client, asker, meta)
         message.room = room
@@ -305,19 +272,25 @@ class McpFrontend:
         self._open[message.msg_id] = message
         return message
 
-    async def _wait(self, message: _Message) -> ToolResult:
-        """Waits for the first reply to *message*."""
-        reply = await message.reply
+    async def _wait(self, message: _Message) -> Answer:
+        """Waits for the first reply to *message*, and lets go of it however the wait ends."""
+        try:
+            reply = await message.reply
+        finally:
+            self._close(message)
+        if reply.status is ReplyStatus.ERROR:
+            raise ToolError(reply.text)
         if message.room:
             self._last_heard[message.asker] = reply.id
         attachments = await self._attachments_of(reply.id, reply.text)
-        return _result(ReplyStatus(reply.status), reply.text, attachments, str(reply.id))
+        return Answer(status=reply.status, text=reply.text, msg_id=str(reply.id),
+                      attachments=[encode(item) for item in attachments])
 
     def _message(self, client: str, asker: Any, meta: Dict[str, Any]) -> _Message:
         """A new message in flight for *client*, with the credentials lent with it."""
         return _Message(
             client      = client,
-            asker       = (client, safe_name(asker, "")),
+            asker       = (client, asker or ""),
             credentials = self._lent(meta),
             reply       = asyncio.get_running_loop().create_future(),
         )
@@ -358,39 +331,13 @@ class McpFrontend:
         return found
 
 
-# === What goes back to the client ================================================
+# === Helpers ======================================================================
 
-def _result(
-    status      : ReplyStatus,
-    text        : str,
-    attachments : Sequence[Attachment] = (),
-    msg_id      : Optional[str] = None,
-) -> ToolResult:
-    """Builds the result of one tool call.
-
-    The structured content is what a chatinho client reads; the text block is
-    for clients that only read text. ``error`` is a tool error.
-
-    Args:
-        status: How the reply describes itself.
-        text: What to say.
-        attachments: What the answer attached.
-        msg_id: The reply's message id in this session, when a reply arrived.
-
-    Returns:
-        ToolResult: Ready to return from a tool.
-    """
-    shown = text if status is ReplyStatus.ANSWERED else "[%s] %s" % (status.value, text)
-    return ToolResult(
-        content=shown,
-        structured_content={
-            "status"      : status.value,
-            "text"        : text,
-            "attachments" : [encode(item) for item in attachments],
-            "msg_id"      : msg_id,
-        },
-        is_error=status is ReplyStatus.ERROR,
-    )
+def _caller(ctx: Context) -> Tuple[str, Dict[str, Any]]:
+    """The calling client's name, and the request's ``_meta``."""
+    meta = dict(ctx.request_context.meta or {}) if ctx.request_context is not None else {}
+    info = meta.get(types.CLIENT_INFO_META_KEY) or {}
+    return str(info.get("name") or "client") if isinstance(info, dict) else "client", meta
 
 
 def _linked_names(text: str) -> List[str]:

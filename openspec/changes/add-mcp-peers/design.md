@@ -49,14 +49,14 @@ See proposal.md for why. What the code has today, and what shapes the approach:
   - `peers()`: every peer but the frontend, as a typed list of `PeerInfo(name, answers)`; a FastMCP client reads it back as objects from `result.data`.
   - `tools()`: the session's commands, as a typed list of `ToolInfo(name, description)`.
   - `run(name, args?)`: runs a command through `invoke` (a leading `/` is accepted) and returns its answer as `answered`; an unknown or failing command is `error`.
-- **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, where `msg_id` is the reply's message id in the remote session (absent when no reply arrived), also rendered as text for clients that only read text. `error` sets `isError`.
-- **Read back:** `McpConnector` turns the result straight into its local `Reply`: `answered` keeps the text and attachments, `asked` becomes `ReplyStatus.ASKED`, and `error` becomes `ReplyStatus.ERROR` with the status named in the text.
-- **Shared code:** the credentials key, safe names and the attachment encoding live in `chatinho/helpers/mcp.py`, standard library only, so each end imports them without the other.
+- **Result:** `say`, `ask` and `run` return an `Answer` model, `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, with `status` `answered` or `asked` and `msg_id` the reply's message id in the remote session; FastMCP sends it as structured content and as JSON text. A failure, including a reply whose status is `error`, raises `ToolError` with the message, so it is a tool error (`isError`) carrying only that text.
+- **Read back:** `McpConnector` turns the result straight into its local `Reply`: a tool error becomes `ReplyStatus.ERROR` naming the remote session, `asked` becomes `ReplyStatus.ASKED`, and anything else is `answered` with its text and attachments.
+- **Shared code:** the credentials key and the attachment encoding live in `chatinho/helpers/mcp.py`, standard library only, so each end imports them without the other.
 - *Alternative, the earlier draft: the SDK's low-level `Server` (`on_list_tools`, `on_call_tool`).* It gave full control, but the tool schemas, the dispatch by name, the extension and the bearer check were all hand-written; FastMCP gives the same request context with far less code.
 
 ### 3. The frontend speaks for every client
 The frontend is the session's peer zero, as a terminal is, and it handles every client itself.
-- **Receive:** a `say` or `ask` tool call arrives, carrying its client's name in `_meta` `clientInfo.name`, made safe (no `/`, non-empty, `client` when missing).
+- **Receive:** a `say` or `ask` tool call arrives, carrying its client's name in `_meta` `clientInfo.name` (`client` when missing).
 - **Forward:** the frontend says the text in the session as its own message (decision 4).
 - **Route back:** it maps that message's id to the open question, which belongs to that client's call. The reply to that message resolves that question alone, and the result goes back on that client's call.
 - **Several clients:** their messages wait at once, each under its own message id, which `say` returns straight away.

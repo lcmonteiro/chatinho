@@ -1,4 +1,4 @@
-"""What ``McpFrontend`` and ``McpConnector`` agree on: the credentials key, names and attachments.
+"""What ``McpFrontend`` and ``McpConnector`` agree on: the credentials key and attachments.
 
 Standard library only, so either end can import it without the other.
 """
@@ -12,19 +12,6 @@ from chatinho.chat_message import Attachment
 #: Where a client puts the credentials it lends, in a request's ``_meta``, and
 #: the capability extension a server declares the ones it accepts under.
 CREDENTIALS_KEY : str = "chatinho/credentials"
-
-
-def safe_name(raw: Any, default: str) -> str:
-    """A name that can stand in a peer path: non-empty, with no ``/``.
-
-    Args:
-        raw: What the other side called itself; anything.
-        default: What to use when *raw* gives nothing usable.
-    """
-    if not isinstance(raw, str):
-        return default
-    name = " ".join(raw.replace("/", "-").split())
-    return name or default
 
 
 def media_type_of(name: str) -> str:

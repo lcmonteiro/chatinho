@@ -7,20 +7,9 @@ from typing import Any, List, Optional
 import mcp_types as types
 from fastmcp import Client
 
-from chatinho import (
-    LOCAL,
-    ChatSession,
-    HookAnswer,
-    HookKeep,
-    HookLink,
-    HookListen,
-    HookPeers,
-    HookSay,
-    Reply,
-    backend,
-    connector,
-    require,
-)
+from chatinho import HookAnswer, HookKeep, HookLink, HookListen, HookPeers, HookSay
+from chatinho import LOCAL, ChatSession, Reply
+from chatinho import backend, connector, require
 from chatinho.frontends.mcp import McpFrontend
 
 
@@ -39,14 +28,15 @@ def client(front: McpFrontend, name: str = "lab") -> Client:
 
 
 async def say(c: Client, text: str, **args: Any) -> dict:
-    """Calls the say tool and returns its structured result."""
-    res = await c.call_tool_mcp("say", {"text": text, **args})
-    return res.structured_content
+    """Calls the say tool; see :func:`call`."""
+    return await call(c, "say", text=text, **args)
 
 
 async def call(c: Client, tool: str, **args: Any) -> dict:
-    """Calls any of the frontend's tools and returns its structured result."""
+    """Calls one of the frontend's tools: its answer, or ``{status: error, text}`` for a tool error."""
     res = await c.call_tool_mcp(tool, args)
+    if res.is_error:
+        return {"status": "error", "text": res.content[0].text}
     return res.structured_content
 
 

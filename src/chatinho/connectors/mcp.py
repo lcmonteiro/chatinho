@@ -19,16 +19,10 @@ from urllib.parse import urlparse
 import mcp_types as types
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
-from chatinho.chat_hooks import (
-    HookAnswer,
-    HookPeers,
-    Peers,
-    connector,
-    name_of,
-    require,
-)
+from chatinho.chat_hooks import HookAnswer, HookPeers, Peers
+from chatinho.chat_hooks import connector, name_of, require
 from chatinho.chat_message import ChatMessage, Reply, ReplyStatus
-from chatinho.helpers.mcp import CREDENTIALS_KEY, decode, safe_name
+from chatinho.helpers.mcp import CREDENTIALS_KEY, decode
 
 logger = logging.getLogger(__name__)
 
@@ -36,26 +30,21 @@ logger = logging.getLogger(__name__)
 # === What comes back from the server ==============================================
 
 def _reply_from(res: types.CallToolResult, name: str) -> Reply:
-    """The local reply for what ``McpFrontend`` wrote, or the best of a plain result.
+    """The local reply for what came back from the remote session.
 
-    ``answered`` keeps the text and attachments; ``asked`` becomes a question
-    from the remote session; ``error`` becomes a short error.
-    A server that is not a chatinho session answers with text alone: that is
-    answered, or an error when the result is marked as one.
+    A tool error is an ``ERROR`` reply naming the remote session. Otherwise the
+    status is the remote reply's own ``ReplyStatus``: ``ANSWERED`` keeps the text
+    and attachments, ``ASKED`` is a question back from the remote session. A
+    server that is not a chatinho session answers with text alone: ``ANSWERED``.
     """
-    data = res.structured_content
-    if isinstance(data, dict) and data.get("status") in {status.value for status in ReplyStatus}:
-        status = data["status"]
-        text   = str(data.get("text", ""))
-    else:
-        status = "error" if res.is_error else "answered"
-        text   = "\n".join(block.text for block in res.content if isinstance(block, types.TextContent))
-        data   = {}
-    if status == "answered":
-        return Reply(text, tuple(decode(item) for item in data.get("attachments") or ()))
-    if status == "asked":
+    plain = "\n".join(block.text for block in res.content if isinstance(block, types.TextContent))
+    if res.is_error:
+        return Reply("%s: error — %s" % (name, plain), status=ReplyStatus.ERROR)
+    data = res.structured_content if isinstance(res.structured_content, dict) else {}
+    text = str(data.get("text", plain))
+    if data.get("status") == ReplyStatus.ASKED:
         return Reply("%s asks: %s" % (name, text), status=ReplyStatus.ASKED)
-    return Reply("%s: %s — %s" % (name, status, text), status=ReplyStatus.ERROR)
+    return Reply(text, tuple(decode(item) for item in data.get("attachments") or ()))
 
 
 @connector("mcp")
@@ -101,7 +90,7 @@ class McpConnector:
         self._token      = token
         self._server     = server
         self._named      = name is not None
-        self.name        = safe_name(name, "mcp") if name is not None else "mcp"
+        self.name        = name or "mcp"
         self._delegate   = dict(delegate or {})
         self._client     : Any = self._make_client()
 
@@ -122,7 +111,7 @@ class McpConnector:
             logger.warning("%s could not reach its server: %s", self.name, exc)
             return
         if found is not None:
-            self.name    = safe_name(found.name, self.name)
+            self.name    = found.name or self.name
             self._named  = True
             self._client = self._make_client()      # so the server sees the real name
 

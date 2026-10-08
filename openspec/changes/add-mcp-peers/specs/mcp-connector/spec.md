@@ -33,7 +33,7 @@ The connector SHALL send a question only when it is asked (`HookAnswer`); it MUS
 - **THEN** the session asks the connector, by the core rule, and the connector asks the remote session `will it rain?`
 
 ### Requirement: Every question gets one answer
-For every question it is asked, the connector SHALL answer exactly once: the remote answer's text, with its attachments attached, when the status is `answered`; the remote peer's question, marked as a question back to the asker, for `asked`; and a short message naming the status for `error`. Losing the connection MUST also produce a reply saying so.
+For every question it is asked, the connector SHALL answer exactly once: the remote answer's text, with its attachments attached, when the status is `answered`; the remote peer's question, marked as a question back to the asker, for `asked`; and a short error naming the remote session for a tool error. Losing the connection MUST also produce a reply saying so.
 
 #### Scenario: Answer with an attachment
 - **WHEN** the remote answer is `answered` with attachment `chart.svg`

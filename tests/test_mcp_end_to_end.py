@@ -2,18 +2,10 @@
 
 import asyncio
 
-from chatinho import (
-    LOCAL,
-    Attachment,
-    ChatSession,
-    Context,
-    HookContext,
-    HookListen,
-    HookSay,
-    Say,
-    frontend,
-    require,
-)
+from chatinho import HookContext, HookListen, HookSay
+from chatinho import Context, Say
+from chatinho import LOCAL, Attachment, ChatSession
+from chatinho import frontend, require
 from chatinho.connectors.mcp import McpConnector
 from chatinho.frontends.mcp import McpFrontend
 from mcp_kit import Agent, Files, Weather
