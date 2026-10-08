@@ -79,4 +79,3 @@ def test_both_ends_agree_on_the_contract():
     assert frontend.CREDENTIALS_KEY == connector.CREDENTIALS_KEY
     assert frontend.STATUSES == connector.STATUSES
     assert set(frontend.STATUSES) == {s.value for s in ReplyStatus} | {"timeout"}
-    assert frontend.DEFAULT_DEADLINE == connector.DEFAULT_DEADLINE

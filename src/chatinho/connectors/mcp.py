@@ -13,7 +13,6 @@ to this machine. Without
 ``delegate``, no key ever leaves this machine.
 """
 
-import asyncio
 import base64
 import ipaddress
 import logging
@@ -45,9 +44,6 @@ STATUSES : Tuple[str, ...] = ("answered", "asked", "error", "timeout")
 #: Where a client puts the credentials it lends, in a request's ``_meta``, and
 #: the capability extension a server declares the ones it accepts under.
 CREDENTIALS_KEY : str = "chatinho/credentials"
-
-#: How long a message may wait for its reply when nobody says otherwise, in seconds.
-DEFAULT_DEADLINE : float = 120.0
 
 
 # === What comes back from the server ==============================================
@@ -100,11 +96,6 @@ def _safe_name(raw: Any, default: str) -> str:
 def _media_type_of(name: str) -> str:
     """The media type a file called *name* most likely holds."""
     return mimetypes.guess_type(name)[0] or "application/octet-stream"
-
-#: How much longer than its deadline a question may take before the link is
-#: taken to be hung. The server answers within the deadline; this only guards
-#: against a server that never does.
-_GRACE : float = 30.0
 
 
 @connector("mcp")
@@ -227,22 +218,16 @@ class McpConnector:
         args : Dict[str, Any] = {"text": text, "asker": asker}
         if self.deadline is not None:
             args["deadline_ms"] = int(self.deadline * 1000)
-        limit = (self.deadline or DEFAULT_DEADLINE * 5) + _GRACE
         try:
             async with self._client as client:
                 if client.protocol_version not in MODERN_PROTOCOL_VERSIONS:
                     raise RuntimeError("The server speaks only the handshake-era MCP protocol")
-                meta = self._lending(client)
-                got  = await asyncio.wait_for(
-                    client.call_tool("say", args, meta=meta, raise_on_error=False), limit)
-        except asyncio.TimeoutError:
-            return Reply("%s: timeout — the remote session never answered" % self.name,
-                         status=ReplyStatus.ERROR)
+                result = await client.call_tool("say", args, meta=self._lending(client), raise_on_error=False)
         except Exception as exc:
             logger.warning("%s could not ask its server: %r", self.name, exc)
             return Reply("%s: could not reach the remote session (%s)" % (self.name, type(exc).__name__),
                          status=ReplyStatus.ERROR)
-        return _reply_from(got, self.name)
+        return _reply_from(result, self.name)
 
     # === Lending ====================================================================
 
