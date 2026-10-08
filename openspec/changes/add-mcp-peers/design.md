@@ -48,8 +48,8 @@ See proposal.md for why. What the code has today, and what shapes the approach:
   - `ask(peer, text)`: the frontend says the text addressed to the peer of that name (`say(..., to=)`), so it is asked of that peer, and returns its answer. An unknown name, a name several peers share, the frontend's own name, or a peer that does not declare `HookAnswer` is `error` at once.
   - `peers()`: every peer but the frontend, as a typed list of `PeerInfo(name, answers)`; a FastMCP client reads it back as objects from `result.data`.
   - `tools()`: the session's commands, as a typed list of `ToolInfo(name, description)`.
-  - `run(name, args?)`: runs a command through `invoke` (a leading `/` is accepted) and returns its answer as `answered`; an unknown or failing command is `error`.
-- **Result:** `say`, `ask` and `run` return an `Answer` model, `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, with `status` `answered` or `asked` and `msg_id` the reply's message id in the remote session; FastMCP sends it as structured content and as JSON text. A failure, including a reply whose status is `error`, raises `ToolError` with the message, so it is a tool error (`isError`) carrying only that text.
+  - `invoke(name, args?)`: runs a command through the `invoke` grant (a leading `/` is accepted) and returns its answer as `answered`; an unknown or failing command is `error`.
+- **Result:** `say`, `ask` and `invoke` return an `Answer` model, `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, with `status` `answered` or `asked` and `msg_id` the reply's message id in the remote session; FastMCP sends it as structured content and as JSON text. A failure, including a reply whose status is `error`, raises `ToolError` with the message, so it is a tool error (`isError`) carrying only that text.
 - **Read back:** `McpConnector` turns the result straight into its local `Reply`: a tool error becomes `ReplyStatus.ERROR` naming the remote session, `asked` becomes `ReplyStatus.ASKED`, and anything else is `answered` with its text and attachments.
 - **Shared code:** the credentials key and the attachment encoding live in `chatinho/helpers/mcp.py`, standard library only, so each end imports them without the other.
 - *Alternative, the earlier draft: the SDK's low-level `Server` (`on_list_tools`, `on_call_tool`).* It gave full control, but the tool schemas, the dispatch by name, the extension and the bearer check were all hand-written; FastMCP gives the same request context with far less code.
@@ -61,7 +61,7 @@ The frontend is the session's peer zero, as a terminal is, and it handles every 
 - **Route back:** it maps that message's id to the open question, which belongs to that client's call. The reply to that message resolves that question alone, and the result goes back on that client's call.
 - **Several clients:** their messages wait at once, each under its own message id, which `say` returns straight away.
 - **Follow-ups:** the frontend keeps the last answer per `(client, asker)`, using the `asker` name the connector sends.
-- **Asking the frontend:** a peer that asks it gets `Reply("Nobody is at this session's terminal…", status="error")`. An answer that arrives after its question ended is only heard.
+- **Asking the frontend:** it does not declare `HookAnswer`, since nobody is at its terminal; the ask/answer pair is not supported. An answer that arrives after its question ended is only heard.
 - *Alternative, the earlier draft: one proxy peer per asker, named `<client>/<asker>`.* It let remote peers tell askers apart, but it needed peers added and removed at run time (`remove_connector`, idle expiry). It is dropped: the frontend manages the connections, and the core stays as it is.
 
 ### 4. Who answers, and the one-result guarantee
@@ -107,7 +107,7 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - `McpConnector` holds one `fastmcp.Client` and opens it per question (`async with client: await client.call_tool("say", …)`); the protocol is stateless, so no link stays open between questions and there is nothing to close at `shutdown()`. `initialize()` opens it once to take the server's name when none was given. It doesn't implement `serve()`, because a dropped link must not end the local chat.
 - The connector refuses a server that only speaks the handshake era. Each request is independent; a failed call answers `error` ("could not reach …"), and the client is reopened lazily on the next question.
 - **Transport:** Streamable HTTP only, `url=…, token=…` with a `Bearer` header, or `server=…` for an in-process server in tests and embedding. There is no stdio transport on either side.
-- `McpFrontend(name="master", *, token, host, port, credentials)`; the token is required, and the name is the frontend's peer name and the server's name. Its `serve()` runs FastMCP's Streamable HTTP app under Uvicorn, with a `TokenVerifier` that compares the bearer token in constant time, and `shutdown()` stops it.
+- `McpFrontend(name="master", *, token, host, port, credentials)`; the token is required, and the name is the frontend's peer name and the server's name. Its `serve()` awaits FastMCP's own `run_async(transport="http")`, with a `TokenVerifier` that compares the bearer token in constant time, and `shutdown()` cancels it.
 - *Alternative: stdio as well.* Dropped: a session served over MCP is reached from another machine, and one transport, always behind a token, keeps both ends simpler.
 
 ### 9. Packaging

@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from chatinho import LOCAL, Attachment, HookAnswer, HookAsk, HookExecute, Reply, connector, require, tool
+from chatinho import LOCAL, Attachment, HookAnswer, HookExecute, Reply, connector, declares, require, tool
 from chatinho.frontends.mcp import McpFrontend
 from chatinho.helpers.mcp import CREDENTIALS_KEY, decode
 from mcp_kit import Agent, Files, Weather, call, client, remote, say
@@ -34,10 +34,10 @@ async def test_what_a_terminal_can_do():
     async with client(front) as c:
         tools = {t.name: t for t in await c.list_tools()}
         other = await c.call_tool_mcp("forget", {})
-    assert list(tools) == ["say", "ask", "peers", "tools", "run"]
+    assert list(tools) == ["say", "ask", "peers", "tools", "invoke"]
     assert set(tools["say"].input_schema["properties"]) == {"text", "asker"}
     assert set(tools["ask"].input_schema["properties"]) == {"peer", "text"}
-    assert set(tools["run"].input_schema["properties"]) == {"name", "args"}
+    assert set(tools["invoke"].input_schema["properties"]) == {"name", "args"}
     assert other.is_error
     await session.close()
 
@@ -111,18 +111,8 @@ async def test_two_clients_at_once():
     await session.close()
 
 
-async def test_asking_the_frontend():
-    @connector("curious")
-    @require(HookAsk)
-    class _Curious:
-        pass
-
-    curious = _Curious()
-    session, front = await remote(Weather(), curious)
-    got = await curious.ask(LOCAL, "anyone there?")
-    assert "Nobody" in got
-    assert session._context()[-1].status == "error"
-    await session.close()
+def test_the_frontend_is_never_asked():
+    assert not declares(McpFrontend(token="t"), HookAnswer)
 
 
 # === Who replies ===================================================================
@@ -285,21 +275,21 @@ async def test_tools():
     await session.close()
 
 
-async def test_run_a_tool():
+async def test_invoke_a_tool():
     session, front = await remote(Weather(), commands=[_EcoTool()])
     async with client(front) as c:
-        got   = await call(c, "run", name="eco", args="hi")
-        slash = await call(c, "run", name="/eco")
+        got   = await call(c, "invoke", name="eco", args="hi")
+        slash = await call(c, "invoke", name="/eco")
     assert (got["status"], got["text"]) == ("answered", "eco: hi")
     assert slash["text"] == "eco: "
     assert "/eco hi" in [m.text for m in session._context()]
     await session.close()
 
 
-async def test_run_a_tool_that_does_not_exist():
+async def test_invoke_a_tool_that_does_not_exist():
     session, front = await remote(Weather())
     async with client(front) as c:
-        got = await call(c, "run", name="nope")
+        got = await call(c, "invoke", name="nope")
     assert got["status"] == "error" and "No tool named" in got["text"]
     await session.close()
 

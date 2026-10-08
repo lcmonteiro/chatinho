@@ -233,7 +233,7 @@ async with client:
 ```
 
 - **The terminal's tools.** `McpFrontend` offers MCP clients what a person at the terminal can do:
-  `say`, `ask` (one peer, by name), `peers`, `tools` (the slash commands) and `run` (one of them).
+  `say`, `ask` (one peer, by name), `peers`, `tools` (the slash commands) and `invoke` (one of them).
 - **`say` is a bridge.** A question asked of `lab` goes to the remote session,
   where `McpFrontend` says it and sends the first reply back. `McpConnector` never names a
   remote peer. In any chatinho session, a say in a room where exactly one peer answers is asked of

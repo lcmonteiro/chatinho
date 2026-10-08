@@ -22,11 +22,11 @@ chatinho SHALL provide `McpFrontend` in `chatinho[mcp]`: a `@frontend` that serv
 - **THEN** it is refused and no peer is asked anything
 
 ### Requirement: The terminal's tools
-The server SHALL expose the MCP tools `say`, `ask`, `peers`, `tools` and `run`: what a person at the terminal can do. `say(text, asker?)` works as a bridge: the frontend says the text in the session as its own message and returns the first reply to it; it MUST NOT take a peer name, so the session decides who replies. Any other tool name MUST yield a tool error.
+The server SHALL expose the MCP tools `say`, `ask`, `peers`, `tools` and `invoke`: what a person at the terminal can do. `say(text, asker?)` works as a bridge: the frontend says the text in the session as its own message and returns the first reply to it; it MUST NOT take a peer name, so the session decides who replies. Any other tool name MUST yield a tool error.
 
 #### Scenario: The tools
 - **WHEN** a client lists the server's tools
-- **THEN** they are `say`, `ask`, `peers`, `tools` and `run`, and `say` has no peer parameter
+- **THEN** they are `say`, `ask`, `peers`, `tools` and `invoke`, and `say` has no peer parameter
 
 ### Requirement: Asking one peer
 `ask(peer, text)` SHALL say the text in the session addressed to the peer of that name, so it is asked of that peer, and return its answer under the same one-result rule as `say`, with the same lent credentials. When no peer other than the frontend has that name, several do, or the peer does not declare `HookAnswer`, the result MUST be a tool error at once.
@@ -40,7 +40,7 @@ The server SHALL expose the MCP tools `say`, `ask`, `peers`, `tools` and `run`: 
 - **THEN** the result is a tool error saying no peer has that name
 
 ### Requirement: The roster and the tools
-`peers()` SHALL list every peer but the frontend, each with its name and whether it answers. `tools()` SHALL list the session's commands, each with its name and description. `run(name, args?)` SHALL run the named command, with or without a leading `/`, and return what it answered as `answered`; an unknown or failing command MUST yield a tool error.
+`peers()` SHALL list every peer but the frontend, each with its name and whether it answers. `tools()` SHALL list the session's commands, each with its name and description. `invoke(name, args?)` SHALL invoke the named command, with or without a leading `/`, and return what it answered as `answered`; an unknown or failing command MUST yield a tool error.
 
 #### Scenario: Listing peers
 - **WHEN** a client calls `peers` in a session with `agent` and a peer `mute` that does not answer
@@ -93,7 +93,7 @@ Every `say` SHALL end in exactly one result: an answer `{status, text, attachmen
 - **THEN** with one peer, that peer is asked again; with several, the new question is said as a reply to the asker's last answer in the room (a reply there always reads `answered`, so a question back cannot be told apart), and the peer that answered sees it is for it
 
 ### Requirement: The frontend speaks for every client
-The frontend SHALL handle every client itself, without adding a peer per client: for each message it receives, it MUST say the text in the session as its own message, remember which client's message that is, and send the reply to that message back to that client alone. Questions from several clients MAY be open at once, and each reply MUST reach only the client whose question it answers. A peer that asks the frontend a question MUST get `error`, since nobody is at its terminal.
+The frontend SHALL handle every client itself, without adding a peer per client: for each message it receives, it MUST say the text in the session as its own message, remember which client's message that is, and send the reply to that message back to that client alone. Questions from several clients MAY be open at once, and each reply MUST reach only the client whose question it answers. The frontend MUST NOT declare `HookAnswer`: nobody is at its terminal, so no peer can ask it.
 
 #### Scenario: The reply goes back to its client
 - **WHEN** a client says "will it rain?" and the session's only peer answers "sunny"
@@ -103,9 +103,9 @@ The frontend SHALL handle every client itself, without adding a peer per client:
 - **WHEN** clients `lab` and `home` each say something while the other's message still waits
 - **THEN** each gets the reply to its own message, and no peer was added to the session
 
-#### Scenario: Asking the frontend
-- **WHEN** a peer asks the frontend a question
-- **THEN** it gets an `error` reply saying nobody is at the terminal
+#### Scenario: The frontend is never asked
+- **WHEN** the session counts the peers that answer
+- **THEN** the frontend is not one of them
 
 ### Requirement: Attachments come back with the answer
 Attachments of an answer SHALL be returned in the result, each with its name, media type and content, so the asking side can keep them.
