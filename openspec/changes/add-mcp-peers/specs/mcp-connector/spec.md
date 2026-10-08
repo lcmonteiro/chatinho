@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Lets a chatinho session put questions to another session over MCP through one ordinary peer, addressed by name, while lending credentials, with each question, to the remote peers that answer.
+Lets a chatinho session put questions to another session over MCP through one ordinary peer that is asked, while lending credentials, with each question, to the remote peers that answer.
 
 ## ADDED Requirements
 
@@ -17,15 +17,15 @@ chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connecto
 - **WHEN** no `name` is given and the server's frontend is named `office`
 - **THEN** the connector appears as `office`
 
-### Requirement: Addressing the remote session
-The connector SHALL send a question only for messages addressed to it: a message starting with `@<name>` (its own name) followed by whitespace, or a question asked to it directly. The rest of the text MUST be sent as one `say` to the remote session, without naming a remote peer; the remote session decides who answers.
+### Requirement: Asking the remote session
+The connector SHALL send a question only when it is asked (`HookAnswer`); it MUST NOT listen to what is said in the room. A leading `@<name>` (its own name) followed by whitespace MAY prefix the question and is dropped. The text MUST be sent as one `say` to the remote session, without naming a remote peer; the remote session decides who answers.
 
-#### Scenario: Addressed by name
-- **WHEN** the user says `@lab will it rain?`
+#### Scenario: Asked directly
+- **WHEN** a peer asks the connector `@lab will it rain?`
 - **THEN** the connector asks the remote session `will it rain?`
 
-#### Scenario: Not addressed
-- **WHEN** the user says something that does not start with `@lab`
+#### Scenario: Said to the room
+- **WHEN** the user says `@lab will it rain?` in a local chat where another peer also answers
 - **THEN** the connector sends nothing and says nothing
 
 #### Scenario: The only answering peer here
@@ -33,7 +33,7 @@ The connector SHALL send a question only for messages addressed to it: a message
 - **THEN** the session asks the connector, by the core rule, and the connector asks the remote session `will it rain?`
 
 ### Requirement: Every question gets one answer
-For every message it is addressed by, the connector SHALL post exactly one reply to it: the remote answer's text, with its attachments attached, when the status is `answered`; the remote peer's question, marked as a question back to the asker, for `asked`; and a short message naming the status for `error`. Losing the connection MUST also produce a reply saying so.
+For every question it is asked, the connector SHALL answer exactly once: the remote answer's text, with its attachments attached, when the status is `answered`; the remote peer's question, marked as a question back to the asker, for `asked`; and a short message naming the status for `error`. Losing the connection MUST also produce a reply saying so.
 
 #### Scenario: Answer with an attachment
 - **WHEN** the remote answer is `answered` with attachment `chart.svg`
@@ -41,7 +41,7 @@ For every message it is addressed by, the connector SHALL post exactly one reply
 
 #### Scenario: Answered with a question
 - **WHEN** the remote result is `asked` with "which login flow?"
-- **THEN** the connector replies with that question, marked as a question from the remote session, and the user's next `@lab …` message continues that conversation
+- **THEN** the connector replies with that question, marked as a question from the remote session, and the next question asked of it continues that conversation
 
 #### Scenario: Remote error
 - **WHEN** the remote result is `error` with "no peer can answer"

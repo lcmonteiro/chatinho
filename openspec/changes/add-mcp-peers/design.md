@@ -98,9 +98,9 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - On the asking side, `McpConnector` turns them back into `Attachment`s on its reply, so the local backend keeps them.
 - *Alternative: a new grant to fetch attachment bytes.* That's cleaner, but it widens the core more than this change needs. It's noted as follow-up.
 
-### 7. Addressing in the local chat
-- **Parsing:** `McpConnector` listens to local broadcasts and takes those that start with `@<name>` followed by whitespace. A message without its name is ignored.
-- **Direct asks:** for a direct ask to the connector, the prefix is optional.
+### 7. Asking in the local chat
+- **Asked only:** `McpConnector` declares `HookAnswer` and nothing that hears the room: it reacts only when it is asked — directly, or by the core rule when it is the only answering peer. A leading `@<name>` is optional and dropped.
+- *Alternative, the earlier draft: listening for `@<name>` in the room.* It duplicated the session's own routing and needed `HookListen` and `HookSay`; it is dropped.
 - **Asker:** the connector sends the asking peer's name; the frontend uses it only to keep that asker's follow-ups together.
 
 ### 8. Connection lifecycle

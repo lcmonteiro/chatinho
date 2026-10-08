@@ -1,9 +1,9 @@
 """A peer that puts questions to another chatinho session over MCP.
 
 :class:`McpConnector` is an ordinary connector: it appears in the chat under a
-name it chooses (``@lab``), and a message addressed to it — ``@lab will it
-rain?`` — is said in the remote session through its ``say`` tool, and the
-first reply to it comes back: exactly one reply for every such message.
+name it chooses (``lab``) and answers what it is asked. Each question is said
+in the remote session through its ``say`` tool, and the first reply to it
+comes back: exactly one reply for every question.
 
 It is a FastMCP client and speaks the modern MCP protocol (2026-07-28). When a
 remote peer needs an LLM, the connector can lend it a credential for that one
@@ -21,16 +21,13 @@ from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
 from chatinho.chat_hooks import (
     HookAnswer,
-    HookListen,
     HookPeers,
-    HookSay,
     Peers,
-    Say,
     connector,
     name_of,
     require,
 )
-from chatinho.chat_message import TOOL, ChatMessage, Reply, ReplyStatus
+from chatinho.chat_message import ChatMessage, Reply, ReplyStatus
 from chatinho.helpers.mcp import CREDENTIALS_KEY, decode, safe_name
 
 logger = logging.getLogger(__name__)
@@ -62,9 +59,7 @@ def _reply_from(res: types.CallToolResult, name: str) -> Reply:
 
 
 @connector("mcp")
-@require(HookListen)
 @require(HookAnswer)
-@require(HookSay)
 @require(HookPeers)
 class McpConnector:
     """Puts questions to a remote chatinho session.
@@ -87,7 +82,6 @@ class McpConnector:
         ValueError: Not exactly one server, or a *url* without a *token*.
     """
 
-    say   : Say
     peers : Peers
 
     def __init__(
@@ -132,17 +126,7 @@ class McpConnector:
             self._named  = True
             self._client = self._make_client()      # so the server sees the real name
 
-    # === Being addressed ============================================================
-
-    async def listen(self, msg: ChatMessage) -> None:
-        """Takes a message said to the room that starts with ``@<its name>``."""
-        if not msg.is_broadcast or msg.frm == TOOL:
-            return
-        text = self._addressed(msg.text)
-        if text is None:
-            return
-        reply = await self._say_remote(text, self._asker(msg.frm))
-        await self.say(reply.text, reply_to=msg.id, attachments=reply.attachments)
+    # === Being asked ================================================================
 
     async def answer(self, msg: ChatMessage) -> Reply:
         """A question asked to it directly; the ``@<its name>`` prefix is optional."""

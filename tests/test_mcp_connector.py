@@ -18,7 +18,7 @@ async def _local(connector, **kwargs):
 @connector("quiet")
 @require(HookAnswer)
 class _Quiet:
-    """A second local peer that answers, so what the user says stays a broadcast."""
+    """A second local peer that answers, so what the user says stays a broadcast, asked of nobody."""
 
     async def answer(self, msg):
         return None
@@ -83,28 +83,18 @@ async def test_named_by_the_server_when_not_given():
     await remote_session.close()
 
 
-# === Addressing ====================================================================
+# === Being asked ==================================================================
 
-async def test_addressed_by_name():
-    weather = Weather()
-    remote_session, front = await remote(weather)
-    session, view = await _local(McpConnector(server=front.server, name="lab"))
-    await view.say("@lab will it rain?")
-    msgs = await _replies(view, 2)
-    assert [m.text for m in weather.asked] == ["will it rain?"]
-    assert msgs[-1].text == "sunny" and msgs[-1].reply_to == msgs[0].id
-    await session.close()
-    await remote_session.close()
-
-
-@pytest.mark.parametrize("said", ["will it rain?", "@laboratory rain?", "@lab", "email me@lab please"])
-async def test_not_addressed(said):
+@pytest.mark.parametrize("said", ["@lab will it rain?", "will it rain?"])
+async def test_what_is_said_to_the_room_is_not_taken(said):
     weather = Weather()
     remote_session, front = await remote(weather)
     session, view = await driven(connectors=[McpConnector(server=front.server, name="lab"), _Quiet()])
     await view.say(said)
     await asyncio.sleep(0.2)
     assert weather.asked == [] and len(view.context()) == 1
+    await session.close()
+    await remote_session.close()
 
 
 async def test_the_only_peer_here_gets_everything_said():
