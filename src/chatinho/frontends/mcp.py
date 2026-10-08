@@ -12,19 +12,17 @@ nobody types into it. Its tools are what a person at the terminal can do:
 - ``run``: run one of them, and get what it answered.
 
 It is built on FastMCP and speaks the modern MCP protocol (2026-07-28) over
-Streamable HTTP, with a bearer token on every request. The protocol is stateless: every request names
-its client, and may carry credentials the client lends for that message; they
-ride on the message said in the session, for whichever peer answers it. No
-peer is added per client: messages are told apart by their ids.
+Streamable HTTP, with a bearer token on every request. The protocol is
+stateless: every request names its client, and may carry credentials the client
+lends for that message; they ride on the message said in the session, for
+whichever peer answers it. No peer is added per client: messages are told apart
+by their ids.
 """
 
 import asyncio
-import base64
 import hmac
 import logging
-import mimetypes
 import re
-import secrets
 from dataclasses import dataclass
 from typing import Annotated, Any, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import unquote, urlparse
@@ -56,18 +54,9 @@ from chatinho.chat_hooks import (
     require,
 )
 from chatinho.chat_message import LOCAL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
+from chatinho.helpers.mcp import CREDENTIALS_KEY, encode, media_type_of, safe_name
 
 logger = logging.getLogger(__name__)
-
-#: Every result a call can end in; exactly one per call.
-STATUSES : Tuple[str, ...] = ("answered", "asked", "error", "timeout")
-
-#: Where a client puts the credentials it lends, in a request's ``_meta``, and
-#: the capability extension a server declares the ones it accepts under.
-CREDENTIALS_KEY : str = "chatinho/credentials"
-
-#: How long a message may wait for its reply when nobody says otherwise, in seconds.
-DEFAULT_DEADLINE : float = 120.0
 
 _LINK = re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 
@@ -79,11 +68,8 @@ _NOBODY_HERE = "Nobody is at this session's terminal: it is served over MCP"
 class _Message:
     """One client's message in flight, from its ``say`` or ``ask`` call to its one result."""
 
-    token       : str
     client      : str
     asker       : Tuple[str, str]
-    deadline    : float
-    seconds     : float
     credentials : Dict[str, Secret]
     reply       : "asyncio.Future[ChatMessage]"
     msg_id      : Optional[MessageID] = None
@@ -91,8 +77,8 @@ class _Message:
     closed      : bool = False
 
 
-_Text     = Annotated[str, Field(description="What to say.")]
-_Deadline = Annotated[Optional[int], Field(ge=1, description="How long to wait, in ms.")]
+_Text = Annotated[str, Field(description="What to say.")]
+
 
 class PeerInfo(BaseModel):
     """One peer in the session, as ``peers`` lists it."""
@@ -124,13 +110,11 @@ class McpFrontend:
         token: The bearer token every request must carry; required.
         host: Where the server listens.
         port: The server's port.
-        deadline: How long a message may wait for its reply when its client
-            does not say, in seconds.
         credentials: The credentials the session's peers may use, by name, each
             with a short description; announced at discovery. Others are dropped.
 
     Raises:
-        ValueError: No token, or a non-positive deadline.
+        ValueError: No token.
     """
 
     say      : Say
@@ -146,17 +130,13 @@ class McpFrontend:
         token       : str,
         host        : str = "127.0.0.1",
         port        : int = 8000,
-        deadline    : float = DEFAULT_DEADLINE,
         credentials : Optional[Dict[str, str]] = None,
     ) -> None:
         if not token:
             raise ValueError("McpFrontend needs a bearer token")
-        if deadline <= 0:
-            raise ValueError("deadline must be positive")
         self.name        = name
         self.host        = host
         self.port        = port
-        self.deadline    = float(deadline)
         self.credentials : Dict[str, str] = dict(credentials or {})
         self._token      = token
         #: The MCP server itself; an in-process client can connect to it directly.
@@ -211,33 +191,31 @@ class McpFrontend:
         text        : _Text,
         ctx         : Context,
         asker       : Annotated[Optional[str], Field(description="Who says it, for follow-ups.")] = None,
-        deadline_ms : _Deadline = None,
     ) -> ToolResult:
         """Say something in this chatinho session, and get the first reply to it.
 
         When one peer answers in the session, it is asked of that peer; when
         several do, it is said to the room. The result is exactly one of:
-        answered, asked (a question back to you), error or timeout.
+        answered, asked (a question back to you) or error.
         """
-        def send(client: str, seconds: float, meta: Dict[str, Any]) -> Any:
-            return self._forward(client, asker, text, seconds, meta)
-        return await self._bridged("say", ctx, text, deadline_ms, send)
+        def send(client: str, meta: Dict[str, Any]) -> Any:
+            return self._forward(client, asker, text, meta)
+        return await self._bridged("say", ctx, text, send)
 
     async def _ask(
         self,
         peer        : Annotated[str, Field(description="The peer's name.")],
         text        : _Text,
         ctx         : Context,
-        deadline_ms : _Deadline = None,
     ) -> ToolResult:
         """Ask one peer of this session, by name (see peers), and get its answer.
 
-        The result is exactly one of: answered, asked (a question back to you),
-        error or timeout.
+        The result is exactly one of: answered, asked (a question back to you)
+        or error.
         """
-        def send(client: str, seconds: float, meta: Dict[str, Any]) -> Any:
-            return self._asked(client, peer, text, seconds, meta)
-        return await self._bridged("ask", ctx, text, deadline_ms, send)
+        def send(client: str, meta: Dict[str, Any]) -> Any:
+            return self._asked(client, peer, text, meta)
+        return await self._bridged("ask", ctx, text, send)
 
     async def _peers(self) -> List[PeerInfo]:
         """Lists the peers in this session, and whether each one answers what it is asked."""
@@ -253,36 +231,29 @@ class McpFrontend:
         self,
         name        : Annotated[str, Field(description="The tool's name, without the slash.")],
         args        : Annotated[str, Field(description="Its arguments, as typed after its name.")] = "",
-        deadline_ms : _Deadline = None,
     ) -> ToolResult:
         """Runs one of this session's tools (see tools) and returns what it answered."""
-        seconds = deadline_ms / 1000.0 if deadline_ms else self.deadline
-        name    = name.lstrip("/")
+        name = name.lstrip("/")
         if name not in self.commands():
-            return _result("error", "No tool named %r in this session" % name)
+            return _result(ReplyStatus.ERROR, "No tool named %r in this session" % name)
         try:
-            said = await asyncio.wait_for(self.invoke(name, args), seconds)
-        except asyncio.TimeoutError:
-            return _result("timeout", "/%s did not answer within %g seconds" % (name, seconds))
+            said = await self.invoke(name, args)
         except Exception as exc:
             logger.error("run /%s failed", name, exc_info=True)
-            return _result("error", "/%s failed: %s" % (name, type(exc).__name__))
-        return _result("answered", said or "")
+            return _result(ReplyStatus.ERROR, "/%s failed: %s" % (name, type(exc).__name__))
+        return _result(ReplyStatus.ANSWERED, said or "")
 
     # === One call ===================================================================
 
-    async def _bridged(
-        self, tool: str, ctx: Context, text: str, deadline_ms: Optional[int], send: Any,
-    ) -> ToolResult:
+    async def _bridged(self, tool: str, ctx: Context, text: str, send: Any) -> ToolResult:
         """Sends one message for a ``say`` or ``ask`` call, and waits for its one result."""
-        meta    = dict(ctx.request_context.meta or {}) if ctx.request_context is not None else {}
-        info    = meta.get(types.CLIENT_INFO_META_KEY) or {}
-        client  = _safe_name(info.get("name") if isinstance(info, dict) else None, "client")
-        seconds = deadline_ms / 1000.0 if deadline_ms else self.deadline
+        meta   = dict(ctx.request_context.meta or {}) if ctx.request_context is not None else {}
+        info   = meta.get(types.CLIENT_INFO_META_KEY) or {}
+        client = safe_name(info.get("name") if isinstance(info, dict) else None, "client")
         if not text.strip():
-            return _result("error", "%s needs a text" % tool)
+            return _result(ReplyStatus.ERROR, "%s needs a text" % tool)
         try:
-            message = await send(client, seconds, meta)
+            message = await send(client, meta)
             if isinstance(message, ToolResult):
                 return message
             try:
@@ -291,41 +262,41 @@ class McpFrontend:
                 self._close(message)          # however the call ended, even cancelled
         except Exception as exc:
             logger.error("%s failed for %s", tool, client, exc_info=True)
-            return _result("error", "%s failed: %s" % (tool, type(exc).__name__))
+            return _result(ReplyStatus.ERROR, "%s failed: %s" % (tool, type(exc).__name__))
 
     # === One message ================================================================
 
     async def _asked(
-        self, client: str, peer: str, text: str, seconds: float, meta: Dict[str, Any],
+        self, client: str, peer: str, text: str, meta: Dict[str, Any],
     ) -> Any:
         """Asks *text* of the peer named *peer* for *client*; an error result if it cannot answer."""
         named = [(at, who) for at, who in sorted(self.peers().items())
                  if at != LOCAL and name_of(who) == peer]
         if not named:
-            return _result("error", "No peer named %r in this session" % (peer,))
+            return _result(ReplyStatus.ERROR, "No peer named %r in this session" % (peer,))
         if len(named) > 1:
-            return _result("error", "Several peers are named %r; ask with say instead" % peer)
+            return _result(ReplyStatus.ERROR, "Several peers are named %r; ask with say instead" % peer)
         at, who = named[0]
         if not declares(who, HookAnswer):
-            return _result("error", "%s does not answer what it is asked" % peer)
-        message = self._message(client, "", seconds, meta)
+            return _result(ReplyStatus.ERROR, "%s does not answer what it is asked" % peer)
+        message = self._message(client, "", meta)
         message.msg_id = await self.say(text, to=at, credentials=message.credentials)
         self._open[message.msg_id] = message
         return message
 
     async def _forward(
-        self, client: str, asker: Any, text: str, seconds: float, meta: Dict[str, Any],
+        self, client: str, asker: Any, text: str, meta: Dict[str, Any],
     ) -> Any:
         """Says *text* in the session for *client*; an error result if nobody could reply."""
         answering = self._answering()
         if not answering:
-            return _result("error", "No peer in this session can answer")
+            return _result(ReplyStatus.ERROR, "No peer in this session can answer")
         room = len(answering) > 1
         if room and not any(declares(who, HookListen) for _, who in answering):
-            return _result(
-                "error", "Several peers could answer and none listens to the room; a peer router is needed")
+            return _result(ReplyStatus.ERROR,
+                           "Several peers could answer and none listens to the room; a peer router is needed")
 
-        message      = self._message(client, asker, seconds, meta)
+        message      = self._message(client, asker, meta)
         message.room = room
         # In the room, a follow-up replies to the asker's last reply; to a lone
         # peer it must not be a reply, or the session would not ask it.
@@ -335,29 +306,20 @@ class McpFrontend:
         return message
 
     async def _wait(self, message: _Message) -> ToolResult:
-        """Waits for the first reply or the deadline, whichever comes first."""
-        remaining = message.deadline - asyncio.get_running_loop().time()
-        if remaining > 0:
-            await asyncio.wait({message.reply}, timeout=remaining)
-        if not message.reply.done():
-            return _result("timeout", "No reply within %g seconds" % message.seconds)
-        reply = message.reply.result()
+        """Waits for the first reply to *message*."""
+        reply = await message.reply
         if message.room:
             self._last_heard[message.asker] = reply.id
         attachments = await self._attachments_of(reply.id, reply.text)
-        return _result(ReplyStatus(reply.status).value, reply.text, attachments, str(reply.id))
+        return _result(ReplyStatus(reply.status), reply.text, attachments, str(reply.id))
 
-    def _message(self, client: str, asker: Any, seconds: float, meta: Dict[str, Any]) -> _Message:
-        """A new message in flight for *client*, with its deadline and the credentials lent with it."""
-        loop = asyncio.get_running_loop()
+    def _message(self, client: str, asker: Any, meta: Dict[str, Any]) -> _Message:
+        """A new message in flight for *client*, with the credentials lent with it."""
         return _Message(
-            token       = secrets.token_urlsafe(18),
             client      = client,
-            asker       = (client, _safe_name(asker, "")),
-            deadline    = loop.time() + seconds,
-            seconds     = seconds,
+            asker       = (client, safe_name(asker, "")),
             credentials = self._lent(meta),
-            reply       = loop.create_future(),
+            reply       = asyncio.get_running_loop().create_future(),
         )
 
     def _close(self, message: _Message) -> None:
@@ -392,14 +354,14 @@ class McpFrontend:
         for name in _linked_names(text):
             data = _read_link(await self.locate(msg_id, name))
             if data is not None:
-                found.append(Attachment(name, _media_type_of(name), data))
+                found.append(Attachment(name, media_type_of(name), data))
         return found
 
 
 # === What goes back to the client ================================================
 
 def _result(
-    status      : str,
+    status      : ReplyStatus,
     text        : str,
     attachments : Sequence[Attachment] = (),
     msg_id      : Optional[str] = None,
@@ -407,46 +369,28 @@ def _result(
     """Builds the result of one tool call.
 
     The structured content is what a chatinho client reads; the text block is
-    for clients that only read text. ``error`` and ``timeout`` are tool errors.
+    for clients that only read text. ``error`` is a tool error.
 
     Args:
-        status: One of :data:`STATUSES`.
+        status: How the reply describes itself.
         text: What to say.
         attachments: What the answer attached.
         msg_id: The reply's message id in this session, when a reply arrived.
 
     Returns:
         ToolResult: Ready to return from a tool.
-
-    Raises:
-        ValueError: *status* is not one of :data:`STATUSES`.
     """
-    if status not in STATUSES:
-        raise ValueError("A result's status is one of %s, got %r" % (", ".join(STATUSES), status))
-    shown = text if status == "answered" else "[%s] %s" % (status, text)
+    shown = text if status is ReplyStatus.ANSWERED else "[%s] %s" % (status.value, text)
     return ToolResult(
         content=shown,
         structured_content={
-            "status"      : status,
+            "status"      : status.value,
             "text"        : text,
-            "attachments" : [_encode(item) for item in attachments],
+            "attachments" : [encode(item) for item in attachments],
             "msg_id"      : msg_id,
         },
-        is_error=status in ("error", "timeout"),
+        is_error=status is ReplyStatus.ERROR,
     )
-
-
-def _safe_name(raw: Any, default: str) -> str:
-    """A name that can stand in a peer path: non-empty, with no ``/``.
-
-    Args:
-        raw: What the other side called itself; anything.
-        default: What to use when *raw* gives nothing usable.
-    """
-    if not isinstance(raw, str):
-        return default
-    name = " ".join(raw.replace("/", "-").split())
-    return name or default
 
 
 def _linked_names(text: str) -> List[str]:
@@ -478,20 +422,6 @@ def _read_link(url: Optional[str]) -> Optional[bytes]:
             return handle.read()
     except OSError:
         return None
-
-
-def _media_type_of(name: str) -> str:
-    """The media type a file called *name* most likely holds."""
-    return mimetypes.guess_type(name)[0] or "application/octet-stream"
-
-
-def _encode(item: Attachment) -> Dict[str, str]:
-    """An attachment as JSON: its name, media type and base64 content."""
-    return {
-        "name"       : item.name,
-        "media_type" : item.media_type,
-        "data_b64"   : base64.b64encode(item.data).decode("ascii"),
-    }
 
 
 class _OneToken(TokenVerifier):

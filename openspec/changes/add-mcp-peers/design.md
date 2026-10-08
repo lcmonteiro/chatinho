@@ -44,13 +44,14 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 ### 2. Wire format: the terminal's tools
 `McpFrontend` builds a `FastMCP` server and registers its own async methods as the tools (`mcp.tool(self._ask, name="ask")`, one line each): FastMCP derives each schema from the signature and each description from the docstring, and a tool reads the request's `_meta` (client name, lent credentials) through its `Context`.
 - **Tools:** what a person at the terminal can do, mirroring `ChatApp`'s grants. There is no tool to read attachments later; attachments come back with the reply.
-  - `say(text, asker?, deadline_ms?)`: the bridge. The frontend says the text in the session and returns the first reply; there is no peer name, so the session decides who replies (decision 4).
-  - `ask(peer, text, deadline_ms?)`: the frontend says the text addressed to the peer of that name (`say(..., to=)`), so it is asked of that peer, and returns its answer. An unknown name, a name several peers share, the frontend's own name, or a peer that does not declare `HookAnswer` is `error` at once.
+  - `say(text, asker?)`: the bridge. The frontend says the text in the session and returns the first reply; there is no peer name, so the session decides who replies (decision 4).
+  - `ask(peer, text)`: the frontend says the text addressed to the peer of that name (`say(..., to=)`), so it is asked of that peer, and returns its answer. An unknown name, a name several peers share, the frontend's own name, or a peer that does not declare `HookAnswer` is `error` at once.
   - `peers()`: every peer but the frontend, as a typed list of `PeerInfo(name, answers)`; a FastMCP client reads it back as objects from `result.data`.
   - `tools()`: the session's commands, as a typed list of `ToolInfo(name, description)`.
-  - `run(name, args?, deadline_ms?)`: runs a command through `invoke` (a leading `/` is accepted) and returns its answer as `answered`; an unknown command is `error`, and one that outlasts the deadline is `timeout`.
-- **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, where `msg_id` is the reply's message id in the remote session (absent when no reply arrived), also rendered as text for clients that only read text. `error` and `timeout` set `isError`.
-- **Read back:** `McpConnector` turns the result straight into its local `Reply`: `answered` keeps the text and attachments, `asked` becomes `ReplyStatus.ASKED`, and `error` and `timeout` become `ReplyStatus.ERROR` with the status named in the text.
+  - `run(name, args?)`: runs a command through `invoke` (a leading `/` is accepted) and returns its answer as `answered`; an unknown or failing command is `error`.
+- **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, where `msg_id` is the reply's message id in the remote session (absent when no reply arrived), also rendered as text for clients that only read text. `error` sets `isError`.
+- **Read back:** `McpConnector` turns the result straight into its local `Reply`: `answered` keeps the text and attachments, `asked` becomes `ReplyStatus.ASKED`, and `error` becomes `ReplyStatus.ERROR` with the status named in the text.
+- **Shared code:** the credentials key, safe names and the attachment encoding live in `chatinho/helpers/mcp.py`, standard library only, so each end imports them without the other.
 - *Alternative, the earlier draft: the SDK's low-level `Server` (`on_list_tools`, `on_call_tool`).* It gave full control, but the tool schemas, the dispatch by name, the extension and the bearer check were all hand-written; FastMCP gives the same request context with far less code.
 
 ### 3. The frontend speaks for every client
@@ -63,25 +64,22 @@ The frontend is the session's peer zero, as a terminal is, and it handles every 
 - **Asking the frontend:** a peer that asks it gets `Reply("Nobody is at this session's terminal…", status="error")`. An answer that arrives after its question ended is only heard.
 - *Alternative, the earlier draft: one proxy peer per asker, named `<client>/<asker>`.* It let remote peers tell askers apart, but it needed peers added and removed at run time (`remove_connector`, idle expiry). It is dropped: the frontend manages the connections, and the core stays as it is.
 
-### 4. Who answers, deadlines and the one-result guarantee
+### 4. Who answers, and the one-result guarantee
 The answering peers are those in `peers()` that declare `HookAnswer`, excluding the frontend.
-- **Always a say:** the frontend `say`s the text and registers a future under the said message id. With one answering peer, the session asks it of that peer (decision 1); with several, it goes to the room. Its `listen` resolves the future with the first message whose `reply_to` is that id; later replies only stay in the conversation. The wait is bounded by the deadline.
+- **Always a say:** the frontend `say`s the text and registers a future under the said message id. With one answering peer, the session asks it of that peer (decision 1); with several, it goes to the room. Its `listen` resolves the future with the first message whose `reply_to` is that id; later replies only stay in the conversation. There is no deadline: the call waits for that first reply, and a client that stops waiting ends its call, which lets go of the message.
 - **Follow-ups:** with one peer, the next message is a new say, asked of that peer, so the peer has the history. With several, the frontend remembers each asker's last reply in the room and says the next message with `reply_to` set to it, so the peer that replied sees it is for it. With one peer the follow-up must not be a reply, or the session would not ask it.
-- **Several peers, none listening:** a `say` reaches only peers that declare `HookListen`, so if none of the answering peers listens, nobody could ever reply. The result is `error` at once ("several peers and none listens; a peer router is needed") rather than a `timeout` after the whole deadline.
+- **Several peers, none listening:** a `say` reaches only peers that declare `HookListen`, so if none of the answering peers listens, nobody could ever reply. The result is `error` at once ("several peers and none listens; a peer router is needed") rather than a wait for a reply that cannot come.
 - **No peer:** `error` at once.
-- **Naming the peer:** `say` never names one, so the remote side owns routing until a peer router takes over; a client that knows whom it wants uses `ask`, which is one hop as well. An addressed say (`say(text, to=peer)`) is asked of that peer without waiting, so `ask` shares `say`'s machinery: the status, attachments, lent credentials, deadline and error reply.
+- **Naming the peer:** `say` never names one, so the remote side owns routing until a peer router takes over; a client that knows whom it wants uses `ask`, which is one hop as well. An addressed say (`say(text, to=peer)`) is asked of that peer without waiting, so `ask` shares `say`'s machinery: the status, attachments, lent credentials and error reply.
 
 Every outcome maps to one result:
 
 | Outcome | Status |
 |---|---|
 | The reply arrived | the reply message's `status` |
-| `asyncio.TimeoutError` | `timeout` |
 | No answering peer | `error` |
 | Several answering peers, none listening | `error` |
 | The lone peer raised | `error` (its error reply) |
-
-The default deadline is configurable (`McpFrontend(deadline=…)`, 120 s when not set); `McpConnector(deadline=…)` sends one with every question.
 
 ### 5. Credential delegation (opt-in)
 This follows A2A's principle: credentials travel out of band, the server declares what it needs, and a short-lived, scoped credential is preferred to a master key.
@@ -89,7 +87,7 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - *Alternative, the earlier draft: a `HookCredential` grant served by the frontend (`credential(msg_id, name)`).* It worked, but it was a second path to what the message itself can carry.
 - **Declaration:** `McpFrontend(credentials={"llm": "OpenAI-compatible API key"})` announces the names in its `server/discover` result, as the capability extension `chatinho/credentials` (SEP-2133 `capabilities.extensions`). Undeclared names are dropped on arrival.
 - **Delivery:** `McpConnector(delegate={"llm": value | callable})` discovers the server first, then puts the declared credentials in the `say` request's `_meta["chatinho/credentials"]`. A callable is called per question, so it can mint short-lived tokens. Over HTTP the connector delegates only to `https` URLs or loopback hosts.
-- **Lifetime:** the frontend builds the mapping of `Secret`s from the request, says the message with it, and clears that same mapping in the `finally` of the `say` call, so it is gone on every outcome, including `timeout`. The text, the store and logs never hold it, and `ChatMessage`'s `repr` leaves it out.
+- **Lifetime:** the frontend builds the mapping of `Secret`s from the request, says the message with it, and clears that same mapping in the `finally` of the `say` call, so it is gone on every outcome, including a client that gives up and ends its call. The text, the store and logs never hold it, and `ChatMessage`'s `repr` leaves it out.
 - **Not passed on:** the credential reaches only the session the connector connects to. A peer that found it on a message must not delegate it further; a connector only delegates its own `delegate` configuration.
 - **Using it:** a peer (for example orbe's agent) reads `msg.credentials.get("llm")` and builds its model with that key for this message only; without one, it answers without a model or with its own.
 - *Alternative: put the key in the question text or a session-wide setting.* That leaks into history and outlives the question.
@@ -108,8 +106,8 @@ This follows A2A's principle: credentials travel out of band, the server declare
 ### 8. Connection lifecycle
 - `McpConnector` holds one `fastmcp.Client` and opens it per question (`async with client: await client.call_tool("say", …)`); the protocol is stateless, so no link stays open between questions and there is nothing to close at `shutdown()`. `initialize()` opens it once to take the server's name when none was given. It doesn't implement `serve()`, because a dropped link must not end the local chat.
 - The connector refuses a server that only speaks the handshake era. Each request is independent; a failed call answers `error` ("could not reach …"), and the client is reopened lazily on the next question.
-- **Transport:** Streamable HTTP only, `url=…, token=…` with a `Bearer` header, or `server=…` for an in-process server in tests and embedding; `deadline` is optional. There is no stdio transport on either side.
-- `McpFrontend(name="master", *, token, host, port, deadline, credentials)`; the token is required, and the name is the frontend's peer name and the server's name. Its `serve()` runs FastMCP's Streamable HTTP app under Uvicorn, with a `TokenVerifier` that compares the bearer token in constant time, and `shutdown()` stops it.
+- **Transport:** Streamable HTTP only, `url=…, token=…` with a `Bearer` header, or `server=…` for an in-process server in tests and embedding. There is no stdio transport on either side.
+- `McpFrontend(name="master", *, token, host, port, credentials)`; the token is required, and the name is the frontend's peer name and the server's name. Its `serve()` runs FastMCP's Streamable HTTP app under Uvicorn, with a `TokenVerifier` that compares the bearer token in constant time, and `shutdown()` stops it.
 - *Alternative: stdio as well.* Dropped: a session served over MCP is reached from another machine, and one transport, always behind a token, keeps both ends simpler.
 
 ### 9. Packaging
@@ -129,7 +127,7 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - **A delegated credential is readable by the remote session's code while it answers.** Delegation reduces exposure (one question, memory only) but cannot prevent a dishonest or buggy remote from copying it. → It's opt-in, HTTPS-only, and the docs recommend a sub-key with a spending limit or a short-lived token.
 - **HTTP exposes every peer.** → The bearer token is mandatory on HTTP. The token and URL are the connector's configuration and are never sent to the server's peers.
 - **With several peers, the first reply wins, whoever it is.** A chatty peer can answer before the right one. → The others still reply into the conversation, and a peer router is the planned fix.
-- **A broadcast nobody replies to** waits for the whole deadline. → It ends in `timeout`, which is still one result; peers that cannot help should stay quiet rather than reply.
+- **A broadcast nobody replies to** waits until the client gives up, since there is no deadline. → The client's own call timeout bounds it, and ending the call lets go of the message and its credentials; peers that cannot help should stay quiet rather than reply.
 - **Names are not unique across machines.** → They're used only for display.
 
 ## Migration Plan

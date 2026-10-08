@@ -54,8 +54,8 @@ A delegated credential SHALL ride only on the message it came with, and be kept 
 - **WHEN** a message that came with `llm` has been answered
 - **THEN** the message carries no credential any more
 
-#### Scenario: Gone on timeout
-- **WHEN** a question with a delegated credential ends in `timeout`
+#### Scenario: Gone when the client gives up
+- **WHEN** a client ends a call that came with a delegated credential before any reply comes
 - **THEN** the credential is discarded at that moment, even if the peer is still working
 
 #### Scenario: Never in history

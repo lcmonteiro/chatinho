@@ -22,14 +22,14 @@ chatinho SHALL provide `McpFrontend` in `chatinho[mcp]`: a `@frontend` that serv
 - **THEN** it is refused and no peer is asked anything
 
 ### Requirement: The terminal's tools
-The server SHALL expose the MCP tools `say`, `ask`, `peers`, `tools` and `run`: what a person at the terminal can do. `say(text, asker?, deadline_ms?)` works as a bridge: the frontend says the text in the session as its own message and returns the first reply to it; it MUST NOT take a peer name, so the session decides who replies. Any other tool name MUST yield `error`.
+The server SHALL expose the MCP tools `say`, `ask`, `peers`, `tools` and `run`: what a person at the terminal can do. `say(text, asker?)` works as a bridge: the frontend says the text in the session as its own message and returns the first reply to it; it MUST NOT take a peer name, so the session decides who replies. Any other tool name MUST yield `error`.
 
 #### Scenario: The tools
 - **WHEN** a client lists the server's tools
 - **THEN** they are `say`, `ask`, `peers`, `tools` and `run`, and `say` has no peer parameter
 
 ### Requirement: Asking one peer
-`ask(peer, text, deadline_ms?)` SHALL say the text in the session addressed to the peer of that name, so it is asked of that peer, and return its answer under the same one-result rule as `say`, with the same deadline and lent credentials. When no peer other than the frontend has that name, several do, or the peer does not declare `HookAnswer`, the result MUST be `error` at once.
+`ask(peer, text)` SHALL say the text in the session addressed to the peer of that name, so it is asked of that peer, and return its answer under the same one-result rule as `say`, with the same lent credentials. When no peer other than the frontend has that name, several do, or the peer does not declare `HookAnswer`, the result MUST be `error` at once.
 
 #### Scenario: Asked by name
 - **WHEN** a client asks `weather` "rain?" in a session with peers `agent` and `weather`
@@ -40,7 +40,7 @@ The server SHALL expose the MCP tools `say`, `ask`, `peers`, `tools` and `run`: 
 - **THEN** the result is `error` saying no peer has that name
 
 ### Requirement: The roster and the tools
-`peers()` SHALL list every peer but the frontend, each with its name and whether it answers. `tools()` SHALL list the session's commands, each with its name and description. `run(name, args?, deadline_ms?)` SHALL run the named command, with or without a leading `/`, and return what it answered as `answered`; an unknown command MUST yield `error`, and a command still running at the deadline MUST yield `timeout`.
+`peers()` SHALL list every peer but the frontend, each with its name and whether it answers. `tools()` SHALL list the session's commands, each with its name and description. `run(name, args?)` SHALL run the named command, with or without a leading `/`, and return what it answered as `answered`; an unknown or failing command MUST yield `error`.
 
 #### Scenario: Listing peers
 - **WHEN** a client calls `peers` in a session with `agent` and a peer `mute` that does not answer
@@ -51,7 +51,7 @@ The server SHALL expose the MCP tools `say`, `ask`, `peers`, `tools` and `run`: 
 - **THEN** the result is `answered` with text `eco: hi`
 
 ### Requirement: The session decides who replies
-For each `say`, the frontend SHALL count the session's answering peers: peers that declare `HookAnswer`, excluding the frontend. With exactly one, the session asks it the say (see `answer-details`). With more than one, the say goes to the room and the first message that replies to it is the result; later replies stay in the conversation but are not returned. A said message reaches only peers that declare `HookListen`, so when several peers answer and none of them listens, the result MUST be `error` at once instead of waiting for the deadline. With none, the result MUST be `error`. This rule stands in for a future peer router.
+For each `say`, the frontend SHALL count the session's answering peers: peers that declare `HookAnswer`, excluding the frontend. With exactly one, the session asks it the say (see `answer-details`). With more than one, the say goes to the room and the first message that replies to it is the result; later replies stay in the conversation but are not returned. A said message reaches only peers that declare `HookListen`, so when several peers answer and none of them listens, the result MUST be `error` at once instead of waiting for a reply that cannot come. With none, the result MUST be `error`. This rule stands in for a future peer router.
 
 #### Scenario: Only one peer
 - **WHEN** a client says "will it rain?" to a session whose only answering peer is `weather`
@@ -74,19 +74,15 @@ For each `say`, the frontend SHALL count the session's answering peers: peers th
 - **THEN** the result is `error` saying no peer can answer
 
 ### Requirement: Exactly one result per question
-Every `say` SHALL return exactly one result `{status, text, attachments, msg_id}`, where `msg_id` is the reply's message id and is absent when no reply arrived, with `status` one of `answered`, `asked` (answered with a question back to the asker), `error` or `timeout`. It MUST return before the request's deadline: the caller's `deadline_ms`, or else the frontend's default deadline, which is configurable when the frontend is created and is 120 seconds when not set; a question nobody has answered by then MUST yield `timeout`. A failing peer MUST yield `error` with a message saying what failed. Results of `error` and `timeout` MUST be marked as tool errors in MCP. The result carries the status of the reply's message: the peer's `Reply` status when the lone peer was asked, `answered` for a plain text or a reply said in the room.
+Every `say` SHALL return exactly one result `{status, text, attachments, msg_id}`, where `msg_id` is the reply's message id and is absent when no reply arrived, with `status` one of `answered`, `asked` (answered with a question back to the asker) or `error`. There is no deadline: the call waits for the first reply, and a client that ends its call MUST leave nothing of the message waiting. A failing peer MUST yield `error` with a message saying what failed. Results of `error` MUST be marked as tool errors in MCP. The result carries the status of the reply's message: the peer's `Reply` status when the lone peer was asked, `answered` for a plain text or a reply said in the room.
 
 #### Scenario: Answered
 - **WHEN** the session's only peer `weather` answers `sunny`
 - **THEN** the result is `answered` with text `sunny`
 
-#### Scenario: Nobody answers in time
-- **WHEN** a client says something with a deadline of 1 second and no reply comes within it
-- **THEN** the result is `timeout`, returned within the deadline
-
-#### Scenario: Configured default deadline
-- **WHEN** the frontend is created with a default deadline of 30 seconds and a client says something without `deadline_ms`
-- **THEN** a question not answered after 30 seconds yields `timeout`
+#### Scenario: The client gives up
+- **WHEN** a client ends its `say` call before any reply comes
+- **THEN** the frontend stops waiting for that message and lets go of what it held
 
 #### Scenario: Answered with a question
 - **WHEN** the answering peer returns `Reply("which login flow?", status="asked")`

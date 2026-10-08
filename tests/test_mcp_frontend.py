@@ -1,13 +1,12 @@
 """McpFrontend: what a terminal can do, as MCP tools, over the modern MCP protocol."""
 
 import asyncio
-import time
 
 import pytest
 
 from chatinho import LOCAL, Attachment, HookAnswer, HookAsk, HookExecute, Reply, connector, require, tool
-from chatinho.connectors.mcp import _decode
-from chatinho.frontends.mcp import CREDENTIALS_KEY, McpFrontend
+from chatinho.frontends.mcp import McpFrontend
+from chatinho.helpers.mcp import CREDENTIALS_KEY, decode
 from mcp_kit import Agent, Files, Weather, call, client, remote, say
 
 
@@ -36,9 +35,9 @@ async def test_what_a_terminal_can_do():
         tools = {t.name: t for t in await c.list_tools()}
         other = await c.call_tool_mcp("forget", {})
     assert list(tools) == ["say", "ask", "peers", "tools", "run"]
-    assert set(tools["say"].input_schema["properties"]) == {"text", "asker", "deadline_ms"}
-    assert set(tools["ask"].input_schema["properties"]) == {"peer", "text", "deadline_ms"}
-    assert set(tools["run"].input_schema["properties"]) == {"name", "args", "deadline_ms"}
+    assert set(tools["say"].input_schema["properties"]) == {"text", "asker"}
+    assert set(tools["ask"].input_schema["properties"]) == {"peer", "text"}
+    assert set(tools["run"].input_schema["properties"]) == {"name", "args"}
     assert other.is_error
     await session.close()
 
@@ -48,24 +47,6 @@ async def test_answered():
     async with client(front) as c:
         got = await say(c, "will it rain?")
     assert (got["status"], got["text"]) == ("answered", "sunny")
-    await session.close()
-
-
-async def test_no_reply_in_time():
-    session, front = await remote(Weather(delay=0.6))
-    started = time.monotonic()
-    async with client(front) as c:
-        got = await say(c, "slow?", deadline_ms=200)
-    assert got["status"] == "timeout"
-    assert time.monotonic() - started < 2
-    await session.close()
-
-
-async def test_the_default_deadline_is_configurable():
-    session, front = await remote(Weather(delay=0.6), deadline=0.2)
-    async with client(front) as c:
-        got = await say(c, "slow?")
-    assert got["status"] == "timeout"
     await session.close()
 
 
@@ -94,7 +75,7 @@ async def test_attachments_come_back(tmp_path):
     async with client(front) as c:
         got = await say(c, "draw it")
     assert got["status"] == "answered"
-    assert [_decode(a) for a in got["attachments"]] == [chart]
+    assert [decode(a) for a in got["attachments"]] == [chart]
     await session.close()
 
 
@@ -246,14 +227,6 @@ async def test_ask_a_peer_that_fails():
     await session.close()
 
 
-async def test_ask_in_time():
-    session, front = await remote(Weather(delay=0.6))
-    async with client(front) as c:
-        got = await call(c, "ask", peer="weather", text="slow?", deadline_ms=100)
-    assert got["status"] == "timeout"
-    await session.close()
-
-
 @connector("mute")
 class _Mute:
     """In the session, but answers nothing."""
@@ -331,14 +304,6 @@ async def test_run_a_tool_that_does_not_exist():
     await session.close()
 
 
-async def test_run_in_time():
-    session, front = await remote(Weather(), commands=[_EcoTool(delay=0.6)])
-    async with client(front) as c:
-        got = await call(c, "run", name="eco", deadline_ms=100)
-    assert got["status"] == "timeout"
-    await session.close()
-
-
 # === Credentials ===================================================================
 
 async def _lend(c, value="sk-test", **args):
@@ -386,14 +351,16 @@ async def test_each_message_brings_its_own_key():
     await session.close()
 
 
-async def test_a_credential_is_gone_on_timeout():
-    agent = Agent(key=False, delay=0.3)
+async def test_a_credential_is_gone_when_the_client_gives_up():
+    agent = Agent(key=False, delay=0.5)
     session, front = await remote(agent, credentials={"llm": "key"})
     async with client(front) as c:
-        got = await _lend(c, deadline_ms=100)
-    assert got["status"] == "timeout"
+        with pytest.raises(Exception):
+            await c.call_tool_mcp("say", {"text": "go"}, timeout=0.1,
+                                  meta={CREDENTIALS_KEY: {"llm": "sk-test"}})
+        await asyncio.sleep(0.1)
     said = [m for m in session._context() if m.text == "go"][0]
-    assert said.credentials == {}                   # cleared at the deadline, while the peer still works
+    assert said.credentials == {}                   # cleared when the call ended, while the peer still works
     await session.close()
 
 

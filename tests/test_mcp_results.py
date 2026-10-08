@@ -5,37 +5,31 @@ import pytest
 from chatinho import Attachment, Reply, ReplyStatus
 from chatinho.connectors import mcp as connector
 from chatinho.frontends import mcp as frontend
+from chatinho.helpers import mcp as helpers
 
 
 def test_an_answer_becomes_the_reply_with_its_attachments():
     chart = Attachment("chart.svg", "image/svg+xml", b"<svg/>")
-    res   = frontend._result("answered", "here [chart](chart.svg)", [chart], "msg-0123456789abcdef")
+    res   = frontend._result(ReplyStatus.ANSWERED, "here [chart](chart.svg)", [chart], "msg-0123456789abcdef")
     assert not res.is_error
     assert connector._reply_from(res, "lab") == Reply("here [chart](chart.svg)", (chart,))
 
 
 def test_a_question_back_is_marked_asked():
-    got = connector._reply_from(frontend._result("asked", "which city?"), "lab")
+    got = connector._reply_from(frontend._result(ReplyStatus.ASKED, "which city?"), "lab")
     assert got == Reply("lab asks: which city?", status=ReplyStatus.ASKED)
 
 
-@pytest.mark.parametrize("status", ["error", "timeout"])
-def test_errors_and_timeouts_become_an_error_reply(status):
-    got = connector._reply_from(frontend._result(status, "what went wrong"), "lab")
+def test_an_error_becomes_an_error_reply():
+    got = connector._reply_from(frontend._result(ReplyStatus.ERROR, "what went wrong"), "lab")
     assert got.status is ReplyStatus.ERROR
-    assert got.text == "lab: %s — what went wrong" % status
+    assert got.text == "lab: error — what went wrong"
 
 
-@pytest.mark.parametrize("status", ["error", "timeout"])
-def test_errors_and_timeouts_are_tool_errors(status):
-    res = frontend._result(status, "what went wrong")
+def test_an_error_is_a_tool_error():
+    res = frontend._result(ReplyStatus.ERROR, "what went wrong")
     assert res.is_error
-    assert res.content[0].text == "[%s] what went wrong" % status
-
-
-def test_an_unknown_status_is_refused():
-    with pytest.raises(ValueError):
-        frontend._result("maybe", "x")
+    assert res.content[0].text == "[error] what went wrong"
 
 
 def test_a_plain_result_is_answered_or_an_error():
@@ -51,8 +45,7 @@ def test_a_plain_result_is_answered_or_an_error():
     ("", "client"), (None, "client"), (3, "client"),
 ])
 def test_names_are_safe_for_a_peer_path(raw, name):
-    assert frontend._safe_name(raw, "client") == name
-    assert connector._safe_name(raw, "client") == name
+    assert helpers.safe_name(raw, "client") == name
 
 
 def test_attachments_are_the_relative_links():
@@ -71,11 +64,10 @@ def test_only_file_links_are_read(tmp_path):
 
 
 def test_media_types():
-    assert frontend._media_type_of("chart.svg") == "image/svg+xml"
-    assert frontend._media_type_of("blob") == "application/octet-stream"
+    assert helpers.media_type_of("chart.svg") == "image/svg+xml"
+    assert helpers.media_type_of("blob") == "application/octet-stream"
 
 
-def test_both_ends_agree_on_the_contract():
-    assert frontend.CREDENTIALS_KEY == connector.CREDENTIALS_KEY
-    assert frontend.STATUSES == connector.STATUSES
-    assert set(frontend.STATUSES) == {s.value for s in ReplyStatus} | {"timeout"}
+def test_an_attachment_survives_the_trip():
+    chart = Attachment("chart.svg", "image/svg+xml", b"<svg/>")
+    assert helpers.decode(helpers.encode(chart)) == chart

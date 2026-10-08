@@ -163,16 +163,6 @@ async def test_a_remote_error_is_said_briefly():
     await remote_session.close()
 
 
-async def test_a_remote_timeout_is_said_briefly():
-    remote_session, front = await remote(Weather(delay=0.6))
-    lab = McpConnector(server=front.server, name="lab", deadline=0.1)
-    session, view = await _local(lab)
-    got = await _asked(view, lab, "rain?")
-    assert got.status == "error" and got.text.startswith("lab: timeout")
-    await session.close()
-    await remote_session.close()
-
-
 async def test_an_unreachable_server_still_gets_a_reply():
     lab = McpConnector(url="http://127.0.0.1:9/mcp", token="t", name="lab")
     session, view = await _local(lab)

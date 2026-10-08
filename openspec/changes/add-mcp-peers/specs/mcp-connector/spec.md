@@ -7,7 +7,7 @@ Lets a chatinho session put questions to another session over MCP through one or
 ## ADDED Requirements
 
 ### Requirement: A connector to a remote session
-chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connector` built from a server to connect to (an HTTP URL with a bearer token, or an in-process server), a `name` and an optional `deadline` (sent with every question it sends; when not set, the server's default applies). It MUST speak the modern MCP protocol (2026-07-28). Its name in the chat MUST be the `name` given, or the server's name when none is given, and MUST be sent to the server as the client name with every request.
+chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connector` built from a server to connect to (an HTTP URL with a bearer token, or an in-process server), and a `name`. It MUST speak the modern MCP protocol (2026-07-28). Its name in the chat MUST be the `name` given, or the server's name when none is given, and MUST be sent to the server as the client name with every request.
 
 #### Scenario: Named by the connector
 - **WHEN** `McpConnector(url=..., token=..., name="lab")` is added to a session
@@ -33,7 +33,7 @@ The connector SHALL send a question only for messages addressed to it: a message
 - **THEN** the session asks the connector, by the core rule, and the connector asks the remote session `will it rain?`
 
 ### Requirement: Every question gets one answer
-For every message it is addressed by, the connector SHALL post exactly one reply to it: the remote answer's text, with its attachments attached, when the status is `answered`; the remote peer's question, marked as a question back to the asker, for `asked`; and a short message naming the status for `error` and `timeout`. Losing the connection MUST also produce a reply saying so.
+For every message it is addressed by, the connector SHALL post exactly one reply to it: the remote answer's text, with its attachments attached, when the status is `answered`; the remote peer's question, marked as a question back to the asker, for `asked`; and a short message naming the status for `error`. Losing the connection MUST also produce a reply saying so.
 
 #### Scenario: Answer with an attachment
 - **WHEN** the remote answer is `answered` with attachment `chart.svg`

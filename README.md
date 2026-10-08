@@ -239,8 +239,8 @@ async with client:
   remote peer. In any chatinho session, a say in a room where exactly one peer answers is asked of
   that peer; with several, it is said to the room. With several and none listening, that is an
   error — a peer router is the planned fix.
-- **One reply, always.** Every question ends in exactly one of `answered`, `asked` (a question back),
-  `error` or `timeout`, within a deadline — 120 s unless the frontend or the connector sets another.
+- **One reply, always.** Every question ends in exactly one of `answered`, `asked` (a question back)
+  or `error`. There is no deadline: a client that stops waiting just ends its call.
   Attachments come back with the answer and the local backend keeps them.
 - **The frontend speaks for every client.** It says each client's message in the remote session as
   its own, and sends the reply to that message back to the client that sent it — several clients at

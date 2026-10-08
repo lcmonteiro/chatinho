@@ -3,21 +3,17 @@
 :class:`McpConnector` is an ordinary connector: it appears in the chat under a
 name it chooses (``@lab``), and a message addressed to it — ``@lab will it
 rain?`` — is said in the remote session through its ``say`` tool, and the
-first reply to it comes back.
-Exactly one reply comes back for every such message.
+first reply to it comes back: exactly one reply for every such message.
 
 It is a FastMCP client and speaks the modern MCP protocol (2026-07-28). When a
 remote peer needs an LLM, the connector can lend it a credential for that one
 question — out of band, only one the server declared, and only over HTTPS or
-to this machine. Without
-``delegate``, no key ever leaves this machine.
+to this machine. Without ``delegate``, no key ever leaves this machine.
 """
 
-import base64
 import ipaddress
 import logging
-import mimetypes
-from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Mapping, Optional, Union
 from urllib.parse import urlparse
 
 import mcp_types as types
@@ -34,16 +30,10 @@ from chatinho.chat_hooks import (
     name_of,
     require,
 )
-from chatinho.chat_message import TOOL, Attachment, ChatMessage, Reply, ReplyStatus
+from chatinho.chat_message import TOOL, ChatMessage, Reply, ReplyStatus
+from chatinho.helpers.mcp import CREDENTIALS_KEY, decode, safe_name
 
 logger = logging.getLogger(__name__)
-
-#: Every result a say can end in; exactly one per message.
-STATUSES : Tuple[str, ...] = ("answered", "asked", "error", "timeout")
-
-#: Where a client puts the credentials it lends, in a request's ``_meta``, and
-#: the capability extension a server declares the ones it accepts under.
-CREDENTIALS_KEY : str = "chatinho/credentials"
 
 
 # === What comes back from the server ==============================================
@@ -52,12 +42,12 @@ def _reply_from(res: types.CallToolResult, name: str) -> Reply:
     """The local reply for what ``McpFrontend`` wrote, or the best of a plain result.
 
     ``answered`` keeps the text and attachments; ``asked`` becomes a question
-    from the remote session; ``error`` and ``timeout`` become a short error.
+    from the remote session; ``error`` becomes a short error.
     A server that is not a chatinho session answers with text alone: that is
     answered, or an error when the result is marked as one.
     """
     data = res.structured_content
-    if isinstance(data, dict) and data.get("status") in STATUSES:
+    if isinstance(data, dict) and data.get("status") in {status.value for status in ReplyStatus}:
         status = data["status"]
         text   = str(data.get("text", ""))
     else:
@@ -65,37 +55,10 @@ def _reply_from(res: types.CallToolResult, name: str) -> Reply:
         text   = "\n".join(block.text for block in res.content if isinstance(block, types.TextContent))
         data   = {}
     if status == "answered":
-        return Reply(text, tuple(_decode(item) for item in data.get("attachments") or ()))
+        return Reply(text, tuple(decode(item) for item in data.get("attachments") or ()))
     if status == "asked":
         return Reply("%s asks: %s" % (name, text), status=ReplyStatus.ASKED)
     return Reply("%s: %s — %s" % (name, status, text), status=ReplyStatus.ERROR)
-
-
-def _decode(data: Dict[str, Any]) -> Attachment:
-    """Reads back an attachment as ``McpFrontend`` encoded it."""
-    return Attachment(
-        name       = str(data["name"]),
-        media_type = str(data.get("media_type") or _media_type_of(str(data["name"]))),
-        data       = base64.b64decode(data.get("data_b64") or ""),
-    )
-
-
-def _safe_name(raw: Any, default: str) -> str:
-    """A name that can stand in a peer path: non-empty, with no ``/``.
-
-    Args:
-        raw: What the other side called itself; anything.
-        default: What to use when *raw* gives nothing usable.
-    """
-    if not isinstance(raw, str):
-        return default
-    name = " ".join(raw.replace("/", "-").split())
-    return name or default
-
-
-def _media_type_of(name: str) -> str:
-    """The media type a file called *name* most likely holds."""
-    return mimetypes.guess_type(name)[0] or "application/octet-stream"
 
 
 @connector("mcp")
@@ -116,15 +79,12 @@ class McpConnector:
         server: An in-process server, for tests and embedding.
         name: Its name in the chat, and the client name the server sees; the
             server's name when left out.
-        deadline: How long the remote session may take for each question, in
-            seconds; the server's own default when left out.
         delegate: Credentials to lend, by name: a value, or a function returning
             one for each question. Only the ones the server declares are sent,
             and only over HTTPS or to this machine.
 
     Raises:
-        ValueError: Not exactly one server, a *url* without a *token*, or a
-            non-positive deadline.
+        ValueError: Not exactly one server, or a *url* without a *token*.
     """
 
     say   : Say
@@ -137,21 +97,17 @@ class McpConnector:
         token       : Optional[str] = None,
         server      : Any = None,
         name        : Optional[str] = None,
-        deadline    : Optional[float] = None,
         delegate    : Optional[Mapping[str, Union[str, Callable[[], str]]]] = None,
     ) -> None:
         if (url is None) == (server is None):
             raise ValueError("Give exactly one of url or server")
         if url is not None and not token:
             raise ValueError("An HTTP server needs its bearer token")
-        if deadline is not None and deadline <= 0:
-            raise ValueError("deadline must be positive")
         self._url        = url
         self._token      = token
         self._server     = server
         self._named      = name is not None
-        self.name        = _safe_name(name, "mcp") if name is not None else "mcp"
-        self.deadline    = deadline
+        self.name        = safe_name(name, "mcp") if name is not None else "mcp"
         self._delegate   = dict(delegate or {})
         self._client     : Any = self._make_client()
 
@@ -172,7 +128,7 @@ class McpConnector:
             logger.warning("%s could not reach its server: %s", self.name, exc)
             return
         if found is not None:
-            self.name    = _safe_name(found.name, self.name)
+            self.name    = safe_name(found.name, self.name)
             self._named  = True
             self._client = self._make_client()      # so the server sees the real name
 
@@ -215,9 +171,7 @@ class McpConnector:
         if self._delegate and not self._may_delegate():
             return Reply("%s: lending credentials needs HTTPS; nothing was sent" % self.name,
                          status=ReplyStatus.ERROR)
-        args : Dict[str, Any] = {"text": text, "asker": asker}
-        if self.deadline is not None:
-            args["deadline_ms"] = int(self.deadline * 1000)
+        args = {"text": text, "asker": asker}
         try:
             async with self._client as client:
                 if client.protocol_version not in MODERN_PROTOCOL_VERSIONS:
