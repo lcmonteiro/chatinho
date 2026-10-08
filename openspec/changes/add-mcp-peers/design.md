@@ -42,7 +42,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - **No peer per client.** The frontend listens and resolves its own waits (decisions 3 and 4), and adds or removes no peer.
 
 ### 2. Wire format: the terminal's tools
-`McpFrontend` builds a `FastMCP` server whose tools are plain async functions declared with `@mcp.tool`, each acting through the frontend: FastMCP derives each schema from the signature and each description from the docstring, and a tool reads the request's `_meta` (client name, lent credentials) through its `Context`.
+`McpFrontend` builds a `FastMCP` server and registers its own async methods as the tools (`mcp.tool(self._ask, name="ask")`, one line each): FastMCP derives each schema from the signature and each description from the docstring, and a tool reads the request's `_meta` (client name, lent credentials) through its `Context`.
 - **Tools:** what a person at the terminal can do, mirroring `ChatApp`'s grants. There is no tool to read attachments later; attachments come back with the reply.
   - `say(text, asker?, deadline_ms?)`: the bridge. The frontend says the text in the session and returns the first reply; there is no peer name, so the session decides who replies (decision 4).
   - `ask(peer, text, deadline_ms?)`: the frontend says the text addressed to the peer of that name (`say(..., to=)`), so it is asked of that peer, and returns its answer. An unknown name, a name several peers share, the frontend's own name, or a peer that does not declare `HookAnswer` is `error` at once.

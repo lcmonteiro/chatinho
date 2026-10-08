@@ -160,7 +160,12 @@ class McpFrontend:
         self.credentials : Dict[str, str] = dict(credentials or {})
         self._token      = token
         #: The MCP server itself; an in-process client can connect to it directly.
-        self.server = _serving(self, FastMCP(name, auth=_OneToken(token)))
+        self.server = FastMCP(name, auth=_OneToken(token))
+        self.server.tool(self._say,   name="say")
+        self.server.tool(self._ask,   name="ask")
+        self.server.tool(self._peers, name="peers")
+        self.server.tool(self._tools, name="tools")
+        self.server.tool(self._run,   name="run")
         if self.credentials:
             self.server.add_extension(_Credentials(self.credentials))
         #: Messages waiting for their reply, by the id the frontend said them under.
@@ -199,20 +204,58 @@ class McpFrontend:
         for message in list(self._open.values()):
             self._close(message)
 
-    # === MCP ========================================================================
+    # === The tools ==================================================================
 
-    def _listed_peers(self) -> List[PeerInfo]:
-        """Everyone in the session but the frontend, and whether each answers."""
+    async def _say(
+        self,
+        text        : _Text,
+        ctx         : Context,
+        asker       : Annotated[Optional[str], Field(description="Who says it, for follow-ups.")] = None,
+        deadline_ms : _Deadline = None,
+    ) -> ToolResult:
+        """Say something in this chatinho session, and get the first reply to it.
+
+        When one peer answers in the session, it is asked of that peer; when
+        several do, it is said to the room. The result is exactly one of:
+        answered, asked (a question back to you), error or timeout.
+        """
+        def send(client: str, seconds: float, meta: Dict[str, Any]) -> Any:
+            return self._forward(client, asker, text, seconds, meta)
+        return await self._bridged("say", ctx, text, deadline_ms, send)
+
+    async def _ask(
+        self,
+        peer        : Annotated[str, Field(description="The peer's name.")],
+        text        : _Text,
+        ctx         : Context,
+        deadline_ms : _Deadline = None,
+    ) -> ToolResult:
+        """Ask one peer of this session, by name (see peers), and get its answer.
+
+        The result is exactly one of: answered, asked (a question back to you),
+        error or timeout.
+        """
+        def send(client: str, seconds: float, meta: Dict[str, Any]) -> Any:
+            return self._asked(client, peer, text, seconds, meta)
+        return await self._bridged("ask", ctx, text, deadline_ms, send)
+
+    async def _peers(self) -> List[PeerInfo]:
+        """Lists the peers in this session, and whether each one answers what it is asked."""
         return [PeerInfo(name=name_of(who), answers=declares(who, HookAnswer))
                 for at, who in sorted(self.peers().items()) if at != LOCAL]
 
-    def _listed_tools(self) -> List[ToolInfo]:
-        """The session's tools, each with its description."""
+    async def _tools(self) -> List[ToolInfo]:
+        """Lists this session's tools (its slash commands), each with what it does."""
         return [ToolInfo(name=name, description=str(getattr(cmd, "description", "") or ""))
                 for name, cmd in sorted(self.commands().items())]
 
-    async def _run(self, name: str, args: str, deadline_ms: Optional[int]) -> ToolResult:
-        """Runs one of the session's tools, within the deadline."""
+    async def _run(
+        self,
+        name        : Annotated[str, Field(description="The tool's name, without the slash.")],
+        args        : Annotated[str, Field(description="Its arguments, as typed after its name.")] = "",
+        deadline_ms : _Deadline = None,
+    ) -> ToolResult:
+        """Runs one of this session's tools (see tools) and returns what it answered."""
         seconds = deadline_ms / 1000.0 if deadline_ms else self.deadline
         name    = name.lstrip("/")
         if name not in self.commands():
@@ -225,6 +268,8 @@ class McpFrontend:
             logger.error("run /%s failed", name, exc_info=True)
             return _result("error", "/%s failed: %s" % (name, type(exc).__name__))
         return _result("answered", said or "")
+
+    # === One call ===================================================================
 
     async def _bridged(
         self, tool: str, ctx: Context, text: str, deadline_ms: Optional[int], send: Any,
@@ -349,66 +394,6 @@ class McpFrontend:
             if data is not None:
                 found.append(Attachment(name, _media_type_of(name), data))
         return found
-
-
-# === The tools ====================================================================
-
-def _serving(front: "McpFrontend", mcp: FastMCP) -> FastMCP:
-    """Gives *mcp* the tools of a terminal, each one acting through *front*."""
-
-    @mcp.tool
-    async def say(
-        text        : _Text,
-        ctx         : Context,
-        asker       : Annotated[Optional[str], Field(description="Who says it, for follow-ups.")] = None,
-        deadline_ms : _Deadline = None,
-    ) -> ToolResult:
-        """Say something in this chatinho session, and get the first reply to it.
-
-        When one peer answers in the session, it is asked of that peer; when
-        several do, it is said to the room. The result is exactly one of:
-        answered, asked (a question back to you), error or timeout.
-        """
-        def send(client: str, seconds: float, meta: Dict[str, Any]) -> Any:
-            return front._forward(client, asker, text, seconds, meta)
-        return await front._bridged("say", ctx, text, deadline_ms, send)
-
-    @mcp.tool
-    async def ask(
-        peer        : Annotated[str, Field(description="The peer's name.")],
-        text        : _Text,
-        ctx         : Context,
-        deadline_ms : _Deadline = None,
-    ) -> ToolResult:
-        """Ask one peer of this session, by name (see peers), and get its answer.
-
-        The result is exactly one of: answered, asked (a question back to you),
-        error or timeout.
-        """
-        def send(client: str, seconds: float, meta: Dict[str, Any]) -> Any:
-            return front._asked(client, peer, text, seconds, meta)
-        return await front._bridged("ask", ctx, text, deadline_ms, send)
-
-    @mcp.tool
-    async def peers() -> List[PeerInfo]:
-        """Lists the peers in this session, and whether each one answers what it is asked."""
-        return front._listed_peers()
-
-    @mcp.tool
-    async def tools() -> List[ToolInfo]:
-        """Lists this session's tools (its slash commands), each with what it does."""
-        return front._listed_tools()
-
-    @mcp.tool
-    async def run(
-        name        : Annotated[str, Field(description="The tool's name, without the slash.")],
-        args        : Annotated[str, Field(description="Its arguments, as typed after its name.")] = "",
-        deadline_ms : _Deadline = None,
-    ) -> ToolResult:
-        """Runs one of this session's tools (see tools) and returns what it answered."""
-        return await front._run(name, args, deadline_ms)
-
-    return mcp
 
 
 # === What goes back to the client ================================================
