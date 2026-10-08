@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from chatinho import Attachment, ChatSession, HookAnswer, Reply, connector, require
+from chatinho import Attachment, HookAnswer, Reply, connector, require
 from chatinho.connectors.mcp import McpConnector
 from conftest import driven
 from mcp_kit import Agent, Files, Weather, remote
@@ -114,8 +114,6 @@ async def test_the_only_peer_here_gets_everything_said():
     await view.say("will it rain?")
     await _replies(view, 2)
     assert [m.text for m in weather.asked] == ["will it rain?"]
-    await session.close()
-    await remote_session.close()
     await session.close()
     await remote_session.close()
 
@@ -253,13 +251,21 @@ async def test_nothing_is_lent_without_delegate():
     await remote_session.close()
 
 
-async def test_shutdown_closes_the_link():
+async def test_no_link_stays_open_between_questions():
     remote_session, front = await remote(Weather())
     lab = McpConnector(server=front.server, name="lab")
-    session = ChatSession(connectors=[lab])
-    await session.start()
-    assert lab._client is not None
+    session, view = await _local(lab)
+    assert await view.ask(lab.peer_id, "rain?") == "sunny"
+    assert not lab._client.is_connected()
     await session.close()
-    await asyncio.sleep(0.05)
-    assert lab._client is None
+    await remote_session.close()
+
+
+async def test_two_questions_at_once():
+    remote_session, front = await remote(Weather("sunny", delay=0.2))
+    lab = McpConnector(server=front.server, name="lab")
+    session, view = await _local(lab)
+    got = await asyncio.gather(view.ask(lab.peer_id, "one?"), view.ask(lab.peer_id, "two?"))
+    assert got == ["sunny", "sunny"]
+    await session.close()
     await remote_session.close()

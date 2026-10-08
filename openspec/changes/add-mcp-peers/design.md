@@ -42,12 +42,12 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - **No peer per client.** The frontend listens and resolves its own waits (decisions 3 and 4), and adds or removes no peer.
 
 ### 2. Wire format: the terminal's tools
-`McpFrontend` is a `FastMCP` server whose tools are its own async methods: FastMCP derives each schema from the method's signature, and a tool reads the request's `_meta` (client name, lent credentials) through its `Context`.
+`McpFrontend` builds a `FastMCP` server whose tools are plain async functions declared with `@mcp.tool`, each acting through the frontend: FastMCP derives each schema from the signature and each description from the docstring, and a tool reads the request's `_meta` (client name, lent credentials) through its `Context`.
 - **Tools:** what a person at the terminal can do, mirroring `ChatApp`'s grants. There is no tool to read attachments later; attachments come back with the reply.
   - `say(text, asker?, deadline_ms?)`: the bridge. The frontend says the text in the session and returns the first reply; there is no peer name, so the session decides who replies (decision 4).
   - `ask(peer, text, deadline_ms?)`: the frontend says the text addressed to the peer of that name (`say(..., to=)`), so it is asked of that peer, and returns its answer. An unknown name, a name several peers share, the frontend's own name, or a peer that does not declare `HookAnswer` is `error` at once.
-  - `peers()`: every peer but the frontend, as `peers: [{name, answers}]`, and a line each in the text.
-  - `tools()`: the session's commands, as `tools: [{name, description}]`, and `/name - description` lines in the text.
+  - `peers()`: every peer but the frontend, as a typed list of `PeerInfo(name, answers)`; a FastMCP client reads it back as objects from `result.data`.
+  - `tools()`: the session's commands, as a typed list of `ToolInfo(name, description)`.
   - `run(name, args?, deadline_ms?)`: runs a command through `invoke` (a leading `/` is accepted) and returns its answer as `answered`; an unknown command is `error`, and one that outlasts the deadline is `timeout`.
 - **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, where `msg_id` is the reply's message id in the remote session (absent when no reply arrived), also rendered as text for clients that only read text. `error` and `timeout` set `isError`.
 - **Read back:** `McpConnector` turns the result straight into its local `Reply`: `answered` keeps the text and attachments, `asked` becomes `ReplyStatus.ASKED`, and `error` and `timeout` become `ReplyStatus.ERROR` with the status named in the text.
@@ -106,7 +106,7 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - **Asker:** the connector sends the asking peer's name; the frontend uses it only to keep that asker's follow-ups together.
 
 ### 8. Connection lifecycle
-- `McpConnector` opens an SDK `Client` in modern mode (`mode="auto"`, which probes `server/discover`) in `initialize()`, and closes it in `shutdown()`. It doesn't implement `serve()`, because a dropped link must not end the local chat.
+- `McpConnector` holds one `fastmcp.Client` and opens it per question (`async with client: await client.call_tool("say", …)`); the protocol is stateless, so no link stays open between questions and there is nothing to close at `shutdown()`. `initialize()` opens it once to take the server's name when none was given. It doesn't implement `serve()`, because a dropped link must not end the local chat.
 - The connector refuses a server that only speaks the handshake era. Each request is independent; a failed call answers `error` ("could not reach …"), and the client is reopened lazily on the next question.
 - **Transport:** Streamable HTTP only, `url=…, token=…` with a `Bearer` header, or `server=…` for an in-process server in tests and embedding; `deadline` is optional. There is no stdio transport on either side.
 - `McpFrontend(name="master", *, token, host, port, deadline, credentials)`; the token is required, and the name is the frontend's peer name and the server's name. Its `serve()` runs FastMCP's Streamable HTTP app under Uvicorn, with a `TokenVerifier` that compares the bearer token in constant time, and `shutdown()` stops it.

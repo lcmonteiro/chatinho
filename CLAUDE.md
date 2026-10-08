@@ -329,7 +329,7 @@ src/chatinho/
 docs/              SPEC.md — the fourteen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
-                   agent_inbox.py (HTTP, inbound), mcp_server.py (served over MCP)
+                   agent_inbox.py (HTTP, inbound), mcp_server.py (served over MCP), mcp_client.py (a plain FastMCP client)
 tests/             test_chat_app.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_a2a_payload.py,

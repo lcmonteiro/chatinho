@@ -52,3 +52,22 @@ async def test_the_example_answers_without_a_key(served):
     session, view = await driven(connectors=[lab])
     assert (await view.ask(lab.peer_id, "hi")).startswith("You asked: hi")
     await session.close()
+
+
+CLIENT = EXAMPLE.with_name("mcp_client.py")
+
+
+async def test_a_plain_fastmcp_client_talks_to_the_example(served):
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, str(CLIENT), served,
+        env={**os.environ, "CHATINHO_MCP_TOKEN": "s3cret"},
+        stdout=asyncio.subprocess.PIPE,
+    )
+    out, _ = await asyncio.wait_for(proc.communicate(), 30)
+    lines  = out.decode().splitlines()
+    assert proc.returncode == 0
+    assert lines == [
+        "peer: agent (answers)",
+        "answered - You asked: what is chatinho? (lend me a key and I will think about it)",
+        "Thinking about 'what is chatinho?' with the key you lent (12 characters)",
+    ]

@@ -299,19 +299,16 @@ class _EcoTool:
 async def test_peers():
     session, front = await remote(Agent(), Weather(), _Mute())
     async with client(front) as c:
-        got = await call(c, "peers")
-    assert got["peers"] == [{"name": "agent", "answers": True}, {"name": "weather", "answers": True},
-                            {"name": "mute", "answers": False}]
-    assert "mute (does not answer)" in got["text"]
+        result = await c.call_tool("peers")
+    assert [(p.name, p.answers) for p in result.data] == [("agent", True), ("weather", True), ("mute", False)]
     await session.close()
 
 
 async def test_tools():
     session, front = await remote(Weather(), commands=[_EcoTool()])
     async with client(front) as c:
-        got = await call(c, "tools")
-    assert got["tools"] == [{"name": "eco", "description": "Repeats what it is given"}]
-    assert got["text"] == "/eco - Repeats what it is given"
+        result = await c.call_tool("tools")
+    assert [(t.name, t.description) for t in result.data] == [("eco", "Repeats what it is given")]
     await session.close()
 
 

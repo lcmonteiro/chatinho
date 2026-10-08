@@ -219,6 +219,19 @@ lab = McpConnector(url="https://lab.example/mcp", token="s3cret", name="lab",
 build_chat(connectors=[lab]).run()
 ```
 
+Any MCP client can use it too — it needs no chatinho, only FastMCP:
+
+```python
+from fastmcp import Client
+
+client = Client("https://lab.example/mcp", auth="s3cret")
+
+async with client:
+    peers  = (await client.call_tool("peers")).data          # [PeerInfo(name=..., answers=...)]
+    result = await client.call_tool("ask", {"peer": "agent", "text": "will it rain?"})
+    print(result.structured_content["text"])
+```
+
 - **The terminal's tools.** `McpFrontend` offers MCP clients what a person at the terminal can do:
   `say`, `ask` (one peer, by name), `peers`, `tools` (the slash commands) and `run` (one of them).
 - **`say` is a bridge.** `@lab will it rain?` sends the rest of the line to the remote session,
@@ -309,6 +322,7 @@ content: an HTML attachment runs its scripts when your browser opens it.
 | [`examples/headless.py`](examples/headless.py) | the same chat wired to stdin/stdout |
 | [`examples/agent_inbox.py`](examples/agent_inbox.py) | inbound: an agent asks over HTTP, you answer |
 | [`examples/mcp_server.py`](examples/mcp_server.py) | a chat with no terminal, served over MCP for another session to ask |
+| [`examples/mcp_client.py`](examples/mcp_client.py) | a plain FastMCP client calling that server's `peers`, `say` and `ask` |
 
 ---
 

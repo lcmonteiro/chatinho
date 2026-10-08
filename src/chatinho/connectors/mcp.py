@@ -162,32 +162,28 @@ class McpConnector:
         self.name        = _safe_name(name, "mcp") if name is not None else "mcp"
         self.deadline    = deadline
         self._delegate   = dict(delegate or {})
-        self._client     : Any = None
-        self._runner     : Optional["asyncio.Task[None]"] = None
-        self._stop       : Optional[asyncio.Event] = None
+        self._client     : Any = self._make_client()
 
     # === Lifecycle ==================================================================
 
     async def initialize(self) -> None:
-        """Connects, and takes the server's name when none was given.
+        """Takes the server's name when none was given.
 
         A server that cannot be reached is not fatal: the chat goes on, and the
         next question tries again and answers that it could not.
         """
+        if self._named:
+            return
         try:
-            client = await self._connect()
+            async with self._client as client:
+                found = client.server_info
         except Exception as exc:
             logger.warning("%s could not reach its server: %s", self.name, exc)
             return
-        if not self._named and client.server_info is not None:
-            self.name   = _safe_name(client.server_info.name, self.name)
-            self._named = True
-            # The server saw the placeholder name; the next requests carry the real one.
-            self._disconnect()
-
-    def shutdown(self) -> None:
-        """Closes the link."""
-        self._disconnect()
+        if found is not None:
+            self.name    = _safe_name(found.name, self.name)
+            self._named  = True
+            self._client = self._make_client()      # so the server sees the real name
 
     # === Being addressed ============================================================
 
@@ -233,15 +229,17 @@ class McpConnector:
             args["deadline_ms"] = int(self.deadline * 1000)
         limit = (self.deadline or DEFAULT_DEADLINE * 5) + _GRACE
         try:
-            client = await self._connect()
-            meta   = self._lending(client)
-            got    = await asyncio.wait_for(client.call_tool_mcp("say", args, meta=meta), limit)
+            async with self._client as client:
+                if client.protocol_version not in MODERN_PROTOCOL_VERSIONS:
+                    raise RuntimeError("The server speaks only the handshake-era MCP protocol")
+                meta = self._lending(client)
+                got  = await asyncio.wait_for(
+                    client.call_tool("say", args, meta=meta, raise_on_error=False), limit)
         except asyncio.TimeoutError:
             return Reply("%s: timeout — the remote session never answered" % self.name,
                          status=ReplyStatus.ERROR)
         except Exception as exc:
             logger.warning("%s could not ask its server: %r", self.name, exc)
-            self._disconnect()
             return Reply("%s: could not reach the remote session (%s)" % (self.name, type(exc).__name__),
                          status=ReplyStatus.ERROR)
         return _reply_from(got, self.name)
@@ -273,39 +271,7 @@ class McpConnector:
                     for name, value in self._delegate.items() if name in declared}
         return {CREDENTIALS_KEY: lent} if lent else None
 
-    # === The link ===================================================================
-
-    async def _connect(self) -> Any:
-        """The open client, opening it first when there is none."""
-        if self._client is not None and self._runner is not None and not self._runner.done():
-            return self._client
-        loop  = asyncio.get_running_loop()
-        ready : "asyncio.Future[Any]" = loop.create_future()
-        self._stop   = asyncio.Event()
-        self._runner = asyncio.create_task(self._run(ready, self._stop))
-        return await ready
-
-    async def _run(self, ready: "asyncio.Future[Any]", stop: asyncio.Event) -> None:
-        """Holds the client open in a task of its own, which is where it must close."""
-        try:
-            async with self._make_client() as client:
-                if client.protocol_version not in MODERN_PROTOCOL_VERSIONS:
-                    raise RuntimeError("The server speaks only the handshake-era MCP protocol")
-                self._client = client
-                ready.set_result(client)
-                await stop.wait()
-        except Exception as exc:
-            if not ready.done():
-                ready.set_exception(exc)
-            else:
-                logger.warning("%s lost its server: %r", self.name, exc)
-        finally:
-            self._client = None
-
-    def _disconnect(self) -> None:
-        if self._stop is not None:
-            self._stop.set()
-        self._client = None
+    # === The client ===================================================================
 
     def _make_client(self) -> Any:
         from fastmcp import Client
