@@ -9,10 +9,11 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - Attachments go to the backend that declares `HookKeep`, under the message id; anyone with `locate` can get a link to them. With no keeping backend they are dropped.
 - A `say` is a broadcast, and a reply to it is another `say` with `reply_to`. Nothing is owed back, so nothing resolves for the sayer; a peer that declares `HookListen` hears every message, including those replies.
 - The core is standard library only; batteries are lazy names behind extras, and `tests/test_architecture.py` checks that (and that `docs/SPEC.md` documents every hook).
-- The official `mcp` SDK (2.3) speaks two protocol eras. The handshake era (2025-11-25) has `initialize`, a session per connection and server-to-client requests. The modern era (2026-07-28), which this change targets, is stateless:
+- FastMCP (4.0), built on the official `mcp` SDK (2.3), speaks two protocol eras. The handshake era (2025-11-25) has `initialize`, a session per connection and server-to-client requests. The modern era (2026-07-28), which this change targets, is stateless:
   - `server/discover` replaces the handshake.
   - Every request carries the client's info and capabilities in `_meta` (`io.modelcontextprotocol/clientInfo`, `…/clientCapabilities`).
-  - The SDK's high-level `Client` can also connect to a `Server` in-process, which the tests use.
+  - FastMCP's `Client` can also connect to a `FastMCP` server in-process, which the tests use.
+  - FastMCP registers async functions as tools, deriving their schema from the signature, gives a tool the request's `_meta` through its `Context`, declares SEP-2133 extensions with `ServerExtension`, and checks bearer tokens with a `TokenVerifier`.
 - Sampling (a server asking its client for a completion) is deprecated in 2026-07-28 (SEP-2577). This change does not use it.
 
 ## Goals / Non-Goals
@@ -20,7 +21,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 **Goals:**
 - One peer in the local chat puts a question to a remote session, and always gets one answer back.
 - A remote peer's LLM calls are paid by the session that asked. Paying for them is done by delegating a credential, opt-in and bounded to one question.
-- Every piece is testable offline, with the SDK's in-process MCP client.
+- Every piece is testable offline, with FastMCP's in-process client.
 
 **Non-Goals:**
 - Routes through several sessions (multi-hop), and `McpConnector` choosing a remote peer (an MCP client can, with `ask`).
@@ -41,7 +42,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - **No peer per client.** The frontend listens and resolves its own waits (decisions 3 and 4), and adds or removes no peer.
 
 ### 2. Wire format: the terminal's tools
-`McpFrontend` uses the SDK's low-level `Server` (`on_list_tools`, `on_call_tool`), for full control over the tool schema and the request context.
+`McpFrontend` is a `FastMCP` server whose tools are its own async methods: FastMCP derives each schema from the method's signature, and a tool reads the request's `_meta` (client name, lent credentials) through its `Context`.
 - **Tools:** what a person at the terminal can do, mirroring `ChatApp`'s grants. There is no tool to read attachments later; attachments come back with the reply.
   - `say(text, asker?, deadline_ms?)`: the bridge. The frontend says the text in the session and returns the first reply; there is no peer name, so the session decides who replies (decision 4).
   - `ask(peer, text, deadline_ms?)`: the frontend says the text addressed to the peer of that name (`say(..., to=)`), so it is asked of that peer, and returns its answer. An unknown name, a name several peers share, the frontend's own name, or a peer that does not declare `HookAnswer` is `error` at once.
@@ -50,7 +51,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
   - `run(name, args?, deadline_ms?)`: runs a command through `invoke` (a leading `/` is accepted) and returns its answer as `answered`; an unknown command is `error`, and one that outlasts the deadline is `timeout`.
 - **Result:** structured content `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, where `msg_id` is the reply's message id in the remote session (absent when no reply arrived), also rendered as text for clients that only read text. `error` and `timeout` set `isError`.
 - **Read back:** `McpConnector` turns the result straight into its local `Reply`: `answered` keeps the text and attachments, `asked` becomes `ReplyStatus.ASKED`, and `error` and `timeout` become `ReplyStatus.ERROR` with the status named in the text.
-- *Alternative: FastMCP decorators.* They're quicker to write but hide the request context needed for client names and lent credentials.
+- *Alternative, the earlier draft: the SDK's low-level `Server` (`on_list_tools`, `on_call_tool`).* It gave full control, but the tool schemas, the dispatch by name, the extension and the bearer check were all hand-written; FastMCP gives the same request context with far less code.
 
 ### 3. The frontend speaks for every client
 The frontend is the session's peer zero, as a terminal is, and it handles every client itself.
@@ -108,13 +109,13 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - `McpConnector` opens an SDK `Client` in modern mode (`mode="auto"`, which probes `server/discover`) in `initialize()`, and closes it in `shutdown()`. It doesn't implement `serve()`, because a dropped link must not end the local chat.
 - The connector refuses a server that only speaks the handshake era. Each request is independent; a failed call answers `error` ("could not reach …"), and the client is reopened lazily on the next question.
 - **Transport:** Streamable HTTP only, `url=…, token=…` with a `Bearer` header, or `server=…` for an in-process server in tests and embedding; `deadline` is optional. There is no stdio transport on either side.
-- `McpFrontend(name="master", *, token, host, port, deadline, credentials)`; the token is required, and the name is the frontend's peer name and the server's name. Its `serve()` runs a Uvicorn app with the SDK's Streamable HTTP app behind a bearer-token check, and `shutdown()` stops it.
+- `McpFrontend(name="master", *, token, host, port, deadline, credentials)`; the token is required, and the name is the frontend's peer name and the server's name. Its `serve()` runs FastMCP's Streamable HTTP app under Uvicorn, with a `TokenVerifier` that compares the bearer token in constant time, and `shutdown()` stops it.
 - *Alternative: stdio as well.* Dropped: a session served over MCP is reached from another machine, and one transport, always behind a token, keeps both ends simpler.
 
 ### 9. Packaging
 - `McpConnector` lives in `chatinho/connectors/mcp.py` and `McpFrontend` in a new `chatinho/frontends/mcp.py`, next to the other batteries of their kind. Each end keeps its own half of the wire format — the frontend writes the result, the connector reads it — and a test checks they agree. They import `mcp` and are exposed through the lazy `__getattr__`, with the `mcp` extra in the missing-extra message.
 - `connectors/__init__.py` and `frontends/__init__.py` resolve their names on first use (PEP 562). Before this, importing any connector imported all of them, so `McpConnector` would have needed `requests` and `openai` too.
-- `pyproject.toml` gains `mcp = ["mcp>=2.3"]`, and `all` and `dev` include it.
+- `pyproject.toml` gains `mcp = ["fastmcp>=4.0"]`, and `all` and `dev` include it.
 - `docs/SPEC.md` documents `msg.credentials` under `HookSay`, and the architecture tests' extras check covers `mcp`.
 
 ## Risks / Trade-offs

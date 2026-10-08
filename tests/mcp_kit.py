@@ -5,7 +5,7 @@ import pathlib
 from typing import Any, List, Optional
 
 import mcp_types as types
-from mcp import Client
+from fastmcp import Client
 
 from chatinho import (
     LOCAL,
@@ -35,18 +35,18 @@ async def remote(*peers: Any, backend: Any = None, commands: Any = (), **options
 
 def client(front: McpFrontend, name: str = "lab") -> Client:
     """A modern MCP client onto *front*, in-process."""
-    return Client(front.server, mode="auto", client_info=types.Implementation(name=name, version="1"))
+    return Client(front.server, client_info=types.Implementation(name=name, version="1"))
 
 
 async def say(c: Client, text: str, **args: Any) -> dict:
     """Calls the say tool and returns its structured result."""
-    res = await c.call_tool("say", {"text": text, **args})
+    res = await c.call_tool_mcp("say", {"text": text, **args})
     return res.structured_content
 
 
 async def call(c: Client, tool: str, **args: Any) -> dict:
     """Calls any of the frontend's tools and returns its structured result."""
-    res = await c.call_tool(tool, args)
+    res = await c.call_tool_mcp(tool, args)
     return res.structured_content
 
 

@@ -58,7 +58,7 @@ def test_core_modules_do_not_import_the_ui_framework(module):
 def test_core_modules_do_not_import_adapter_libraries(module):
     """Policy must not reach out to a concrete transport or database driver."""
     roots = imported_roots(SRC / module)
-    forbidden = roots & {"openai", "sqlalchemy", "requests", "httpx", "mcp", "mcp_types"}
+    forbidden = roots & {"openai", "sqlalchemy", "requests", "httpx", "mcp", "mcp_types", "fastmcp"}
     assert not forbidden, f"{module} must not depend on {sorted(forbidden)}"
 
 
@@ -214,7 +214,7 @@ _WITHOUT_THE_EXTRAS = """
 import builtins, sys
 real = builtins.__import__
 def blocked(name, *a, **k):
-    if name.split(".")[0] in {"textual", "openai", "sqlalchemy", "requests", "mcp", "mcp_types"}:
+    if name.split(".")[0] in {"textual", "openai", "sqlalchemy", "requests", "mcp", "mcp_types", "fastmcp"}:
         raise ImportError("No module named %r" % name)
     return real(name, *a, **k)
 builtins.__import__ = blocked

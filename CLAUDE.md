@@ -735,7 +735,7 @@ with `ctrl+g` now.
 `tests/test_architecture.py` is not documentation, it is enforcement — a boundary nothing checks
 is a boundary that rots. It parses the core modules and fails if:
 
-- `textual` appears in their imports, or `openai`, `sqlalchemy`, `requests`, `httpx`, `mcp`;
+- `textual` appears in their imports, or `openai`, `sqlalchemy`, `requests`, `httpx`, `mcp`, `fastmcp`;
 - anything but the presentation layer imports Textual;
 - the session imports the app;
 - **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
@@ -744,7 +744,7 @@ is a boundary that rots. It parses the core modules and fails if:
   import under `if TYPE_CHECKING`, or PEP 562 hands a consumer's mypy `Any` and the `py.typed` this
   package ships means nothing for it;
 - **`import chatinho` needs one of the batteries** — a subprocess imports it with `textual`,
-  `openai`, `sqlalchemy`, `requests` and `mcp` all blocked, and each of the six lazy names has to
+  `openai`, `sqlalchemy`, `requests`, `mcp` and `fastmcp` all blocked, and each of the six lazy names has to
   report its own extra;
 - **`docs/SPEC.md` disagrees with the hook constants** — its summary table has to name the same
   fourteen, with the same demanded method and the same grants, and each one has to have its own
@@ -773,7 +773,7 @@ too. Six names live behind an extra and are resolved on first use with PEP 562 `
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
-| `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `mcp` (the official SDK, 2.3+) |
+| `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` (4.0+, on the official `mcp` SDK) |
 
 `chatinho[mcp]` brings pydantic, starlette and uvicorn with it, so it is the heavy one — on Termux
 especially. `chatinho[all]` is all five; `chatinho[dev]` is those plus pytest, ruff and mypy, which is what CI

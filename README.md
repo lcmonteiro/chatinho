@@ -65,7 +65,7 @@ true. Six names live behind an extra:
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
-| `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `mcp` |
+| `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` |
 | all of them | `chatinho[all]` | all five |
 
 They are resolved on first use, so `import chatinho` never drags in a terminal for a script that

@@ -44,16 +44,16 @@ tui = ["textual>=0.45.0", "markdown-it-py>=2.0.0"]
 openai = ["openai>=1.0.0"]
 a2a    = ["requests>=2.25.0"]
 sql    = ["sqlalchemy>=2.0.0"]
-mcp    = ["mcp>=2.3"]
+mcp    = ["fastmcp>=4.0"]
 all    = ["textual>=0.45.0", "markdown-it-py>=2.0.0", "openai>=1.0.0", "requests>=2.25.0", "sqlalchemy>=2.0.0",
-          "mcp>=2.3"]
+          "fastmcp>=4.0"]
 dev = [
     "textual>=0.45.0",
     "markdown-it-py>=2.0.0",
     "openai>=1.0.0",
     "requests>=2.25.0",
     "sqlalchemy>=2.0.0",
-    "mcp>=2.3",
+    "fastmcp>=4.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.6",

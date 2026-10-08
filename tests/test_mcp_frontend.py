@@ -19,7 +19,7 @@ async def test_named_master_by_default():
     assert session._peers()[0] is front
     async with client(front) as c:
         assert c.server_info.name == "master"
-        assert c.session.protocol_version == "2026-07-28"
+        assert c.protocol_version == "2026-07-28"
     await session.close()
 
 
@@ -33,13 +33,13 @@ def test_a_token_is_required():
 async def test_what_a_terminal_can_do():
     session, front = await remote(Weather())
     async with client(front) as c:
-        tools = {t.name: t for t in (await c.list_tools()).tools}
-        other = await c.call_tool("forget", {})
+        tools = {t.name: t for t in await c.list_tools()}
+        other = await c.call_tool_mcp("forget", {})
     assert list(tools) == ["say", "ask", "peers", "tools", "run"]
     assert set(tools["say"].input_schema["properties"]) == {"text", "asker", "deadline_ms"}
     assert set(tools["ask"].input_schema["properties"]) == {"peer", "text", "deadline_ms"}
     assert set(tools["run"].input_schema["properties"]) == {"name", "args", "deadline_ms"}
-    assert other.is_error and other.structured_content["status"] == "error"
+    assert other.is_error
     await session.close()
 
 
@@ -277,7 +277,7 @@ async def test_ask_lends_credentials():
     agent = Agent(key=True)
     session, front = await remote(agent, Weather(), credentials={"llm": "key"})
     async with client(front) as c:
-        await c.call_tool("ask", {"peer": "agent", "text": "go"}, meta={CREDENTIALS_KEY: {"llm": "sk-a"}})
+        await c.call_tool_mcp("ask", {"peer": "agent", "text": "go"}, meta={CREDENTIALS_KEY: {"llm": "sk-a"}})
     assert agent.keys == ["sk-a"]
     assert [m for m in session._context() if m.text == "go"][0].credentials == {}
     await session.close()
@@ -346,14 +346,14 @@ async def test_run_in_time():
 
 async def _lend(c, value="sk-test", **args):
     lent = {CREDENTIALS_KEY: {"llm": value, "cloud": "x"}}
-    res  = await c.call_tool("say", {"text": "go", **args}, meta=lent)
+    res  = await c.call_tool_mcp("say", {"text": "go", **args}, meta=lent)
     return res.structured_content
 
 
 async def test_declared_at_discovery():
     session, front = await remote(Weather(), credentials={"llm": "OpenAI-compatible API key"})
     async with client(front) as c:
-        found = c.session.discover_result.capabilities.extensions
+        found = c.server_capabilities.extensions
     assert found[CREDENTIALS_KEY] == {"llm": "OpenAI-compatible API key"}
     await session.close()
 

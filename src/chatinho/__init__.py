@@ -39,8 +39,8 @@ Six names need an extra, and say so if it is missing:
     OpenAIConnector    chatinho[openai]   openai
     A2AConnector       chatinho[a2a]      requests
     DatabaseBackend    chatinho[sql]      sqlalchemy
-    McpFrontend        chatinho[mcp]      mcp
-    McpConnector       chatinho[mcp]      mcp
+    McpFrontend        chatinho[mcp]      fastmcp
+    McpConnector       chatinho[mcp]      fastmcp
 
 Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand`` —
 imports nothing but the standard library.
@@ -106,8 +106,8 @@ _BEHIND_AN_EXTRA = {
     "OpenAIConnector" : (".connectors.openai", "openai", "openai"),
     "A2AConnector"    : (".connectors.a2a",    "a2a",    "requests"),
     "DatabaseBackend" : (".backends",     "sql",    "sqlalchemy"),
-    "McpFrontend"     : (".frontends.mcp",     "mcp",    "mcp"),
-    "McpConnector"    : (".connectors.mcp",    "mcp",    "mcp"),
+    "McpFrontend"     : (".frontends.mcp",     "mcp",    "fastmcp"),
+    "McpConnector"    : (".connectors.mcp",    "mcp",    "fastmcp"),
 }
 
 

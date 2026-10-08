@@ -6,9 +6,10 @@ rain?`` — is said in the remote session through its ``say`` tool, and the
 first reply to it comes back.
 Exactly one reply comes back for every such message.
 
-It speaks the modern MCP protocol (2026-07-28). When a remote peer needs an LLM,
-the connector can lend it a credential for that one question — out of band,
-only one the server declared, and only over HTTPS or to this machine. Without
+It is a FastMCP client and speaks the modern MCP protocol (2026-07-28). When a
+remote peer needs an LLM, the connector can lend it a credential for that one
+question — out of band, only one the server declared, and only over HTTPS or
+to this machine. Without
 ``delegate``, no key ever leaves this machine.
 """
 
@@ -17,7 +18,6 @@ import base64
 import ipaddress
 import logging
 import mimetypes
-from contextlib import AsyncExitStack
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Union
 from urllib.parse import urlparse
 
@@ -116,7 +116,7 @@ class McpConnector:
     """Puts questions to a remote chatinho session.
 
     Give it exactly one server: an HTTP ``url`` with its bearer ``token``, or
-    a ``server`` object (an in-process ``mcp`` ``Server``, or an
+    a ``server`` object (an in-process ``FastMCP`` server, such as an
     ``McpFrontend``'s ``.server``).
 
     Args:
@@ -235,7 +235,7 @@ class McpConnector:
         try:
             client = await self._connect()
             meta   = self._lending(client)
-            got    = await asyncio.wait_for(client.call_tool("say", args, meta=meta), limit)
+            got    = await asyncio.wait_for(client.call_tool_mcp("say", args, meta=meta), limit)
         except asyncio.TimeoutError:
             return Reply("%s: timeout — the remote session never answered" % self.name,
                          status=ReplyStatus.ERROR)
@@ -267,8 +267,8 @@ class McpConnector:
         """The ``_meta`` for one question: the configured credentials the server declared."""
         if not self._delegate:
             return None
-        found    = client.session.discover_result
-        declared = ((found.capabilities.extensions or {}).get(CREDENTIALS_KEY) or {}) if found else {}
+        found    = client.server_capabilities
+        declared = ((found.extensions or {}).get(CREDENTIALS_KEY) or {}) if found else {}
         lent     = {name: (value() if callable(value) else value)
                     for name, value in self._delegate.items() if name in declared}
         return {CREDENTIALS_KEY: lent} if lent else None
@@ -288,9 +288,8 @@ class McpConnector:
     async def _run(self, ready: "asyncio.Future[Any]", stop: asyncio.Event) -> None:
         """Holds the client open in a task of its own, which is where it must close."""
         try:
-            async with AsyncExitStack() as stack:
-                client = await stack.enter_async_context(self._make_client(stack))
-                if client.session.protocol_version not in MODERN_PROTOCOL_VERSIONS:
+            async with self._make_client() as client:
+                if client.protocol_version not in MODERN_PROTOCOL_VERSIONS:
                     raise RuntimeError("The server speaks only the handshake-era MCP protocol")
                 self._client = client
                 ready.set_result(client)
@@ -308,19 +307,10 @@ class McpConnector:
             self._stop.set()
         self._client = None
 
-    def _make_client(self, stack: AsyncExitStack) -> Any:
-        from mcp import Client
-        options : Dict[str, Any] = dict(
-            mode        = "auto",
+    def _make_client(self) -> Any:
+        from fastmcp import Client
+        return Client(
+            self._server if self._server is not None else str(self._url),
+            auth        = self._token if self._server is None else None,
             client_info = types.Implementation(name=self.name, version="chatinho"),
         )
-        if self._server is not None:
-            return Client(self._server, **options)
-        import httpx2
-        from mcp.client.streamable_http import streamable_http_client
-        http = httpx2.AsyncClient(
-            headers={"Authorization": "Bearer %s" % self._token},
-            timeout=httpx2.Timeout(30.0, read=300.0),
-        )
-        stack.push_async_callback(http.aclose)
-        return Client(streamable_http_client(str(self._url), http_client=http), **options)
