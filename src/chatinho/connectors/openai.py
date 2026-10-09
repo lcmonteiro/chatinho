@@ -4,8 +4,8 @@ import logging
 from typing import Any, Optional
 import openai
 
-from ..chat_hooks import HookAnswer, connector, require
-from ..chat_message import Reply
+from ..hooks import HookAnswer, connector, require
+from ..message import Reply
 
 logger = logging.getLogger(__name__)
 

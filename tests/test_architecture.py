@@ -22,17 +22,13 @@ SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "chatinho"
 
 # Modules that must stay free of the delivery mechanism.
 CORE_MODULES = [
-    "chat_session.py",
-    "chat_message.py",
-    "chat_hooks.py",
+    "session.py",
+    "message.py",
+    "hooks.py",
 ]
 
-# Modules that are allowed to know about Textual: the presentation layer.
-PRESENTATION_MODULES = [
-    "chat_app.py",
-    "chat_log.py",
-    "chat_input.py",
-]
+# The package that is allowed to know about Textual: the terminal frontend.
+PRESENTATION_PACKAGE = "frontends/chat/"
 
 
 def imported_roots(path: pathlib.Path) -> set:
@@ -68,20 +64,20 @@ def test_the_presentation_layer_is_the_only_place_that_knows_textual():
         for path in sorted(SRC.rglob("*.py"))
         if "textual" in imported_roots(path)
     ]
-    assert with_textual == sorted(PRESENTATION_MODULES)
+    outside = [path for path in with_textual if not path.startswith(PRESENTATION_PACKAGE)]
+    assert outside == [], "only %s may import Textual: %s" % (PRESENTATION_PACKAGE, outside)
+    assert PRESENTATION_PACKAGE + "__init__.py" in with_textual
 
 
-def test_the_session_does_not_depend_on_the_app():
-    roots = imported_roots(SRC / "chat_session.py")
-    assert "chat_app" not in roots
-    tree = ast.parse((SRC / "chat_session.py").read_text(encoding="utf-8"))
+@pytest.mark.parametrize("module", CORE_MODULES)
+def test_the_core_does_not_depend_on_a_frontend_or_the_builders(module):
+    tree = ast.parse((SRC / module).read_text(encoding="utf-8"))
     relative = {
-        node.module for node in ast.walk(tree)
+        node.module.split(".")[0] for node in ast.walk(tree)
         if isinstance(node, ast.ImportFrom) and node.level > 0 and node.module
     }
-    assert "chat_app" not in relative, "the session must never import its presentation"
-    assert "chat_log" not in relative
-    assert "chat_input" not in relative
+    assert "frontends" not in relative, "%s must never import a frontend" % module
+    assert "builder" not in relative, "%s must never import the builders" % module
 
 
 # === Names we must not take from Textual ========================================
@@ -106,16 +102,16 @@ def _assigned_attributes(path: str, class_name: str) -> set:
 @pytest.mark.parametrize(
     "module, class_name, base",
     [
-        ("src/chatinho/chat_app.py",   "ChatApp",            "textual.app:App"),
-        ("src/chatinho/chat_log.py",   "ChatLog",            "textual.containers:Container"),
-        ("src/chatinho/chat_input.py", "CommandInput",       "textual.widgets:Input"),
-        ("src/chatinho/chat_input.py", "CommandSuggestions", "textual.widgets:OptionList"),
+        ("src/chatinho/frontends/chat/__init__.py", "ChatFrontend",       "textual.app:App"),
+        ("src/chatinho/frontends/chat/messages.py", "ChatLog",            "textual.containers:Container"),
+        ("src/chatinho/frontends/chat/composer.py", "CommandInput",       "textual.widgets:Input"),
+        ("src/chatinho/frontends/chat/composer.py", "CommandSuggestions", "textual.widgets:OptionList"),
     ],
 )
 def test_a_grant_never_shadows_a_textual_method(module, class_name, base):
     """A grant arrives by setattr, so the assignment check above cannot see it.
 
-    This is not hypothetical: `ChatApp` was granted `run`, which is Textual's own
+    This is not hypothetical: `ChatFrontend` was granted `run`, which is Textual's own
     `App.run()` — the documented way to start the app. mypy caught that one
     because the class annotates its grants; a class that did not annotate them
     would have shipped it.
@@ -143,10 +139,10 @@ def _declared_hooks(path: str, class_name: str) -> set:
 @pytest.mark.parametrize(
     "module, class_name, base",
     [
-        ("src/chatinho/chat_app.py",   "ChatApp",            "textual.app:App"),
-        ("src/chatinho/chat_log.py",   "ChatLog",            "textual.containers:Container"),
-        ("src/chatinho/chat_input.py", "CommandInput",       "textual.widgets:Input"),
-        ("src/chatinho/chat_input.py", "CommandSuggestions", "textual.widgets:OptionList"),
+        ("src/chatinho/frontends/chat/__init__.py", "ChatFrontend",       "textual.app:App"),
+        ("src/chatinho/frontends/chat/messages.py", "ChatLog",            "textual.containers:Container"),
+        ("src/chatinho/frontends/chat/composer.py", "CommandInput",       "textual.widgets:Input"),
+        ("src/chatinho/frontends/chat/composer.py", "CommandSuggestions", "textual.widgets:OptionList"),
     ],
 )
 def test_we_never_shadow_a_textual_method(module, class_name, base):
@@ -222,8 +218,7 @@ builtins.__import__ = blocked
 import chatinho
 from chatinho import ChatSession, HelpCommand, TestCommand, ChatMessage, require, HookListen
 print("core-ok")
-for name in ("build_chat", "OpenAIConnector", "A2AConnector", "DatabaseBackend",
-             "McpFrontend", "McpConnector"):
+for name in sorted(chatinho._BEHIND_AN_EXTRA):
     try:
         getattr(chatinho, name)
     except ImportError as exc:
@@ -235,7 +230,7 @@ def test_the_core_imports_with_none_of_the_batteries_installed():
     """``import chatinho`` must not need a terminal, an HTTP client and an ORM.
 
     A project that embeds the session in a service installs the package and
-    nothing else; the four names that need an extra are resolved on first use
+    nothing else; the names that need an extra are resolved on first use
     (PEP 562) and report the extra by name when it is missing. Run in a fresh
     interpreter, because the point is what happens at import.
     """
@@ -246,7 +241,8 @@ def test_the_core_imports_with_none_of_the_batteries_installed():
     assert done.returncode == 0, done.stderr
     lines = done.stdout.split()
     assert "core-ok" in done.stdout, done.stdout
-    assert lines.count("True") == 6, "an extra is not named in its own error:\n%s" % done.stdout
+    assert lines.count("True") == len(chatinho._BEHIND_AN_EXTRA), \
+        "an extra is not named in its own error:\n%s" % done.stdout
 
 
 def test_the_declared_extras_are_the_ones_the_package_asks_for():

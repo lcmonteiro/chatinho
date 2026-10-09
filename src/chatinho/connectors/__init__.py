@@ -1,7 +1,7 @@
 """Connectors for chatinho.
 
 A connector is a plain class that declares what it can do with
-:func:`~chatinho.chat_hooks.require`; there is no base class to inherit.
+:func:`~chatinho.hooks.require`; there is no base class to inherit.
 
 Each one needs its own extra, so they are imported on first use (PEP 562):
 asking for ``McpConnector`` must not need the OpenAI client, nor the other way

@@ -17,10 +17,10 @@ from textual.containers import ScrollableContainer, Vertical
 from textual.widget import Widget
 from textual.widgets import Markdown, Static
 
-from . import chat_clipboard
-from .chat_hooks import name_of
-from .chat_message import TOOL, ChatMessage, MessageID
-from .chat_style import ChatStyle
+from ...hooks import name_of
+from ...message import TOOL, ChatMessage, MessageID
+from . import clipboard
+from .style import ChatStyle
 
 logger = logging.getLogger(__name__)
 
@@ -513,7 +513,7 @@ class ChatLog(TouchScrollableContainer):
     async def _copy_with_a_helper(self, msg_id: MessageID, text: str) -> None:
         """Runs the clipboard helper off the event loop, then reports both routes."""
         loop  = asyncio.get_running_loop()
-        route = await loop.run_in_executor(None, chat_clipboard.put, text)
+        route = await loop.run_in_executor(None, clipboard.put, text)
         routes = "OSC 52" if route is None else "OSC 52 + %s" % route
         self.notify(
             "%s\n\nSent by %s." % (preview_of(text), routes),

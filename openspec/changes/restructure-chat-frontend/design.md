@@ -36,14 +36,14 @@ The cost is a large `__init__.py` of about 530 lines.
 ### Both builders in a root `builder.py`, each importing its frontend inside the function
 `builder.py` must not import either frontend at module level. If it did, reading `build_chat_session` would need `fastmcp`, and reading `build_mcp_session` would need `textual`. So `build_chat_session` imports `.frontends.chat`, and `build_mcp_session` imports `.frontends.mcp`, each inside its own body. The alternative was a builder next to each frontend: it puts the dependency in the right place, but the user chose one module holding both.
 
-### The lazy table checks the extra itself
-`builder.py` now imports cleanly without any extra. Without a fix, `__getattr__` would hand back the builder, and the missing extra would only surface later as a bare `ModuleNotFoundError` from inside the call. So `__getattr__` checks `importlib.util.find_spec(<distribution module>)` before importing. If the module is missing, it raises the same "Install it with: pip install 'chatinho[<extra>]'" `ImportError` as today. The table becomes:
+### The lazy table imports the extra itself
+`builder.py` now imports cleanly without any extra. Without a fix, `__getattr__` would hand back the builder, and the missing extra would only surface later as a bare `ModuleNotFoundError` from inside the call. So `__getattr__` imports the extra's own library (`import_module(<distribution module>)`) before the module that defines the name. If that fails, it raises the same "Install it with: pip install 'chatinho[<extra>]'" `ImportError` as today. Importing the library, rather than asking `importlib.util.find_spec` whether it exists, also catches an import that is blocked, which is how the architecture test simulates a missing extra. The table becomes:
 
 ```
 build_chat_session : (".builder",              "tui", "textual")
-build_mcp_session  : (".builder",              "mcp", "fastmcp")
 ChatFrontend       : (".frontends.chat",       "tui", "textual")
 ChatStyle          : (".frontends.chat.style", "tui", "textual")
+build_mcp_session  : (".builder",              "mcp", "fastmcp")
 McpFrontend        : (".frontends.mcp",        "mcp", "fastmcp")
 ... (connectors and backend unchanged)
 ```
@@ -75,7 +75,7 @@ A final `grep -rnE "chat_(app|log|input|style|clipboard|session|message|hooks|bu
 - [Patch strings that point at an old module path] → They fail loudly as `ModuleNotFoundError` or `AttributeError` when the test runs. The grep above catches the rest.
 - [Logger names change from `chatinho.chat_session` to `chatinho.session`] → Anyone filtering logs by the old name loses them. This is accepted as part of the breaking rename, and the README says so.
 - [`ChatStyle` now needs the `tui` extra] → A headless user who imported it for nothing loses that import, but nothing headless used it.
-- [`find_spec` on an import name that is not the distribution name] → It holds for every extra today. If a new extra breaks this, its table entry carries the import name explicitly.
+- [Importing a library whose import name is not the distribution name] → For every extra today, the import name and the distribution name are the same. If a new extra breaks this, its table entry carries the import name explicitly.
 - [Users of `build_chat` / `chatinho.chat_*`] → There are no shims. The proposal marks the change **BREAKING**, the version is still 0.1.x, and the README states the new names.
 
 ## Migration Plan

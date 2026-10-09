@@ -1,7 +1,7 @@
 """The ``/help`` command: lists what can be run."""
 
-from ..chat_hooks import HookExecute, HookPeers, HookCommands, HookSay, Commands, Peers, Say, require, tool
-from ..chat_message import LOCAL, Reply
+from ..hooks import HookExecute, HookPeers, HookCommands, HookSay, Commands, Peers, Say, require, tool
+from ..message import LOCAL, Reply
 
 
 @tool("help", "Lists the available commands")

@@ -2,8 +2,8 @@
 
 from typing import Optional
 
-from ..chat_hooks import Context, HookContext, HookExecute, HookPeers, HookSay, Peers, Say, require, tool
-from ..chat_message import LOCAL, Reply
+from ..hooks import Context, HookContext, HookExecute, HookPeers, HookSay, Peers, Say, require, tool
+from ..message import LOCAL, Reply
 
 
 @tool("test", "Checks the chat is wired up")

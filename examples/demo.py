@@ -1,6 +1,6 @@
 """Demo of the chatinho library: markdown, code blocks, tools and replies.
 
-Everything is built through the public ``build_chat`` factory. A tool is a
+Everything is built through the public ``build_chat_session`` factory. A tool is a
 peer that can be asked, and a command is that ask: typing ``/code`` asks
 the peer named "code".
 
@@ -18,7 +18,7 @@ from chatinho import (
     Reply,
     Say,
     connector,
-    build_chat,
+    build_chat_session,
     require,
     tool,
 )
@@ -88,7 +88,7 @@ WELCOME = (
 
 def main() -> None:
     """Builds the demo chat and runs it."""
-    build_chat(
+    build_chat_session(
         connectors      = [EchoConnector()],
         commands        = [HelpCommand(), CodeCommand()],
         title           = "chatinho demo",

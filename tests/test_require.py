@@ -205,7 +205,7 @@ def test_frontend_is_a_connector_that_already_knows_it_is_peer_zero():
 
 
 def test_a_frontend_that_does_not_name_itself_is_called_chat():
-    """``build_chat(name="me")`` is how a chat you are in reads better."""
+    """``build_chat_session(name="me")`` is how a chat you are in reads better."""
 
     @frontend()
     class Anonymous:

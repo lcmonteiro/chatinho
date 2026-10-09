@@ -42,7 +42,7 @@ NEWLINE_KEYS : Tuple[str, ...] = ("ctrl+enter", "ctrl+j", "shift+enter", "alt+en
 #: sending — and is consumed doing it. A **space**: ending a line with one and
 #: carrying on is what continuing already feels like, so the gesture is the
 #: intention rather than a code for it. Set it to another character, or to
-#: None to turn it off, with ``build_chat(newline_escape=…)``.
+#: None to turn it off, with ``build_chat_session(newline_escape=…)``.
 NEWLINE_ESCAPE : str = " "
 
 

@@ -308,7 +308,7 @@ class UpperCommand:
 ```
 
 A command is **not a peer**: no id, no queue, nothing addressed to it. It is registered with
-`add_command`, not `add_connector`, and it is a separate parameter to `build_chat` for that reason.
+`add_command`, not `add_connector`, and it is a separate parameter to `build_chat_session` for that reason.
 
 Running one is two messages:
 
@@ -519,7 +519,7 @@ Stated rather than hidden, because each one is a real trade:
 | | |
 |---|---|
 | `examples/hooks.py` | this document, executable — one peer per hook |
-| `examples/demo.py` | the full TUI, built with `build_chat` |
+| `examples/demo.py` | the full TUI, built with `build_chat_session` |
 | `examples/headless.py` | the same chat with no terminal, in about forty lines |
 | `examples/agent_inbox.py` | the inbound direction: an agent asks over HTTP, you answer |
 | `CLAUDE.md` | why the design is this shape, and what it was before |

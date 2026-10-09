@@ -9,30 +9,30 @@ import subprocess
 
 import pytest
 
-from chatinho import chat_clipboard
+from chatinho.frontends.chat import clipboard
 
 
 def test_no_helper_installed_is_not_a_failure(monkeypatch):
     """The ordinary case on a plain server: OSC 52 is then the only route."""
-    monkeypatch.setattr(chat_clipboard.shutil, "which", lambda name: None)
+    monkeypatch.setattr(clipboard.shutil, "which", lambda name: None)
 
-    assert chat_clipboard.helper() is None
-    assert chat_clipboard.put("oi") is None
+    assert clipboard.helper() is None
+    assert clipboard.put("oi") is None
 
 
 def test_the_first_helper_on_path_wins(monkeypatch):
     """Termux leads the list: its terminal is the one that drops OSC 52."""
     monkeypatch.setattr(
-        chat_clipboard.shutil, "which",
+        clipboard.shutil, "which",
         lambda name: "/usr/bin/%s" % name if name in ("xclip", "termux-clipboard-set") else None,
     )
-    assert chat_clipboard.helper() == ["termux-clipboard-set"]
+    assert clipboard.helper() == ["termux-clipboard-set"]
 
     monkeypatch.setattr(
-        chat_clipboard.shutil, "which",
+        clipboard.shutil, "which",
         lambda name: "/usr/bin/%s" % name if name == "xclip" else None,
     )
-    assert chat_clipboard.helper() == ["xclip", "-selection", "clipboard"]
+    assert clipboard.helper() == ["xclip", "-selection", "clipboard"]
 
 
 def test_the_text_is_fed_to_the_helper_on_stdin(monkeypatch):
@@ -44,13 +44,13 @@ def test_the_text_is_fed_to_the_helper_on_stdin(monkeypatch):
         seen["timeout"] = kwargs.get("timeout")
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(chat_clipboard.shutil, "which", lambda name: "/usr/bin/" + name)
-    monkeypatch.setattr(chat_clipboard.subprocess, "run", fake_run)
+    monkeypatch.setattr(clipboard.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
 
-    assert chat_clipboard.put("olá") == "termux-clipboard-set"
+    assert clipboard.put("olá") == "termux-clipboard-set"
     assert seen["command"] == ["termux-clipboard-set"]
     assert seen["input"] == "olá".encode("utf-8")
-    assert seen["timeout"] == chat_clipboard.TIMEOUT
+    assert seen["timeout"] == clipboard.TIMEOUT
 
 
 @pytest.mark.parametrize("blow_up", [
@@ -64,15 +64,15 @@ def test_a_helper_that_fails_is_logged_and_not_raised(monkeypatch, blow_up):
     def fake_run(command, **kwargs):
         raise blow_up
 
-    monkeypatch.setattr(chat_clipboard.shutil, "which", lambda name: "/usr/bin/" + name)
-    monkeypatch.setattr(chat_clipboard.subprocess, "run", fake_run)
+    monkeypatch.setattr(clipboard.shutil, "which", lambda name: "/usr/bin/" + name)
+    monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
 
-    assert chat_clipboard.put("oi") is None
+    assert clipboard.put("oi") is None
 
 
 # === The real subprocess, not a stand-in ========================================
 #
-# The tests above replace `chat_clipboard.put`, which proves the callers do the
+# The tests above replace `clipboard.put`, which proves the callers do the
 # right thing and proves nothing about the thing itself. These run a helper that
 # is really on PATH and really executed, because the wiring from copy_message
 # through a worker, an executor and subprocess.run is exactly where a copy can
@@ -91,7 +91,7 @@ def a_helper_on_path(tmp_path, monkeypatch):
 
 
 def test_put_really_runs_the_helper(a_helper_on_path):
-    assert chat_clipboard.put("texto a sério") == "termux-clipboard-set"
+    assert clipboard.put("texto a sério") == "termux-clipboard-set"
     assert a_helper_on_path.read_text() == "texto a sério"
 
 
@@ -103,9 +103,9 @@ async def test_the_app_really_reaches_the_clipboard(a_helper_on_path):
     the last step, so this one lets all four happen.
     """
     from chatinho import ChatSession
-    from chatinho.chat_app import ChatApp
+    from chatinho.frontends.chat import ChatFrontend
 
-    app     = ChatApp()
+    app     = ChatFrontend()
     session = ChatSession()
     session.add_connector(app)
     await session.start()
