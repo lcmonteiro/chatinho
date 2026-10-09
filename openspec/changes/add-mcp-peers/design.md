@@ -35,7 +35,8 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 ### 1. Core additions stay small and generic
 - **`answer` returns a `Reply`.** Like a command's `execute`, a peer's `answer` returns `Reply | None`; a plain string is a `TypeError`, so every answer carries its status and attachments the same way.
 - **`Reply.status`**, a `ReplyStatus` `str` enum (`ANSWERED` | `ASKED` | `ERROR`, default `ANSWERED`; "I don't know" is an `answered` text), carried on the answer's **`ChatMessage.status`**. Whoever hears or reads the reply sees what it said about itself; `ask` still returns the text. The archive does not keep the status.
-- **A say in a room with one peer that answers is asked of it.** `say` addresses the message to that peer when it is not a reply, is not from a command, and exactly one peer other than the speaker and the frontend declares `HookAnswer`. Its `answer` is called, and the reply comes back with `reply_to` set to the say. Listeners still hear both. This makes a room with one agent a conversation with it, and it is what lets the MCP bridge use one verb.
+- **A say in a room with one peer that answers is asked of it.** `say` addresses the message to that peer when it is not a reply, is not from a command, and exactly one peer other than the speaker and the frontend declares `HookAnswer`. Its `answer` is called, and the reply comes back with `reply_to` set to the say. Listeners still hear both. This makes a room with one agent a conversation with it.
+- **An addressed say.** `say(text, to=peer)` is asked of that peer, its answer coming back as a reply, with nobody waiting on it. It is how `McpFrontend` asks a peer and how the terminal's `@name` asks one, keeping the status, attachments and credentials on the messages.
 - *Alternative, the earlier draft: `ask(..., detail=True) -> Answer(text, status, msg_id)`.* It gave the frontend the status and the answer's id, but only for its own asks. With the status on the message and a say that asks the lone peer, the frontend just says and listens, and `detail` goes.
 - **Credentials on the message:** `ChatMessage.credentials`, set through `say(..., credentials=…)` (decision 5).
 - *Alternative: MCP sampling, relaying each completion back to the asker.* It was in an earlier draft. It is dropped: it is deprecated in the modern protocol, it costs a round trip per completion, and credential delegation covers the same need.
@@ -86,7 +87,7 @@ This follows A2A's principle: credentials travel out of band, the server declare
 
 ### 6. Attachments
 - With the reply's message id, the frontend reads each attachment through `locate` (the backend's `file://` link) and returns its bytes base64-encoded.
-- The names are the relative link targets in the answer's text. In chatinho a message links its attachments by name, and backends have no way to list a message's attachments. Each name is `locate`d, and names that resolve to nothing are skipped. A session without a linking backend returns no attachments, and the text says so.
+- The names are the relative link targets in the answer's text. In chatinho a message links its attachments by name, and backends have no way to list a message's attachments. Each name is `locate`d, and names that resolve to nothing are skipped. A session without a linking backend returns no attachments; the text keeps its links.
 - On the asking side, `McpConnector` turns them back into `Attachment`s on its reply, so the local backend keeps them.
 - *Alternative: a new grant to fetch attachment bytes.* That's cleaner, but it widens the core more than this change needs. It's noted as follow-up.
 
@@ -98,33 +99,33 @@ This follows A2A's principle: credentials travel out of band, the server declare
 
 ### 8. Connection lifecycle
 - `McpConnector` holds one `fastmcp.Client` and opens it per question (`async with client: await client.call_tool("ask", …)`); the protocol is stateless, so no link stays open between questions and there is nothing to close at `shutdown()`. `initialize()` opens it once to take the server's name when none was given. It doesn't implement `serve()`, because a dropped link must not end the local chat.
-- The connector refuses a server that only speaks the handshake era. Each request is independent; a failed call answers `error` ("could not reach …"), and the client is reopened lazily on the next question.
+- The connector refuses a server that only speaks the handshake era. Each request is independent; a failed call answers `error` ("could not reach …"), and each question opens its own client.
 - **Transport:** Streamable HTTP only, `url=…, token=…` with a `Bearer` header, or `server=…` for an in-process server in tests and embedding. There is no stdio transport on either side.
 - `McpFrontend(name="master", *, token, host, port, credentials)`; the token is required, and the name is the frontend's peer name and the server's name. Its `serve()` awaits FastMCP's own `run_async(transport="http")`, with a `TokenVerifier` that compares the bearer token in constant time, and `shutdown()` cancels it.
 - *Alternative: stdio as well.* Dropped: a session served over MCP is reached from another machine, and one transport, always behind a token, keeps both ends simpler.
 
 ### 9. Packaging
-- `McpConnector` lives in `chatinho/connectors/mcp.py` and `McpFrontend` in a new `chatinho/frontends/mcp.py`, next to the other batteries of their kind. Each end keeps its own half of the wire format — the frontend writes the result, the connector reads it — and a test checks they agree. They import `mcp` and are exposed through the lazy `__getattr__`, with the `mcp` extra in the missing-extra message.
+- `McpConnector` lives in `chatinho/connectors/mcp.py` and `McpFrontend` in a new `chatinho/frontends/mcp.py`, next to the other batteries of their kind. Each end keeps its own half of the wire format — the frontend returns the `Answer` model, the connector reads it back — and a test checks they agree; what both share (the credentials key, the attachment encoding) is in `chatinho/helpers/mcp.py`. They import FastMCP and are exposed through the lazy `__getattr__`, with the `mcp` extra in the missing-extra message.
 - `connectors/__init__.py` and `frontends/__init__.py` resolve their names on first use (PEP 562). Before this, importing any connector imported all of them, so `McpConnector` would have needed `requests` and `openai` too.
 - `pyproject.toml` gains `mcp = ["fastmcp>=4.0"]`, and `all` and `dev` include it.
-- `docs/SPEC.md` documents `msg.credentials` under `HookSay`, and the architecture tests' extras check covers `mcp`.
+- `docs/SPEC.md` documents `msg.credentials` under `HookSay`, and the architecture tests' extras check covers `mcp` and `fastmcp`.
 
 ## Risks / Trade-offs
 
-- **A say in a room with one peer that answers is now asked of it**, in every chatinho session. In a local chat with one agent, everything the user says goes to it, with or without `@name`. → That is the intent; with two agents nothing changes, and replies and commands' output stay broadcasts.
+- **A say in a room with one peer that answers is now asked of it**, in every chatinho session. In a local chat with one agent, everything the user says goes to it; `@name` asks a peer explicitly. → That is the intent; with two agents nothing changes, and replies and commands' output stay broadcasts.
 - **Remote peers cannot tell clients apart.** Every remote question comes from the frontend (`master`). → The routing back is exact, since it is by message id. A peer that must know who asked is a case for a later field on the message.
-- **Attachment bytes through `locate`** depend on a linking backend. → The server documents it and the result says when attachments couldn't be returned. A byte-level grant is a follow-up.
+- **Attachment bytes through `locate`** depend on a linking backend. → Without one, the result carries no attachments and the text keeps its links. A byte-level grant is a follow-up.
 - **The `mcp` extra pulls in pydantic and other compiled packages**, so it's heavy on Termux. → It's optional, and the core stays dependency-free.
 - **A message's credentials are visible to every peer that hears it**, not only the one that answers: listeners get the same message. → They are cleared once the message is answered; a session that lends keys should trust its own peers.
 - **A delegated credential is readable by the remote session's code while it answers.** Delegation reduces exposure (one question, memory only) but cannot prevent a dishonest or buggy remote from copying it. → It's opt-in, the system should be served over HTTPS, and the docs recommend a sub-key with a spending limit or a short-lived token.
 - **HTTP exposes every peer.** → The bearer token is mandatory on HTTP. The token and URL are the connector's configuration and are never sent to the server's peers.
 - **The client must know the remote peer's name.** → `peers` lists them, and `McpConnector` picks the only answering one by itself.
 - **A peer that never answers** keeps the call waiting, since there is no deadline. → The client's own call timeout bounds it, and ending the call lets go of the question and its credentials.
-- **Names are not unique across machines.** → They're used only for display.
+- **Names address peers.** `ask(peer)` and the terminal's `@name` find a peer by name, and names are not unique across machines. → A name several peers share in one session is a tool error, and `@name` with no such peer is said as typed.
 
 ## Migration Plan
 
-This is additive except for one rule: in a room where exactly one peer answers, a say that is not a reply is now asked of that peer. Chats with several peers that answer, `ask`, and `Reply` without a status keep their behavior. To roll back, remove the extra and revert the change.
+This is additive except for three changes. In a room where exactly one peer answers, a say that is not a reply is now asked of that peer. A peer's `answer` must return a `Reply` (or `None`): one that returns a string now fails with `TypeError` until it wraps it in `Reply(...)`. In the terminal, a line starting with `@name` of a peer is now an ask of that peer. Chats with several peers that answer, `ask`, and `Reply` without a status keep their behavior. To roll back, remove the extra and revert the change.
 
 ## Open Questions
 

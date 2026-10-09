@@ -2,15 +2,15 @@
 
 ## Purpose
 
-Lets a peer say more about its answer than its text — that it answers with a question of its own, or that it failed — and carries that on the answer's message. Makes a room with one peer that answers behave as a conversation with it: a say there is asked of that peer.
+Makes every answer a `Reply`, which can say more than its text — that it answers with a question of its own, or that it failed — and carries that on the answer's message. Lets a say be addressed to one peer (`say(..., to=)`), and the terminal ask a peer with `@name`. Makes a room with one peer that answers behave as a conversation with it: a say there is asked of that peer.
 
 ## ADDED Requirements
 
 ### Requirement: Answer status
-`Reply` SHALL accept an optional `status`, a `ReplyStatus` enum (a `str` enum, so its value is accepted too), one of `answered` (the default), `asked` (the answer is a question back to the asker, for example when more information is needed) and `error` (the peer could not answer). A peer that does not know MUST answer `answered`, saying so in the text. A plain string answer, and a `Reply` without a status, MUST count as `answered`. Any other status MUST be refused with `ValueError` when the `Reply` is created.
+`Reply` SHALL accept an optional `status`, a `ReplyStatus` enum (a `str` enum, so its value is accepted too), one of `answered` (the default), `asked` (the answer is a question back to the asker, for example when more information is needed) and `error` (the peer could not answer). A peer that does not know MUST answer `answered`, saying so in the text. A `Reply` without a status MUST count as `answered`. Any other status MUST be refused with `ValueError` when the `Reply` is created.
 
 #### Scenario: Plain answer
-- **WHEN** a peer's `answer` returns `"sunny"`
+- **WHEN** a peer's `answer` returns `Reply("sunny")`
 - **THEN** the answer's status is `answered`
 
 #### Scenario: Answered with a question

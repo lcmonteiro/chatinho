@@ -15,7 +15,7 @@
 
 ## 3. MCP server frontend
 
-- [x] 3.1 Add the result helpers to each end — building the result in `McpFrontend` (with base64 attachments) and reading it back into a `Reply` in `McpConnector` — and unit tests for them
+- [x] 3.1 Add the result to each end — the `Answer` model and `ToolError` in `McpFrontend`, read back into a `Reply` in `McpConnector`, with the attachment encoding in `helpers/mcp.py` — and unit tests for them
 - [x] 3.2 Implement `McpFrontend` (named `master` unless given a name, used as the server's name) as a `FastMCP` server, modern protocol (2026-07-28): `serve()` over Streamable HTTP with a required token, and statuses; verify in-process FastMCP `Client` tests for the default name `master`, answered, and attachments returned
 - [x] 3.3 Have the frontend bridge every client: say each question as its own message, map the said id to that client's call, send the reply back on that call, without declaring `HookAnswer`; no peer is added or removed per client; verify tests for two clients at once and the frontend never being asked
 - [x] 3.4 Drop the `say` tool and its room logic (lone peer, first reply, follow-ups per asker): the client names the peer with `ask`; verify the tool list is `ask`, `peers`, `tools` and `invoke`
@@ -33,5 +33,5 @@
 ## 5. End to end, docs and checks
 
 - [x] 5.1 Add an end-to-end test of two sessions over the modern protocol, in-process: `draw the login flow` asked of `lab` in A reaches B's only peer and comes back with an attachment; with two peers in B, a connector built with `peer=` asks that one; B's peer reads a credential A delegates; B's peers are asked by its frontend
-- [x] 5.2 Add `examples/mcp_server.py` (a headless session served over HTTP with a token) and update `README.md` (extras table, an "MCP peers" section with addressing, who answers, opt-in credential delegation with its sub-key advice, and the token) and `CLAUDE.md`; verify the example runs and the README matches the API
+- [x] 5.2 Add `examples/mcp_server.py` (a headless session served over HTTP with a token) and `examples/mcp_client.py` (a plain FastMCP client for it) and update `README.md` (extras table, an "MCP peers" section with addressing, who answers, opt-in credential delegation with its sub-key advice, and the token) and `CLAUDE.md`; verify the example runs and the README matches the API
 - [x] 5.3 Run `ruff check src tests examples`, `mypy src/chatinho`, `pytest -q` and `openspec validate --all --strict --no-interactive`; verify all pass
