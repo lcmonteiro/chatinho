@@ -120,20 +120,8 @@ class McpConnector:
     # === Being asked ================================================================
 
     async def answer(self, msg: ChatMessage) -> Reply:
-        """A question asked to it directly; the ``@<its name>`` prefix is optional."""
-        text = self._addressed(msg.text)
-        return await self._ask_remote(text if text is not None else msg.text)
-
-    def _addressed(self, text: str) -> Optional[str]:
-        """The rest of *text* when it starts with ``@<name>`` and whitespace, else None."""
-        prefix = "@" + self.name
-        stripped = text.lstrip()
-        if not stripped.startswith(prefix):
-            return None
-        rest = stripped[len(prefix):]
-        if not rest or not rest[0].isspace():
-            return None
-        return rest.strip() or None
+        """A question asked of it; its text goes to the remote peer as it is."""
+        return await self._ask_remote(msg.text)
 
     # === One question ===============================================================
 

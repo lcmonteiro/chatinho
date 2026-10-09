@@ -90,7 +90,8 @@ This follows A2A's principle: credentials travel out of band, the server declare
 - *Alternative: a new grant to fetch attachment bytes.* That's cleaner, but it widens the core more than this change needs. It's noted as follow-up.
 
 ### 7. Asking in the local chat
-- **Asked only:** `McpConnector` declares `HookAnswer` and nothing that hears the room: it reacts only when it is asked — directly, or by the core rule when it is the only answering peer. A leading `@<name>` is optional and dropped.
+- **Asked only:** `McpConnector` declares `HookAnswer` and nothing that hears the room: it reacts only when it is asked — directly, or by the core rule when it is the only answering peer — and sends the question's text as it is.
+- **`@name` in the terminal:** `ChatApp` turns a line `@<name> text` into `say(text, to=peer)`, an ask that nothing waits on, so the input stays free; `@<name>` never reaches the message, and any other line is said as typed.
 - *Alternative, the earlier draft: listening for `@<name>` in the room.* It duplicated the session's own routing and needed `HookListen` and `HookSay`; it is dropped.
 - **Which remote peer:** the connector asks its `peer`, or, when none was given, the only remote peer that answers, found with the remote `peers` tool. With none or several, it answers with an error asking for `peer=`.
 

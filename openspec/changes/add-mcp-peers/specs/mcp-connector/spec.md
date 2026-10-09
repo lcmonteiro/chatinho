@@ -18,10 +18,10 @@ chatinho SHALL provide `McpConnector` in `chatinho[mcp]`: an ordinary `@connecto
 - **THEN** the connector appears as `office`
 
 ### Requirement: Asking the remote session
-The connector SHALL send a question only when it is asked (`HookAnswer`); it MUST NOT listen to what is said in the room. A leading `@<name>` (its own name) followed by whitespace MAY prefix the question and is dropped. The text MUST be sent as one `ask` to the remote session, naming the remote peer: the `peer` given, or else the only remote peer that answers, as the remote `peers` tool lists them. When no `peer` is given and the remote session has none or several that answer, the connector MUST answer with an error asking for `peer=`, and send nothing.
+The connector SHALL send a question only when it is asked (`HookAnswer`); it MUST NOT listen to what is said in the room. The question's text MUST be sent, as it is, as one `ask` to the remote session, naming the remote peer: the `peer` given, or else the only remote peer that answers, as the remote `peers` tool lists them. When no `peer` is given and the remote session has none or several that answer, the connector MUST answer with an error asking for `peer=`, and send nothing.
 
 #### Scenario: Asked directly
-- **WHEN** a peer asks the connector `@lab will it rain?`
+- **WHEN** a peer asks the connector `will it rain?`
 - **THEN** the connector asks the remote session's only answering peer `will it rain?`
 
 #### Scenario: Several remote peers
@@ -29,11 +29,15 @@ The connector SHALL send a question only when it is asked (`HookAnswer`); it MUS
 - **THEN** each question is asked of `weather`; without `peer`, the connector answers with an error asking for `peer=`
 
 #### Scenario: Said to the room
-- **WHEN** the user says `@lab will it rain?` in a local chat where another peer also answers
+- **WHEN** a peer says `will it rain?` to the room, without `to`, in a local chat where another peer also answers
 - **THEN** the connector sends nothing and says nothing
 
+#### Scenario: Asked from the terminal
+- **WHEN** the user types `@lab will it rain?` in the terminal
+- **THEN** the connector is asked `will it rain?`, without `@lab`
+
 #### Scenario: The only answering peer here
-- **WHEN** the connector is the only peer in the local chat that answers, and the user says `will it rain?` without `@lab`
+- **WHEN** the connector is the only peer in the local chat that answers, and the user says `will it rain?`
 - **THEN** the session asks the connector, by the core rule, and the connector asks the remote peer `will it rain?`
 
 ### Requirement: Every question gets one answer

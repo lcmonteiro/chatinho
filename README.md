@@ -175,6 +175,10 @@ outlines that grow with their text, and the one filled bubble is the message you
 to. The colours are Claude Code's — its warm neutrals and Claude's own orange — and `ChatStyle` is
 a dataclass, so `dataclasses.replace` changes any one of them.
 
+A line that starts with **`@name`** asks that peer: `@lab will it rain?` asks `lab` "will it
+rain?", without the `@lab`, and its answer comes back as a reply. A line with no such peer is said
+to everyone as typed.
+
 `quit_key` moves the quit binding off Textual's `ctrl+q` — `build_chat(quit_key="ctrl+g")` — and a
 key Textual could never receive is refused there and then, rather than becoming a binding that
 silently never fires.

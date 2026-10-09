@@ -45,7 +45,7 @@ async def test_a_question_crosses_with_a_lent_key_and_returns_with_its_drawing(t
     here   = ChatSession(frontend=me, backend=Files(tmp_path / "here"), connectors=[lab])
     await here.start()
 
-    await me.say("@lab draw the login flow")
+    await me.say("draw the login flow")
     reply = (await _until(me, 2))[-1]
 
     assert reply.text.startswith("agent: draw the login flow")
@@ -69,7 +69,7 @@ async def test_with_two_remote_peers_the_connector_names_one():
     here   = ChatSession(frontend=me, connectors=[lab])
     await here.start()
 
-    await me.say("@lab who can draw?")
+    await me.say("who can draw?")
     reply = (await _until(me, 2))[-1]
 
     assert reply.text == "agent: who can draw?"

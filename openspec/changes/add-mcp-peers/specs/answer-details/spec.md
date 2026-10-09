@@ -47,6 +47,17 @@ Lets a peer say more about its answer than its text — that it answers with a q
 - **WHEN** a peer says something with `to` set to an id that is not in the chat, or to itself
 - **THEN** `say` raises `ValueError`
 
+### Requirement: The terminal asks with @name
+In the terminal (`ChatApp`), a line that starts with `@<name>`, where `<name>` is a peer in the chat other than the terminal, followed by whitespace and some text, SHALL be an ask of that peer: it MUST be said addressed to that peer (`say(text, to=peer)`), with the text after the name only, so `@<name>` never reaches the message. Any other line, including `@<name>` alone or a name no peer has, MUST be said as typed.
+
+#### Scenario: Asked by name
+- **WHEN** the user types `@sol will it rain?` in a chat with peers `sol` and `lua`
+- **THEN** only `sol` is asked, with the text `will it rain?`, and its answer replies to that message
+
+#### Scenario: Not a peer
+- **WHEN** the user types `@nobody hi`
+- **THEN** `@nobody hi` is said to everyone, as typed
+
 ### Requirement: A say in a room with one peer that answers is asked of it
 When a peer says something that is neither addressed (`to` is not set) nor a reply (`reply_to` is not set), and exactly one peer other than the speaker and the frontend declares `HookAnswer`, the session SHALL address the say to that peer: its `answer` MUST be called, and its reply posted with `reply_to` set to the say. Everyone who listens MUST still hear the say. What a command writes, a say that is a reply, and a say in a room with no such peer or with several MUST stay a broadcast. When the peer's `answer` raises and no `ask` waits on the message, the session MUST post an `error` reply to it.
 

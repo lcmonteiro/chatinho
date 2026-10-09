@@ -65,7 +65,7 @@ async def test_named_by_the_server_when_not_given():
     office = McpConnector(server=front.server)
     session, view = await _local(office)
     assert office.name == "office"
-    await view.say("@office rain?")
+    await view.say("rain?")
     texts = [m.text for m in await _replies(view, 2)]
     assert texts[-1] == "sunny"
     await session.close()
@@ -102,7 +102,6 @@ async def test_asked_directly():
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
     assert await view.ask(lab.peer_id, "rain?") == "sunny"
-    assert await view.ask(lab.peer_id, "@lab rain?") == "sunny"
     await session.close()
     await remote_session.close()
 
@@ -114,7 +113,7 @@ async def test_an_answer_with_an_attachment_is_kept_here(tmp_path):
     remote_session, front = await remote(Agent(attach=chart), backend=Files(tmp_path / "there"))
     here = Files(tmp_path / "here")
     session, view = await _local(McpConnector(server=front.server, name="lab"), backend=here)
-    await view.say("@lab draw it")
+    await view.say("draw it")
     reply = (await _replies(view, 2))[-1]
     assert "[chart](chart.svg)" in reply.text
     assert (tmp_path / "here" / str(reply.id) / "chart.svg").read_bytes() == b"<svg/>"
@@ -145,7 +144,7 @@ async def test_no_remote_peer_is_said_briefly():
 async def test_an_unreachable_server_still_gets_a_reply():
     lab = McpConnector(url="http://127.0.0.1:9/mcp", token="t", name="lab")
     session, view = await _local(lab)
-    await view.say("@lab anyone?")
+    await view.say("anyone?")
     reply = (await _replies(view, 2))[-1]
     assert reply.text.startswith("lab: could not reach the remote session")
     await session.close()
