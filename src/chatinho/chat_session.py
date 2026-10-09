@@ -23,20 +23,10 @@ from datetime import datetime
 from inspect import isawaitable
 from typing import Any, Dict, List, Optional, Sequence
 
-from .chat_hooks import (
-    HookExecute,
-    HookKeep,
-    HookLink,
-    HookForget,
-    HookLoad,
-    HookAnswer,
-    HookListen,
-    declares,
-    hooks_of,
-    declared_id,
-    name_of,
-)
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, MessageStore, Reply
+from .chat_hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, HookListen, HookLoad
+from .chat_hooks import declared_id, declares, hooks_of, name_of
+from .chat_message import LOCAL, TOOL
+from .chat_message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
 
 logger = logging.getLogger(__name__)
 
@@ -283,24 +273,50 @@ class ChatSession:
         async def say(
             text        : str,
             *,
+            to          : Optional[int] = None,
             reply_to    : Optional[MessageID] = None,
             attachments : Sequence[Attachment] = (),
+            credentials : Optional[Dict[str, Secret]] = None,
         ) -> MessageID:
-            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=None, reply_to=reply_to)
+            if to is not None and (to not in self._connectors or to == frm):
+                raise ValueError("No other peer with id %d" % to)
+            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, reply_to=reply_to)
+            if credentials is not None:
+                msg.credentials = credentials     # the lender's own mapping, so it can clear it
+            if to is None and reply_to is None and frm != TOOL:
+                msg.to = self._only_answerer(frm)
             await self._kept(msg, attachments)
             return await self._post(msg)
         return say
 
+    def _only_answerer(self, frm: int) -> Optional[int]:
+        """The one peer a say is asked of: the only one that answers, or None.
+
+        The speaker and the frontend do not count — the frontend speaks for the
+        person, and a say must not turn into a question put to them.
+        """
+        answering = [at for at, who in self._connectors.items()
+                     if at not in (frm, LOCAL) and declares(who, HookAnswer)]
+        return answering[0] if len(answering) == 1 else None
+
     def _ask_for(self, frm: int):
-        async def ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
+        async def ask(
+            to          : int,
+            text        : str,
+            *,
+            attachments : Sequence[Attachment] = (),
+        ) -> str:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
             await self._kept(msg, attachments)
             future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
-            await self._post(msg)
-            return await future
+            try:
+                await self._post(msg)
+                return await future
+            finally:
+                self._pending.pop(msg.id, None)
         return ask
 
     async def _kept(self, msg: ChatMessage, attachments: Sequence[Attachment]) -> None:
@@ -373,11 +389,27 @@ class ChatSession:
         if not declares(who, HookAnswer):
             logger.warning("%r was asked but does not declare %s", name_of(who), HookAnswer)
             return
-        reply = await who.answer(msg)
+        try:
+            reply = await who.answer(msg)
+            if reply is not None and not isinstance(reply, Reply):
+                raise TypeError("%s answered with %s; answer must return a Reply or None"
+                                % (name_of(who), type(reply).__name__))
+        except Exception as exc:
+            # The asker is owed one reply, and a failure is one. An ask that is
+            # waiting raises; a say that was asked of this peer gets an error
+            # reply, so whoever waits on it hears. _drain logs it either way.
+            waiting = self._pending.pop(msg.id, None)
+            if waiting is not None and not waiting.done():
+                waiting.set_exception(exc)
+            else:
+                await self._post(ChatMessage(
+                    id=self._store.new_id(), text="%s failed: %s" % (name_of(who), type(exc).__name__),
+                    frm=at, to=msg.frm, reply_to=msg.id, status=ReplyStatus.ERROR))
+            raise
         if reply is not None:
-            text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
-            answered = ChatMessage(id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id)
-            await self._kept(answered, carried)
+            answered = ChatMessage(id=self._store.new_id(), text=reply.text, frm=at, to=msg.frm,
+                                   reply_to=msg.id, status=reply.status)
+            await self._kept(answered, reply.attachments)
             await self._post(answered)
 
     async def _drain(self, at: int) -> None:

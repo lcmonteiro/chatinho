@@ -33,12 +33,14 @@ With a terminal, which needs ``pip install chatinho[tui]``::
 
 The application class itself is private: ``build_chat`` builds one.
 
-Four names need an extra, and say so if it is missing:
+Six names need an extra, and say so if it is missing:
 
     build_chat         chatinho[tui]      textual
     OpenAIConnector    chatinho[openai]   openai
     A2AConnector       chatinho[a2a]      requests
     DatabaseBackend    chatinho[sql]      sqlalchemy
+    McpFrontend        chatinho[mcp]      fastmcp
+    McpConnector       chatinho[mcp]      fastmcp
 
 Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand`` —
 imports nothing but the standard library.
@@ -47,15 +49,18 @@ imports nothing but the standard library.
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:                       # never executed; read by type checkers
-    # The four names below are resolved lazily at runtime, which hands a type
+    # The six names below are resolved lazily at runtime, which hands a type
     # checker ``Any`` and quietly undoes the ``py.typed`` this package ships.
     # Importing them here restores that without importing anything at run time.
     from .backends import DatabaseBackend
     from .chat_builder import build_chat
-    from .connectors import A2AConnector, OpenAIConnector
+    from .connectors.a2a import A2AConnector
+    from .connectors.mcp import McpConnector
+    from .connectors.openai import OpenAIConnector
+    from .frontends.mcp import McpFrontend
 
 from .chat_session import ChatSession
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
 from .chat_hooks import (
     connector,
     tool,
@@ -98,9 +103,11 @@ __version__ = "0.1.0"
 #: The names that live behind an extra: attribute -> (module, distribution).
 _BEHIND_AN_EXTRA = {
     "build_chat"      : (".chat_builder", "tui",    "textual"),
-    "OpenAIConnector" : (".connectors",   "openai", "openai"),
-    "A2AConnector"    : (".connectors",   "a2a",    "requests"),
+    "OpenAIConnector" : (".connectors.openai", "openai", "openai"),
+    "A2AConnector"    : (".connectors.a2a",    "a2a",    "requests"),
     "DatabaseBackend" : (".backends",     "sql",    "sqlalchemy"),
+    "McpFrontend"     : (".frontends.mcp",     "mcp",    "fastmcp"),
+    "McpConnector"    : (".connectors.mcp",    "mcp",    "fastmcp"),
 }
 
 
@@ -108,7 +115,7 @@ def __getattr__(name: str) -> Any:
     """Imports the batteries only when one is asked for (PEP 562).
 
     ``import chatinho`` must not drag in a terminal, an HTTP client and an ORM
-    for a script that wanted a ``ChatSession``. These four are resolved on first
+    for a script that wanted a ``ChatSession``. These six are resolved on first
     use instead, and a missing extra is reported as itself rather than as
     somebody else's ``ModuleNotFoundError``.
 
@@ -146,6 +153,8 @@ __all__ = [
     "MessageID",
     "Attachment",
     "Reply",
+    "ReplyStatus",
+    "Secret",
     "ChatStyle",
     "LOCAL",
     "TOOL",
@@ -190,6 +199,8 @@ __all__ = [
     "A2AConnector",
     "OpenAIConnector",
     "DatabaseBackend",
+    "McpFrontend",
+    "McpConnector",
     "HelpCommand",
     "TestCommand",
 ]

@@ -126,6 +126,56 @@ async def test_blank_input_says_nothing():
     assert app.messages == []
 
 
+@connector("sol")
+@require(HookAnswer)
+class _Sol:
+    """Answers what it is asked, and remembers it."""
+
+    def __init__(self):
+        self.asked = []
+
+    async def answer(self, msg):
+        self.asked.append(msg)
+        return Reply("sunny")
+
+
+@connector("lua")
+@require(HookAnswer)
+class _Lua:
+    """A second peer that answers, so a plain say stays a broadcast."""
+
+    async def answer(self, msg):
+        return Reply("full")
+
+
+async def _submit(app, pilot, text):
+    app.query_one("#input-line", CommandInput).text = text
+    await pilot.press("enter")
+    for _ in range(50):
+        await pilot.pause(0.02)
+
+
+async def test_an_at_name_asks_that_peer_without_the_name():
+    sol = _Sol()
+    app = await chat_app(connectors=[sol, _Lua()])
+    async with app.run_test() as pilot:
+        await _submit(app, pilot, "@sol will it rain?")
+        asked = app.messages[0]
+        assert (asked.text, asked.to) == ("will it rain?", sol.peer_id)
+        assert [m.text for m in sol.asked] == ["will it rain?"]
+        assert app.messages[-1].text == "sunny" and app.messages[-1].reply_to == asked.id
+
+
+@pytest.mark.parametrize("typed", ["@nobody hi", "@sol", "hello @sol"])
+async def test_anything_else_is_said_as_typed(typed):
+    sol = _Sol()
+    app = await chat_app(connectors=[sol, _Lua()])
+    async with app.run_test() as pilot:
+        await _submit(app, pilot, typed)
+        assert app.messages[0].text == typed and app.messages[0].is_broadcast
+        assert sol.asked == []
+
+
 # === Commands are run, and the running is recorded ==============================
 
 
@@ -449,8 +499,8 @@ async def test_the_terminal_serves_until_the_user_quits():
 class _Outro:
     """Someone other than the user, so a received bubble exists to measure."""
 
-    async def answer(self, msg) -> str:
-        return "recebida"
+    async def answer(self, msg) -> Reply:
+        return Reply("recebida")
 
 
 def _bubbles(app):
@@ -679,8 +729,8 @@ async def test_up_moves_the_cursor_when_no_suggestion_is_open():
 @connector("segundo")
 @require(HookAnswer)
 class _Segundo:
-    async def answer(self, msg) -> str:
-        return "sou o segundo"
+    async def answer(self, msg) -> Reply:
+        return Reply("sou o segundo")
 
 
 async def test_each_peer_gets_its_own_header_colour():

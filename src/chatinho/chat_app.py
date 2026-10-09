@@ -27,7 +27,7 @@ The parts live next door:
 
 import logging
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from textual.app import App, ComposeResult
 from textual.css.query import NoMatches
@@ -54,6 +54,7 @@ from .chat_hooks import (
     Locate,
     Say,
     frontend,
+    name_of,
     require,
 )
 from .chat_input import (
@@ -65,7 +66,7 @@ from .chat_input import (
     validate_escape,
 )
 from .chat_log import ChatLog
-from .chat_message import ChatMessage, MessageID
+from .chat_message import LOCAL, ChatMessage, MessageID, Reply
 from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
@@ -378,9 +379,24 @@ class ChatApp(App):
             name, _, args = text[1:].strip().partition(" ")
             await self.command(name, args)
         else:
-            target = self._reply_target
+            target   = self._reply_target
             self._clear_reply_target()
-            await self.say(text, reply_to=target)
+            to, text = self._addressed(text)
+            await self.say(text, to=to, reply_to=target)
+
+    def _addressed(self, text: str) -> Tuple[Optional[int], str]:
+        """``@name rest`` asks the peer called *name* (``rest`` alone); anything else is said to all.
+
+        The ask is an addressed say: the peer is asked, the answer comes back
+        as a reply, and nothing waits on it here, so the input stays free.
+        """
+        name, _, rest = text[1:].partition(" ") if text.startswith("@") else ("", "", "")
+        rest = rest.strip()
+        if rest:
+            for at, who in self.peers().items():
+                if at != LOCAL and name_of(who) == name:
+                    return at, rest
+        return None, text
 
     def on_text_area_changed(self, message: TextArea.Changed) -> None:
         """Update the command-suggestion popup as the user types."""
@@ -418,7 +434,7 @@ class ChatApp(App):
         """Someone spoke to everyone: repaint."""
         self._repaint()
 
-    async def answer(self, msg: ChatMessage, **kwargs) -> Optional[str]:
+    async def answer(self, msg: ChatMessage, **kwargs) -> Optional[Reply]:
         """
         Someone asked the user something.
 

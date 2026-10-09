@@ -48,7 +48,7 @@ class _Eco:
 class _Lento:
     async def answer(self, msg) -> str:
         await asyncio.sleep(0.3)
-        return "finalmente"
+        return Reply("finalmente")
 
 
 @connector("rebenta")
@@ -61,8 +61,8 @@ class _Rebenta:
 @connector("rapido")
 @require(HookAnswer)
 class _Rapido:
-    async def answer(self, msg) -> str:
-        return "eco: %s" % msg.text
+    async def answer(self, msg) -> Reply:
+        return Reply("eco: %s" % msg.text)
 
 
 @connector("ouvinte")
@@ -254,9 +254,11 @@ async def test_a_slow_peer_holds_up_only_itself():
 
 async def test_a_peer_that_raises_does_not_take_the_chat_down():
     session, view = await driven(connectors=[_Rebenta(), _Rapido()])
-    asyncio.create_task(view.ask(1, "?"))       # never answers
+    failing = asyncio.create_task(view.ask(1, "?"))     # raises in the asker
     await asyncio.sleep(0.05)
     assert await view.ask(2, "ola") == "eco: ola"
+    with pytest.raises(RuntimeError, match="kaboom"):
+        await failing
     await session.close()
 
 

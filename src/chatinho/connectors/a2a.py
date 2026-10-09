@@ -1,10 +1,12 @@
 """A2A (Agent-to-Agent) connector for chatinho."""
 
+import json
 import logging
 from typing import Any, Dict
 import requests
 
 from ..chat_hooks import HookAnswer, connector, require
+from ..chat_message import Reply
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +54,7 @@ class A2AConnector:
             logger.warning(f"Could not connect to A2A endpoint during initialization: {e}")
             # Don't fail initialization - allow for lazy connection
     
-    async def answer(self, msg: Any, **kwargs) -> Any:
+    async def answer(self, msg: Any, **kwargs) -> Reply:
         """Ask the A2A agent and return its answer.
         
         Args:
@@ -63,7 +65,7 @@ class A2AConnector:
                 - streaming: Whether to expect a streaming response
                 
         Returns:
-            Dict: Response from the A2A agent
+            Reply: The text parts of the A2A agent's response, or the response as JSON
         """
         logger.debug(f"Answering via A2A connector '{self.name}': {msg.text[:100]}...")
         
@@ -103,8 +105,17 @@ class A2AConnector:
             
             result = response.json()
             logger.debug(f"A2A response received: {str(result)[:200]}...")
-            return result
+            return Reply(_text_of(result))
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to send message via A2A connector '{self.name}': {e}")
             raise
+
+
+def _text_of(result: Any) -> str:
+    """The text parts of an A2A response (a Message, or one wrapped in ``result``), else its JSON."""
+    message = result.get("result", result) if isinstance(result, dict) else None
+    parts   = message.get("parts") if isinstance(message, dict) else None
+    texts   = [part["text"] for part in parts or ()
+               if isinstance(part, dict) and isinstance(part.get("text"), str)]
+    return "\n".join(texts) if texts else json.dumps(result)

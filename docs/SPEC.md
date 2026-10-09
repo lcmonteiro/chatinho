@@ -30,7 +30,7 @@ be peer zero.
 A message says where it came from and where it is going, and that is the whole of the routing:
 
 ```python
-ChatMessage(id, text, frm=0, to=None, reply_to=None, timestamp=...)
+ChatMessage(id, text, frm=0, to=None, reply_to=None, timestamp=..., status=ReplyStatus.ANSWERED, credentials={})
 ```
 
 `id` and `reply_to` are `MessageID`s, not strings. `str(msg.id)` is `msg-` and 16 random hex
@@ -102,8 +102,8 @@ hook alone:
 class WeatherConnector:
     ask : Ask                      # annotate every grant, or mypy cannot see it
 
-    async def answer(self, msg) -> str:
-        return "sunny"
+    async def answer(self, msg) -> Reply:
+        return Reply("sunny")
 ```
 
 `require` validates **at class-definition time**: a demanded method left out or misspelled is an
@@ -118,7 +118,7 @@ A class that declares only grants is asked for nothing.
 
 ### HookSay
 
-> **grants** `say(text: str, *, reply_to: Optional[MessageID] = None, attachments: Sequence[Attachment] = ()) -> MessageID`
+> **grants** `say(text: str, *, to: Optional[int] = None, reply_to: Optional[MessageID] = None, attachments: Sequence[Attachment] = (), credentials: Optional[Dict[str, Secret]] = None) -> MessageID`
 
 Says *text* to everyone but the speaker. Returns the new message's id. *text* is Markdown;
 *attachments* go to the backend under the new message's id — see [Attachments](#attachments).
@@ -132,17 +132,43 @@ await self.say("echo: good morning", reply_to=msg.id)   # a reply to a say is an
 **and** it is how an ask is answered late. A peer that returned `None` from `answer` resolves the
 waiting ask by saying the reply with `reply_to` set to the question's id.
 
+`to` addresses the message to one peer: it is asked of that peer, as an ask would be, but nobody
+waits on it — the answer comes back as a reply to it, and every listener still hears both. A `to`
+that is not another peer in the chat raises `ValueError`.
+
+*credentials* ride on the message — `msg.credentials`, keys by name wrapped in `Secret` — for whoever
+answers it, and nothing else: a peer can work with a different key for each message. They never
+enter the text, never show in a `repr`, and the archive does not keep them; the message keeps the
+very mapping it was given, so whoever lent it clears it once the message is answered.
+
+```python
+async def answer(self, msg) -> Reply:
+    key = msg.credentials.get("llm")              # a Secret, or None
+    model = make_model(key.reveal()) if key else self.default_model
+```
+
+**A room with one peer that answers is a conversation with it.** A say that is not a reply, said by
+a peer — not by a command — when exactly one peer declares `HookAnswer` besides the speaker and the
+frontend, is asked of that peer: it goes out addressed to it, its `answer` is called, and the reply
+comes back with `reply_to` set to the say. Everyone who listens still hears both. With two or more
+such peers, or none, a say is a broadcast, as before.
+
 ### HookAsk
 
 > **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str`
 
-Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id.
-What comes back is the reply's text. Anything the reply attached went to the backend, under the
-reply's id, where `locate` finds it.
+Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id,
+and whatever the peer's `answer` raised if it failed. What comes back is the reply's
+text. Anything the reply attached went to the backend, under the reply's id, where `locate` finds it.
 
 ```python
 answer = await self.ask(session.id_of("weather"), "what is the weather?")
 ```
+
+What the reply said about itself is on its message: `msg.status` is `answered`, `asked` (a question
+back) or `error` — a `ReplyStatus`, a `str` enum, so `msg.status == "asked"` holds — from
+`Reply(..., status=ReplyStatus.ASKED)`; a `Reply` is `ANSWERED` unless it says otherwise. A peer whose `answer`
+fails replies with `ReplyStatus.ERROR` when nobody is awaiting it — a say asked of it.
 
 `ask(LOCAL, ...)` asks the user. It does not block the chat: the awaiting peer's own task is
 parked, and every other peer carries on.
@@ -245,17 +271,18 @@ Nothing is owed back. A backend, an audit log and a metrics counter each want al
 
 ### HookAnswer
 
-> **demands** `async answer(msg: ChatMessage) -> Optional[Union[str, Reply]]`
+> **demands** `async answer(msg: ChatMessage) -> Optional[Reply]`
 
-Someone asked *you*. What you return is the reply, posted by the session in your name. Return a
-`Reply(text, attachments)` to attach something; a plain string is a reply with none.
+Someone asked *you*. The `Reply` you return is posted by the session in your name, with its
+attachments and its status. Anything else — a plain string included — is a failure (`TypeError`),
+as it is for a command's `execute`.
 
 ```python
 @connector("weather")
 @require(HookAnswer)
 class WeatherConnector:
-    async def answer(self, msg: ChatMessage) -> Optional[str]:
-        return "sunny"
+    async def answer(self, msg: ChatMessage) -> Optional[Reply]:
+        return Reply("sunny")
 ```
 
 **Returning `None` is not a failure.** The ask stays waiting, and whatever this peer says later

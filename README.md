@@ -57,7 +57,7 @@ pip install -e /path/to/chatinho
 
 **The core has no dependencies at all.** `ChatSession`, the hooks, `HelpCommand` and `TestCommand`
 need nothing beyond the standard library, and `tests/test_architecture.py` fails if that stops being
-true. Four names live behind an extra:
+true. Six names live behind an extra:
 
 | you want | install | it brings |
 |---|---|---|
@@ -65,7 +65,8 @@ true. Four names live behind an extra:
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
-| all of them | `chatinho[all]` | all four |
+| `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` |
+| all of them | `chatinho[all]` | all five |
 
 They are resolved on first use, so `import chatinho` never drags in a terminal for a script that
 wanted a session. A missing extra reports itself:
@@ -174,6 +175,10 @@ outlines that grow with their text, and the one filled bubble is the message you
 to. The colours are Claude Code's — its warm neutrals and Claude's own orange — and `ChatStyle` is
 a dataclass, so `dataclasses.replace` changes any one of them.
 
+A line that starts with **`@name`** asks that peer: `@lab will it rain?` asks `lab` "will it
+rain?", without the `@lab`, and its answer comes back as a reply. A line with no such peer is said
+to everyone as typed.
+
 `quit_key` moves the quit binding off Textual's `ctrl+q` — `build_chat(quit_key="ctrl+g")` — and a
 key Textual could never receive is refused there and then, rather than becoming a binding that
 silently never fires.
@@ -195,6 +200,65 @@ build_chat(
 
 Needs `chatinho[all]`, or whichever extras those three names ask for.
 
+### Across machines — `pip install 'chatinho[mcp]'`
+
+One session can put questions to another over MCP (the modern protocol, 2026-07-28). On the machine
+that answers, `McpFrontend` takes the terminal's place — it is peer zero, named `master` by default,
+and nobody types into it:
+
+```python
+from chatinho import ChatSession
+from chatinho.frontends import McpFrontend
+
+ChatSession(frontend=McpFrontend(token="s3cret", port=8000), connectors=[Agent()]).run()
+```
+
+On the machine that asks, `McpConnector` is an ordinary peer with a name it chooses:
+
+```python
+from chatinho.connectors import McpConnector
+
+lab = McpConnector(url="https://lab.example/mcp", token="s3cret", name="lab",
+                   delegate={"llm": my_sub_key})
+build_chat(connectors=[lab]).run()
+```
+
+Any MCP client can use it too — it needs no chatinho, only FastMCP:
+
+```python
+from fastmcp import Client
+
+client = Client("https://lab.example/mcp", auth="s3cret")
+
+async with client:
+    peers  = (await client.call_tool("peers")).data          # [PeerInfo(name=..., answers=...)]
+    result = await client.call_tool("ask", {"peer": "agent", "text": "will it rain?"})
+    print(result.structured_content["text"])
+```
+
+- **The terminal's tools.** `McpFrontend` offers MCP clients what a person at the terminal can do:
+  `ask` (one peer, by name), `peers`, `tools` (the slash commands) and `invoke` (one of them).
+- **A question names its peer.** A question asked of `lab` goes to one remote peer: the
+  `McpConnector(peer=...)` given, or else the remote session's only answering peer. With several and
+  no `peer=`, the connector answers with an error — a peer router is the planned fix. In any
+  chatinho session, a say in a room where exactly one peer answers is asked of that peer.
+- **One reply, always.** Every question ends in exactly one of `answered`, `asked` (a question back)
+  or `error`. There is no deadline: a client that stops waiting just ends its call.
+  Attachments come back with the answer and the local backend keeps them.
+- **The frontend speaks for every client.** It says each client's message in the remote session as
+  its own, and sends the reply to that message back to the client that sent it — several clients at
+  once, told apart by message id. No peer is added per client, so remote peers see every
+  question coming from `master`.
+- **Lending intelligence is lending a credential**, the way A2A delegates them, and it is opt-in:
+  `McpFrontend(credentials={"llm": "API key"})` declares what its peers may use, and
+  `McpConnector(delegate={"llm": key_or_function})` sends it out of band — serve the session over
+  HTTPS, since the connector does not check the transport. It rides on the message said in the remote session, as `msg.credentials`, and the
+  peer that answers uses it for that message alone — so one peer can work with a different key for
+  each message. It is cleared once the message is answered. Without `delegate`, no key leaves the
+  asking machine. Lend a sub-key with a spending limit or a short-lived token — never your main key.
+- **Over Streamable HTTP only, with a bearer token** — required — and anyone holding it can ask every
+  peer of the session. There is no stdio transport.
+
 ### Writing your own
 
 A frontend, a connector, a command and a backend are all plain classes; the difference is what
@@ -210,8 +274,8 @@ class Terminal:
 @connector("weather")               # a peer: it gets an id and a queue
 @require(HookAnswer)
 class Weather:
-    async def answer(self, msg) -> str:
-        return "sunny"
+    async def answer(self, msg) -> Reply:
+        return Reply("sunny")
 
 @tool("upper", "Upper-case the rest of the line")   # not a peer: it just runs
 @require(HookExecute)
@@ -260,6 +324,8 @@ content: an HTML attachment runs its scripts when your browser opens it.
 | [`examples/demo.py`](examples/demo.py) | the full TUI: Markdown, code blocks, autocomplete, replies |
 | [`examples/headless.py`](examples/headless.py) | the same chat wired to stdin/stdout |
 | [`examples/agent_inbox.py`](examples/agent_inbox.py) | inbound: an agent asks over HTTP, you answer |
+| [`examples/mcp_server.py`](examples/mcp_server.py) | a chat with no terminal, served over MCP for another session to ask |
+| [`examples/mcp_client.py`](examples/mcp_client.py) | a plain FastMCP client calling that server's `peers` and `ask` |
 
 ---
 

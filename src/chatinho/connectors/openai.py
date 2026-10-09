@@ -5,6 +5,7 @@ from typing import Any, Optional
 import openai
 
 from ..chat_hooks import HookAnswer, connector, require
+from ..chat_message import Reply
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ class OpenAIConnector:
             logger.error(f"Failed to initialize OpenAI connector '{self.name}': {e}")
             raise
     
-    async def answer(self, msg: Any, **kwargs) -> Any:
+    async def answer(self, msg: Any, **kwargs) -> Reply:
         """Ask the OpenAI model and return its reply.
         
         Args:
@@ -57,7 +58,7 @@ class OpenAIConnector:
                 - conversation_history: Previous messages for context
                 
         Returns:
-            str: Response from OpenAI
+            Reply: Response from OpenAI
         """
         logger.debug(f"Answering via OpenAI connector '{self.name}': {msg.text[:100]}...")
         
@@ -95,7 +96,7 @@ class OpenAIConnector:
             response_text = response.choices[0].message.content
             
             logger.debug(f"OpenAI response received: {response_text[:100]}...")
-            return response_text
+            return Reply(response_text or "")
             
         except Exception as e:
             logger.error(f"Failed to send message via OpenAI connector '{self.name}': {e}")

@@ -22,7 +22,7 @@ subsystem holds up nobody but itself.
     @connector("weather")
     @require(HookAnswer)
     class WeatherConnector:
-        async def answer(self, msg): return "sunny"
+        async def answer(self, msg): return Reply("sunny")
 
 One hook per ``require``, stacked. Each declaration is its own line, so it has
 somewhere to carry options that belong to that hook alone:
@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
 
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID
+from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Secret
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +49,21 @@ class Say(Protocol):
         self,
         text        : str,
         *,
+        to          : Optional[int] = None,
         reply_to    : Optional[MessageID] = None,
         attachments : Sequence[Attachment] = (),
+        credentials : Optional[Dict[str, Secret]] = None,
     ) -> MessageID:
         """Adds *text* to the conversation and returns the new message's id.
 
+        With *to*, the message is addressed: it is asked of that peer, without
+        waiting, and its answer comes back as a reply to it. Raises
+        ``ValueError`` when *to* is not another peer in the chat.
+
         *attachments* go to the backend, kept under the new message's id; its
         Markdown text can link to them by name. The message itself is text.
+        *credentials* ride on the message, for whoever answers it; the message
+        keeps that very mapping, so whoever lent them can clear it.
         """
         ...
 
@@ -67,6 +75,9 @@ class Ask(Protocol):
         """Asks peer *to* and waits for the text of the answer it sends back.
 
         *attachments* go to the backend, as with ``say``.
+
+        Raises:
+            Exception: Whatever the peer's ``answer`` raised, when it failed.
         """
         ...
 
@@ -180,6 +191,15 @@ HookSay = Hook(
     # say(text, reply_to=None) -> id. Reaches every peer but the sender.
     # A reply to a say is another say: a broadcast is owed to nobody, so there
     # is no fourth verb for answering one.
+    #
+    # One exception, so a room with one peer that answers behaves like a
+    # conversation with it: a say that is not itself a reply, said by a peer
+    # (not a command) in a room where exactly one peer answers — besides the
+    # speaker and the frontend — is asked of that peer. Everyone who listens
+    # still hears it; the answer comes back as a reply to it.
+    #
+    # say(text, to=peer) does that on purpose: an addressed say is asked of
+    # that peer and nobody waits on it — the answer is a reply like any other.
 )
 
 HookAsk = Hook(
@@ -207,9 +227,10 @@ HookListen = Hook(
 HookAnswer = Hook(
     name="HookAnswer",
     method="answer",
-    # async answer(msg) -> str | Reply | None. Someone asked you; what you
-    # return is the reply, and the session posts it in your name. Return a
-    # Reply to attach something to it; the asker still gets the text.
+    # async answer(msg) -> Reply | None. Someone asked you; the Reply you
+    # return is posted in your name, with its attachments and its status. The
+    # asker gets its text. Anything else is a failure (TypeError), as it is for
+    # a command's execute.
     #
     # Return None when the answer is not yours to invent yet — a terminal
     # waiting on a person, a connector waiting on a server. The ask stays

@@ -96,8 +96,8 @@ class _Reporter:
 @connector("simples")
 @require(HookAnswer)
 class _Plain:
-    async def answer(self, msg) -> str:
-        return "just text"
+    async def answer(self, msg) -> Reply:
+        return Reply("just text")
 
 
 @tool("texto", "answers with a plain string")

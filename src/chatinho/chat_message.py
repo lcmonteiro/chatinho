@@ -20,6 +20,7 @@ application.
 import re
 import secrets
 from dataclasses import dataclass, field
+from enum import Enum
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -56,20 +57,64 @@ class Attachment:
     data       : bytes
 
 
+class ReplyStatus(str, Enum):
+    """What an answer says about itself.
+
+    A ``str`` enum, so it compares equal to its value: ``ReplyStatus.ASKED ==
+    "asked"``.
+    """
+
+    #: The default, and it covers "I don't know" too, said in the text.
+    ANSWERED = "answered"
+    #: A question back to the asker, for example when more is needed.
+    ASKED    = "asked"
+    #: The peer could not answer.
+    ERROR    = "error"
+
+
 @dataclass(frozen=True)
 class Reply:
-    """What ``answer`` or a command's ``execute`` returns when it attaches.
+    """What ``answer`` or a command's ``execute`` returns when it says more than text.
 
-    Returning a plain string still works; a Reply is only for an answer that
-    carries attachments.
+    Returning a plain string still works; a Reply is for an answer that carries
+    attachments, or that is not a plain answer.
 
     Attributes:
         text: The answer, as Markdown.
         attachments: What the reply attaches; they go to the backend.
+        status: What the answer says about itself; ``ANSWERED`` when left out.
+            Its value as a string is accepted too.
     """
 
     text        : str
     attachments : Tuple[Attachment, ...] = ()
+    status      : ReplyStatus = ReplyStatus.ANSWERED
+
+    def __post_init__(self) -> None:
+        # ReplyStatus("maybe") raises ValueError, which is the refusal we want.
+        object.__setattr__(self, "status", ReplyStatus(self.status))
+
+
+class Secret:
+    """A value that must never be shown: a credential lent for one question.
+
+    ``repr`` and ``str`` are redacted, so a Secret in a log line, an error or a
+    traceback's locals says nothing. :meth:`reveal` is the one way to the value.
+    """
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str) -> None:
+        self._value = value
+
+    def reveal(self) -> str:
+        """Returns the value itself."""
+        return self._value
+
+    def __repr__(self) -> str:
+        return "Secret('***')"
+
+    __str__ = __repr__
 
 
 @dataclass(frozen=True)
@@ -144,6 +189,12 @@ class ChatMessage:
         to: The id it was addressed to, or None when it went to everyone.
         reply_to: The id of the message this answers, when it answers one.
         timestamp: When it entered the history.
+        status: What an answer said about itself, from the ``Reply`` that
+            made it; :attr:`ReplyStatus.ANSWERED` for everything else. Not kept by the archive.
+        credentials: Keys lent with this message, by name — for answering it
+            and nothing else, so a peer can work with a different key for each
+            message. Never in the text, never shown, never kept by the archive;
+            whoever lent them clears them once the message is answered.
     """
 
     id        : MessageID
@@ -152,6 +203,8 @@ class ChatMessage:
     to        : Optional[int] = None
     reply_to  : Optional[MessageID] = None
     timestamp : datetime = field(default_factory=datetime.now)
+    status    : ReplyStatus = ReplyStatus.ANSWERED
+    credentials : Dict[str, "Secret"] = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def is_broadcast(self) -> bool:
