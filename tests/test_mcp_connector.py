@@ -51,22 +51,11 @@ def test_exactly_one_server():
 # === Naming ========================================================================
 
 async def test_named_by_the_connector():
-    weather = Weather()
-    remote_session, front = await remote(weather)
+    remote_session, front = await remote(Weather())
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
     assert lab.name == "lab"
-    seen = []
-    forwarding = front._forward
-
-    async def spying(client, asker, *args):
-        seen.append((client, asker))
-        return await forwarding(client, asker, *args)
-
-    front._forward = spying
-    await view.say("@lab rain?")
-    await _replies(view, 2)
-    assert seen == [("lab", "driver")]
+    assert await view.ask(lab.peer_id, "rain?") == "sunny"
     await session.close()
     await remote_session.close()
 
@@ -143,12 +132,12 @@ async def test_a_question_back_is_marked():
     await remote_session.close()
 
 
-async def test_a_remote_error_is_said_briefly():
+async def test_no_remote_peer_is_said_briefly():
     remote_session, front = await remote()
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
     got = await _asked(view, lab, "rain?")
-    assert got.status == "error" and got.text.startswith("lab: error") and "No peer" in got.text
+    assert got.status == "error" and got.text.startswith("lab: no single remote peer answers")
     await session.close()
     await remote_session.close()
 
@@ -247,5 +236,29 @@ async def test_two_questions_at_once():
     session, view = await _local(lab)
     got = await asyncio.gather(view.ask(lab.peer_id, "one?"), view.ask(lab.peer_id, "two?"))
     assert got == ["sunny", "sunny"]
+    await session.close()
+    await remote_session.close()
+
+
+async def test_with_several_remote_peers_one_is_named():
+    weather = Weather("sunny")
+    remote_session, front = await remote(Agent(), weather)
+    unnamed = McpConnector(server=front.server, name="lab")
+    named   = McpConnector(server=front.server, name="sky", peer="weather")
+    session, view = await driven(connectors=[unnamed, named])
+    got = await _asked(view, unnamed, "rain?")
+    assert got.status == "error" and "peer=" in got.text
+    assert await view.ask(named.peer_id, "rain?") == "sunny"
+    assert [m.text for m in weather.asked] == ["rain?"]
+    await session.close()
+    await remote_session.close()
+
+
+async def test_a_remote_error_is_said_briefly():
+    remote_session, front = await remote(Weather(Reply("the service is down", status="error")))
+    lab = McpConnector(server=front.server, name="lab")
+    session, view = await _local(lab)
+    got = await _asked(view, lab, "rain?")
+    assert got.status == "error" and got.text == "lab: error — the service is down"
     await session.close()
     await remote_session.close()

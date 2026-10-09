@@ -24,11 +24,11 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - Every piece is testable offline, with FastMCP's in-process client.
 
 **Non-Goals:**
-- Routes through several sessions (multi-hop), and `McpConnector` choosing a remote peer (an MCP client can, with `ask`).
-- A peer router. Until there is one, the remote session sends a question to its only peer, or says it to the room.
+- Routes through several sessions (multi-hop).
+- A peer router. Until there is one, the client names the remote peer it asks; `McpConnector` asks the only answering remote peer unless it is given `peer=`.
 - Notifications and resource subscriptions.
 - Remote peers mirrored one-to-one in the local roster.
-- Remote peers asking the remote asker a question (MCP elicitation); the frontend answers such questions with `error`. A remote peer that needs more information answers with status `asked` instead, and the asker's next question continues the conversation.
+- Remote peers asking the remote asker a question (MCP elicitation); the frontend does not answer questions. A remote peer that needs more information answers with status `asked` instead, and the asker's next question continues the conversation.
 
 ## Decisions
 
@@ -42,52 +42,43 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 - **No peer per client.** The frontend listens and resolves its own waits (decisions 3 and 4), and adds or removes no peer.
 
 ### 2. Wire format: the terminal's tools
-`McpFrontend` builds a `FastMCP` server and registers its own async methods as the tools (`mcp.tool(self._ask, name="ask")`, one line each): FastMCP derives each schema from the signature and each description from the docstring, and a tool reads the request's `_meta` (client name, lent credentials) through its `Context`.
-- **Tools:** what a person at the terminal can do, mirroring `ChatApp`'s grants. There is no tool to read attachments later; attachments come back with the reply.
-  - `say(text, asker?)`: the bridge. The frontend says the text in the session and returns the first reply; there is no peer name, so the session decides who replies (decision 4).
+`McpFrontend` builds a `FastMCP` server and registers its own async methods as the tools (`mcp.tool(self._ask, name="ask")`, one line each): FastMCP derives each schema from the signature and each description from the docstring, and a tool reads the request's `_meta` (lent credentials) through its `Context`.
+- **Tools:** `ask`, `peers`, `tools` and `invoke`, what a person at the terminal can do, mirroring `ChatApp`'s grants. There is no `say` tool: a client always names the peer it asks. There is no tool to read attachments later; attachments come back with the reply.
   - `ask(peer, text)`: the frontend says the text addressed to the peer of that name (`say(..., to=)`), so it is asked of that peer, and returns its answer. An unknown name, a name several peers share, the frontend's own name, or a peer that does not declare `HookAnswer` is `error` at once.
   - `peers()`: every peer but the frontend, as a typed list of `PeerInfo(name, answers)`; a FastMCP client reads it back as objects from `result.data`.
   - `tools()`: the session's commands, as a typed list of `ToolInfo(name, description)`.
   - `invoke(name, args?)`: runs a command through the `invoke` grant (a leading `/` is accepted) and returns its answer as `answered`; an unknown or failing command is `error`.
-- **Result:** `say`, `ask` and `invoke` return an `Answer` model, `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, with `status` `answered` or `asked` and `msg_id` the reply's message id in the remote session; FastMCP sends it as structured content and as JSON text. A failure, including a reply whose status is `error`, raises `ToolError` with the message, so it is a tool error (`isError`) carrying only that text.
+- **Result:** `ask` and `invoke` return an `Answer` model, `{status, text, attachments: [{name, media_type, data_b64}], msg_id}`, with `status` `answered` or `asked` and `msg_id` the reply's message id in the remote session; FastMCP sends it as structured content and as JSON text. A failure, including a reply whose status is `error`, raises `ToolError` with the message, so it is a tool error (`isError`) carrying only that text.
 - **Read back:** `McpConnector` turns the result straight into its local `Reply`: a tool error becomes `ReplyStatus.ERROR` naming the remote session, `asked` becomes `ReplyStatus.ASKED`, and anything else is `answered` with its text and attachments.
 - **Shared code:** the credentials key and the attachment encoding live in `chatinho/helpers/mcp.py`, standard library only, so each end imports them without the other.
 - *Alternative, the earlier draft: the SDK's low-level `Server` (`on_list_tools`, `on_call_tool`).* It gave full control, but the tool schemas, the dispatch by name, the extension and the bearer check were all hand-written; FastMCP gives the same request context with far less code.
 
 ### 3. The frontend speaks for every client
 The frontend is the session's peer zero, as a terminal is, and it handles every client itself.
-- **Receive:** a `say` or `ask` tool call arrives, carrying its client's name in `_meta` `clientInfo.name` (`client` when missing).
-- **Forward:** the frontend says the text in the session as its own message (decision 4).
-- **Route back:** it maps that message's id to the open question, which belongs to that client's call. The reply to that message resolves that question alone, and the result goes back on that client's call.
-- **Several clients:** their messages wait at once, each under its own message id, which `say` returns straight away.
-- **Follow-ups:** the frontend keeps the last answer per `(client, asker)`, using the `asker` name the connector sends.
+- **Receive:** an `ask` tool call arrives, with the peer's name, the text and, in `_meta`, any lent credentials.
+- **Forward:** the frontend says the text in the session as its own message, addressed to that peer (`say(text, to=peer)`), so the session asks it of that peer without anyone waiting on a core `ask`.
+- **Route back:** it maps that message's id to the open call. Its `listen` resolves the call with the message whose `reply_to` is that id. There is no deadline: the call waits for that reply, and a client that stops waiting ends its call, which lets go of the question.
+- **Several clients:** their questions wait at once, each under its own message id.
+- **Follow-ups:** a peer that answered `asked` is asked again by the client's next `ask`; it has the conversation's history.
 - **Asking the frontend:** it does not declare `HookAnswer`, since nobody is at its terminal; the ask/answer pair is not supported. An answer that arrives after its question ended is only heard.
 - *Alternative, the earlier draft: one proxy peer per asker, named `<client>/<asker>`.* It let remote peers tell askers apart, but it needed peers added and removed at run time (`remove_connector`, idle expiry). It is dropped: the frontend manages the connections, and the core stays as it is.
 
-### 4. Who answers, and the one-result guarantee
-The answering peers are those in `peers()` that declare `HookAnswer`, excluding the frontend.
-- **Always a say:** the frontend `say`s the text and registers a future under the said message id. With one answering peer, the session asks it of that peer (decision 1); with several, it goes to the room. Its `listen` resolves the future with the first message whose `reply_to` is that id; later replies only stay in the conversation. There is no deadline: the call waits for that first reply, and a client that stops waiting ends its call, which lets go of the message.
-- **Follow-ups:** with one peer, the next message is a new say, asked of that peer, so the peer has the history. With several, the frontend remembers each asker's last reply in the room and says the next message with `reply_to` set to it, so the peer that replied sees it is for it. With one peer the follow-up must not be a reply, or the session would not ask it.
-- **Several peers, none listening:** a `say` reaches only peers that declare `HookListen`, so if none of the answering peers listens, nobody could ever reply. The result is `error` at once ("several peers and none listens; a peer router is needed") rather than a wait for a reply that cannot come.
-- **No peer:** `error` at once.
-- **Naming the peer:** `say` never names one, so the remote side owns routing until a peer router takes over; a client that knows whom it wants uses `ask`, which is one hop as well. An addressed say (`say(text, to=peer)`) is asked of that peer without waiting, so `ask` shares `say`'s machinery: the status, attachments, lent credentials and error reply.
-
-Every outcome maps to one result:
-
-| Outcome | Status |
+### 4. One result per question
+| Outcome | Result |
 |---|---|
-| The reply arrived | the reply message's `status` |
-| No answering peer | `error` |
-| Several answering peers, none listening | `error` |
-| The lone peer raised | `error` (its error reply) |
+| The reply arrived, `answered` or `asked` | an `Answer` with the reply's status |
+| The reply's status is `error` (for example, the peer raised) | a tool error with its text |
+| No peer by that name, several, or one that does not answer | a tool error at once |
+
+- *Alternative, the earlier draft: a `say` tool that said the text to the room and returned the first reply, with the lone-peer rule and follow-ups kept per asker.* It let the remote side choose, but the first reply could come from any peer, and it needed per-asker state. It is dropped: the client names the peer, until a peer router chooses for it.
 
 ### 5. Credential delegation (opt-in)
 This follows A2A's principle: credentials travel out of band, the server declares what it needs, and a short-lived, scoped credential is preferred to a master key.
 - **Core:** the credentials ride on the message as metadata, `ChatMessage.credentials` (keys by name, each a `Secret`), set by `say(..., credentials=…)`. The peer that answers a message reads them from that message, so the key it uses belongs to the message, and one peer can work with a different key for each message.
 - *Alternative, the earlier draft: a `HookCredential` grant served by the frontend (`credential(msg_id, name)`).* It worked, but it was a second path to what the message itself can carry.
 - **Declaration:** `McpFrontend(credentials={"llm": "OpenAI-compatible API key"})` announces the names in its `server/discover` result, as the capability extension `chatinho/credentials` (SEP-2133 `capabilities.extensions`). Undeclared names are dropped on arrival.
-- **Delivery:** `McpConnector(delegate={"llm": value | callable})` discovers the server first, then puts the declared credentials in the `say` request's `_meta["chatinho/credentials"]`. A callable is called per question, so it can mint short-lived tokens. Over HTTP the connector delegates only to `https` URLs or loopback hosts.
-- **Lifetime:** the frontend builds the mapping of `Secret`s from the request, says the message with it, and clears that same mapping in the `finally` of the `say` call, so it is gone on every outcome, including a client that gives up and ends its call. The text, the store and logs never hold it, and `ChatMessage`'s `repr` leaves it out.
+- **Delivery:** `McpConnector(delegate={"llm": value | callable})` discovers the server first, then puts the declared credentials in the `ask` request's `_meta["chatinho/credentials"]`. A callable is called per question, so it can mint short-lived tokens. Over HTTP the connector delegates only to `https` URLs or loopback hosts.
+- **Lifetime:** the frontend builds the mapping of `Secret`s from the request, says the question with it, and clears that same mapping when the `ask` call ends, so it is gone on every outcome, including a client that gives up and ends its call. The text, the store and logs never hold it, and `ChatMessage`'s `repr` leaves it out.
 - **Not passed on:** the credential reaches only the session the connector connects to. A peer that found it on a message must not delegate it further; a connector only delegates its own `delegate` configuration.
 - **Using it:** a peer (for example orbe's agent) reads `msg.credentials.get("llm")` and builds its model with that key for this message only; without one, it answers without a model or with its own.
 - *Alternative: put the key in the question text or a session-wide setting.* That leaks into history and outlives the question.
@@ -101,10 +92,10 @@ This follows A2A's principle: credentials travel out of band, the server declare
 ### 7. Asking in the local chat
 - **Asked only:** `McpConnector` declares `HookAnswer` and nothing that hears the room: it reacts only when it is asked — directly, or by the core rule when it is the only answering peer. A leading `@<name>` is optional and dropped.
 - *Alternative, the earlier draft: listening for `@<name>` in the room.* It duplicated the session's own routing and needed `HookListen` and `HookSay`; it is dropped.
-- **Asker:** the connector sends the asking peer's name; the frontend uses it only to keep that asker's follow-ups together.
+- **Which remote peer:** the connector asks its `peer`, or, when none was given, the only remote peer that answers, found with the remote `peers` tool. With none or several, it answers with an error asking for `peer=`.
 
 ### 8. Connection lifecycle
-- `McpConnector` holds one `fastmcp.Client` and opens it per question (`async with client: await client.call_tool("say", …)`); the protocol is stateless, so no link stays open between questions and there is nothing to close at `shutdown()`. `initialize()` opens it once to take the server's name when none was given. It doesn't implement `serve()`, because a dropped link must not end the local chat.
+- `McpConnector` holds one `fastmcp.Client` and opens it per question (`async with client: await client.call_tool("ask", …)`); the protocol is stateless, so no link stays open between questions and there is nothing to close at `shutdown()`. `initialize()` opens it once to take the server's name when none was given. It doesn't implement `serve()`, because a dropped link must not end the local chat.
 - The connector refuses a server that only speaks the handshake era. Each request is independent; a failed call answers `error` ("could not reach …"), and the client is reopened lazily on the next question.
 - **Transport:** Streamable HTTP only, `url=…, token=…` with a `Bearer` header, or `server=…` for an in-process server in tests and embedding. There is no stdio transport on either side.
 - `McpFrontend(name="master", *, token, host, port, credentials)`; the token is required, and the name is the frontend's peer name and the server's name. Its `serve()` awaits FastMCP's own `run_async(transport="http")`, with a `TokenVerifier` that compares the bearer token in constant time, and `shutdown()` cancels it.
@@ -119,15 +110,14 @@ This follows A2A's principle: credentials travel out of band, the server declare
 ## Risks / Trade-offs
 
 - **A say in a room with one peer that answers is now asked of it**, in every chatinho session. In a local chat with one agent, everything the user says goes to it, with or without `@name`. → That is the intent; with two agents nothing changes, and replies and commands' output stay broadcasts.
-- **Remote peers cannot tell clients apart.** Every remote question comes from the frontend (`master`). → The routing back is exact, since it is by message id. A peer that must know who asked is a case for the peer router, or for a later field on the message.
+- **Remote peers cannot tell clients apart.** Every remote question comes from the frontend (`master`). → The routing back is exact, since it is by message id. A peer that must know who asked is a case for a later field on the message.
 - **Attachment bytes through `locate`** depend on a linking backend. → The server documents it and the result says when attachments couldn't be returned. A byte-level grant is a follow-up.
-- **Client names are self-declared.** Any client can claim to be `lab`, and on a stateless protocol nothing ties a request to an earlier one. → On HTTP every client already holds the same bearer token, so names only group follow-ups; they are not trusted.
 - **The `mcp` extra pulls in pydantic and other compiled packages**, so it's heavy on Termux. → It's optional, and the core stays dependency-free.
 - **A message's credentials are visible to every peer that hears it**, not only the one that answers: listeners get the same message. → They are cleared once the message is answered; a session that lends keys should trust its own peers.
 - **A delegated credential is readable by the remote session's code while it answers.** Delegation reduces exposure (one question, memory only) but cannot prevent a dishonest or buggy remote from copying it. → It's opt-in, HTTPS-only, and the docs recommend a sub-key with a spending limit or a short-lived token.
 - **HTTP exposes every peer.** → The bearer token is mandatory on HTTP. The token and URL are the connector's configuration and are never sent to the server's peers.
-- **With several peers, the first reply wins, whoever it is.** A chatty peer can answer before the right one. → The others still reply into the conversation, and a peer router is the planned fix.
-- **A broadcast nobody replies to** waits until the client gives up, since there is no deadline. → The client's own call timeout bounds it, and ending the call lets go of the message and its credentials; peers that cannot help should stay quiet rather than reply.
+- **The client must know the remote peer's name.** → `peers` lists them, and `McpConnector` picks the only answering one by itself.
+- **A peer that never answers** keeps the call waiting, since there is no deadline. → The client's own call timeout bounds it, and ending the call lets go of the question and its credentials.
 - **Names are not unique across machines.** → They're used only for display.
 
 ## Migration Plan

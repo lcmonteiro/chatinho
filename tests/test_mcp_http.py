@@ -43,7 +43,7 @@ async def test_http_refuses_requests_without_the_token_and_serves_those_with_it(
 
         async with Client(url, auth="s3cret", client_info=types.Implementation(name="lab", version="1")) as c:
             version = c.protocol_version
-            res     = await c.call_tool_mcp("say", {"text": "rain?"})
+            res     = await c.call_tool_mcp("ask", {"peer": "weather", "text": "rain?"})
         assert res.structured_content["text"] == "sunny"
         assert version == "2026-07-28"
     finally:

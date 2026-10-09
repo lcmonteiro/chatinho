@@ -23,7 +23,7 @@ async def main(text: str) -> None:
         for peer in (await client.call_tool("peers")).data:
             print("peer:", peer.name, "(answers)" if peer.answers else "")
 
-        result = await client.call_tool("say", {"text": text}, raise_on_error=False)
+        result = await client.call_tool("ask", {"peer": "agent", "text": text})
         print(result.structured_content["status"], "-", result.structured_content["text"])
 
         result = await client.call_tool("ask", {"peer": "agent", "text": text},

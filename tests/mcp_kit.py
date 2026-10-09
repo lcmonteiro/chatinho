@@ -27,9 +27,9 @@ def client(front: McpFrontend, name: str = "lab") -> Client:
     return Client(front.server, client_info=types.Implementation(name=name, version="1"))
 
 
-async def say(c: Client, text: str, **args: Any) -> dict:
-    """Calls the say tool; see :func:`call`."""
-    return await call(c, "say", text=text, **args)
+async def ask(c: Client, peer: str, text: str) -> dict:
+    """Calls the ask tool; see :func:`call`."""
+    return await call(c, "ask", peer=peer, text=text)
 
 
 async def call(c: Client, tool: str, **args: Any) -> dict:

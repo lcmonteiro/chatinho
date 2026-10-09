@@ -1,9 +1,10 @@
 """A peer that puts questions to another chatinho session over MCP.
 
 :class:`McpConnector` is an ordinary connector: it appears in the chat under a
-name it chooses (``lab``) and answers what it is asked. Each question is said
-in the remote session through its ``say`` tool, and the first reply to it
-comes back: exactly one reply for every question.
+name it chooses (``lab``) and answers what it is asked. Each question is asked
+of one remote peer through the remote session's ``ask`` tool — the ``peer``
+given, or else the only remote peer that answers — and exactly one reply comes
+back for every question.
 
 It is a FastMCP client and speaks the modern MCP protocol (2026-07-28). When a
 remote peer needs an LLM, the connector can lend it a credential for that one
@@ -19,8 +20,8 @@ from urllib.parse import urlparse
 import mcp_types as types
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
-from chatinho.chat_hooks import HookAnswer, HookPeers, Peers
-from chatinho.chat_hooks import connector, name_of, require
+from chatinho.chat_hooks import HookAnswer
+from chatinho.chat_hooks import connector, require
 from chatinho.chat_message import ChatMessage, Reply, ReplyStatus
 from chatinho.helpers.mcp import CREDENTIALS_KEY, decode
 
@@ -49,7 +50,6 @@ def _reply_from(res: types.CallToolResult, name: str) -> Reply:
 
 @connector("mcp")
 @require(HookAnswer)
-@require(HookPeers)
 class McpConnector:
     """Puts questions to a remote chatinho session.
 
@@ -63,6 +63,8 @@ class McpConnector:
         server: An in-process server, for tests and embedding.
         name: Its name in the chat, and the client name the server sees; the
             server's name when left out.
+        peer: The remote peer to ask; the only remote peer that answers when
+            left out.
         delegate: Credentials to lend, by name: a value, or a function returning
             one for each question. Only the ones the server declares are sent,
             and only over HTTPS or to this machine.
@@ -71,8 +73,6 @@ class McpConnector:
         ValueError: Not exactly one server, or a *url* without a *token*.
     """
 
-    peers : Peers
-
     def __init__(
         self,
         *,
@@ -80,6 +80,7 @@ class McpConnector:
         token       : Optional[str] = None,
         server      : Any = None,
         name        : Optional[str] = None,
+        peer        : Optional[str] = None,
         delegate    : Optional[Mapping[str, Union[str, Callable[[], str]]]] = None,
     ) -> None:
         if (url is None) == (server is None):
@@ -91,6 +92,7 @@ class McpConnector:
         self._server     = server
         self._named      = name is not None
         self.name        = name or "mcp"
+        self.peer        = peer
         self._delegate   = dict(delegate or {})
         self._client     : Any = self._make_client()
 
@@ -120,7 +122,7 @@ class McpConnector:
     async def answer(self, msg: ChatMessage) -> Reply:
         """A question asked to it directly; the ``@<its name>`` prefix is optional."""
         text = self._addressed(msg.text)
-        return await self._say_remote(text if text is not None else msg.text, self._asker(msg.frm))
+        return await self._ask_remote(text if text is not None else msg.text)
 
     def _addressed(self, text: str) -> Optional[str]:
         """The rest of *text* when it starts with ``@<name>`` and whitespace, else None."""
@@ -133,28 +135,33 @@ class McpConnector:
             return None
         return rest.strip() or None
 
-    def _asker(self, frm: int) -> str:
-        who = self.peers().get(frm)
-        return name_of(who) if who is not None else "peer-%d" % frm
-
     # === One question ===============================================================
 
-    async def _say_remote(self, text: str, asker: str) -> Reply:
+    async def _ask_remote(self, text: str) -> Reply:
         """Asks the remote session, and turns whatever happens into one reply."""
         if self._delegate and not self._may_delegate():
             return Reply("%s: lending credentials needs HTTPS; nothing was sent" % self.name,
                          status=ReplyStatus.ERROR)
-        args = {"text": text, "asker": asker}
         try:
             async with self._client as client:
                 if client.protocol_version not in MODERN_PROTOCOL_VERSIONS:
                     raise RuntimeError("The server speaks only the handshake-era MCP protocol")
-                result = await client.call_tool("say", args, meta=self._lending(client), raise_on_error=False)
+                peer = self.peer or await self._only_peer(client)
+                if peer is None:
+                    return Reply("%s: no single remote peer answers; name one with peer=" % self.name,
+                                 status=ReplyStatus.ERROR)
+                result = await client.call_tool("ask", {"peer": peer, "text": text},
+                                                meta=self._lending(client), raise_on_error=False)
         except Exception as exc:
             logger.warning("%s could not ask its server: %r", self.name, exc)
             return Reply("%s: could not reach the remote session (%s)" % (self.name, type(exc).__name__),
                          status=ReplyStatus.ERROR)
         return _reply_from(result, self.name)
+
+    async def _only_peer(self, client: Any) -> Optional[str]:
+        """The only remote peer that answers, or None when there are none or several."""
+        answering = [peer.name for peer in (await client.call_tool("peers")).data if peer.answers]
+        return answering[0] if len(answering) == 1 else None
 
     # === Lending ====================================================================
 

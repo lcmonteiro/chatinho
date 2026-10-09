@@ -3,9 +3,6 @@
 :class:`McpFrontend` is the session's peer zero, as a terminal would be, but
 nobody types into it. Its tools are what a person at the terminal can do:
 
-- ``say``: say something in the session and get the first reply to it. When
-  one peer answers there, the session asks it of that peer; when several do,
-  it is said to the room.
 - ``ask``: ask one peer, by name, and get its answer.
 - ``peers``: who is in the session, and which of them answer.
 - ``tools``: the session's tools (its slash commands).
@@ -13,10 +10,9 @@ nobody types into it. Its tools are what a person at the terminal can do:
 
 It is built on FastMCP and speaks the modern MCP protocol (2026-07-28) over
 Streamable HTTP, with a bearer token on every request. The protocol is
-stateless: every request names its client, and may carry credentials the client
-lends for that message; they ride on the message said in the session, for
-whichever peer answers it. No peer is added per client: messages are told apart
-by their ids.
+stateless: every request may carry credentials the client lends for that
+question; they ride on the message asked in the session, for the peer that
+answers it. No peer is added per client: questions are told apart by their ids.
 """
 
 import asyncio
@@ -24,11 +20,10 @@ import hmac
 import logging
 import re
 from dataclasses import dataclass
-from typing import Annotated, Any, Dict, List, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Optional
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
-import mcp_types as types
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server.auth import AccessToken, TokenVerifier
@@ -49,14 +44,11 @@ _LINK = re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
 
 @dataclass(eq=False)
 class _Message:
-    """One client's message in flight, from its ``say`` or ``ask`` call to its one result."""
+    """One client's question in flight, from its ``ask`` call to its one result."""
 
-    client      : str
-    asker       : Tuple[str, str]
     credentials : Dict[str, Secret]
     reply       : "asyncio.Future[ChatMessage]"
     msg_id      : Optional[MessageID] = None
-    room        : bool = False
     closed      : bool = False
 
 
@@ -64,7 +56,7 @@ _Text = Annotated[str, Field(description="What to say.")]
 
 
 class Answer(BaseModel):
-    """What ``say``, ``ask`` and ``invoke`` return; a failure is a tool error instead."""
+    """What ``ask`` and ``invoke`` return; a failure is a tool error instead."""
 
     status      : ReplyStatus = Field(description="answered, or asked: a question back to you.")
     text        : str
@@ -133,7 +125,6 @@ class McpFrontend:
         self._token      = token
         #: The MCP server itself; an in-process client can connect to it directly.
         self.server = FastMCP(name, auth=_OneToken(token))
-        self.server.tool(self._say,    name="say")
         self.server.tool(self._ask,    name="ask")
         self.server.tool(self._peers,  name="peers")
         self.server.tool(self._tools,  name="tools")
@@ -142,8 +133,6 @@ class McpFrontend:
             self.server.add_extension(_Credentials(self.credentials))
         #: Messages waiting for their reply, by the id the frontend said them under.
         self._open : Dict[MessageID, _Message] = {}
-        #: Each asker's last reply in the room, so its next message there replies to it.
-        self._last_heard : Dict[Tuple[str, str], MessageID] = {}
         self._serving  : Optional["asyncio.Task[Any]"] = None
         self._stopping : bool = False
 
@@ -177,21 +166,6 @@ class McpFrontend:
 
     # === The tools ==================================================================
 
-    async def _say(
-        self,
-        text        : _Text,
-        ctx         : Context,
-        asker       : Annotated[Optional[str], Field(description="Who says it, for follow-ups.")] = None,
-    ) -> Answer:
-        """Say something in this chatinho session, and get the first reply to it.
-
-        When one peer answers in the session, it is asked of that peer; when
-        several do, it is said to the room. The answer is answered or asked (a
-        question back to you); a failure is a tool error.
-        """
-        client, meta = _caller(ctx)
-        return await self._wait(await self._forward(client, asker, text, meta))
-
     async def _ask(
         self,
         peer        : Annotated[str, Field(description="The peer's name.")],
@@ -203,8 +177,7 @@ class McpFrontend:
         The answer is answered or asked (a question back to you); a failure is a
         tool error.
         """
-        client, meta = _caller(ctx)
-        return await self._wait(await self._asked(client, peer, text, meta))
+        return await self._wait(await self._asked(peer, text, _meta(ctx)))
 
     async def _peers(self) -> List[PeerInfo]:
         """Lists the peers in this session, and whether each one answers what it is asked."""
@@ -229,41 +202,19 @@ class McpFrontend:
 
     # === One message ================================================================
 
-    async def _asked(
-        self, client: str, peer: str, text: str, meta: Dict[str, Any],
-    ) -> _Message:
-        """Asks *text* of the peer named *peer* for *client*."""
+    async def _asked(self, peer: str, text: str, meta: Dict[str, Any]) -> _Message:
+        """Asks *text* of the peer named *peer*, with the credentials lent in *meta*."""
         named = [(at, who) for at, who in sorted(self.peers().items())
                  if at != LOCAL and name_of(who) == peer]
         if not named:
             raise ToolError("No peer named %r in this session" % (peer,))
         if len(named) > 1:
-            raise ToolError("Several peers are named %r; ask with say instead" % peer)
+            raise ToolError("Several peers are named %r" % peer)
         at, who = named[0]
         if not declares(who, HookAnswer):
             raise ToolError("%s does not answer what it is asked" % peer)
-        message = self._message(client, "", meta)
+        message = _Message(credentials=self._lent(meta), reply=asyncio.get_running_loop().create_future())
         message.msg_id = await self.say(text, to=at, credentials=message.credentials)
-        self._open[message.msg_id] = message
-        return message
-
-    async def _forward(
-        self, client: str, asker: Any, text: str, meta: Dict[str, Any],
-    ) -> _Message:
-        """Says *text* in the session for *client*."""
-        answering = self._answering()
-        if not answering:
-            raise ToolError("No peer in this session can answer")
-        room = len(answering) > 1
-        if room and not any(declares(who, HookListen) for _, who in answering):
-            raise ToolError("Several peers could answer and none listens; a peer router is needed")
-
-        message      = self._message(client, asker, meta)
-        message.room = room
-        # In the room, a follow-up replies to the asker's last reply; to a lone
-        # peer it must not be a reply, or the session would not ask it.
-        reply_to       = self._last_heard.get(message.asker) if room else None
-        message.msg_id = await self.say(text, reply_to=reply_to, credentials=message.credentials)
         self._open[message.msg_id] = message
         return message
 
@@ -275,20 +226,9 @@ class McpFrontend:
             self._close(message)
         if reply.status is ReplyStatus.ERROR:
             raise ToolError(reply.text)
-        if message.room:
-            self._last_heard[message.asker] = reply.id
         attachments = await self._attachments_of(reply.id, reply.text)
         return Answer(status=reply.status, text=reply.text, msg_id=str(reply.id),
                       attachments=[encode(item) for item in attachments])
-
-    def _message(self, client: str, asker: Any, meta: Dict[str, Any]) -> _Message:
-        """A new message in flight for *client*, with the credentials lent with it."""
-        return _Message(
-            client      = client,
-            asker       = (client, asker or ""),
-            credentials = self._lent(meta),
-            reply       = asyncio.get_running_loop().create_future(),
-        )
 
     def _close(self, message: _Message) -> None:
         """Lets go of everything a message held: its wait and its credentials."""
@@ -302,11 +242,6 @@ class McpFrontend:
         message.credentials.clear()
 
     # === Helpers ====================================================================
-
-    def _answering(self) -> List[Tuple[int, Any]]:
-        """The peers that can answer: everyone but the frontend that declares HookAnswer."""
-        return [(at, who) for at, who in sorted(self.peers().items())
-                if at != LOCAL and declares(who, HookAnswer)]
 
     def _lent(self, meta: Dict[str, Any]) -> Dict[str, Secret]:
         """The declared credentials lent with a message, wrapped so they never show."""
@@ -328,11 +263,9 @@ class McpFrontend:
 
 # === Helpers ======================================================================
 
-def _caller(ctx: Context) -> Tuple[str, Dict[str, Any]]:
-    """The calling client's name, and the request's ``_meta``."""
-    meta = dict(ctx.request_context.meta or {}) if ctx.request_context is not None else {}
-    info = meta.get(types.CLIENT_INFO_META_KEY) or {}
-    return str(info.get("name") or "client") if isinstance(info, dict) else "client", meta
+def _meta(ctx: Context) -> Dict[str, Any]:
+    """The request's ``_meta``, where a client lends its credentials."""
+    return dict(ctx.request_context.meta or {}) if ctx.request_context is not None else {}
 
 
 def _linked_names(text: str) -> List[str]:

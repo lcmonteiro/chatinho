@@ -233,12 +233,11 @@ async with client:
 ```
 
 - **The terminal's tools.** `McpFrontend` offers MCP clients what a person at the terminal can do:
-  `say`, `ask` (one peer, by name), `peers`, `tools` (the slash commands) and `invoke` (one of them).
-- **`say` is a bridge.** A question asked of `lab` goes to the remote session,
-  where `McpFrontend` says it and sends the first reply back. `McpConnector` never names a
-  remote peer. In any chatinho session, a say in a room where exactly one peer answers is asked of
-  that peer; with several, it is said to the room. With several and none listening, that is an
-  error — a peer router is the planned fix.
+  `ask` (one peer, by name), `peers`, `tools` (the slash commands) and `invoke` (one of them).
+- **A question names its peer.** A question asked of `lab` goes to one remote peer: the
+  `McpConnector(peer=...)` given, or else the remote session's only answering peer. With several and
+  no `peer=`, the connector answers with an error — a peer router is the planned fix. In any
+  chatinho session, a say in a room where exactly one peer answers is asked of that peer.
 - **One reply, always.** Every question ends in exactly one of `answered`, `asked` (a question back)
   or `error`. There is no deadline: a client that stops waiting just ends its call.
   Attachments come back with the answer and the local backend keeps them.
@@ -322,7 +321,7 @@ content: an HTML attachment runs its scripts when your browser opens it.
 | [`examples/headless.py`](examples/headless.py) | the same chat wired to stdin/stdout |
 | [`examples/agent_inbox.py`](examples/agent_inbox.py) | inbound: an agent asks over HTTP, you answer |
 | [`examples/mcp_server.py`](examples/mcp_server.py) | a chat with no terminal, served over MCP for another session to ask |
-| [`examples/mcp_client.py`](examples/mcp_client.py) | a plain FastMCP client calling that server's `peers`, `say` and `ask` |
+| [`examples/mcp_client.py`](examples/mcp_client.py) | a plain FastMCP client calling that server's `peers` and `ask` |
 
 ---
 
