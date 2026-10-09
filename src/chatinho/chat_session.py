@@ -411,6 +411,9 @@ class ChatSession:
             return
         try:
             reply = await who.answer(msg)
+            if reply is not None and not isinstance(reply, Reply):
+                raise TypeError("%s answered with %s; answer must return a Reply or None"
+                                % (name_of(who), type(reply).__name__))
         except Exception as exc:
             # The asker is owed one reply, and a failure is one. An ask that is
             # waiting raises; a say that was asked of this peer gets an error
@@ -424,11 +427,9 @@ class ChatSession:
                     frm=at, to=msg.frm, reply_to=msg.id, status=ReplyStatus.ERROR))
             raise
         if reply is not None:
-            text, carried = (reply.text, reply.attachments) if isinstance(reply, Reply) else (reply, ())
-            status   = reply.status if isinstance(reply, Reply) else ReplyStatus.ANSWERED
-            answered = ChatMessage(id=self._store.new_id(), text=text, frm=at, to=msg.frm, reply_to=msg.id,
-                                   status=status)
-            await self._kept(answered, carried)
+            answered = ChatMessage(id=self._store.new_id(), text=reply.text, frm=at, to=msg.frm,
+                                   reply_to=msg.id, status=reply.status)
+            await self._kept(answered, reply.attachments)
             await self._post(answered)
 
     async def _drain(self, at: int) -> None:

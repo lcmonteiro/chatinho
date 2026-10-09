@@ -2,7 +2,7 @@
 
 import asyncio
 
-from chatinho import HookAnswer, HookSay, Secret, connector, require
+from chatinho import HookAnswer, HookSay, Reply, Secret, connector, require
 from conftest import driven
 
 
@@ -17,7 +17,7 @@ class _Pensador:
     async def answer(self, msg):
         lent = msg.credentials.get("llm")
         self.keys.append(lent.reveal() if lent is not None else None)
-        return "ok"
+        return Reply("ok")
 
 
 @connector("lender")

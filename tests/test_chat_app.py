@@ -136,7 +136,7 @@ class _Sol:
 
     async def answer(self, msg):
         self.asked.append(msg)
-        return "sunny"
+        return Reply("sunny")
 
 
 @connector("lua")
@@ -145,7 +145,7 @@ class _Lua:
     """A second peer that answers, so a plain say stays a broadcast."""
 
     async def answer(self, msg):
-        return "full"
+        return Reply("full")
 
 
 async def _submit(app, pilot, text):
@@ -499,8 +499,8 @@ async def test_the_terminal_serves_until_the_user_quits():
 class _Outro:
     """Someone other than the user, so a received bubble exists to measure."""
 
-    async def answer(self, msg) -> str:
-        return "recebida"
+    async def answer(self, msg) -> Reply:
+        return Reply("recebida")
 
 
 def _bubbles(app):
@@ -729,8 +729,8 @@ async def test_up_moves_the_cursor_when_no_suggestion_is_open():
 @connector("segundo")
 @require(HookAnswer)
 class _Segundo:
-    async def answer(self, msg) -> str:
-        return "sou o segundo"
+    async def answer(self, msg) -> Reply:
+        return Reply("sou o segundo")
 
 
 async def test_each_peer_gets_its_own_header_colour():

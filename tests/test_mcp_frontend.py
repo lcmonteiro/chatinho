@@ -87,7 +87,7 @@ class _Echo:
 
     async def answer(self, msg):
         await asyncio.sleep(0.1)
-        return "echo: %s" % msg.text
+        return Reply("echo: %s" % msg.text)
 
 
 async def test_the_reply_goes_back_to_its_client():

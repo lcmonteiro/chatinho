@@ -193,8 +193,7 @@ log from inside a *synchronous* Textual paint.
 ## Attachments go to the backend, and the message stays text
 
 A peer attaches through every door it speaks through: `say` and `ask` take `attachments`, `answer`
-may return a `Reply` (a plain string still works), and a command's `execute` always returns one (a
-string raises `TypeError`); `ask` and `invoke` still return text. None of it rides on `ChatMessage`:
+and a command's `execute` both return a `Reply` (a string raises `TypeError`); `ask` and `invoke` still return text. None of it rides on `ChatMessage`:
 at each door the session hands the attachments to the backend's `keep` (`HookKeep`), under the new
 message's id, **before** `_post` — so the link exists when the text arrives — and posts the text
 alone. No keeper, and they are dropped; a keeper that raises is logged and the text posted anyway.
@@ -252,8 +251,8 @@ A peer or a command is a **plain class**. No base class, no `isinstance` anywher
 class WeatherConnector:
     say : Say                       # annotate a grant, or a type checker cannot see it
 
-    async def answer(self, msg) -> str:
-        return "sunny"
+    async def answer(self, msg) -> Reply:
+        return Reply("sunny")
 ```
 
 One hook per `require`, stacked. Each declaration owns its line, so it has somewhere to carry

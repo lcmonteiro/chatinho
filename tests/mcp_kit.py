@@ -46,7 +46,7 @@ class Weather:
     """Answers every question it is asked, and remembers them."""
 
     def __init__(self, reply: Any = "sunny", delay: float = 0.0) -> None:
-        self.reply = reply
+        self.reply = Reply(reply) if isinstance(reply, str) else reply
         self.delay = delay
         self.asked : List[Any] = []
 

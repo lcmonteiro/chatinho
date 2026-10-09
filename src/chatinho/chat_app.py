@@ -66,7 +66,7 @@ from .chat_input import (
     validate_escape,
 )
 from .chat_log import ChatLog
-from .chat_message import LOCAL, ChatMessage, MessageID
+from .chat_message import LOCAL, ChatMessage, MessageID, Reply
 from .chat_style import ChatStyle
 
 logger = logging.getLogger(__name__)
@@ -434,7 +434,7 @@ class ChatApp(App):
         """Someone spoke to everyone: repaint."""
         self._repaint()
 
-    async def answer(self, msg: ChatMessage, **kwargs) -> Optional[str]:
+    async def answer(self, msg: ChatMessage, **kwargs) -> Optional[Reply]:
         """
         Someone asked the user something.
 

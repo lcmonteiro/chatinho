@@ -41,6 +41,7 @@ from chatinho import (
     HookListen,
     HookSay,
     Context,
+    Reply,
     Say,
     connector,
     frontend,
@@ -142,7 +143,7 @@ class Terminal:
         """Renders a broadcast."""
         print("< %s" % msg.text)
 
-    async def answer(self, msg: ChatMessage) -> Optional[str]:
+    async def answer(self, msg: ChatMessage) -> Optional[Reply]:
         """Shows the question; the answer is whatever the user types next."""
         print("\n< %s   [%s asks]" % (msg.text, msg.frm))
         return None

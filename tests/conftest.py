@@ -25,6 +25,7 @@ from chatinho import (
     Context,
     Peers,
     Invoke,
+    Reply,
     Say,
     frontend,
     require,
@@ -60,10 +61,10 @@ class Driver:
         """Records every broadcast that reached us."""
         self.heard.append(msg)
 
-    async def answer(self, msg: ChatMessage) -> Optional[str]:
+    async def answer(self, msg: ChatMessage) -> Optional[Reply]:
         """Records the question and answers it from the queue, if it has one."""
         self.asked.append(msg)
-        return self.answers.pop(0) if self.answers else None
+        return Reply(self.answers.pop(0)) if self.answers else None
 
     def texts(self) -> List[str]:
         """The whole history as plain strings, oldest first."""

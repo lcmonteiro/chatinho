@@ -19,7 +19,7 @@ Needs ``pip install 'chatinho[mcp]'``.
 import os
 import sys
 
-from chatinho import ChatSession, HookAnswer, connector, require
+from chatinho import ChatSession, HookAnswer, Reply, connector, require
 from chatinho.frontends.mcp import McpFrontend
 
 
@@ -28,12 +28,13 @@ from chatinho.frontends.mcp import McpFrontend
 class Agent:
     """Answers with the asker's key when it lends one, and plainly when it does not."""
 
-    async def answer(self, msg) -> str:
+    async def answer(self, msg) -> Reply:
         lent = msg.credentials.get("llm")
         if lent is None:
-            return "You asked: %s (lend me a key and I will think about it)" % msg.text
+            return Reply("You asked: %s (lend me a key and I will think about it)" % msg.text)
         # A real agent builds its model with lent.reveal() here, for this message only.
-        return "Thinking about %r with the key you lent (%d characters)" % (msg.text, len(lent.reveal()))
+        key = lent.reveal()
+        return Reply("Thinking about %r with the key you lent (%d characters)" % (msg.text, len(key)))
 
 
 def main() -> None:

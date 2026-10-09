@@ -21,7 +21,7 @@ from conftest import driven
 @require(HookAnswer)
 class _Eco:
     def __init__(self, reply="sunny"):
-        self.reply = reply
+        self.reply = Reply(reply) if isinstance(reply, str) else reply
         self.asked = []
 
     async def answer(self, msg):
@@ -180,4 +180,25 @@ async def test_a_lone_peer_that_fails_replies_with_an_error():
     reply = view.context()[-1]
     assert (reply.reply_to, reply.status) == (said_id, "error")
     assert "RuntimeError" in reply.text and reply.frm == eco.peer_id
+    await session.close()
+
+
+@connector("antigo")
+@require(HookAnswer)
+class _Antigo:
+    """Answers with a bare string, which an answer may no longer do."""
+
+    async def answer(self, msg):
+        return "sunny"
+
+
+async def test_an_answer_must_be_a_reply():
+    falador = _Falador()
+    session, view = await driven(connectors=[_Antigo(), _Eco(), falador])
+    with pytest.raises(TypeError):
+        await view.ask(view.id_of("antigo"), "rain?")
+    said_id = await falador.say("rain?", to=view.id_of("antigo"))
+    await _settle()
+    reply = view.context()[-1]
+    assert (reply.reply_to, reply.status) == (said_id, "error") and "TypeError" in reply.text
     await session.close()

@@ -125,10 +125,10 @@ class WeatherConnector:
     grant for answering late; ``say(text, reply_to=msg.id)`` is that door.
     """
 
-    async def answer(self, msg: ChatMessage) -> Optional[str]:
+    async def answer(self, msg: ChatMessage) -> Optional[Reply]:
         """Answers inline."""
         note("HookAnswer", "was asked %r" % msg.text)
-        return "sunny"
+        return Reply("sunny")
 
 
 @tool("upper", "Upper-case the rest of the line")

@@ -25,6 +25,13 @@ Lets a peer say more about its answer than its text — that it answers with a q
 - **WHEN** code creates `Reply("x", status="maybe")`
 - **THEN** it raises `ValueError`
 
+### Requirement: An answer is a Reply
+A peer's `answer` SHALL return a `Reply` or `None`, as a command's `execute` does. Anything else, a plain string included, MUST be treated as a failure of that peer (`TypeError`): an `ask` waiting on it raises, and otherwise the session posts an `error` reply.
+
+#### Scenario: A string is refused
+- **WHEN** a peer's `answer` returns `"sunny"`
+- **THEN** an `ask` of it raises `TypeError`, and a say asked of it gets an `error` reply
+
 ### Requirement: The status travels on the message
 `ChatMessage` SHALL carry a `status`, a `ReplyStatus`, `answered` by default. The message the session posts for a peer's answer MUST carry the status of the `Reply` it came from, so anyone who hears or reads it knows what the answer said about itself. `ask` MUST keep returning the answer's text. The archive need not keep the status.
 

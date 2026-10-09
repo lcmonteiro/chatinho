@@ -33,6 +33,7 @@ See proposal.md for why. What the code has today, and what shapes the approach:
 ## Decisions
 
 ### 1. Core additions stay small and generic
+- **`answer` returns a `Reply`.** Like a command's `execute`, a peer's `answer` returns `Reply | None`; a plain string is a `TypeError`, so every answer carries its status and attachments the same way.
 - **`Reply.status`**, a `ReplyStatus` `str` enum (`ANSWERED` | `ASKED` | `ERROR`, default `ANSWERED`; "I don't know" is an `answered` text), carried on the answer's **`ChatMessage.status`**. Whoever hears or reads the reply sees what it said about itself; `ask` still returns the text. The archive does not keep the status.
 - **A say in a room with one peer that answers is asked of it.** `say` addresses the message to that peer when it is not a reply, is not from a command, and exactly one peer other than the speaker and the frontend declares `HookAnswer`. Its `answer` is called, and the reply comes back with `reply_to` set to the say. Listeners still hear both. This makes a room with one agent a conversation with it, and it is what lets the MCP bridge use one verb.
 - *Alternative, the earlier draft: `ask(..., detail=True) -> Answer(text, status, msg_id)`.* It gave the frontend the status and the answer's id, but only for its own asks. With the status on the message and a say that asks the lone peer, the frontend just says and listens, and `detail` goes.

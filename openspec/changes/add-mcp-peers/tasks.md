@@ -7,6 +7,7 @@
 - [x] 1.3 Add `ChatMessage.credentials` (keys by name as `Secret`, left out of `repr`) and `say(..., credentials=…)`, which puts the lender's very mapping on the message; document it in `docs/SPEC.md`; verify a key per message, clearing by the lender, and never shown
 - [x] 1.4 Add `say(..., to=)`: an addressed say is asked of that peer without waiting, and a `to` that is not another peer raises `ValueError`; document it in `docs/SPEC.md`; verify tests for said to one peer and said to nobody
 - [x] 1.5 Make `ChatApp` turn `@<name> text` into `say(text, to=peer)` for a peer of that name, without `@<name>` in the message, and say anything else as typed; verify tests for asked by name and said as typed
+- [x] 1.6 Make `answer` return `Reply | None` like `execute`: anything else is a `TypeError` failure; move every peer in the package, examples and tests to `Reply`; document it in `docs/SPEC.md`; verify a string is refused
 
 ## 2. Packaging
 

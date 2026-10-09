@@ -103,7 +103,7 @@ class Terminal:
         reply = " (replying to %s)" % msg.reply_to if msg.reply_to else ""
         print("< %s%s" % (msg.text, reply))
 
-    async def answer(self, msg: ChatMessage) -> Optional[str]:
+    async def answer(self, msg: ChatMessage) -> Optional[Reply]:
         """Shows a question put to the user; the reply is theirs to type."""
         print("? %s  — reply with  =<answer>" % msg.text)
         return None

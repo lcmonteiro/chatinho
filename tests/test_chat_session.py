@@ -48,7 +48,7 @@ class _Eco:
 class _Lento:
     async def answer(self, msg) -> str:
         await asyncio.sleep(0.3)
-        return "finalmente"
+        return Reply("finalmente")
 
 
 @connector("rebenta")
@@ -61,8 +61,8 @@ class _Rebenta:
 @connector("rapido")
 @require(HookAnswer)
 class _Rapido:
-    async def answer(self, msg) -> str:
-        return "eco: %s" % msg.text
+    async def answer(self, msg) -> Reply:
+        return Reply("eco: %s" % msg.text)
 
 
 @connector("ouvinte")

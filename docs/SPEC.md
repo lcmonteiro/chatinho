@@ -102,8 +102,8 @@ hook alone:
 class WeatherConnector:
     ask : Ask                      # annotate every grant, or mypy cannot see it
 
-    async def answer(self, msg) -> str:
-        return "sunny"
+    async def answer(self, msg) -> Reply:
+        return Reply("sunny")
 ```
 
 `require` validates **at class-definition time**: a demanded method left out or misspelled is an
@@ -142,7 +142,7 @@ enter the text, never show in a `repr`, and the archive does not keep them; the 
 very mapping it was given, so whoever lent it clears it once the message is answered.
 
 ```python
-async def answer(self, msg) -> str:
+async def answer(self, msg) -> Reply:
     key = msg.credentials.get("llm")              # a Secret, or None
     model = make_model(key.reveal()) if key else self.default_model
 ```
@@ -167,7 +167,7 @@ answer = await self.ask(session.id_of("weather"), "what is the weather?")
 
 What the reply said about itself is on its message: `msg.status` is `answered`, `asked` (a question
 back) or `error` — a `ReplyStatus`, a `str` enum, so `msg.status == "asked"` holds — from
-`Reply(..., status=ReplyStatus.ASKED)`, and `ANSWERED` for a plain string. A peer whose `answer`
+`Reply(..., status=ReplyStatus.ASKED)`; a `Reply` is `ANSWERED` unless it says otherwise. A peer whose `answer`
 fails replies with `ReplyStatus.ERROR` when nobody is awaiting it — a say asked of it.
 
 `ask(LOCAL, ...)` asks the user. It does not block the chat: the awaiting peer's own task is
@@ -271,17 +271,18 @@ Nothing is owed back. A backend, an audit log and a metrics counter each want al
 
 ### HookAnswer
 
-> **demands** `async answer(msg: ChatMessage) -> Optional[Union[str, Reply]]`
+> **demands** `async answer(msg: ChatMessage) -> Optional[Reply]`
 
-Someone asked *you*. What you return is the reply, posted by the session in your name. Return a
-`Reply(text, attachments)` to attach something; a plain string is a reply with none.
+Someone asked *you*. The `Reply` you return is posted by the session in your name, with its
+attachments and its status. Anything else — a plain string included — is a failure (`TypeError`),
+as it is for a command's `execute`.
 
 ```python
 @connector("weather")
 @require(HookAnswer)
 class WeatherConnector:
-    async def answer(self, msg: ChatMessage) -> Optional[str]:
-        return "sunny"
+    async def answer(self, msg: ChatMessage) -> Optional[Reply]:
+        return Reply("sunny")
 ```
 
 **Returning `None` is not a failure.** The ask stays waiting, and whatever this peer says later

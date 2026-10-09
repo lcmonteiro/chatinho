@@ -22,7 +22,7 @@ subsystem holds up nobody but itself.
     @connector("weather")
     @require(HookAnswer)
     class WeatherConnector:
-        async def answer(self, msg): return "sunny"
+        async def answer(self, msg): return Reply("sunny")
 
 One hook per ``require``, stacked. Each declaration is its own line, so it has
 somewhere to carry options that belong to that hook alone:
@@ -227,9 +227,10 @@ HookListen = Hook(
 HookAnswer = Hook(
     name="HookAnswer",
     method="answer",
-    # async answer(msg) -> str | Reply | None. Someone asked you; what you
-    # return is the reply, and the session posts it in your name. Return a
-    # Reply to attach something to it; the asker still gets the text.
+    # async answer(msg) -> Reply | None. Someone asked you; the Reply you
+    # return is posted in your name, with its attachments and its status. The
+    # asker gets its text. Anything else is a failure (TypeError), as it is for
+    # a command's execute.
     #
     # Return None when the answer is not yours to invent yet — a terminal
     # waiting on a person, a connector waiting on a server. The ask stays

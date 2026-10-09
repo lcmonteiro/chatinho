@@ -274,8 +274,8 @@ class Terminal:
 @connector("weather")               # a peer: it gets an id and a queue
 @require(HookAnswer)
 class Weather:
-    async def answer(self, msg) -> str:
-        return "sunny"
+    async def answer(self, msg) -> Reply:
+        return Reply("sunny")
 
 @tool("upper", "Upper-case the rest of the line")   # not a peer: it just runs
 @require(HookExecute)
