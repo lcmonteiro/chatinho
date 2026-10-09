@@ -28,7 +28,7 @@
 - [x] 4.1 Implement `McpConnector` (HTTP `url` + `token`, or an in-process `server`, `name`): open a `fastmcp.Client` per question (`async with client:`), with no link left open between questions, name from the server when not given, client name sent with every request; verify the naming scenarios against an in-process server
 - [x] 4.2 React only to asks (no `HookListen`): send the text as it is, and `ask` the remote `peer`, or the only answering remote peer found with `peers`, else answer an error asking for `peer=`; verify tests for asked directly, said to the room not taken, and several remote peers
 - [x] 4.3 Answer exactly once per question: text and attachments for `answered`, the remote question for `asked`, and short status messages for `error` and lost connections; verify tests for each
-- [x] 4.4 Add `delegate=` to `McpConnector`: discover the server's declared credentials, send only configured ones it declared, in `_meta`, calling callables per question; refuse non-`https` non-loopback URLs; never delegate a credential found on a message; verify tests for sent with the question, not declared not sent, plain HTTP refused, and token per question
+- [x] 4.4 Add `delegate=` to `McpConnector`: discover the server's declared credentials, send only configured ones it declared, in `_meta`, calling callables per question; never delegate a credential found on a message; verify tests for sent with the question, not declared not sent, and token per question
 
 ## 5. End to end, docs and checks
 

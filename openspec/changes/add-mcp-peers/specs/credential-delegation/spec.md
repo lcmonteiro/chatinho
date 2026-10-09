@@ -29,7 +29,7 @@ Lets an asker lend a credential (for example an LLM API key or a short-lived tok
 - **THEN** no peer can obtain it
 
 ### Requirement: Credentials travel out of band
-`McpConnector` SHALL delegate only when configured to, with a mapping from credential name to either a value or a function returning a value for each question (so it can mint short-lived tokens). It MUST send only the configured credentials the server declared, in the request's MCP metadata, never in the question text. Over HTTP it MUST refuse to delegate to a URL that is not `https`, unless the host is a loopback address. Without the configuration, the connector MUST NOT send any credential.
+`McpConnector` SHALL delegate only when configured to, with a mapping from credential name to either a value or a function returning a value for each question (so it can mint short-lived tokens). It MUST send only the configured credentials the server declared, in the request's MCP metadata, never in the question text. Choosing a transport fit to carry a credential (HTTPS) is the responsibility of whoever builds the system; the connector does not check it. Without the configuration, the connector MUST NOT send any credential.
 
 #### Scenario: Sent with the question
 - **WHEN** a connector configured with `delegate={"llm": key}` asks a server that declared `llm`
@@ -38,10 +38,6 @@ Lets an asker lend a credential (for example an LLM API key or a short-lived tok
 #### Scenario: Not declared, not sent
 - **WHEN** the same connector asks a server that declared no credentials
 - **THEN** no credential is sent
-
-#### Scenario: Plain HTTP refused
-- **WHEN** a connector configured to delegate connects to `http://lab.example:8000`
-- **THEN** it does not send the credential and its reply says delegation requires HTTPS
 
 #### Scenario: Token per question
 - **WHEN** the configured value for `llm` is a function

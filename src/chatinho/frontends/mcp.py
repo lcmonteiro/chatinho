@@ -191,11 +191,10 @@ class McpFrontend:
 
     async def _invoke(
         self,
-        name        : Annotated[str, Field(description="The tool's name, without the slash.")],
+        name        : Annotated[str, Field(description="The tool's name, as tools lists it.")],
         args        : Annotated[str, Field(description="Its arguments, as typed after its name.")] = "",
     ) -> Answer:
         """Runs one of this session's tools (see tools) and returns what it answered."""
-        name = name.lstrip("/")
         if name not in self.commands():
             raise ToolError("No tool named %r in this session" % name)
         return Answer(status=ReplyStatus.ANSWERED, text=await self.invoke(name, args) or "")

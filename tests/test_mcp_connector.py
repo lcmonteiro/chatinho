@@ -176,19 +176,6 @@ async def test_not_declared_not_sent():
     await remote_session.close()
 
 
-async def test_plain_http_is_refused():
-    lab = McpConnector(url="http://lab.example:8000/mcp", token="t", name="lab", delegate={"llm": "sk"})
-    session, view = await _local(lab)
-    got = await _asked(view, lab, "go")
-    assert got.status == "error" and "HTTPS" in got.text
-    await session.close()
-
-
-def test_https_and_this_machine_may_lend():
-    for url in ("https://lab.example/mcp", "http://127.0.0.1:8000/mcp", "http://localhost:8000/mcp"):
-        assert McpConnector(url=url, token="t", delegate={"llm": "sk"})._may_delegate()
-
-
 async def test_a_token_per_question():
     minted = []
 

@@ -8,14 +8,13 @@ back for every question.
 
 It is a FastMCP client and speaks the modern MCP protocol (2026-07-28). When a
 remote peer needs an LLM, the connector can lend it a credential for that one
-question — out of band, only one the server declared, and only over HTTPS or
-to this machine. Without ``delegate``, no key ever leaves this machine.
+question — out of band, and only one the server declared. Without ``delegate``,
+no key ever leaves this machine; choosing a transport fit to carry one (HTTPS)
+is up to whoever builds the system.
 """
 
-import ipaddress
 import logging
 from typing import Any, Callable, Dict, Mapping, Optional, Union
-from urllib.parse import urlparse
 
 import mcp_types as types
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
@@ -66,8 +65,7 @@ class McpConnector:
         peer: The remote peer to ask; the only remote peer that answers when
             left out.
         delegate: Credentials to lend, by name: a value, or a function returning
-            one for each question. Only the ones the server declares are sent,
-            and only over HTTPS or to this machine.
+            one for each question. Only the ones the server declares are sent.
 
     Raises:
         ValueError: Not exactly one server, or a *url* without a *token*.
@@ -127,9 +125,6 @@ class McpConnector:
 
     async def _ask_remote(self, text: str) -> Reply:
         """Asks the remote session, and turns whatever happens into one reply."""
-        if self._delegate and not self._may_delegate():
-            return Reply("%s: lending credentials needs HTTPS; nothing was sent" % self.name,
-                         status=ReplyStatus.ERROR)
         try:
             async with self._client as client:
                 if client.protocol_version not in MODERN_PROTOCOL_VERSIONS:
@@ -152,21 +147,6 @@ class McpConnector:
         return answering[0] if len(answering) == 1 else None
 
     # === Lending ====================================================================
-
-    def _may_delegate(self) -> bool:
-        """Credentials go over HTTPS, or to this machine — never over plain HTTP elsewhere."""
-        if self._url is None:
-            return True
-        parsed = urlparse(self._url)
-        if parsed.scheme == "https":
-            return True
-        host = parsed.hostname or ""
-        if host == "localhost":
-            return True
-        try:
-            return ipaddress.ip_address(host).is_loopback
-        except ValueError:
-            return False
 
     def _lending(self, client: Any) -> Optional[Dict[str, Any]]:
         """The ``_meta`` for one question: the configured credentials the server declared."""

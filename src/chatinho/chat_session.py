@@ -23,30 +23,10 @@ from datetime import datetime
 from inspect import isawaitable
 from typing import Any, Dict, List, Optional, Sequence
 
-from .chat_hooks import (
-    HookExecute,
-    HookKeep,
-    HookLink,
-    HookForget,
-    HookLoad,
-    HookAnswer,
-    HookListen,
-    declares,
-    hooks_of,
-    declared_id,
-    name_of,
-)
-from .chat_message import (
-    LOCAL,
-    TOOL,
-    Attachment,
-    ChatMessage,
-    MessageID,
-    MessageStore,
-    Reply,
-    ReplyStatus,
-    Secret,
-)
+from .chat_hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, HookListen, HookLoad
+from .chat_hooks import declared_id, declares, hooks_of, name_of
+from .chat_message import LOCAL, TOOL
+from .chat_message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
 
 logger = logging.getLogger(__name__)
 

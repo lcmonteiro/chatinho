@@ -40,7 +40,7 @@ The server SHALL expose exactly the MCP tools `ask`, `peers`, `tools` and `invok
 - **THEN** the result is a tool error saying no peer has that name
 
 ### Requirement: The roster and the tools
-`peers()` SHALL list every peer but the frontend, each with its name and whether it answers. `tools()` SHALL list the session's commands, each with its name and description. `invoke(name, args?)` SHALL invoke the named command, with or without a leading `/`, and return what it answered as `answered`; an unknown or failing command MUST yield a tool error.
+`peers()` SHALL list every peer but the frontend, each with its name and whether it answers. `tools()` SHALL list the session's commands, each with its name and description. `invoke(name, args?)` SHALL invoke the command of that name, as `tools` lists it (without `/`), and return what it answered as `answered`; an unknown or failing command MUST yield a tool error.
 
 #### Scenario: Listing peers
 - **WHEN** a client calls `peers` in a session with `agent` and a peer `mute` that does not answer

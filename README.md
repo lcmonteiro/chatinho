@@ -251,8 +251,8 @@ async with client:
   question coming from `master`.
 - **Lending intelligence is lending a credential**, the way A2A delegates them, and it is opt-in:
   `McpFrontend(credentials={"llm": "API key"})` declares what its peers may use, and
-  `McpConnector(delegate={"llm": key_or_function})` sends it out of band, over HTTPS or to this
-  machine only. It rides on the message said in the remote session, as `msg.credentials`, and the
+  `McpConnector(delegate={"llm": key_or_function})` sends it out of band — serve the session over
+  HTTPS, since the connector does not check the transport. It rides on the message said in the remote session, as `msg.credentials`, and the
   peer that answers uses it for that message alone — so one peer can work with a different key for
   each message. It is cleared once the message is answered. Without `delegate`, no key leaves the
   asking machine. Lend a sub-key with a spending limit or a short-lived token — never your main key.

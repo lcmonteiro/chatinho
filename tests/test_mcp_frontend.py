@@ -211,7 +211,7 @@ async def test_invoke_a_tool():
         got   = await call(c, "invoke", name="eco", args="hi")
         slash = await call(c, "invoke", name="/eco")
     assert (got["status"], got["text"]) == ("answered", "eco: hi")
-    assert slash["text"] == "eco: "
+    assert slash["status"] == "error"                 # the name is the command's, without a slash
     assert "/eco hi" in [m.text for m in session._context()]
     await session.close()
 
