@@ -39,7 +39,7 @@ Served over MCP, which needs ``pip install chatinho[mcp]``::
 Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both in
 :mod:`chatinho.frontends` — and either can be passed to ``ChatSession`` by hand.
 
-Ten names need an extra, and say so if it is missing:
+Nine names need an extra, and say so if it is missing:
 
     build_chat_session  chatinho[tui,mcp]  textual, fastmcp
     build_mcp_session   chatinho[tui,mcp]  textual, fastmcp
@@ -48,7 +48,6 @@ Ten names need an extra, and say so if it is missing:
     McpFrontend         chatinho[mcp]      fastmcp
     McpConnector        chatinho[mcp]      fastmcp
     OpenAIConnector     chatinho[openai]   openai
-    A2AConnector        chatinho[a2a]      requests
     DatabaseBackend     chatinho[sql]      sqlalchemy
 
 Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand`` —
@@ -63,7 +62,6 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     # Importing them here restores that without importing anything at run time.
     from .backends import DatabaseBackend
     from .builder import build_chat_session, build_mcp_session
-    from .connectors.a2a import A2AConnector
     from .connectors.mcp import McpConnector
     from .connectors.openai import OpenAIConnector
     from .frontends.chat import ChatFrontend
@@ -92,7 +90,6 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
     "McpFrontend"        : (".frontends.mcp",        (_MCP,)),
     "McpConnector"       : (".connectors.mcp",       (_MCP,)),
     "OpenAIConnector"    : (".connectors.openai",    (("openai", "openai"),)),
-    "A2AConnector"       : (".connectors.a2a",       (("a2a", "requests"),)),
     "DatabaseBackend"    : (".backends",             (("sql", "sqlalchemy"),)),
 }
 
@@ -186,7 +183,6 @@ __all__ = [
     "Commands",
     "Locate",
     # batteries
-    "A2AConnector",
     "OpenAIConnector",
     "DatabaseBackend",
     "ChatFrontend",

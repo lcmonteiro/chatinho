@@ -25,9 +25,9 @@ printf '/help\nola\n' | python examples/headless.py   # or scripted
 | `agent_inbox.py` | The inbound direction: a connector declaring `@require(HookAsk)` and running its own `http.server` on a background thread. An agent POSTs a question to `/ask`, it lands in the chat tagged with its origin and task id, and your reply is routed back to the task that asked. Shows why connectors own their listener — and why they need `shutdown()` |
 | `headless.py` | The same chat with no terminal UI: a `ChatSession` wired to stdin/stdout. Same commands, same connector, same hooks — the presentation layer is one `print`. Reads from a pipe when stdin is not a TTY, so it doubles as a scriptable transcript |
 
-The demo runs without credentials or a backend. The shipped `A2AConnector` and
-`OpenAIConnector` both reach the network in `initialize()`, so an example using
-them needs real endpoints and keys.
+The demo runs without credentials or a backend. The shipped `OpenAIConnector`
+and `McpConnector` reach the network, so an example using them needs real
+endpoints and keys.
 
 For what each hook means and what it costs, see [`docs/SPEC.md`](../docs/SPEC.md); `hooks.py` is
 that document made executable, so if the two ever disagree the example is the one that is right.

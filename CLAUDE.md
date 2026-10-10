@@ -30,9 +30,9 @@ things:
 
 ```python
 build_chat_session(
-    connectors = [A2AConnector(url="…", api_key="…")],   # peers: id, queue, conversation
-    commands   = [HelpCommand(), TestCommand()],         # not peers: they just run
-    backend    = DatabaseBackend("sqlite:///chat.db"),   # a peer that listens
+    connectors = [OpenAIConnector(name="gpt", api_key="…")],   # peers: id, queue, conversation
+    commands   = [HelpCommand(), TestCommand()],               # not peers: they just run
+    backend    = DatabaseBackend("sqlite:///chat.db"),         # a peer that listens
 )
 ```
 
@@ -318,7 +318,7 @@ src/chatinho/
   commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
                    attachments
-  connectors/      a2a.py, openai.py, mcp.py (McpConnector: asking a remote session over MCP)
+  connectors/      openai.py, mcp.py (McpConnector: asking a remote session over MCP)
                    — plain classes, no base; each imported on first use, behind its own extra
   frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
     chat/          the terminal — the only package that imports Textual:
@@ -334,7 +334,7 @@ examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (std
                    agent_inbox.py (HTTP, inbound), mcp_server.py (served over MCP), mcp_client.py (a plain FastMCP client)
 tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
-                   test_require.py, test_architecture.py, test_package_layout.py, test_a2a_payload.py,
+                   test_require.py, test_architecture.py, test_package_layout.py,
                    test_clipboard.py, test_answer_details.py,
                    test_lending.py, test_mcp_*.py with mcp_kit.py (no terminal)
 ```
@@ -737,7 +737,7 @@ with `ctrl+g` now.
 `tests/test_architecture.py` is not documentation, it is enforcement — a boundary nothing checks
 is a boundary that rots. It parses the core modules and fails if:
 
-- `textual` appears in their imports, or `openai`, `sqlalchemy`, `requests`, `httpx`, `mcp`, `fastmcp`;
+- `textual` appears in their imports, or `openai`, `sqlalchemy`, `httpx`, `mcp`, `fastmcp`;
 - anything but the presentation layer imports Textual;
 - the session imports the app;
 - **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
@@ -746,7 +746,7 @@ is a boundary that rots. It parses the core modules and fails if:
   import under `if TYPE_CHECKING`, or PEP 562 hands a consumer's mypy `Any` and the `py.typed` this
   package ships means nothing for it;
 - **`import chatinho` needs one of the batteries** — a subprocess imports it with `textual`,
-  `openai`, `sqlalchemy`, `requests`, `mcp` and `fastmcp` all blocked, and each of the six lazy names has to
+  `openai`, `sqlalchemy`, `mcp` and `fastmcp` all blocked, and each of the lazy names has to
   report its own extra;
 - **`docs/SPEC.md` disagrees with the hook constants** — its summary table has to name the same
   fourteen, with the same demanded method and the same grants, and each one has to have its own
@@ -767,18 +767,18 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 `dependencies = []`. `ChatSession`, the fourteen hooks, `HelpCommand` and `TestCommand` import nothing
 but the standard library — which the fitness tests already enforced, so the packaging now says it
-too. Six names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
+too. Nine names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
 | name | extra | brings |
 |---|---|---|
-| `build_chat_session` | `chatinho[tui]` | `textual` |
-| `OpenAIConnector` | `chatinho[openai]` | `openai` |
-| `A2AConnector` | `chatinho[a2a]` | `requests` |
-| `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
+| `ChatFrontend`, `ChatStyle` | `chatinho[tui]` | `textual` |
 | `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` (4.0+, on the official `mcp` SDK) |
+| `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
+| `OpenAIConnector` | `chatinho[openai]` | `openai` |
+| `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
 
 `chatinho[mcp]` brings pydantic, starlette and uvicorn with it, so it is the heavy one — on Termux
-especially. `chatinho[all]` is all five; `chatinho[dev]` is those plus pytest, ruff and mypy, which is what CI
+especially. `chatinho[all]` is all four; `chatinho[dev]` is those plus pytest, ruff and mypy, which is what CI
 installs and what `setup.sh` syncs. A missing extra raises an `ImportError` that names it, rather
 than surfacing as somebody else's `ModuleNotFoundError`.
 
@@ -792,12 +792,12 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 52 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`__init__.py` exports 51 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
 `MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`; the declaring machinery
 (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
 `declared_id`, `name_of`, `Hook`); the fourteen `Hook*` constants; the grant protocols (`Say`, `Ask`,
-`Invoke`, `Context`, `Peers`, `Commands`, `Locate`); and the batteries (`A2AConnector`,
-`OpenAIConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`, `McpConnector`,
+`Invoke`, `Context`, `Peers`, `Commands`, `Locate`); and the batteries
+(`OpenAIConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`, `McpConnector`,
 `HelpCommand`, `TestCommand`).
 
 **Both frontends are public, and both have a builder.** `ChatFrontend` (in `chatinho.frontends.chat`)
