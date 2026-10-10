@@ -310,7 +310,7 @@ Two costs, stated plainly:
 src/chatinho/
   __init__.py      public API
   builder.py       build_chat_session, build_mcp_session — a ChatSession with its frontend;
-                   each imports its frontend when called, so neither needs the other's extra
+                   imports both frontends, so it needs chatinho[tui,mcp]
   session.py       ChatSession: run, peers, commands, queues, routing, context      (545)
   hooks.py         Hook, the ten constants,    @require, the grant protocols       (489)
   message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
@@ -803,10 +803,9 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 **Both frontends are public, and both have a builder.** `ChatFrontend` (in `chatinho.frontends.chat`)
 and `McpFrontend` (in `chatinho.frontends.mcp`) take no session: either can be passed to
 `ChatSession(frontend=...)` by hand, and `build_chat_session` / `build_mcp_session` in `builder.py`
-do exactly that, more conveniently. The builders live in one module, so each imports its frontend
-inside the function — `chatinho.builder` imports with neither extra — and the lazy `__getattr__`
-imports the extra's own library before the name, so a missing extra is still reported when the
-name is read rather than later, inside the call.
+do exactly that, more conveniently. `builder.py` imports both frontends at the top, so the builders
+need both extras — `chatinho[tui,mcp]` — while each frontend needs only its own. The lazy table
+lists every `(extra, library)` pair a name needs, and a missing one names them all.
 
 `build_chat_session` returns a `ChatSession`, so a consumer's mypy sees the whole surface `ChatSession`
 promises — which is also why the `TYPE_CHECKING` block in `__init__.py` matters: without it the

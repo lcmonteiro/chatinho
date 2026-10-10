@@ -33,22 +33,26 @@ Alternatives considered:
 
 The cost is a large `__init__.py` of about 530 lines.
 
-### Both builders in a root `builder.py`, each importing its frontend inside the function
-`builder.py` must not import either frontend at module level. If it did, reading `build_chat_session` would need `fastmcp`, and reading `build_mcp_session` would need `textual`. So `build_chat_session` imports `.frontends.chat`, and `build_mcp_session` imports `.frontends.mcp`, each inside its own body. The alternative was a builder next to each frontend: it puts the dependency in the right place, but the user chose one module holding both.
+### Both builders in a root `builder.py`, importing both frontends at the top
+`builder.py` imports `ChatFrontend`, `ChatStyle`, `NEWLINE_ESCAPE` and `McpFrontend` at module level, like any other module. The cost is that both builders need both extras, `chatinho[tui,mcp]`. A caller with only one extra passes that frontend to `ChatSession(frontend=...)` by hand, which is what each builder does.
 
-### The lazy table imports the extra itself
-`builder.py` now imports cleanly without any extra. Without a fix, `__getattr__` would hand back the builder, and the missing extra would only surface later as a bare `ModuleNotFoundError` from inside the call. So `__getattr__` imports the extra's own library (`import_module(<distribution module>)`) before the module that defines the name. If that fails, it raises the same "Install it with: pip install 'chatinho[<extra>]'" `ImportError` as today. Importing the library, rather than asking `importlib.util.find_spec` whether it exists, also catches an import that is blocked, which is how the architecture test simulates a missing extra. The table becomes:
+Alternatives considered:
+- Importing each frontend inside its builder. Each builder needed only its own extra, but the imports were hidden in function bodies and the type hints needed a `TYPE_CHECKING` block. This was rejected in review.
+- A builder next to each frontend. This was not chosen: one module holds both builders.
+
+### The lazy table names every extra a name needs
+Each entry in `_BEHIND_AN_EXTRA` lists the `(extra, library)` pairs its name needs. When importing the defining module fails, `__getattr__` names all of them, for example "Install it with: pip install 'chatinho[tui,mcp]'". The table becomes:
 
 ```
-build_chat_session : (".builder",              "tui", "textual")
-ChatFrontend       : (".frontends.chat",       "tui", "textual")
-ChatStyle          : (".frontends.chat.style", "tui", "textual")
-build_mcp_session  : (".builder",              "mcp", "fastmcp")
-McpFrontend        : (".frontends.mcp",        "mcp", "fastmcp")
-... (connectors and backend unchanged)
+build_chat_session : (".builder",              tui, mcp)
+build_mcp_session  : (".builder",              tui, mcp)
+ChatFrontend       : (".frontends.chat",       tui)
+ChatStyle          : (".frontends.chat.style", tui)
+McpFrontend        : (".frontends.mcp",        mcp)
+... (connectors and backend unchanged, one pair each)
 ```
 
-The check uses the import name, which is the same as the distribution name for `textual`, `fastmcp`, `openai`, `requests` and `sqlalchemy`. `ChatFrontend` also joins `frontends/__init__.py`'s `_WHERE`.
+`ChatFrontend` also joins `frontends/__init__.py`'s `_WHERE`.
 
 ### `ChatStyle` goes behind `tui`
 `chat_style.py` imports no Textual itself. But once it is `frontends/chat/style.py`, importing it runs `frontends/chat/__init__.py` first, and that file imports Textual. Keeping `ChatStyle` importable without the extra would mean keeping it outside the terminal's package. That contradicts the goal of keeping the terminal's parts together. A colour scheme is only useful with the terminal, so it moves behind `tui`. The `TYPE_CHECKING` block in `chatinho/__init__.py` imports it from its new place.
@@ -75,7 +79,7 @@ A final `grep -rnE "chat_(app|log|input|style|clipboard|session|message|hooks|bu
 - [Patch strings that point at an old module path] → They fail loudly as `ModuleNotFoundError` or `AttributeError` when the test runs. The grep above catches the rest.
 - [Logger names change from `chatinho.chat_session` to `chatinho.session`] → Anyone filtering logs by the old name loses them. This is accepted as part of the breaking rename, and the README says so.
 - [`ChatStyle` now needs the `tui` extra] → A headless user who imported it for nothing loses that import, but nothing headless used it.
-- [Importing a library whose import name is not the distribution name] → For every extra today, the import name and the distribution name are the same. If a new extra breaks this, its table entry carries the import name explicitly.
+- [Both builders need both extras] → A terminal-only install cannot use `build_chat_session`. `ChatSession(frontend=ChatFrontend(...))` is one line, and the README shows it.
 - [Users of `build_chat` / `chatinho.chat_*`] → There are no shims. The proposal marks the change **BREAKING**, the version is still 0.1.x, and the README states the new names.
 
 ## Migration Plan

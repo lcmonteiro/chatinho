@@ -61,8 +61,9 @@ true. These names live behind an extra:
 
 | you want | install | it brings |
 |---|---|---|
-| `build_chat_session`, `ChatFrontend`, `ChatStyle` — the terminal | `chatinho[tui]` | `textual` |
-| `build_mcp_session`, `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` |
+| `ChatFrontend`, `ChatStyle` — the terminal | `chatinho[tui]` | `textual` |
+| `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` |
+| `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
@@ -77,8 +78,8 @@ ImportError: build_chat_session needs 'textual', which chatinho does not install
              Install it with:  pip install 'chatinho[tui]'
 ```
 
-Each builder needs only its own extra: `build_chat_session` never imports the MCP library, and
-`build_mcp_session` never imports the terminal.
+The builders live in one module that imports both frontends, so they need both extras. With only
+one, pass that frontend to `ChatSession(frontend=...)` yourself — it is what the builder does.
 
 The package ships `py.typed`, so a consumer's mypy sees the annotations.
 

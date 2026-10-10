@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Fixes where chatinho's public names live: the core under unprefixed modules, each frontend under `chatinho.frontends`, and one builder per kind of session, each needing only its own extra.
+Fixes where chatinho's public names live: the core under unprefixed modules, each frontend under `chatinho.frontends`, and one builder per kind of session in `chatinho.builder`.
 
 ## ADDED Requirements
 
@@ -47,13 +47,17 @@ chatinho SHALL provide `build_chat_session` and `build_mcp_session` in `chatinho
 - **WHEN** code calls `build_mcp_session(token="")`
 - **THEN** it raises `ValueError`
 
-### Requirement: A builder needs only its own extra
-`build_chat_session` MUST work with only the `tui` extra installed, and `build_mcp_session` with only the `mcp` extra. Reading either builder off `chatinho` without its extra installed MUST raise `ImportError` naming the extra to install (`chatinho[tui]` or `chatinho[mcp]`).
+### Requirement: The builders need both frontend extras
+`chatinho.builder` imports both frontends, so `build_chat_session` and `build_mcp_session` MUST each need the `tui` and the `mcp` extras. Reading either builder off `chatinho` without both installed MUST raise `ImportError` naming `chatinho[tui,mcp]`. Each frontend MUST still need only its own extra: `ChatFrontend` works without the `mcp` extra, and `McpFrontend` without the `tui` extra, so a caller with one extra builds the `ChatSession` with that frontend by hand.
 
-#### Scenario: Terminal only
-- **WHEN** only the `tui` extra is installed and code reads `chatinho.build_chat_session`
-- **THEN** it gets the builder, and building a session does not need the MCP library
+#### Scenario: A builder without the MCP library
+- **WHEN** the `mcp` extra is not installed and code reads `chatinho.build_chat_session`
+- **THEN** it raises `ImportError` whose message says to install `chatinho[tui,mcp]`
 
-#### Scenario: MCP builder without its extra
-- **WHEN** the `mcp` extra is not installed and code reads `chatinho.build_mcp_session`
-- **THEN** it raises `ImportError` whose message says to install `chatinho[mcp]`
+#### Scenario: A builder without the terminal library
+- **WHEN** the `tui` extra is not installed and code reads `chatinho.build_mcp_session`
+- **THEN** it raises `ImportError` whose message says to install `chatinho[tui,mcp]`
+
+#### Scenario: A frontend without the other extra
+- **WHEN** only the `tui` extra is installed and code reads `chatinho.ChatFrontend`
+- **THEN** it gets the terminal frontend

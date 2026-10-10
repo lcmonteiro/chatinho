@@ -23,13 +23,14 @@
 ## 3. Builders and the package root
 
 - [x] 3.1 In `builder.py`:
-  - rename `build_chat` to `build_chat_session`, building a `ChatFrontend` that it imports inside the function;
-  - add `build_mcp_session(connectors, commands, backend, name="master", *, token, host, port, credentials)`, building an `McpFrontend` that it imports inside the function.
+  - import both frontends at the top;
+  - rename `build_chat` to `build_chat_session`, building a `ChatFrontend`;
+  - add `build_mcp_session(connectors, commands, backend, name="master", *, token, host, port, credentials)`, building an `McpFrontend`.
 
-  Verify that `python -c "import chatinho.builder"` succeeds with neither frontend imported (`'textual' not in sys.modules`).
+  Verify with `python -c "from chatinho.builder import build_chat_session, build_mcp_session"`.
 - [x] 3.2 Rework `chatinho/__init__.py`:
   - make the `_BEHIND_AN_EXTRA` table hold `build_chat_session`, `build_mcp_session`, `ChatFrontend`, `ChatStyle` and `McpFrontend` with their extras;
-  - make `__getattr__` import the extra's library before the defining module;
+  - have each table entry list every `(extra, library)` pair its name needs, and have `__getattr__` name all of them;
   - point the core imports at the new modules;
   - drop the eager `ChatStyle` import;
   - update the `TYPE_CHECKING` block, `__all__` and the docstring (extras table, examples).
@@ -51,7 +52,7 @@
   - `from chatinho import ChatFrontend`;
   - `build_chat_session` builds a session with a `ChatFrontend` at peer zero;
   - `build_mcp_session` builds one with an `McpFrontend` named `master` on the given port, and refuses an empty token;
-  - a missing extra raises `ImportError` naming `chatinho[tui]` / `chatinho[mcp]` (simulated by blocking the import).
+  - a builder without either library raises `ImportError` naming `chatinho[tui,mcp]`, while each frontend needs only its own extra (simulated by blocking the import).
 
   Verify that they pass.
 

@@ -38,36 +38,13 @@ from textual.keys import KEY_ALIASES, Keys
 from textual.containers import Container, Vertical
 from textual.widgets import TextArea
 
-from ...hooks import (
-    Ask,
-    HookAsk,
-    HookContext,
-    HookAnswer,
-    HookListen,
-    HookPeers,
-    HookCommands,
-    HookInvoke,
-    HookLocate,
-    HookSay,
-    Context,
-    Peers,
-    Commands,
-    Invoke,
-    Locate,
-    Say,
-    frontend,
-    name_of,
-    require,
-)
-from .composer import (
-    COMMAND_PREFIX,
-    NEWLINE_ESCAPE,
-    SUGGESTIONS_ID,
-    CommandInput,
-    CommandSuggestions,
-    validate_escape,
-)
+from ...hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke
+from ...hooks import HookListen, HookLocate, HookPeers, HookSay
+from ...hooks import Ask, Commands, Context, Invoke, Locate, Peers, Say
+from ...hooks import frontend, name_of, require
 from ...message import LOCAL, ChatMessage, MessageID, Reply
+from .composer import COMMAND_PREFIX, NEWLINE_ESCAPE, SUGGESTIONS_ID
+from .composer import CommandInput, CommandSuggestions, validate_escape
 from .messages import ChatLog
 from .style import ChatStyle
 

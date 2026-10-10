@@ -19,7 +19,7 @@ The terminal is one frontend among others now, since `McpFrontend` can take peer
   - `build_mcp_session`, which is new and builds a session with an `McpFrontend` as peer zero.
 - **BREAKING** No compatibility shims: `build_chat`, `ChatApp` and the `chatinho.chat_*` modules are gone.
 - `ChatFrontend` becomes public. It sits behind the `tui` extra, as `McpFrontend` sits behind `mcp`. `ChatStyle` moves behind the `tui` extra too.
-- Each builder needs only its own extra. A missing extra is reported as soon as the builder is read off the package, naming the extra to install.
+- `builder.py` imports both frontends at the top, so both builders need `chatinho[tui,mcp]`. Each frontend still needs only its own extra. A missing extra is reported as soon as the name is read off the package, naming the extras to install.
 - The rest of the code and the docs follow the new names. Behaviour does not change.
 
 ## Capabilities
@@ -28,7 +28,7 @@ The terminal is one frontend among others now, since `McpFrontend` can take peer
 - `package-layout`: covers:
   - the public import paths of the core and the frontends;
   - the two session builders;
-  - the rule that each builder needs only its own extra.
+  - the extras the builders and the frontends need.
 
 ### Modified Capabilities
 - `answer-details`: the "terminal asks with @name" requirement names the terminal `ChatFrontend` instead of `ChatApp`.

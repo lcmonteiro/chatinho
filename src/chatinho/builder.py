@@ -5,19 +5,20 @@ Each builder does what a caller would do by hand — build a
 the session's ``frontend`` — because a frontend is a normal peer, one of the
 four roles a session takes, not something the session's constructor wires up.
 
-- :func:`build_chat_session` attaches the terminal, and needs ``chatinho[tui]``.
-- :func:`build_mcp_session` attaches an MCP server, and needs ``chatinho[mcp]``.
+- :func:`build_chat_session` attaches the terminal.
+- :func:`build_mcp_session` attaches an MCP server.
 
-Each imports its frontend when it is called, so this module imports neither:
-building a terminal chat never needs the MCP library, nor the other way round.
+This module imports both frontends, so it needs both extras: ``chatinho[tui,mcp]``.
+A caller with only one of them builds a ``ChatSession`` with that frontend by hand.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
+from .frontends.chat import ChatFrontend
+from .frontends.chat.composer import NEWLINE_ESCAPE
+from .frontends.chat.style import ChatStyle
+from .frontends.mcp import McpFrontend
 from .session import ChatSession
-
-if TYPE_CHECKING:
-    from .frontends.chat.style import ChatStyle
 
 
 def build_chat_session(
@@ -27,10 +28,10 @@ def build_chat_session(
     title           : str = "Chatinho",
     welcome_message : str = "",
     max_displayed   : int = 100,
-    style           : Optional["ChatStyle"] = None,
+    style           : Optional[ChatStyle] = None,
     quit_key        : str = "ctrl+q",
     copy_key        : str = "ctrl+y",
-    newline_escape  : Optional[str] = " ",     # the composer's NEWLINE_ESCAPE
+    newline_escape  : Optional[str] = NEWLINE_ESCAPE,
     name            : Optional[str] = None,
 ) -> ChatSession:
     """Builds a chat with a terminal from peers and a backend.
@@ -77,7 +78,6 @@ def build_chat_session(
     Raises:
         ValueError: ``quit_key`` is not a key Textual could receive.
     """
-    from .frontends.chat import ChatFrontend
     presentation = ChatFrontend(
         title           = title,
         welcome_message = welcome_message,
@@ -130,7 +130,6 @@ def build_mcp_session(
     Raises:
         ValueError: ``token`` is empty.
     """
-    from .frontends.mcp import McpFrontend
     presentation = McpFrontend(
         name,
         token       = token,

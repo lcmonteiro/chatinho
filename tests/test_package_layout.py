@@ -1,7 +1,7 @@
 """Where the public names live, and the two builders.
 
 The core is unprefixed, each frontend lives under ``chatinho.frontends``, and
-each builder needs only its own extra. See openspec/specs/package-layout.
+the builders need both extras. See openspec/specs/package-layout.
 """
 
 import importlib
@@ -93,9 +93,9 @@ def test_an_mcp_chat_without_a_token():
         build_mcp_session(token="")
 
 
-# === Each builder needs only its own extra ========================================
+# === The builders need both extras ===============================================
 
-_WITH_ONE_EXTRA_BLOCKED = """
+_WITH_ONE_LIBRARY_BLOCKED = """
 import builtins, sys
 blocked_root = sys.argv[1]
 real = builtins.__import__
@@ -106,43 +106,39 @@ def blocked(name, *a, **k):
 builtins.__import__ = blocked
 
 import chatinho
-for name in ("build_chat_session", "build_mcp_session"):
+for name in ("build_chat_session", "build_mcp_session", "ChatFrontend", "McpFrontend"):
     try:
-        builder = getattr(chatinho, name)
+        getattr(chatinho, name)
     except ImportError as exc:
-        print(name, "missing", str(exc))
+        print(name, "missing", str(exc).replace(" ", "_"))
     else:
         print(name, "ok")
 """
 
 
-def _read_builders_without(root: str) -> str:
+def _read_without(root: str) -> dict:
     done = subprocess.run(
-        [sys.executable, "-c", _WITH_ONE_EXTRA_BLOCKED, root],
+        [sys.executable, "-c", _WITH_ONE_LIBRARY_BLOCKED, root],
         capture_output=True, text=True, cwd=str(ROOT),
     )
     assert done.returncode == 0, done.stderr
-    return done.stdout
+    return {line.split()[0]: line.split()[1:] for line in done.stdout.splitlines()}
 
 
-def test_the_terminal_builder_does_not_need_the_mcp_extra():
-    out = _read_builders_without("fastmcp")
-    assert "build_chat_session ok" in out
-    assert "build_mcp_session missing" in out and "chatinho[mcp]" in out
+@pytest.mark.parametrize("library", ["textual", "fastmcp"])
+def test_either_builder_needs_both_extras(library):
+    read = _read_without(library)
+    for builder in ("build_chat_session", "build_mcp_session"):
+        status, message = read[builder]
+        assert status == "missing"
+        assert "chatinho[tui,mcp]" in message
 
 
-def test_the_mcp_builder_does_not_need_the_tui_extra():
-    out = _read_builders_without("textual")
-    assert "build_mcp_session ok" in out
-    assert "build_chat_session missing" in out and "chatinho[tui]" in out
+def test_each_frontend_needs_only_its_own_extra():
+    without_mcp = _read_without("fastmcp")
+    assert without_mcp["ChatFrontend"] == ["ok"]
+    assert "chatinho[mcp]" in without_mcp["McpFrontend"][1]
 
-
-def test_building_a_terminal_chat_never_imports_the_mcp_library():
-    done = subprocess.run(
-        [sys.executable, "-c",
-         "import sys; from chatinho import build_chat_session; build_chat_session(); "
-         "print('fastmcp' in sys.modules)"],
-        capture_output=True, text=True, cwd=str(ROOT),
-    )
-    assert done.returncode == 0, done.stderr
-    assert done.stdout.strip() == "False"
+    without_tui = _read_without("textual")
+    assert without_tui["McpFrontend"] == ["ok"]
+    assert "chatinho[tui]" in without_tui["ChatFrontend"][1]
