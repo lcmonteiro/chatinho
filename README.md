@@ -65,7 +65,6 @@ true. These names live behind an extra:
 | `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` |
 | `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
-| `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
 | all of them | `chatinho[all]` | all five |
 
@@ -87,6 +86,10 @@ The package ships `py.typed`, so a consumer's mypy sees the annotations.
 `ChatFrontend` (in `chatinho.frontends.chat`), and the `chatinho.chat_*` modules are gone: the core
 is `chatinho.session`, `chatinho.message` and `chatinho.hooks`, and the terminal's parts live under
 `chatinho.frontends.chat`. Logger names follow the modules.
+
+**Removed in 0.1.x:** `A2AConnector` and the `chatinho[a2a]` extra. It did not speak the A2A
+protocol and blocked the event loop; to put questions to another chatinho session, use
+`McpConnector`.
 
 **Requires Python ≥ 3.12.**
 
@@ -195,13 +198,10 @@ silently never fires.
 ### With the batteries
 
 ```python
-from chatinho import build_chat_session, A2AConnector, OpenAIConnector, DatabaseBackend, HelpCommand
+from chatinho import build_chat_session, OpenAIConnector, DatabaseBackend, HelpCommand
 
 build_chat_session(
-    connectors = [
-        A2AConnector(name="agent", url="https://api.example.com", api_key="***"),
-        OpenAIConnector(name="gpt", api_key="***"),
-    ],
+    connectors = [OpenAIConnector(name="gpt", api_key="***")],
     commands   = [HelpCommand()],
     backend    = DatabaseBackend("sqlite:///chat.db"),
 ).run()
