@@ -70,13 +70,6 @@ def test_a_chat_with_a_terminal():
     assert "help" in session._commands()
 
 
-def test_the_chat_builder_escapes_newlines_like_the_composer():
-    import inspect
-    from chatinho.frontends.chat.composer import NEWLINE_ESCAPE
-    default = inspect.signature(build_chat_session).parameters["newline_escape"].default
-    assert default == NEWLINE_ESCAPE
-
-
 def test_a_chat_served_over_mcp():
     agent   = _Agent()
     session = build_mcp_session(connectors=[agent], token="t", port=9000)

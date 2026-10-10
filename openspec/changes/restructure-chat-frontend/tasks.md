@@ -46,7 +46,7 @@
   - point the lazy-extra tests at the new table.
 
   Verify that the file passes.
-- [x] 4.2 Update imports, patch strings and names (`ChatApp` to `ChatFrontend`, `build_chat` to `build_chat_session`) in `conftest.py`, `test_chat_app.py`, `test_clipboard.py`, `test_command_suggestions.py`, `test_message_store.py` and `test_require.py`. Verify that each passes.
+- [x] 4.2 Update imports, patch strings and names (`ChatApp` to `ChatFrontend`, `build_chat` to `build_chat_session`) in `conftest.py`, `test_chat_app.py` (renamed `test_chat_frontend.py`), `test_clipboard.py`, `test_command_suggestions.py`, `test_message_store.py` and `test_require.py`. Verify that each passes.
 - [x] 4.3 Add tests for the `package-layout` spec:
   - the new import paths, and that the old `chatinho.chat_*` modules are gone;
   - `from chatinho import ChatFrontend`;

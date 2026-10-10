@@ -19,7 +19,7 @@ Today every module of the package sits at its root:
 **Non-Goals:**
 - No behaviour change: no new hooks or parameters, apart from `build_mcp_session`.
 - No renames of the classes inside the moved modules (`ChatLog`, `CommandInput`, `CommandSuggestions`, `ChatStyle`). The one exception is `ChatApp`, which becomes `ChatFrontend`.
-- Tests are not moved into a `tests/frontends/chat/` tree. They stay where they are, with updated imports.
+- Tests are not moved into a `tests/frontends/chat/` tree. They stay where they are, with updated imports; only `test_chat_app.py` is renamed `test_chat_frontend.py`, after the class it tests.
 
 ## Decisions
 

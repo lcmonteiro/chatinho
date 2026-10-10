@@ -13,7 +13,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
-Most of them run without mounting anything; only `test_chat_app.py` and
+Most of them run without mounting anything; only `test_chat_frontend.py` and
 `test_command_suggestions.py` need a Textual app. That ratio is the point of the layout below, not an accident of it.
 
 ---
@@ -332,7 +332,7 @@ docs/              SPEC.md — the fourteen hooks, with an example and a cost fo
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
                    agent_inbox.py (HTTP, inbound), mcp_server.py (served over MCP), mcp_client.py (a plain FastMCP client)
-tests/             test_chat_app.py, test_command_suggestions.py (mounted)
+tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_package_layout.py, test_a2a_payload.py,
                    test_clipboard.py, test_answer_details.py,

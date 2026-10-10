@@ -42,7 +42,7 @@ The terminal is one frontend among others now, since `McpFrontend` can take peer
   - the relative imports in `backends/`, `commands/`, `connectors/`, `frontends/mcp.py` and `helpers/` change.
 - **Tests:**
   - `tests/test_architecture.py` (module paths, the "only the terminal knows Textual" rule);
-  - imports and patch strings in `conftest.py`, `test_chat_app.py`, `test_clipboard.py`, `test_command_suggestions.py`, `test_message_store.py` and `test_require.py`.
+  - imports and patch strings in `conftest.py`, `test_chat_app.py` (renamed `test_chat_frontend.py`), `test_clipboard.py`, `test_command_suggestions.py`, `test_message_store.py` and `test_require.py`.
 - **Examples and docs:** `examples/demo.py`, `examples/headless.py`, `examples/mcp_server.py`, `examples/README.md`, `README.md`, `docs/SPEC.md` and `CLAUDE.md`.
 - **Packaging:** `pyproject.toml` only where it names modules. The extras are unchanged.
 - **Users:** anyone importing `build_chat` or `chatinho.chat_*` must switch to the new names.
