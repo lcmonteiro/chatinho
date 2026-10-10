@@ -12,7 +12,6 @@ from typing import Any
 
 #: name -> the module that defines it.
 _WHERE = {
-    "A2AConnector"    : "chatinho.connectors.a2a",
     "OpenAIConnector" : "chatinho.connectors.openai",
     "McpConnector"    : "chatinho.connectors.mcp",
 }
