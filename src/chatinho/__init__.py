@@ -55,7 +55,7 @@ Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand``
 imports nothing but the standard library.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Tuple
 
 if TYPE_CHECKING:                       # never executed; read by type checkers
     # The names below are resolved lazily at runtime, which hands a type
@@ -81,19 +81,19 @@ from .commands import HelpCommand, TestCommand
 
 __version__ = "0.1.0"
 
-#: The names that live behind an extra: attribute -> (module, (extra, library), ...).
+#: The names that live behind an extra: attribute -> (module, ((extra, library), ...)).
 _TUI = ("tui", "textual")
 _MCP = ("mcp", "fastmcp")
-_BEHIND_AN_EXTRA = {
-    "build_chat_session" : (".builder",              _TUI, _MCP),
-    "build_mcp_session"  : (".builder",              _TUI, _MCP),
-    "ChatFrontend"       : (".frontends.chat",       _TUI),
-    "ChatStyle"          : (".frontends.chat.style", _TUI),
-    "McpFrontend"        : (".frontends.mcp",        _MCP),
-    "McpConnector"       : (".connectors.mcp",       _MCP),
-    "OpenAIConnector"    : (".connectors.openai",    ("openai", "openai")),
-    "A2AConnector"       : (".connectors.a2a",       ("a2a", "requests")),
-    "DatabaseBackend"    : (".backends",             ("sql", "sqlalchemy")),
+_BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
+    "build_chat_session" : (".builder",              (_TUI, _MCP)),
+    "build_mcp_session"  : (".builder",              (_TUI, _MCP)),
+    "ChatFrontend"       : (".frontends.chat",       (_TUI,)),
+    "ChatStyle"          : (".frontends.chat.style", (_TUI,)),
+    "McpFrontend"        : (".frontends.mcp",        (_MCP,)),
+    "McpConnector"       : (".connectors.mcp",       (_MCP,)),
+    "OpenAIConnector"    : (".connectors.openai",    (("openai", "openai"),)),
+    "A2AConnector"       : (".connectors.a2a",       (("a2a", "requests"),)),
+    "DatabaseBackend"    : (".backends",             (("sql", "sqlalchemy"),)),
 }
 
 
@@ -117,7 +117,7 @@ def __getattr__(name: str) -> Any:
     """
     if name not in _BEHIND_AN_EXTRA:
         raise AttributeError("module %r has no attribute %r" % (__name__, name))
-    where, *extras = _BEHIND_AN_EXTRA[name]
+    where, extras = _BEHIND_AN_EXTRA[name]
     from importlib import import_module
     try:
         return getattr(import_module(where, __name__), name)

@@ -251,7 +251,7 @@ def test_the_declared_extras_are_the_ones_the_package_asks_for():
     assert declared["project"]["dependencies"] == [], "the core must install nothing"
 
     extras = declared["project"]["optional-dependencies"]
-    needed = {pair for _, *pairs in chatinho._BEHIND_AN_EXTRA.values() for pair in pairs}
+    needed = {pair for _, pairs in chatinho._BEHIND_AN_EXTRA.values() for pair in pairs}
     named  = {extra for extra, _ in needed}
     assert named <= set(extras), "chatinho names extras that pyproject does not declare"
 
