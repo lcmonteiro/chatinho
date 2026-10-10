@@ -39,7 +39,7 @@ Served over MCP, which needs ``pip install chatinho[mcp]``::
 Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both in
 :mod:`chatinho.frontends` — and either can be passed to ``ChatSession`` by hand.
 
-Nine names need an extra, and say so if it is missing:
+Eight names need an extra, and say so if it is missing:
 
     build_chat_session  chatinho[tui,mcp]  textual, fastmcp
     build_mcp_session   chatinho[tui,mcp]  textual, fastmcp

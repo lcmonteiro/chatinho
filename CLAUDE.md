@@ -767,7 +767,7 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 `dependencies = []`. `ChatSession`, the fourteen hooks, `HelpCommand` and `TestCommand` import nothing
 but the standard library — which the fitness tests already enforced, so the packaging now says it
-too. Nine names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
+too. Eight names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
 | name | extra | brings |
 |---|---|---|
