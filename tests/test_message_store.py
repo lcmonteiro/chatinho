@@ -9,7 +9,7 @@ import threading
 
 import pytest
 
-from chatinho.chat_message import ChatMessage, MessageID, MessageStore
+from chatinho.message import ChatMessage, MessageID, MessageStore
 
 mid = MessageID.parse
 

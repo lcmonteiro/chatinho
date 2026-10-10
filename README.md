@@ -57,27 +57,36 @@ pip install -e /path/to/chatinho
 
 **The core has no dependencies at all.** `ChatSession`, the hooks, `HelpCommand` and `TestCommand`
 need nothing beyond the standard library, and `tests/test_architecture.py` fails if that stops being
-true. Six names live behind an extra:
+true. These names live behind an extra:
 
 | you want | install | it brings |
 |---|---|---|
-| `build_chat` — the terminal app | `chatinho[tui]` | `textual` |
+| `ChatFrontend`, `ChatStyle` — the terminal | `chatinho[tui]` | `textual` |
+| `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` |
+| `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
-| `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` |
 | all of them | `chatinho[all]` | all five |
 
 They are resolved on first use, so `import chatinho` never drags in a terminal for a script that
 wanted a session. A missing extra reports itself:
 
 ```
->>> chatinho.build_chat
-ImportError: build_chat needs 'textual', which chatinho does not install by default.
+>>> chatinho.build_chat_session
+ImportError: build_chat_session needs 'textual', which chatinho does not install by default.
              Install it with:  pip install 'chatinho[tui]'
 ```
 
+The builders live in one module that imports both frontends, so they need both extras. With only
+one, pass that frontend to `ChatSession(frontend=...)` yourself — it is what the builder does.
+
 The package ships `py.typed`, so a consumer's mypy sees the annotations.
+
+**Renamed in 0.1.x, with no aliases:** `build_chat` is `build_chat_session`, `ChatApp` is
+`ChatFrontend` (in `chatinho.frontends.chat`), and the `chatinho.chat_*` modules are gone: the core
+is `chatinho.session`, `chatinho.message` and `chatinho.hooks`, and the terminal's parts live under
+`chatinho.frontends.chat`. Logger names follow the modules.
 
 **Requires Python ≥ 3.12.**
 
@@ -152,16 +161,16 @@ asyncio.run(main())
 ### With the terminal — `pip install 'chatinho[tui]'`
 
 ```python
-from chatinho import build_chat, HelpCommand, TestCommand
+from chatinho import build_chat_session, HelpCommand, TestCommand
 
-build_chat(
+build_chat_session(
     connectors = [],                                # peers: id, queue, conversation
     commands   = [HelpCommand(), TestCommand()],    # not peers: they just run
     backend    = None,                              # a peer that listens
 ).run()
 ```
 
-`build_chat` returns the **session**, with the terminal handed over as its `frontend` — an
+`build_chat_session` returns the **session**, with the terminal handed over as its `frontend` — an
 ordinary peer that declares `@frontend("chat")`, which is `@connector` pinned to `LOCAL`. The
 session owns the loop: `run()` starts
 everything, runs every peer's `serve()`, and closes when the first of them returns — quitting the
@@ -169,7 +178,7 @@ terminal is the end of the chat. Markdown rendering,
 syntax-highlighted code blocks, command autocomplete and click-to-reply come with it. The input
 takes more than one line — **Enter sends; Ctrl+J, or a space typed before Enter, opens a line**
 (Ctrl+Enter, Shift+Enter and Alt+Enter do too, on a terminal that reports them; those two always
-work, and `build_chat(newline_escape=…)` changes the character or turns it off) — bubbles are
+work, and `build_chat_session(newline_escape=…)` changes the character or turns it off) — bubbles are
 drawn as
 outlines that grow with their text, and the one filled bubble is the message you selected to reply
 to. The colours are Claude Code's — its warm neutrals and Claude's own orange — and `ChatStyle` is
@@ -179,16 +188,16 @@ A line that starts with **`@name`** asks that peer: `@lab will it rain?` asks `l
 rain?", without the `@lab`, and its answer comes back as a reply. A line with no such peer is said
 to everyone as typed.
 
-`quit_key` moves the quit binding off Textual's `ctrl+q` — `build_chat(quit_key="ctrl+g")` — and a
+`quit_key` moves the quit binding off Textual's `ctrl+q` — `build_chat_session(quit_key="ctrl+g")` — and a
 key Textual could never receive is refused there and then, rather than becoming a binding that
 silently never fires.
 
 ### With the batteries
 
 ```python
-from chatinho import build_chat, A2AConnector, OpenAIConnector, DatabaseBackend, HelpCommand
+from chatinho import build_chat_session, A2AConnector, OpenAIConnector, DatabaseBackend, HelpCommand
 
-build_chat(
+build_chat_session(
     connectors = [
         A2AConnector(name="agent", url="https://api.example.com", api_key="***"),
         OpenAIConnector(name="gpt", api_key="***"),
@@ -203,15 +212,17 @@ Needs `chatinho[all]`, or whichever extras those three names ask for.
 ### Across machines — `pip install 'chatinho[mcp]'`
 
 One session can put questions to another over MCP (the modern protocol, 2026-07-28). On the machine
-that answers, `McpFrontend` takes the terminal's place — it is peer zero, named `master` by default,
-and nobody types into it:
+that answers, `build_mcp_session` puts an `McpFrontend` in the terminal's place — it is peer zero,
+named `master` by default, and nobody types into it:
 
 ```python
-from chatinho import ChatSession
-from chatinho.frontends import McpFrontend
+from chatinho import build_mcp_session
 
-ChatSession(frontend=McpFrontend(token="s3cret", port=8000), connectors=[Agent()]).run()
+build_mcp_session(connectors=[Agent()], token="s3cret", port=8000).run()
 ```
+
+It is the same as `ChatSession(frontend=McpFrontend(token="s3cret", port=8000), connectors=[Agent()])`,
+with `McpFrontend` from `chatinho.frontends`.
 
 On the machine that asks, `McpConnector` is an ordinary peer with a name it chooses:
 
@@ -220,7 +231,7 @@ from chatinho.connectors import McpConnector
 
 lab = McpConnector(url="https://lab.example/mcp", token="s3cret", name="lab",
                    delegate={"llm": my_sub_key})
-build_chat(connectors=[lab]).run()
+build_chat_session(connectors=[lab]).run()
 ```
 
 Any MCP client can use it too — it needs no chatinho, only FastMCP:

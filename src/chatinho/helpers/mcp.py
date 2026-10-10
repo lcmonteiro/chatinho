@@ -7,7 +7,7 @@ import base64
 import mimetypes
 from typing import Any, Dict
 
-from chatinho.chat_message import Attachment
+from chatinho.message import Attachment
 
 #: Where a client puts the credentials it lends, in a request's ``_meta``, and
 #: the capability extension a server declares the ones it accepts under.

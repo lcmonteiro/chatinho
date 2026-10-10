@@ -28,86 +28,72 @@ Headless — no terminal, and nothing to install beyond this package::
 
 With a terminal, which needs ``pip install chatinho[tui]``::
 
-    >>> from chatinho import build_chat         # doctest: +SKIP
-    >>> build_chat(commands=[HelpCommand()]).run()
+    >>> from chatinho import build_chat_session     # doctest: +SKIP
+    >>> build_chat_session(commands=[HelpCommand()]).run()
 
-The application class itself is private: ``build_chat`` builds one.
+Served over MCP, which needs ``pip install chatinho[mcp]``::
 
-Six names need an extra, and say so if it is missing:
+    >>> from chatinho import build_mcp_session      # doctest: +SKIP
+    >>> build_mcp_session(commands=[HelpCommand()], token="secret").run()
 
-    build_chat         chatinho[tui]      textual
-    OpenAIConnector    chatinho[openai]   openai
-    A2AConnector       chatinho[a2a]      requests
-    DatabaseBackend    chatinho[sql]      sqlalchemy
-    McpFrontend        chatinho[mcp]      fastmcp
-    McpConnector       chatinho[mcp]      fastmcp
+Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both in
+:mod:`chatinho.frontends` — and either can be passed to ``ChatSession`` by hand.
+
+Ten names need an extra, and say so if it is missing:
+
+    build_chat_session  chatinho[tui,mcp]  textual, fastmcp
+    build_mcp_session   chatinho[tui,mcp]  textual, fastmcp
+    ChatFrontend        chatinho[tui]      textual
+    ChatStyle           chatinho[tui]      textual
+    McpFrontend         chatinho[mcp]      fastmcp
+    McpConnector        chatinho[mcp]      fastmcp
+    OpenAIConnector     chatinho[openai]   openai
+    A2AConnector        chatinho[a2a]      requests
+    DatabaseBackend     chatinho[sql]      sqlalchemy
 
 Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand`` —
 imports nothing but the standard library.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Tuple
 
 if TYPE_CHECKING:                       # never executed; read by type checkers
-    # The six names below are resolved lazily at runtime, which hands a type
+    # The names below are resolved lazily at runtime, which hands a type
     # checker ``Any`` and quietly undoes the ``py.typed`` this package ships.
     # Importing them here restores that without importing anything at run time.
     from .backends import DatabaseBackend
-    from .chat_builder import build_chat
+    from .builder import build_chat_session, build_mcp_session
     from .connectors.a2a import A2AConnector
     from .connectors.mcp import McpConnector
     from .connectors.openai import OpenAIConnector
+    from .frontends.chat import ChatFrontend
+    from .frontends.chat.style import ChatStyle
     from .frontends.mcp import McpFrontend
 
-from .chat_session import ChatSession
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
-from .chat_hooks import (
-    connector,
-    tool,
-    frontend,
-    backend,
-    require,
-    hooks_of,
-    options_of,
-    declares,
-    declared_id,
-    name_of,
-    Hook,
-    HookSay,
-    HookAsk,
-    HookAnswer,
-    HookInvoke,
-    HookExecute,
-    HookContext,
-    HookPeers,
-    HookCommands,
-    HookListen,
-    HookLoad,
-    HookForget,
-    HookKeep,
-    HookLink,
-    HookLocate,
-    Say,
-    Ask,
-    Invoke,
-    Context,
-    Peers,
-    Commands,
-    Locate,
-)
-from .chat_style import ChatStyle
+from .session import ChatSession
+from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
+from .hooks import connector, tool, frontend, backend, require
+from .hooks import hooks_of, options_of, declares, declared_id, name_of
+from .hooks import Hook, HookSay, HookAsk, HookAnswer, HookInvoke, HookExecute, HookContext
+from .hooks import HookPeers, HookCommands, HookListen, HookLoad, HookForget, HookKeep, HookLink, HookLocate
+from .hooks import Say, Ask, Invoke, Context, Peers, Commands, Locate
 from .commands import HelpCommand, TestCommand
 
 __version__ = "0.1.0"
 
-#: The names that live behind an extra: attribute -> (module, distribution).
-_BEHIND_AN_EXTRA = {
-    "build_chat"      : (".chat_builder", "tui",    "textual"),
-    "OpenAIConnector" : (".connectors.openai", "openai", "openai"),
-    "A2AConnector"    : (".connectors.a2a",    "a2a",    "requests"),
-    "DatabaseBackend" : (".backends",     "sql",    "sqlalchemy"),
-    "McpFrontend"     : (".frontends.mcp",     "mcp",    "fastmcp"),
-    "McpConnector"    : (".connectors.mcp",    "mcp",    "fastmcp"),
+#: The names that live behind an extra: attribute -> (module, ((extra, library), ...)).
+_TUI = ("tui", "textual")
+_MCP = ("mcp", "fastmcp")
+_BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
+    "build_chat_session" : (".builder",              (_TUI, _MCP)),
+    "build_mcp_session"  : (".builder",              (_TUI, _MCP)),
+    "ChatFrontend"       : (".frontends.chat",       (_TUI,)),
+    "ChatStyle"          : (".frontends.chat.style", (_TUI,)),
+    "McpFrontend"        : (".frontends.mcp",        (_MCP,)),
+    "McpConnector"       : (".connectors.mcp",       (_MCP,)),
+    "OpenAIConnector"    : (".connectors.openai",    (("openai", "openai"),)),
+    "A2AConnector"       : (".connectors.a2a",       (("a2a", "requests"),)),
+    "DatabaseBackend"    : (".backends",             (("sql", "sqlalchemy"),)),
 }
 
 
@@ -115,7 +101,7 @@ def __getattr__(name: str) -> Any:
     """Imports the batteries only when one is asked for (PEP 562).
 
     ``import chatinho`` must not drag in a terminal, an HTTP client and an ORM
-    for a script that wanted a ``ChatSession``. These six are resolved on first
+    for a script that wanted a ``ChatSession``. These are resolved on first
     use instead, and a missing extra is reported as itself rather than as
     somebody else's ``ModuleNotFoundError``.
 
@@ -131,14 +117,18 @@ def __getattr__(name: str) -> Any:
     """
     if name not in _BEHIND_AN_EXTRA:
         raise AttributeError("module %r has no attribute %r" % (__name__, name))
-    where, extra, needs = _BEHIND_AN_EXTRA[name]
+    where, extras = _BEHIND_AN_EXTRA[name]
     from importlib import import_module
     try:
         return getattr(import_module(where, __name__), name)
     except ImportError as exc:
         raise ImportError(
-            "%s needs %r, which chatinho does not install by default. "
-            "Install it with:  pip install 'chatinho[%s]'" % (name, needs, extra)
+            "%s needs %s, which chatinho does not install by default. "
+            "Install it with:  pip install 'chatinho[%s]'" % (
+                name,
+                " and ".join(repr(library) for _, library in extras),
+                ",".join(extra for extra, _ in extras),
+            )
         ) from exc
 
 
@@ -147,7 +137,8 @@ def __dir__() -> Any:
     return sorted(__all__)
 
 __all__ = [
-    "build_chat",
+    "build_chat_session",
+    "build_mcp_session",
     "ChatSession",
     "ChatMessage",
     "MessageID",
@@ -155,7 +146,6 @@ __all__ = [
     "Reply",
     "ReplyStatus",
     "Secret",
-    "ChatStyle",
     "LOCAL",
     "TOOL",
     # declaring
@@ -199,6 +189,8 @@ __all__ = [
     "A2AConnector",
     "OpenAIConnector",
     "DatabaseBackend",
+    "ChatFrontend",
+    "ChatStyle",
     "McpFrontend",
     "McpConnector",
     "HelpCommand",

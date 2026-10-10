@@ -19,9 +19,9 @@ from typing import Any, Callable, Dict, Mapping, Optional, Union
 import mcp_types as types
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
-from chatinho.chat_hooks import HookAnswer
-from chatinho.chat_hooks import connector, require
-from chatinho.chat_message import ChatMessage, Reply, ReplyStatus
+from chatinho.hooks import HookAnswer
+from chatinho.hooks import connector, require
+from chatinho.message import ChatMessage, Reply, ReplyStatus
 from chatinho.helpers.mcp import CREDENTIALS_KEY, decode
 
 logger = logging.getLogger(__name__)

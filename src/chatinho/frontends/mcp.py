@@ -30,11 +30,11 @@ from fastmcp.server.auth import AccessToken, TokenVerifier
 from fastmcp.server.extensions import ServerExtension
 from pydantic import BaseModel, Field
 
-from chatinho.chat_hooks import HookAnswer, HookCommands, HookInvoke, HookListen, HookLocate, HookPeers
-from chatinho.chat_hooks import HookSay
-from chatinho.chat_hooks import Commands, Invoke, Locate, Peers, Say
-from chatinho.chat_hooks import declares, frontend, name_of, require
-from chatinho.chat_message import LOCAL, Attachment, ChatMessage, MessageID, ReplyStatus, Secret
+from chatinho.hooks import HookAnswer, HookCommands, HookInvoke, HookListen, HookLocate, HookPeers
+from chatinho.hooks import HookSay
+from chatinho.hooks import Commands, Invoke, Locate, Peers, Say
+from chatinho.hooks import declares, frontend, name_of, require
+from chatinho.message import LOCAL, Attachment, ChatMessage, MessageID, ReplyStatus, Secret
 from chatinho.helpers.mcp import CREDENTIALS_KEY, encode, media_type_of
 
 logger = logging.getLogger(__name__)

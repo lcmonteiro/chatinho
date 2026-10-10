@@ -29,8 +29,8 @@ from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, cre
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from ..chat_hooks import HookForget, HookKeep, HookLink, HookListen, HookLoad, backend, require
-from ..chat_message import Attachment, ChatMessage, MessageID
+from ..hooks import HookForget, HookKeep, HookLink, HookListen, HookLoad, backend, require
+from ..message import Attachment, ChatMessage, MessageID
 
 logger = logging.getLogger(__name__)
 

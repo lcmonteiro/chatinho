@@ -2,10 +2,10 @@
 
 Build the chat UI theme in Python instead of editing raw CSS:
 
-    from chatinho import ChatStyle, build_chat
+    from chatinho import ChatStyle, build_chat_session
 
     style = ChatStyle(accent="#ff5733", sent_bubble_border="#ff5733")
-    chat = build_chat(style=style)
+    chat = build_chat_session(style=style)
 
 Use ``dataclasses.replace`` to tweak a base style without touching the rest:
 
@@ -29,7 +29,7 @@ from dataclasses import asdict, dataclass
 from string import Template
 from typing import Tuple
 
-from .chat_message import TOOL
+from ...message import TOOL
 
 # Template first: the stylesheet with $placeholders for every ChatStyle field.
 _CSS_TEMPLATE = Template(

@@ -1,6 +1,6 @@
 """Tests for the Textual presentation.
 
-The app is built with ``build_chat`` and mounted via ``App.run_test()``, so
+The app is built with ``build_chat_session`` and mounted via ``App.run_test()``, so
 the widgets are available to the code under test. The presentation is a
 peer like any other — registered at LOCAL — so these tests are the same
 model as the headless ones, with a terminal attached.
@@ -17,17 +17,17 @@ from textual import events
 from textual.binding import NoBinding
 from textual.color import Color
 
-from chatinho.chat_app import ChatApp
-from chatinho.chat_input import NEWLINE_KEYS, CommandInput
-from chatinho.chat_log import chat_markdown, preview_of
-from chatinho.chat_message import MessageID
+from chatinho.frontends.chat import ChatFrontend
+from chatinho.frontends.chat.composer import NEWLINE_KEYS, CommandInput
+from chatinho.frontends.chat.messages import chat_markdown, preview_of
+from chatinho.message import MessageID
 from chatinho import (
     LOCAL,
     Attachment,
     HookKeep,
     HookLink,
     backend,
-    build_chat,
+    build_chat_session,
     TOOL,
     Ask,
     HelpCommand,
@@ -43,17 +43,17 @@ from chatinho import (
 )
 
 
-async def chat_app(connectors=None, commands=None, backend=None, **kwargs):
-    """The terminal peer, built and attached the way build_chat does it.
+async def chat_frontend(connectors=None, commands=None, backend=None, **kwargs):
+    """The terminal peer, built and attached the way build_chat_session does it.
 
-    ``build_chat`` returns the *session* — the terminal is one of its
+    ``build_chat_session`` returns the *session* — the terminal is one of its
     peers, not its owner — so a test that drives the app builds it the same way
     a caller would: an ordinary connector, attached to an ordinary session. It
     does not hold the session either, so this starts it directly rather than
     relying on the app to reach back for it.
     """
     session = ChatSession(connectors=connectors, commands=commands, backend=backend)
-    app = ChatApp(**kwargs)
+    app = ChatFrontend(**kwargs)
     session.add_connector(app)
     await session.start()
     return app
@@ -91,7 +91,7 @@ class _Agente:
 
 
 async def test_say_returns_an_id_and_stores():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test():
         said = await app.say("hello")
         msg = app.messages[0]
@@ -101,13 +101,13 @@ async def test_say_returns_an_id_and_stores():
 
 
 async def test_the_welcome_message_is_the_app_saying_it():
-    app = await chat_app(welcome_message="Bem-vindo")
+    app = await chat_frontend(welcome_message="Bem-vindo")
     async with app.run_test():
         assert [m.text for m in app.messages] == ["Bem-vindo"]
 
 
 async def test_submitting_text_says_it():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", CommandInput)
         inp.text = "  ola  "
@@ -118,7 +118,7 @@ async def test_submitting_text_says_it():
 
 
 async def test_blank_input_says_nothing():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test() as pilot:
         app.query_one("#input-line", CommandInput).text = "   "
         await pilot.press("enter")
@@ -157,7 +157,7 @@ async def _submit(app, pilot, text):
 
 async def test_an_at_name_asks_that_peer_without_the_name():
     sol = _Sol()
-    app = await chat_app(connectors=[sol, _Lua()])
+    app = await chat_frontend(connectors=[sol, _Lua()])
     async with app.run_test() as pilot:
         await _submit(app, pilot, "@sol will it rain?")
         asked = app.messages[0]
@@ -169,7 +169,7 @@ async def test_an_at_name_asks_that_peer_without_the_name():
 @pytest.mark.parametrize("typed", ["@nobody hi", "@sol", "hello @sol"])
 async def test_anything_else_is_said_as_typed(typed):
     sol = _Sol()
-    app = await chat_app(connectors=[sol, _Lua()])
+    app = await chat_frontend(connectors=[sol, _Lua()])
     async with app.run_test() as pilot:
         await _submit(app, pilot, typed)
         assert app.messages[0].text == typed and app.messages[0].is_broadcast
@@ -181,7 +181,7 @@ async def test_anything_else_is_said_as_typed(typed):
 
 async def test_running_a_command_is_recorded_whole():
     """The invocation and the answer are both messages, in that order."""
-    app = await chat_app(commands=[_Eco(), _Mudo()])
+    app = await chat_frontend(commands=[_Eco(), _Mudo()])
     async with app.run_test() as pilot:
         assert await app.command("eco", "ola") == "eco: ola"
         assert await app.command("mudo") == "só para quem correu"
@@ -199,7 +199,7 @@ async def test_what_a_command_writes_is_not_the_user_speaking():
     than said to the room, so a peer that replies to broadcasts sees neither as
     the user speaking.
     """
-    app = await chat_app(commands=[_Eco()])
+    app = await chat_frontend(commands=[_Eco()])
     async with app.run_test() as pilot:
         await app.command("eco", "ola")
         await pilot.pause()
@@ -209,7 +209,7 @@ async def test_what_a_command_writes_is_not_the_user_speaking():
 
 
 async def test_submitting_a_slash_runs_the_tool():
-    app = await chat_app(commands=[_Eco()])
+    app = await chat_frontend(commands=[_Eco()])
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", CommandInput)
         inp.text = "/eco bom dia"
@@ -219,7 +219,7 @@ async def test_submitting_a_slash_runs_the_tool():
 
 
 async def test_an_unknown_command_says_so():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test() as pilot:
         assert await app.command("nope") is None
         await pilot.pause()
@@ -227,7 +227,7 @@ async def test_an_unknown_command_says_so():
 
 
 async def test_help_lists_the_tools_that_can_be_asked():
-    app = await chat_app(commands=[HelpCommand(), _Eco()])
+    app = await chat_frontend(commands=[HelpCommand(), _Eco()])
     async with app.run_test() as pilot:
         answer = await app.command("help")
         await pilot.pause()
@@ -240,7 +240,7 @@ async def test_help_lists_the_tools_that_can_be_asked():
 async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
     """The whole round trip, with no routing code in the presentation."""
     agente = _Agente()
-    app = await chat_app(connectors=[agente])
+    app = await chat_frontend(connectors=[agente])
     async with app.run_test() as pilot:
         question = asyncio.create_task(agente.ask(LOCAL, "Autorizas?"))
         await pilot.pause()
@@ -258,7 +258,7 @@ async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
 
 async def test_a_message_from_another_thread_reaches_the_log():
     """A connector with its own server thread must be able to speak."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test() as pilot:
         loop = asyncio.get_running_loop()
         done = threading.Event()
@@ -283,7 +283,7 @@ async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
     The invocation and the answer are both messages now, and the answer carries
     ``reply_to``, so the log renders it the way it renders any reply.
     """
-    app = await chat_app(commands=[_Eco()])
+    app = await chat_frontend(commands=[_Eco()])
     async with app.run_test() as pilot:
         await app.command("eco", "ola")
         await pilot.pause()
@@ -296,7 +296,7 @@ async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
 
 
 async def test_the_log_renders_what_the_history_holds():
-    app = await chat_app(commands=[_Eco()])
+    app = await chat_frontend(commands=[_Eco()])
     async with app.run_test() as pilot:
         await app.say("uma")
         await app.command("eco", "duas")
@@ -307,7 +307,7 @@ async def test_the_log_renders_what_the_history_holds():
 
 
 async def test_only_the_window_is_rendered():
-    app = await chat_app(max_displayed=3)
+    app = await chat_frontend(max_displayed=3)
     async with app.run_test() as pilot:
         for n in range(6):
             await app.say("m%d" % n)
@@ -320,7 +320,7 @@ async def test_only_the_window_is_rendered():
 
 
 async def test_get_replies_reads_the_thread_back():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test():
         first = await app.say("original")
         reply = await app.say("resposta", reply_to=first)
@@ -329,7 +329,7 @@ async def test_get_replies_reads_the_thread_back():
 
 
 async def test_send_pending_reply_uses_the_clicked_target():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test() as pilot:
         target = await app.say("alvo")
         await pilot.pause()
@@ -340,7 +340,7 @@ async def test_send_pending_reply_uses_the_clicked_target():
 
 
 async def test_send_pending_reply_does_nothing_without_a_target():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test():
         assert await app.send_pending_reply("resposta") is None
         assert app.messages == []
@@ -350,7 +350,7 @@ async def test_send_pending_reply_does_nothing_without_a_target():
 
 
 async def test_the_header_shows_the_short_id_and_not_the_full_one():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         said = await app.say("curto")
         await pilot.pause()
@@ -360,7 +360,7 @@ async def test_the_header_shows_the_short_id_and_not_the_full_one():
 
 
 async def test_the_reply_placeholder_names_the_short_id():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         said = await app.say("alvo")
         await pilot.pause()
@@ -370,7 +370,7 @@ async def test_the_reply_placeholder_names_the_short_id():
 
 
 async def test_a_reply_still_carries_the_full_id():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         said = await app.say("alvo")
         await pilot.pause()
@@ -381,11 +381,11 @@ async def test_a_reply_still_carries_the_full_id():
 
 
 async def test_the_copy_notice_is_titled_with_the_short_id(monkeypatch):
-    from chatinho import chat_clipboard
+    from chatinho.frontends.chat import clipboard
 
-    monkeypatch.setattr(chat_clipboard, "put", lambda text: None)
+    monkeypatch.setattr(clipboard, "put", lambda text: None)
 
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         said = await app.say("para copiar")
         await pilot.pause()
@@ -416,24 +416,24 @@ def _actions_for(app, key):
 
 
 async def test_the_quit_key_defaults_to_textuals_own():
-    app = await chat_app()
+    app = await chat_frontend()
     assert _actions_for(app, "ctrl+q") == ["quit"]
 
 
 async def test_a_given_quit_key_replaces_the_default_rather_than_joining_it():
-    """ChatApp declares no BINDINGS: quit is inherited, and Textual *merges*.
+    """ChatFrontend declares no BINDINGS: quit is inherited, and Textual *merges*.
 
     Declaring a new binding in the subclass would leave ctrl+q quitting as
     well, which is the bug this guards. The instance's own map is what moves.
     """
-    app = await chat_app(quit_key="ctrl+g")
+    app = await chat_frontend(quit_key="ctrl+g")
     assert _actions_for(app, "ctrl+g") == ["quit"]
     assert _actions_for(app, "ctrl+q") is None
 
 
 async def test_the_quit_key_actually_quits_and_the_old_one_does_not():
     """The map saying so is not the same as the app doing so."""
-    app = await chat_app(quit_key="ctrl+g")
+    app = await chat_frontend(quit_key="ctrl+g")
     async with app.run_test() as pilot:
         await pilot.press("ctrl+q")
         await pilot.pause()
@@ -446,8 +446,8 @@ async def test_the_quit_key_actually_quits_and_the_old_one_does_not():
 
 async def test_rebinding_quit_leaves_the_other_bindings_alone():
     """ctrl+c is help_quit and ctrl+p is the command palette; neither moves."""
-    default = await chat_app()
-    rebound = await chat_app(quit_key="f10")
+    default = await chat_frontend()
+    rebound = await chat_frontend(quit_key="f10")
     for key in ("ctrl+c", "ctrl+p"):
         assert _actions_for(rebound, key) == _actions_for(default, key)
 
@@ -456,17 +456,17 @@ async def test_rebinding_quit_leaves_the_other_bindings_alone():
 async def test_a_quit_key_textual_could_never_receive_is_refused(bad):
     """Binding() accepts 'not a key' and then never fires — a silent no-op."""
     with pytest.raises(ValueError, match="quit_key"):
-        await chat_app(quit_key=bad)
+        await chat_frontend(quit_key=bad)
 
 
 async def test_a_single_character_and_a_named_key_are_both_accepted():
-    assert _actions_for(await chat_app(quit_key="q"), "q") == ["quit"]
-    assert _actions_for(await chat_app(quit_key="escape"), "escape") == ["quit"]
+    assert _actions_for(await chat_frontend(quit_key="q"), "q") == ["quit"]
+    assert _actions_for(await chat_frontend(quit_key="escape"), "escape") == ["quit"]
 
 
 def test_build_chat_returns_the_session_with_the_terminal_attached():
     """The session owns the loop; the terminal is one of the peers it serves."""
-    session = build_chat(commands=[_Eco()])
+    session = build_chat_session(commands=[_Eco()])
 
     assert isinstance(session, ChatSession)
     assert session.id_of("chat") == LOCAL, "the terminal is the session's frontend"
@@ -478,7 +478,7 @@ async def test_the_terminal_serves_until_the_user_quits():
 
     ``run()`` would try to start a second event loop inside the session's own.
     """
-    app = await chat_app(quit_key="ctrl+g")
+    app = await chat_frontend(quit_key="ctrl+g")
     serving = asyncio.create_task(app.run_async(headless=True))
     await asyncio.sleep(0.2)
     assert not serving.done(), "still serving while the app is up"
@@ -510,7 +510,7 @@ def _bubbles(app):
 
 async def test_a_bubble_is_as_wide_as_its_widest_line():
     """Dynamic, not 90% of the window — and never past the maximum."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(100, 30)) as pilot:
         await app.say("oi")
         await app.say("palavra " * 40)
@@ -523,7 +523,7 @@ async def test_a_bubble_is_as_wide_as_its_widest_line():
 
 async def test_a_bubble_has_no_background_until_it_is_the_reply_target():
     """The fill is what selection means; nothing else in the log has one."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test() as pilot:
         await app.say("oi")
         await pilot.pause()
@@ -547,7 +547,7 @@ async def test_who_spoke_is_on_the_container_whichever_side_it_takes():
     the other side, in one place. What matters here is that every message
     carries one of the two classes the stylesheet aligns by.
     """
-    app = await chat_app(connectors=[_Outro()])
+    app = await chat_frontend(connectors=[_Outro()])
     async with app.run_test(size=(100, 30)) as pilot:
         outro = next(at for at, who in app.peers().items()
                      if getattr(who, "name", None) == "outro")
@@ -570,7 +570,7 @@ async def test_a_newline_key_opens_a_line_and_enter_sends_both(newline_key):
     Parametrized over the constant rather than over a list written out here, so
     a key added to it cannot arrive untested.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test() as pilot:
         await pilot.press("a")
         await pilot.press(newline_key)
@@ -589,7 +589,7 @@ async def test_a_space_before_enter_opens_a_line_and_is_consumed():
     Ending a line with a space and carrying on is what continuing already
     feels like, so the gesture is the intention rather than a code for it.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test() as pilot:
         await pilot.press("a", "space", "enter", "b")
         assert app.query_one("#input-line", CommandInput).text == "a\nb"
@@ -608,7 +608,7 @@ async def test_a_message_that_really_ends_in_the_escape_can_still_be_sent():
     message — and `submit` strips the text anyway, so with a space the whole
     question is invisible.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test() as pilot:
         await pilot.press("a", "space", "left", "enter")
         await pilot.pause()
@@ -617,7 +617,7 @@ async def test_a_message_that_really_ends_in_the_escape_can_still_be_sent():
 
 async def test_the_escape_is_configurable_and_can_be_turned_off():
     """A space suits a chat; a backslash suits somebody who types prose in one."""
-    app = await chat_app(newline_escape="\\")
+    app = await chat_frontend(newline_escape="\\")
     async with app.run_test() as pilot:
         await pilot.press("a", "space", "enter")
         await pilot.pause()
@@ -626,7 +626,7 @@ async def test_the_escape_is_configurable_and_can_be_turned_off():
         await pilot.press("b", "backslash", "enter", "c")
         assert app.query_one("#input-line", CommandInput).text == "b\nc"
 
-    off = await chat_app(newline_escape=None)
+    off = await chat_frontend(newline_escape=None)
     async with off.run_test() as pilot:
         await pilot.press("a", "space", "enter")
         await pilot.pause()
@@ -694,7 +694,7 @@ def test_at_least_one_newline_key_arrives_without_the_enhanced_protocol():
 
 async def test_the_input_grows_with_the_lines_up_to_its_maximum():
     """It starts one row tall and stops at input_max_height, borders included."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(100, 30)) as pilot:
         inp = app.query_one("#input-line", CommandInput)
         assert inp.outer_size.height == 3, "one row of text, plus its border"
@@ -710,7 +710,7 @@ async def test_the_input_grows_with_the_lines_up_to_its_maximum():
 
 async def test_up_moves_the_cursor_when_no_suggestion_is_open():
     """Up and Down belong to the popup only while it has something to move."""
-    app = await chat_app(commands=[_Eco()])
+    app = await chat_frontend(commands=[_Eco()])
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", CommandInput)
         inp.insert("um\ndois")
@@ -735,7 +735,7 @@ class _Segundo:
 
 async def test_each_peer_gets_its_own_header_colour():
     """The header carries who spoke and the message id, so it is what is tinted."""
-    app = await chat_app(connectors=[_Outro(), _Segundo()])
+    app = await chat_frontend(connectors=[_Outro(), _Segundo()])
     async with app.run_test(size=(100, 30)) as pilot:
         at = {getattr(who, "name", None): i for i, who in app.peers().items()}
         await app.say("eu")
@@ -781,7 +781,7 @@ async def test_the_scrollbar_wears_the_palette_too():
     the stylesheet parsed, and the default theme's blue still ran down the side
     of the chat. Only a render showed it.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(60, 14)) as pilot:
         for i in range(6):
             await app.say("mensagem %d, comprida o suficiente para encher a linha toda" % i)
@@ -806,7 +806,7 @@ async def test_the_scrollbar_is_one_cell_wide():
     fails on the default rather than merely on a field being unset — the
     `.scrollbar` rule that matched nothing once made exactly that mistake.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(60, 24)) as pilot:
         for i in range(30):
             await app.say("mensagem %d" % i)
@@ -819,7 +819,7 @@ async def test_the_scrollbar_is_one_cell_wide():
 
 async def test_the_scrollbar_width_is_a_style_field():
     """And a wider one is still reachable, for a terminal where one is too thin."""
-    app = await chat_app(style=replace(ChatStyle(), scrollbar_size=3))
+    app = await chat_frontend(style=replace(ChatStyle(), scrollbar_size=3))
     async with app.run_test(size=(60, 24)) as pilot:
         for i in range(30):
             await app.say("mensagem %d" % i)
@@ -862,7 +862,7 @@ async def test_the_track_is_the_chat_behind_it_until_you_reach_for_it():
     alone at rest, and the hover colour brings the track back under the
     pointer — so nothing is lost, it is only quiet.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(48, 14)) as pilot:
         _, bar, painted = await _scrollbar_column(app, pilot)
         style = ChatStyle()
@@ -883,7 +883,7 @@ async def test_a_transparent_track_follows_the_chat_background():
     would leave a strip behind the moment someone changed one of the two.
     """
     style = replace(ChatStyle(), chat_bg="#101010", screen_bg="#101010")
-    app = await chat_app(style=style)
+    app = await chat_frontend(style=style)
     async with app.run_test(size=(48, 14)) as pilot:
         _, _, painted = await _scrollbar_column(app, pilot)
         assert painted() == {"#101010"}
@@ -914,7 +914,7 @@ async def test_the_input_scrollbar_wears_the_same_palette_as_the_log():
     bars would pass.
     """
     style = ChatStyle()
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(44, 18)) as pilot:
         log, inp = await _both_bars_up(pilot, app)
 
@@ -935,7 +935,7 @@ async def test_both_scrollbars_line_up_against_the_edge():
     what puts them against the edge at the same time. Measured, not assumed:
     at 44 columns the last one is 43.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(44, 18)) as pilot:
         log, inp = await _both_bars_up(pilot, app)
 
@@ -947,7 +947,7 @@ async def test_both_scrollbars_line_up_against_the_edge():
 
 async def test_a_bubble_never_runs_past_the_window_or_under_the_scrollbar():
     """bubble_max_width is a cap, not a width: a narrow window wins over it."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(60, 14)) as pilot:
         for i in range(6):
             await app.say("mensagem %d, comprida o suficiente para encher a linha toda" % i)
@@ -971,7 +971,7 @@ async def test_a_bubble_never_runs_past_the_window_or_under_the_scrollbar():
 
 async def test_selecting_a_bubble_fills_it_and_nothing_else():
     """The fill is the whole of the selection; there is no second outline."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test() as pilot:
         await app.say("oi")
         await pilot.pause()
@@ -989,7 +989,7 @@ async def test_selecting_a_bubble_fills_it_and_nothing_else():
 
 async def test_the_header_is_above_the_bubble_and_outside_it():
     """It is a sibling of the bubble, not a child: the bubble holds only text."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("oi")
         await pilot.pause()
@@ -1005,7 +1005,7 @@ async def test_the_header_is_above_the_bubble_and_outside_it():
 
 async def test_the_bubble_border_is_the_headers_colour():
     """One colour per peer, not one for the name and another for the box."""
-    app = await chat_app(connectors=[_Outro()])
+    app = await chat_frontend(connectors=[_Outro()])
     async with app.run_test(size=(80, 24)) as pilot:
         at = {getattr(who, "name", None): i for i, who in app.peers().items()}
         await app.say("eu")
@@ -1028,7 +1028,7 @@ async def test_a_bubble_is_never_narrower_than_the_header_above_it():
     A two-word message would otherwise get a bubble far narrower than its own
     header, which reads as two things rather than one.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("oi")
         await app.say("uma mensagem bem mais comprida do que o seu cabeçalho, para variar")
@@ -1057,12 +1057,12 @@ async def test_a_quit_key_the_terminal_cannot_send_is_refused(combo, arrives):
     silent nothing `_validate_key` already existed to prevent.
     """
     with pytest.raises(ValueError, match=arrives):
-        await chat_app(quit_key=combo)
+        await chat_frontend(quit_key=combo)
 
 
 def test_the_swallowed_keys_are_read_from_textual_not_listed_here():
     """Derived, so it cannot drift from what Textual actually does."""
-    from chatinho.chat_app import _SWALLOWED, _swallowed_keys
+    from chatinho.frontends.chat import _SWALLOWED, _swallowed_keys
 
     assert _swallowed_keys() == _SWALLOWED
     assert _SWALLOWED["ctrl+h"] == "backspace"
@@ -1073,7 +1073,7 @@ def test_the_swallowed_keys_are_read_from_textual_not_listed_here():
 
 
 async def test_two_taps_copy_the_message():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("para copiar")
         await pilot.pause()
@@ -1092,7 +1092,7 @@ async def test_two_taps_copy_the_message():
 
 
 async def test_one_tap_still_selects_the_reply_target():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("para responder")
         await pilot.pause()
@@ -1132,7 +1132,7 @@ def _click_at(widget, screen_y, screen_x=None):
 
 async def test_a_press_that_travelled_down_is_not_a_tap():
     """A press that landed low and lifted high was a drag, not a tap."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("nem copiar nem responder")
         await pilot.pause()
@@ -1148,7 +1148,7 @@ async def test_a_press_that_travelled_down_is_not_a_tap():
 
 async def test_a_tap_that_barely_moves_is_still_a_tap():
     """A finger is never perfectly still; only a real travel is a scroll."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("ainda e um toque")
         await pilot.pause()
@@ -1211,7 +1211,7 @@ async def test_dragging_across_text_selects_it_and_the_log_holds_still():
     two gestures apart by device, because no mouse protocol reports one: what
     decides is whether the press landed on anything selectable.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
         log    = await _a_full_log(pilot, app)
         screen = app.screen
@@ -1236,7 +1236,7 @@ async def test_dragging_the_background_still_pans_the_log():
     be kept by asking which device sent it. It is kept by where it starts: the
     margin beside a bubble has no text in it.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
         log    = await _a_full_log(pilot, app)
         screen = app.screen
@@ -1270,7 +1270,7 @@ async def test_selecting_sideways_does_not_retarget_the_reply():
     silently moved the reply target. A press that travelled on either axis is
     a drag.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("uma mensagem com palavras que se seleccionam")
         await pilot.pause()
@@ -1299,7 +1299,7 @@ async def test_the_header_stays_inside_a_phone_width_terminal():
     it.
     """
     for width in (40, 50, 60):
-        app = await chat_app()
+        app = await chat_frontend()
         async with app.run_test(size=(width, 16)) as pilot:
             await app.say("uma mensagem bastante longa para encher a bolha toda")
             await pilot.pause()
@@ -1322,7 +1322,7 @@ async def test_selecting_one_character_is_not_a_tap_either():
     pointer dragged across text — which a travel threshold generous enough for
     a thumb will always let through.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 16)) as pilot:
         await app.say("uma mensagem com varias palavras")
         await pilot.pause()
@@ -1349,7 +1349,7 @@ async def test_selecting_one_character_is_not_a_tap_either():
 
 async def test_a_tap_that_selects_nothing_still_taps():
     """And the guard above must not eat the gesture it sits in front of."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 16)) as pilot:
         await app.say("uma mensagem com varias palavras")
         await pilot.pause()
@@ -1384,7 +1384,7 @@ async def test_the_input_is_ruled_off_above_and_below_with_open_sides():
     the content width is asserted and not only the border type — a `border:
     none` that forgot the rules would pass a type check on top and bottom.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(46, 14)) as pilot:
         await pilot.pause()
 
@@ -1411,7 +1411,7 @@ async def test_the_rules_brighten_while_the_input_has_focus():
     The two colours are asserted to differ first, or this passes on a palette
     that made them the same and the whole check would be vacuous.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(46, 14)) as pilot:
         await pilot.pause()
         style = ChatStyle()
@@ -1444,7 +1444,7 @@ async def test_the_input_rules_carry_no_hue_of_their_own():
 
 async def test_the_box_is_still_there_for_whoever_prefers_it():
     """Both shapes are real; `input_frame` is which one."""
-    app = await chat_app(style=replace(ChatStyle(), input_frame="box"))
+    app = await chat_frontend(style=replace(ChatStyle(), input_frame="box"))
     async with app.run_test(size=(46, 14)) as pilot:
         await pilot.pause()
 
@@ -1498,7 +1498,7 @@ async def test_a_message_typed_over_three_lines_is_three_lines_in_the_bubble():
     rows anyway, and the joined text looks exactly like the broken text — which
     is how the first attempt to reproduce this came back green.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(60, 20)) as pilot:
         await app.say("um\ndois\ntres")
         await pilot.pause()
@@ -1515,7 +1515,7 @@ async def test_the_enters_reach_the_bubble_from_the_keyboard():
     The input is where the report came from, so the test presses keys rather
     than calling `say` — nothing between the two is allowed to eat a newline.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(60, 20)) as pilot:
         await pilot.pause()
         for key in list("um") + ["space", "enter"] + list("dois") + ["ctrl+j"] + list("tres"):
@@ -1536,7 +1536,7 @@ async def test_the_enters_reach_the_bubble_from_the_keyboard():
 
 async def test_a_fenced_block_still_renders_as_code_in_a_bubble():
     """The rewrite must not reach inside a fence, where newlines were fine."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(60, 24)) as pilot:
         await app.say("antes\n\n```python\na = 1\nb = 2\n```\n\ndepois")
         await pilot.pause()
@@ -1553,7 +1553,7 @@ async def test_a_fenced_block_still_renders_as_code_in_a_bubble():
 
 async def test_the_header_names_the_peer_with_an_at_and_no_brackets():
     """`Other` told you nothing when two connectors were in the room."""
-    app = await chat_app(connectors=[_Outro()], commands=[_Eco()])
+    app = await chat_frontend(connectors=[_Outro()], commands=[_Eco()])
     async with app.run_test(size=(90, 24)) as pilot:
         at = {getattr(who, "name", None): i for i, who in app.peers().items()}
         await app.say("eu")
@@ -1576,14 +1576,14 @@ async def test_the_header_names_the_peer_with_an_at_and_no_brackets():
 
 async def test_a_peer_that_is_gone_is_named_by_its_number():
     """History outlives connectors: a backend reloads what a peer once said."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)):
         assert app._chat_log._name_of_peer(41) == "41", "still true, still distinct"
 
 
 async def test_the_terminal_can_be_named_something_you_would_call_yourself():
     """`@chat` is the class's own name; `@me` is what a person types."""
-    app = await chat_app(name="me")
+    app = await chat_frontend(name="me")
     async with app.run_test(size=(90, 24)) as pilot:
         await app.say("eu")
         await pilot.pause()
@@ -1593,7 +1593,7 @@ async def test_the_terminal_can_be_named_something_you_would_call_yourself():
 
 
 async def test_naming_the_terminal_is_optional_and_defaults_to_the_class():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         await app.say("eu")
         await pilot.pause()
@@ -1605,7 +1605,7 @@ async def test_naming_the_terminal_is_optional_and_defaults_to_the_class():
 async def test_a_blank_terminal_name_is_refused():
     """It is shown as `@name`: a blank one renders a lone `@`."""
     with pytest.raises(ValueError, match="blank"):
-        await chat_app(name="   ")
+        await chat_frontend(name="   ")
 
 
 def test_naming_an_instance_works_only_because_the_decorator_shadows_the_property():
@@ -1622,7 +1622,7 @@ def test_naming_an_instance_works_only_because_the_decorator_shadows_the_propert
     with pytest.raises(AttributeError):
         Plain().name = "me"
 
-    assert ChatApp.__dict__.get("name") == "chat", "the decorator wrote it onto the class"
+    assert ChatFrontend.__dict__.get("name") == "chat", "the decorator wrote it onto the class"
 
 
 # === What the bubble costs around its text ======================================
@@ -1630,7 +1630,7 @@ def test_naming_an_instance_works_only_because_the_decorator_shadows_the_propert
 
 async def test_the_bubble_clears_its_header_by_a_space():
     """Flush with the header reads as one block; a space apart reads as two."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         await app.say("oi")
         await pilot.pause()
@@ -1648,7 +1648,7 @@ async def test_a_line_measured_to_fit_does_not_wrap():
     Four cells the bubble's width never counted, so a line sized to fit wrapped
     anyway. The stylesheet zeroes it rather than the measurement adding four.
     """
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(100, 24)) as pilot:
         one_line = "abcdefghij " * 3 + "fim"
         await app.say(one_line)
@@ -1662,7 +1662,7 @@ async def test_a_line_measured_to_fit_does_not_wrap():
 
 async def test_there_is_one_blank_row_under_the_text_not_two():
     """The bubble pads by one; MarkdownParagraph added a second underneath."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         await app.say("oi")
         await pilot.pause()
@@ -1675,7 +1675,7 @@ async def test_there_is_one_blank_row_under_the_text_not_two():
 
 async def test_paragraphs_are_still_separated_from_each_other():
     """Only the *trailing* margin goes: `:last-child`, not every paragraph."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 40)) as pilot:
         await app.say("um\n\ndois\n\ntres")
         await pilot.pause()
@@ -1686,7 +1686,7 @@ async def test_paragraphs_are_still_separated_from_each_other():
 
 
 async def test_one_blank_row_separates_one_message_from_the_next():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 40)) as pilot:
         await app.say("primeira")
         await app.say("segunda")
@@ -1702,7 +1702,7 @@ async def test_one_blank_row_separates_one_message_from_the_next():
 
 async def test_the_copy_key_copies_the_selected_message():
     """A phone terminal may take the long press for its own menu."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         await app.say("para copiar")
         await pilot.pause()
@@ -1718,7 +1718,7 @@ async def test_the_copy_key_copies_the_selected_message():
 
 
 async def test_the_copy_key_says_what_to_do_when_nothing_is_selected():
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         await app.say("nada selecionado")
         await pilot.pause()
@@ -1736,7 +1736,7 @@ async def test_the_copy_key_says_what_to_do_when_nothing_is_selected():
 
 
 async def test_the_copy_key_can_be_moved_and_is_validated_like_the_quit_key():
-    app = await chat_app(copy_key="f8")
+    app = await chat_frontend(copy_key="f8")
     async with app.run_test(size=(90, 24)) as pilot:
         await app.say("noutra tecla")
         await pilot.pause()
@@ -1750,16 +1750,16 @@ async def test_the_copy_key_can_be_moved_and_is_validated_like_the_quit_key():
         assert copied == ["noutra tecla"]
 
     with pytest.raises(ValueError, match="backspace"):
-        await chat_app(copy_key="ctrl+h")
+        await chat_frontend(copy_key="ctrl+h")
 
 
 async def test_copying_takes_both_routes_and_names_them(monkeypatch):
     """OSC 52 goes out regardless; a helper runs too when the system has one."""
-    from chatinho import chat_clipboard
+    from chatinho.frontends.chat import clipboard
 
-    monkeypatch.setattr(chat_clipboard, "put", lambda text: "termux-clipboard-set")
+    monkeypatch.setattr(clipboard, "put", lambda text: "termux-clipboard-set")
 
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         await app.say("para copiar")
         await pilot.pause()
@@ -1783,11 +1783,11 @@ async def test_copying_takes_both_routes_and_names_them(monkeypatch):
 
 async def test_with_no_helper_the_notification_says_only_osc_52(monkeypatch):
     """Naming the route is what makes a silent failure diagnosable."""
-    from chatinho import chat_clipboard
+    from chatinho.frontends.chat import clipboard
 
-    monkeypatch.setattr(chat_clipboard, "put", lambda text: None)
+    monkeypatch.setattr(clipboard, "put", lambda text: None)
 
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
         await app.say("sem helper")
         await pilot.pause()
@@ -1808,7 +1808,7 @@ async def test_with_no_helper_the_notification_says_only_osc_52(monkeypatch):
 
 async def test_two_taps_far_apart_in_time_are_two_taps():
     """The pair has to be quick, or every second reply-select would copy."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
         await app.say("nem copiar")
         await pilot.pause()
@@ -1837,10 +1837,10 @@ async def test_the_confirmation_is_a_popup_that_actually_appears(monkeypatch):
     """
     from textual.widgets._toast import Toast
 
-    from chatinho import chat_clipboard
-    monkeypatch.setattr(chat_clipboard, "put", lambda text: "termux-clipboard-set")
+    from chatinho.frontends.chat import clipboard
+    monkeypatch.setattr(clipboard, "put", lambda text: "termux-clipboard-set")
 
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(80, 24), notifications=True) as pilot:
         await app.say("para copiar")
         await pilot.pause()
@@ -1880,7 +1880,7 @@ def test_the_double_tap_does_not_use_textuals_chain_count():
     """
     from textual.app import App
 
-    import chatinho.chat_log as log
+    import chatinho.frontends.chat.messages as log
 
     assert "chain" not in inspect.getsource(log._MessageContainer.on_click).replace(
         "``event.chain``", ""
@@ -1916,7 +1916,7 @@ def _header_text_span(container):
 
 async def test_the_chat_is_centred_and_capped_on_a_wide_terminal():
     """A line the width of a desk is a line nobody reads across."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(140, 20)) as pilot:
         await app.say("oi")
         await pilot.pause()
@@ -1929,7 +1929,7 @@ async def test_the_chat_is_centred_and_capped_on_a_wide_terminal():
 
 async def test_a_narrow_terminal_gives_the_chat_all_of_it():
     """The cap is a maximum, not a width: nothing is wasted on a phone."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(60, 20)) as pilot:
         await app.say("oi")
         await pilot.pause()
@@ -1940,7 +1940,7 @@ async def test_a_narrow_terminal_gives_the_chat_all_of_it():
 
 async def test_the_input_is_still_at_the_bottom_of_the_centred_body():
     """`dock: bottom` is relative to the parent, which is now a narrower one."""
-    app = await chat_app()
+    app = await chat_frontend()
     async with app.run_test(size=(140, 20)) as pilot:
         await app.say("oi")
         await pilot.pause()
@@ -1957,7 +1957,7 @@ async def test_the_input_is_still_at_the_bottom_of_the_centred_body():
 
 async def test_your_own_messages_are_on_the_right_by_default():
     """Everyone else stays left, so it reads as two columns."""
-    app = await chat_app(connectors=[_Outro()])
+    app = await chat_frontend(connectors=[_Outro()])
     async with app.run_test(size=(140, 20)) as pilot:
         at = {getattr(who, "name", None): i for i, who in app.peers().items()}
         await app.say("minha")
@@ -1979,7 +1979,7 @@ async def test_a_header_hugs_the_same_edge_its_bubble_does():
     from the message it names. The header takes the bubble's own span now, and
     the text inside it takes the same side.
     """
-    app = await chat_app(connectors=[_Outro()])
+    app = await chat_frontend(connectors=[_Outro()])
     async with app.run_test(size=(96, 24)) as pilot:
         at = {getattr(who, "name", None): i for i, who in app.peers().items()}
         await app.say("uma mensagem longa o suficiente para a bolha esticar bem para a esquerda")
@@ -2001,7 +2001,7 @@ async def test_a_header_hugs_the_same_edge_its_bubble_does():
 
 
 async def test_local_align_left_puts_everyone_in_one_column():
-    app = await chat_app(connectors=[_Outro()],
+    app = await chat_frontend(connectors=[_Outro()],
                          style=replace(ChatStyle(), local_align="left"))
     async with app.run_test(size=(140, 20)) as pilot:
         at = {getattr(who, "name", None): i for i, who in app.peers().items()}
@@ -2059,7 +2059,7 @@ def _record(app, monkeypatch) -> tuple:
 
 async def test_an_attachment_link_opens_where_the_backend_says(monkeypatch):
     keeper = _Keeper()
-    app = await chat_app(backend=keeper)
+    app = await chat_frontend(backend=keeper)
     opened, notices = _record(app, monkeypatch)
     async with app.run_test() as pilot:
         chart  = Attachment("revenue.html", "text/html", b"<p>up</p>")
@@ -2071,7 +2071,7 @@ async def test_an_attachment_link_opens_where_the_backend_says(monkeypatch):
 
 
 async def test_an_attachment_the_backend_does_not_have_is_not_found(monkeypatch):
-    app = await chat_app(backend=_Keeper())
+    app = await chat_frontend(backend=_Keeper())
     opened, notices = _record(app, monkeypatch)
     async with app.run_test() as pilot:
         msg_id = await app.say("See the [chart](revenue.html)")
@@ -2082,7 +2082,7 @@ async def test_an_attachment_the_backend_does_not_have_is_not_found(monkeypatch)
 
 
 async def test_without_a_backend_an_attachment_link_is_not_found(monkeypatch):
-    app = await chat_app()
+    app = await chat_frontend()
     opened, notices = _record(app, monkeypatch)
     async with app.run_test() as pilot:
         msg_id = await app.say("See the [chart](revenue.html)")
@@ -2094,7 +2094,7 @@ async def test_without_a_backend_an_attachment_link_is_not_found(monkeypatch):
 
 async def test_an_absolute_link_opens_without_asking_the_backend(monkeypatch):
     keeper = _Keeper()
-    app = await chat_app(backend=keeper)
+    app = await chat_frontend(backend=keeper)
     opened, notices = _record(app, monkeypatch)
     async with app.run_test() as pilot:
         msg_id = await app.say("see [this](https://example.com/page)")

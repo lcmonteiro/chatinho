@@ -3,11 +3,11 @@
 ``ChatSession`` routes messages between peers and imports no UI
 framework. The conversation is protected: nothing here calls the session.
 ``Terminal`` below declares the hooks it needs and is registered at ``LOCAL``,
-because the user is peer zero — exactly what ``ChatApp`` does, with the
+because the user is peer zero — exactly what ``ChatFrontend`` does, with the
 terminal taken out.
 
 Note that ``import chatinho`` still loads Textual today, because the package's
-``__init__`` eagerly imports the application. ``chatinho.chat_session`` itself
+``__init__`` eagerly imports the application. ``chatinho.session`` itself
 does not, and ``tests/test_architecture.py`` keeps it that way.
 
 Run it:            python examples/headless.py

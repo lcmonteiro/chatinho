@@ -3,9 +3,9 @@
 The conversation is protected: nothing calls ``session._say``. A peer
 declares the hooks it needs and the session hands the capabilities over at
 ``add_connector``. :class:`Driver` is the presentation with the terminal taken
-out — the same declarations ``ChatApp`` makes, ``@frontend`` included — so a
+out — the same declarations ``ChatFrontend`` makes, ``@frontend`` included — so a
 test drives a chat exactly the way the TUI does, through the same parameter
-``build_chat`` hands the terminal over by.
+``build_chat_session`` hands the terminal over by.
 """
 
 from typing import Any, List, Optional
@@ -30,7 +30,7 @@ from chatinho import (
     frontend,
     require,
 )
-from chatinho.chat_session import ChatSession
+from chatinho.session import ChatSession
 
 
 @frontend("driver")
@@ -84,7 +84,7 @@ async def driven(**kwargs) -> tuple:
     """Builds a started session with a :class:`Driver` at :data:`LOCAL`.
 
     Args:
-        **kwargs: Passed straight to :class:`~chatinho.chat_session.ChatSession`.
+        **kwargs: Passed straight to :class:`~chatinho.session.ChatSession`.
 
     Returns:
         tuple: The session and its driver.

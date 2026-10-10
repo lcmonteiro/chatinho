@@ -13,7 +13,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 | `ruff check src tests examples` | clean |
 | `mypy src/chatinho` | clean |
 
-Most of them run without mounting anything; only `test_chat_app.py` and
+Most of them run without mounting anything; only `test_chat_frontend.py` and
 `test_command_suggestions.py` need a Textual app. That ratio is the point of the layout below, not an accident of it.
 
 ---
@@ -29,7 +29,7 @@ giving `answer` to things that only execute; they are separate parameters becaus
 things:
 
 ```python
-build_chat(
+build_chat_session(
     connectors = [A2AConnector(url="…", api_key="…")],   # peers: id, queue, conversation
     commands   = [HelpCommand(), TestCommand()],         # not peers: they just run
     backend    = DatabaseBackend("sqlite:///chat.db"),   # a peer that listens
@@ -55,12 +55,12 @@ to is TOOL    → a command was run          (invoke)
 reply_to set  → it answers that message    (answer)
 ```
 
-**The presentation is peer zero, and says so itself.** `ChatApp` is `@frontend("chat")` — being
+**The presentation is peer zero, and says so itself.** `ChatFrontend` is `@frontend("chat")` — being
 the person is what it *is*, not a favour whoever attaches it does — and it declares the same hooks
 a connector does. There is no privileged path: a terminal reaches the conversation through exactly
-the doors a weather service does, and the session numbers everything else from one. `ChatApp` no
+the doors a weather service does, and the session numbers everything else from one. `ChatFrontend` no
 longer attaches itself, either: it takes no session in its constructor, and
-`chat_builder.build_chat` hands it over as the session's `frontend` the same way it would hand
+`builder.build_chat_session` hands it over as the session's `frontend` the same way it would hand
 over any other peer.
 
 **`@frontend(name)` is `@connector(name, id=LOCAL)`, and exists because writing that out is an
@@ -290,7 +290,7 @@ quitting the terminal is the end of it even when a server is still listening —
 cancelled. A session with nothing serving runs until it is interrupted, which is what a bot wants.
 Cancellation is not swallowed; `run()` turns the Ctrl-C case into a quiet exit itself.
 
-That is the inversion: the session drives, and the terminal is a peer it serves. `ChatApp.serve()` is
+That is the inversion: the session drives, and the terminal is a peer it serves. `ChatFrontend.serve()` is
 `await self.run_async()` — `run()` would try to start a second loop inside the session's own.
 
 Two costs, stated plainly:
@@ -309,30 +309,32 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  chat_app.py      ChatApp — Textual presentation only, no session of its own
-  chat_builder.py  build_chat — builds a ChatSession and ChatApp, wires the two
-  chat_session.py  ChatSession: run, peers, commands, queues, routing, context      (545)
-  chat_hooks.py    Hook, the ten constants,    @require, the grant protocols       (489)
-  chat_message.py  ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
+  builder.py       build_chat_session, build_mcp_session — a ChatSession with its frontend;
+                   imports both frontends, so it needs chatinho[tui,mcp]
+  session.py       ChatSession: run, peers, commands, queues, routing, context      (545)
+  hooks.py         Hook, the ten constants,    @require, the grant protocols       (489)
+  message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
                    Attachment, Reply (what peers attach; the backend keeps it)
-  chat_log.py      ChatLog widget: renders through the granted context reader
-  chat_input.py    CommandInput (a multi-line TextArea) + CommandSuggestions
-  chat_clipboard.py  OSC 52's second route: a clipboard helper, if the system has one
-  chat_style.py    ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
                    attachments
   connectors/      a2a.py, openai.py, mcp.py (McpConnector: asking a remote session over MCP)
                    — plain classes, no base; each imported on first use, behind its own extra
   frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
+    chat/          the terminal — the only package that imports Textual:
+      __init__.py  ChatFrontend — Textual presentation only, no session of its own
+      messages.py  ChatLog widget: renders through the granted context reader
+      composer.py  CommandInput (a multi-line TextArea) + CommandSuggestions
+      clipboard.py OSC 52's second route: a clipboard helper, if the system has one
+      style.py     ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   helpers/         mcp.py (what McpFrontend and McpConnector share: credentials key, names, attachments)
 docs/              SPEC.md — the fourteen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
                    agent_inbox.py (HTTP, inbound), mcp_server.py (served over MCP), mcp_client.py (a plain FastMCP client)
-tests/             test_chat_app.py, test_command_suggestions.py (mounted)
+tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
-                   test_require.py, test_architecture.py, test_a2a_payload.py,
+                   test_require.py, test_architecture.py, test_package_layout.py, test_a2a_payload.py,
                    test_clipboard.py, test_answer_details.py,
                    test_lending.py, test_mcp_*.py with mcp_kit.py (no terminal)
 ```
@@ -508,7 +510,7 @@ The rule touches prose and nothing else, and **a fence is safe because it has no
 — across headings, links, images, quotes, tables, fences and nested lists, `inline` is the only
 token markdown-it ever gives children to. A `token.type == "inline"` guard was written and then
 deleted: breaking it changed no test. `markdown-it-py` is named in the `tui` extra now, since
-`chat_log` imports it directly rather than leaning on textual to have brought it.
+`frontends/chat/messages.py` imports it directly rather than leaning on textual to have brought it.
 
 **The header names the peer**: `21:15 @meteo · 3f9a1c2`. The id after the dot is short, as git
 shortens a commit hash: a message id is a `MessageID`, not a string — `str()` gives `msg-` and 16
@@ -520,7 +522,7 @@ because a command is in no roster, and a peer that has since gone falls back to 
 outlives connectors, since a backend reloads what a peer once said. `You`/`Other` told you nothing
 once two connectors were in the room.
 
-The terminal's own name is `chat`, which is a poor thing to call yourself, so `build_chat(name=…)`
+The terminal's own name is `chat`, which is a poor thing to call yourself, so `build_chat_session(name=…)`
 overrides it — the demo is `@me`. **That assignment works only because `@connector` wrote `name`
 onto the class**: `DOMNode.name` is a read-only property, and the same line on a plain `App` raises
 `AttributeError`. The shadowing the fitness tests hunt for is load-bearing here, which is why
@@ -616,7 +618,7 @@ arriving, not the handling. `copy_key` (default `ctrl+y`, validated like `quit_k
 message selected as the reply target: tap, then press.
 
 **Copying takes two routes, because neither is enough alone.** Textual's own `copy_to_clipboard` is
-OSC 52, an escape sequence a terminal is free to drop — Termux drops it — so `chat_clipboard` also
+OSC 52, an escape sequence a terminal is free to drop — Termux drops it — so `frontends/chat/clipboard.py` also
 runs a **helper**: `termux-clipboard-set`, `wl-copy`, `xclip`, `xsel` or `pbcopy`, whichever the
 system has. Both run every time: over SSH a helper writes the *server's* clipboard, which nobody
 is looking at, and OSC 52 is what reaches the person at the keyboard. The helper is a subprocess,
@@ -624,11 +626,11 @@ so it runs in a worker rather than stopping the chat, and a failure is logged ra
 the other route has already been taken, and a clipboard is never worth interrupting a conversation
 for. The notification **names the routes that ran** (`Copied 3f9a1c2`, `Sent by OSC 52 + termux-clipboard-set.`)
 rather than claiming the text arrived; whether it did is the terminal's business, and saying which
-route was taken is what makes a silent failure diagnosable. `chat_clipboard` imports nothing but
+route was taken is what makes a silent failure diagnosable. The clipboard module imports nothing but
 the standard library, so it is tested without mounting anything.
 
 **Two of those tests run the helper for real**, with a working one put on `PATH`, because every
-other test in the file replaces `chat_clipboard.put` with a double. Those prove the callers do the
+other test in the file replaces `clipboard.put` with a double. Those prove the callers do the
 right thing and prove nothing about the thing itself — and the wiring from `copy_message` through a
 worker, an executor and `subprocess.run` is exactly where a copy can be connected wrongly and still
 pass a suite full of doubles. That gap was found while chasing a report of copying not working on a
@@ -707,7 +709,7 @@ from the bytes here and found in its docs afterwards; it ships no `ctrl+enter` a
 **The default is a space, not the backslash Claude Code uses.** Ending a line with a space and
 carrying on is what continuing already *feels* like: the gesture is the intention rather than a
 code for it, which is the whole difference between a shortcut you remember and one you don't.
-`build_chat(newline_escape=…)` takes any single character, or `None` to turn it off —
+`build_chat_session(newline_escape=…)` takes any single character, or `None` to turn it off —
 `validate_escape` refuses anything else, and refuses `"\n"` outright because the escape is looked
 for on the cursor's own line, which never holds a newline, so it could only ever be a silent
 nothing.
@@ -757,7 +759,7 @@ with no error at all, and the only symptom was the suite going from six seconds 
 Setting `self.title` or `self.value` is ordinary use, so properties are not flagged — only the
 silent case.
 
-The grants half was added after a third near-miss: `ChatApp` was granted `run`, which is Textual's
+The grants half was added after a third near-miss: `ChatFrontend` was granted `run`, which is Textual's
 own `App.run()` — the documented way to start the app. mypy caught it because the class annotates
 its grants; one that did not would have shipped it. The grant is called `invoke` now.
 
@@ -769,7 +771,7 @@ too. Six names live behind an extra and are resolved on first use with PEP 562 `
 
 | name | extra | brings |
 |---|---|---|
-| `build_chat` | `chatinho[tui]` | `textual` |
+| `build_chat_session` | `chatinho[tui]` | `textual` |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `A2AConnector` | `chatinho[a2a]` | `requests` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
@@ -790,23 +792,22 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 50 names: `build_chat`, `ChatSession`, `ChatMessage`, `MessageID`, `Attachment`,
-`Reply`, `ReplyStatus`, `Secret`, `ChatStyle`, `LOCAL`, `TOOL`; the declaring machinery (`connector`, `tool`,
-`frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`, `declared_id`, `name_of`, `Hook`);
-the fourteen `Hook*` constants; the grant protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`,
-`Commands`, `Locate`); and the batteries (`A2AConnector`, `OpenAIConnector`,
-`DatabaseBackend`, `McpFrontend`, `McpConnector`, `HelpCommand`, `TestCommand`).
+`__init__.py` exports 52 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`; the declaring machinery
+(`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
+`declared_id`, `name_of`, `Hook`); the fourteen `Hook*` constants; the grant protocols (`Say`, `Ask`,
+`Invoke`, `Context`, `Peers`, `Commands`, `Locate`); and the batteries (`A2AConnector`,
+`OpenAIConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`, `McpConnector`,
+`HelpCommand`, `TestCommand`).
 
-`ChatApp` is not exported, even though it no longer carries the underscore that used to say so:
-`build_chat` is the way to build one, in `chat_builder.py`, and the class itself lives in
-`chat_app.py` — a public module, reachable from it, with nothing enforcing that a caller goes
-through the factory instead. The underscore was dropped once the class stopped attaching itself in
-its own constructor: it takes no session, and `build_chat` hands it over as the session's
-`frontend` the same way it would hand over any other peer, so there is no
-longer anything privileged about instantiating it directly — only the missing `session` attribute
-a caller would then have to wire up by hand, which `build_chat` still does more conveniently.
+**Both frontends are public, and both have a builder.** `ChatFrontend` (in `chatinho.frontends.chat`)
+and `McpFrontend` (in `chatinho.frontends.mcp`) take no session: either can be passed to
+`ChatSession(frontend=...)` by hand, and `build_chat_session` / `build_mcp_session` in `builder.py`
+do exactly that, more conveniently. `builder.py` imports both frontends at the top, so the builders
+need both extras — `chatinho[tui,mcp]` — while each frontend needs only its own. The lazy table
+lists every `(extra, library)` pair a name needs, and a missing one names them all.
 
-`build_chat` returns a `ChatSession`, so a consumer's mypy sees the whole surface `ChatSession`
+`build_chat_session` returns a `ChatSession`, so a consumer's mypy sees the whole surface `ChatSession`
 promises — which is also why the `TYPE_CHECKING` block in `__init__.py` matters: without it the
 lazy `__getattr__` hands them `Any` instead.
 
@@ -895,7 +896,7 @@ Extracted from `lcmonteiro/mcking-codespace` at `python/chatinho`. **The monorep
 exists** and the two have diverged substantially; the monorepo also still has its own
 `.github/workflows/chatinho-tests.yml`.
 
-The UI half of the old `ChatApp` had been deleted in the monorepo by `dbcd6bc` and never re-added;
+The UI half of the old `ChatFrontend` had been deleted in the monorepo by `dbcd6bc` and never re-added;
 it was recovered from `7c61e3b`, the last fully green commit, and has since been rewritten twice —
 once to split Textual out of the use cases, and once to replace the vocabulary with the three verbs
 above. Little of the recovered code survives, but nothing was lost to get here.

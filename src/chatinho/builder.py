@@ -1,21 +1,27 @@
-"""Builds a chat: a session, and the terminal attached to it like any peer.
+"""Builds a session with its frontend attached like any peer.
 
-:func:`build_chat` is the public entry point for a chat with a terminal. It
-does what a caller would do by hand — build a :class:`~chatinho.chat_session.ChatSession`,
-build a :class:`~chatinho.chat_app.ChatApp`, and hand it over as the
-session's ``frontend`` — because the terminal is a normal peer now, one of the
-four roles a session takes, not something its own constructor wires up.
+Each builder does what a caller would do by hand — build a
+:class:`~chatinho.session.ChatSession`, build a frontend, and hand it over as
+the session's ``frontend`` — because a frontend is a normal peer, one of the
+four roles a session takes, not something the session's constructor wires up.
+
+- :func:`build_chat_session` attaches the terminal.
+- :func:`build_mcp_session` attaches an MCP server.
+
+This module imports both frontends, so it needs both extras: ``chatinho[tui,mcp]``.
+A caller with only one of them builds a ``ChatSession`` with that frontend by hand.
 """
 
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
-from .chat_app import ChatApp
-from .chat_input import NEWLINE_ESCAPE
-from .chat_session import ChatSession
-from .chat_style import ChatStyle
+from .frontends.chat import ChatFrontend
+from .frontends.chat.composer import NEWLINE_ESCAPE
+from .frontends.chat.style import ChatStyle
+from .frontends.mcp import McpFrontend
+from .session import ChatSession
 
 
-def build_chat(
+def build_chat_session(
     connectors      : Optional[List[Any]] = None,
     commands        : Optional[List[Any]] = None,
     backend         : Optional[Any] = None,
@@ -28,7 +34,7 @@ def build_chat(
     newline_escape  : Optional[str] = NEWLINE_ESCAPE,
     name            : Optional[str] = None,
 ) -> ChatSession:
-    """Builds a chat application from peers and a backend.
+    """Builds a chat with a terminal from peers and a backend.
 
     A **connector** is a peer: it has an id and a queue, and the conversation
     reaches it. A **command** is not: it has neither, and it runs only when
@@ -36,7 +42,7 @@ def build_chat(
     things.
 
     For a chat without a terminal — a script, a bot, a test — build a
-    :class:`~chatinho.chat_session.ChatSession` directly and attach your own
+    :class:`~chatinho.session.ChatSession` directly and attach your own
     presentation.
 
     Args:
@@ -46,7 +52,7 @@ def build_chat(
         title: Title of the chat application.
         welcome_message: Message displayed on mount; empty means none.
         max_displayed: How many messages are rendered at once (sliding window).
-        style: Colour scheme; defaults to :class:`~chatinho.chat_style.ChatStyle`.
+        style: Colour scheme; defaults to :class:`~chatinho.frontends.chat.style.ChatStyle`.
         newline_escape: Typed just before Enter, opens a line instead of
             sending, and is consumed doing it. A space by default — ending a
             line with one and carrying on is what continuing already feels
@@ -72,7 +78,7 @@ def build_chat(
     Raises:
         ValueError: ``quit_key`` is not a key Textual could receive.
     """
-    presentation = ChatApp(
+    presentation = ChatFrontend(
         title           = title,
         welcome_message = welcome_message,
         max_displayed   = max_displayed,
@@ -81,6 +87,55 @@ def build_chat(
         copy_key        = copy_key,
         newline_escape  = newline_escape,
         name            = name,
+    )
+    return ChatSession(
+        connectors = connectors,
+        commands   = commands,
+        frontend   = presentation,
+        backend    = backend,
+    )
+
+
+def build_mcp_session(
+    connectors  : Optional[List[Any]] = None,
+    commands    : Optional[List[Any]] = None,
+    backend     : Optional[Any] = None,
+    name        : str = "master",
+    *,
+    token       : str,
+    host        : str = "127.0.0.1",
+    port        : int = 8000,
+    credentials : Optional[Dict[str, str]] = None,
+) -> ChatSession:
+    """Builds a chat served over MCP from peers and a backend.
+
+    The same session :func:`build_chat_session` builds, with an
+    :class:`~chatinho.frontends.mcp.McpFrontend` as peer zero in place of the
+    terminal: MCP clients put the questions, and the peers answer them.
+
+    Args:
+        connectors: Links to agents or APIs; peers, numbered from one.
+        commands: Things a client runs with the ``invoke`` tool; not peers.
+        backend: Backend used by ``save_data``/``load_data``.
+        name: The frontend's name in the session, and the server's name.
+        token: The bearer token every request must carry.
+        host: Where the server listens.
+        port: The port it listens on.
+        credentials: Lent with every message to the peers that answer it.
+
+    Returns:
+        ChatSession: The session, with the MCP server as its ``frontend``.
+        Call ``run()`` on it: it serves until the frontend stops.
+
+    Raises:
+        ValueError: ``token`` is empty.
+    """
+    presentation = McpFrontend(
+        name,
+        token       = token,
+        host        = host,
+        port        = port,
+        credentials = credentials,
     )
     return ChatSession(
         connectors = connectors,

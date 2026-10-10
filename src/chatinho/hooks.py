@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
 
-from .chat_message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Secret
+from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Secret
 
 logger = logging.getLogger(__name__)
 
@@ -427,7 +427,7 @@ def tool(name: str, description: str = "") -> Callable[[type], type]:
 
 
 def frontend(name: str = "chat") -> Callable[[type], type]:
-    """Names the presentation, and pins it to :data:`~chatinho.chat_message.LOCAL`.
+    """Names the presentation, and pins it to :data:`~chatinho.message.LOCAL`.
 
     A frontend is the peer that **is** the person — a terminal, a stdin reader,
     an HTTP inbox — and being peer zero is what that *is*, not an id whoever
@@ -438,13 +438,13 @@ def frontend(name: str = "chat") -> Callable[[type], type]:
     repository alone.
 
     A chat has one, since :data:`LOCAL` is one id — a second frontend is
-    refused at :meth:`~chatinho.chat_session.ChatSession.add_connector` like
+    refused at :meth:`~chatinho.session.ChatSession.add_connector` like
     any id already taken.
 
     Args:
         name: What the presentation is called in the log, shown as ``@name``
             beside everything the user says. The default reads poorly in a
-            chat you are in, which is why ``build_chat(name="me")`` overrides
+            chat you are in, which is why ``build_chat_session(name="me")`` overrides
             it; a presentation that knows its own name declares it here.
 
     Returns:

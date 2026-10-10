@@ -1,28 +1,30 @@
-"""Textual presentation layer for a :class:`~chatinho.chat_session.ChatSession`.
+"""The terminal: a Textual frontend for a :class:`~chatinho.session.ChatSession`.
 
-The class here, :class:`ChatApp`, is built and attached to a session by
-:func:`~chatinho.chat_builder.build_chat`, the public entry point — it takes
-no session of its own, because it is a normal connector like any other, wired
-up by whoever builds the chat rather than by its own constructor.
+The class here, :class:`ChatFrontend`, is peer zero of a session. Either
+:func:`~chatinho.builder.build_chat_session` builds one and attaches it, or
+you pass one as the session's ``frontend`` yourself — it takes no session of
+its own, because it is a normal connector like any other, wired up by whoever
+builds the chat rather than by its own constructor.
 
 The presentation is a peer like any other. ``@frontend`` is what says so — it
-is ``@connector`` pinned to :data:`~chatinho.chat_message.LOCAL`, because the
+is ``@connector`` pinned to :data:`~chatinho.message.LOCAL`, because the
 user is peer zero by definition — and beyond that it declares the same hooks a
 connector does. There is no privileged path: a terminal reaches the
 conversation through exactly the doors a weather service does.
 
-This module is the *only* place that knows the chat is a terminal app. It owns
+This package is the *only* place that knows the chat is a terminal app. It owns
 the widget tree, the reply target (a click is a UI concept), thread marshalling
 and the welcome message.
 
-The parts live next door:
+Its parts live next to it:
 
-- :mod:`chatinho.chat_session` — the hub; imports no UI framework.
-- :mod:`chatinho.chat_message` — the message model and the history store.
-- :mod:`chatinho.chat_hooks`   — the hook constants, decorator and registry.
-- :mod:`chatinho.chat_log`     — the scrollable log widget and its bubbles.
-- :mod:`chatinho.chat_input`   — the input line and its autocomplete popup.
-- :mod:`chatinho.chat_builder` — :func:`build_chat`, which wires this to a session.
+- :mod:`.messages`  — the scrollable log widget and its bubbles.
+- :mod:`.composer`  — the input line and its autocomplete popup.
+- :mod:`.style`     — the colour scheme, rendered to CSS.
+- :mod:`.clipboard` — copying a message out of the terminal.
+
+and the core it talks to, which imports no UI framework, lives above it in
+:mod:`chatinho.session`, :mod:`chatinho.message` and :mod:`chatinho.hooks`.
 """
 
 import logging
@@ -36,38 +38,15 @@ from textual.keys import KEY_ALIASES, Keys
 from textual.containers import Container, Vertical
 from textual.widgets import TextArea
 
-from .chat_hooks import (
-    Ask,
-    HookAsk,
-    HookContext,
-    HookAnswer,
-    HookListen,
-    HookPeers,
-    HookCommands,
-    HookInvoke,
-    HookLocate,
-    HookSay,
-    Context,
-    Peers,
-    Commands,
-    Invoke,
-    Locate,
-    Say,
-    frontend,
-    name_of,
-    require,
-)
-from .chat_input import (
-    COMMAND_PREFIX,
-    NEWLINE_ESCAPE,
-    SUGGESTIONS_ID,
-    CommandInput,
-    CommandSuggestions,
-    validate_escape,
-)
-from .chat_log import ChatLog
-from .chat_message import LOCAL, ChatMessage, MessageID, Reply
-from .chat_style import ChatStyle
+from ...hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke
+from ...hooks import HookListen, HookLocate, HookPeers, HookSay
+from ...hooks import Ask, Commands, Context, Invoke, Locate, Peers, Say
+from ...hooks import frontend, name_of, require
+from ...message import LOCAL, ChatMessage, MessageID, Reply
+from .composer import COMMAND_PREFIX, NEWLINE_ESCAPE, SUGGESTIONS_ID
+from .composer import CommandInput, CommandSuggestions, validate_escape
+from .messages import ChatLog
+from .style import ChatStyle
 
 logger = logging.getLogger(__name__)
 
@@ -175,13 +154,13 @@ def _validate_key(key: str) -> str:
 @require(HookCommands)
 @require(HookInvoke)
 @require(HookLocate)
-class ChatApp(App):
+class ChatFrontend(App):
     """
-    Terminal presentation of a :class:`~chatinho.chat_session.ChatSession`.
+    Terminal presentation of a :class:`~chatinho.session.ChatSession`.
 
-    Build instances with :func:`~chatinho.chat_builder.build_chat` rather than
-    directly. It takes no session: it is a normal connector, and it is
-    :meth:`~chatinho.chat_session.ChatSession.add_connector` that grants it
+    Build one with :func:`~chatinho.builder.build_chat_session`, or pass one as
+    a session's ``frontend``. It takes no session: it is a normal connector, and it is
+    :meth:`~chatinho.session.ChatSession.add_connector` that grants it
     ``say``, ``ask``, ``context``, ``peers``, ``commands`` and ``invoke``, and
     subscribes ``listen`` and ``answer`` — the same as any other peer. A
     connector does not hold the session; whatever it needs of it is granted,
@@ -272,7 +251,7 @@ class ChatApp(App):
         """
         Moves the quit binding onto *quit_key*, and off whatever held it.
 
-        ``ChatApp`` declares no ``BINDINGS`` of its own: quit is inherited from
+        ``ChatFrontend`` declares no ``BINDINGS`` of its own: quit is inherited from
         ``App``, and Textual *merges* a subclass's bindings with its parent's
         rather than replacing them — so declaring a new one would leave
         ``ctrl+q`` quitting as well. The instance's own map is what has to

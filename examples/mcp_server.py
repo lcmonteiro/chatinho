@@ -19,8 +19,7 @@ Needs ``pip install 'chatinho[mcp]'``.
 import os
 import sys
 
-from chatinho import ChatSession, HookAnswer, Reply, connector, require
-from chatinho.frontends.mcp import McpFrontend
+from chatinho import HookAnswer, Reply, build_mcp_session, connector, require
 
 
 @connector("agent")
@@ -39,10 +38,9 @@ class Agent:
 
 def main() -> None:
     """Serves the session over HTTP on the port given, 8000 by default."""
-    port  = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-    front = McpFrontend(token=os.environ["CHATINHO_MCP_TOKEN"], port=port,
-                        credentials={"llm": "OpenAI-compatible API key"})
-    ChatSession(frontend=front, connectors=[Agent()]).run()
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    build_mcp_session(connectors=[Agent()], token=os.environ["CHATINHO_MCP_TOKEN"], port=port,
+                      credentials={"llm": "OpenAI-compatible API key"}).run()
 
 
 if __name__ == "__main__":
