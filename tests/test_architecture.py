@@ -25,6 +25,7 @@ CORE_MODULES = [
     "session.py",
     "message.py",
     "hooks.py",
+    "query.py",
 ]
 
 # The package that is allowed to know about Textual: the terminal frontend.

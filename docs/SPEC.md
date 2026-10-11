@@ -187,14 +187,24 @@ Both the invocation and the answer become messages — see [`HookExecute`](#hook
 
 ### HookContext
 
-> **grants** `context(*, since=None, start=None, limit=None) -> List[ChatMessage]`
+> **grants** `context(query=None, *, since=None, start=None, limit=None) -> List[ChatMessage]`
 
-The conversation so far, by time (`since`) or by index (`start`), at most `limit` of it.
+The conversation so far, by time (`since`) or by index (`start`), at most `limit` of it — and,
+with a `Query`, only the part you need:
 
 ```python
 for msg in self.context(limit=50):
     ...
+
+from chatinho import Query, SELF
+self.context(Query(peer=SELF, errors=False).last(20))   # what passed between me and anyone
+self.context(Query(thread=msg.id))                      # the reply chain of one message
 ```
+
+A `Query` (`peer`, `thread`, `errors`, `since`, `limit`, combined with AND) narrows first, then
+the keywords as before. `SELF` is whoever asks: the grant is bound to the asking peer, the way
+`say` is. A query is plain data, not a callable, so a backend can be handed the same value one day
+and answer it itself.
 
 One interface over **two tiers**: what was said this session, and what `start()` loaded back from
 the backend. Whoever asks never learns which tier a message came from.

@@ -27,6 +27,7 @@ from .hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, Hook
 from .hooks import declared_id, declares, hooks_of, name_of
 from .message import LOCAL, TOOL
 from .message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
+from .query import Query
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +239,7 @@ class ChatSession:
         grants = dict(
             say     = lambda: self._say_for(at),
             ask     = lambda: self._ask_for(at),
-            context = lambda: self._context,
+            context = lambda: self._context_for(at),
             invoke  = lambda: self._invoke_for(at),
             peers   = lambda: self._peers,
             commands= lambda: self._commands,
@@ -431,12 +432,26 @@ class ChatSession:
 
     # === History ====================================================================
 
+    def _context_for(self, at: int):
+        """The ``context`` grant for the peer at *at*, so :data:`SELF` means it."""
+        def context(
+            query : Optional[Query] = None,
+            *,
+            since : Optional[datetime] = None,
+            start : Optional[int] = None,
+            limit : Optional[int] = None,
+        ) -> List[ChatMessage]:
+            return self._context(query, since=since, start=start, limit=limit, asker=at)
+        return context
+
     def _context(
         self,
+        query : Optional[Query] = None,
         *,
         since : Optional[datetime] = None,
         start : Optional[int] = None,
         limit : Optional[int] = None,
+        asker : Optional[int] = None,
     ) -> List[ChatMessage]:
         """
         The conversation so far, by time or by index. Granted by ``HookContext``.
@@ -451,18 +466,24 @@ class ChatSession:
         it reach would make it a coroutine, and the terminal renders the log
         from inside a synchronous Textual paint.
 
-        The three narrow independently and are applied in order, so
-        ``load_messages(since=t, limit=20)`` is the last twenty since *t*.
+        A :class:`~chatinho.query.Query` narrows first; then the three
+        keywords narrow independently and are applied in order, so
+        ``context(since=t, limit=20)`` is the last twenty since *t*.
 
         Args:
+            query: Which messages, as data; :data:`~chatinho.query.SELF` in it
+                means *asker*.
             since: Keep only messages stamped at or after this moment.
             start: Index into what is left; drops everything before it.
             limit: Keep at most this many, counting back from the newest.
+            asker: The id of the peer asking, which :data:`SELF` resolves to.
 
         Returns:
             List[ChatMessage]: A new list, oldest first.
         """
         msgs = self._store.messages
+        if query is not None:
+            msgs = query.select(msgs, asker)
         if since is not None:
             msgs = [m for m in msgs if m.timestamp >= since]
         if start is not None:

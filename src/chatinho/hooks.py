@@ -38,6 +38,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
 
 from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Secret
+from .query import Query
 
 logger = logging.getLogger(__name__)
 
@@ -132,10 +133,14 @@ class Context(Protocol):
     One interface over two tiers. The recent turns live in the session; older
     ones live in the backend and are recalled into it at ``start()``. Whoever
     asks never learns which tier a message came from — that is the point.
+
+    A :class:`~chatinho.query.Query` says which part — a thread, what passed
+    with one peer, nothing that failed — and narrows before the keywords.
     """
 
     def __call__(
         self,
+        query : Optional[Query] = None,
         *,
         since : Optional[datetime] = None,
         start : Optional[int] = None,

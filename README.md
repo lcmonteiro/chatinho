@@ -91,6 +91,11 @@ is `chatinho.session`, `chatinho.message` and `chatinho.hooks`, and the terminal
 protocol and blocked the event loop; to put questions to another chatinho session, use
 `McpConnector`.
 
+**Changed in 0.1.x:** `OpenAIConnector.initialize()` no longer calls the API — a bad or missing key
+shows up as an `error` reply to the first question instead of stopping the chat — and `answer()`
+takes no per-call keyword arguments (`model`, `system_message`, `conversation_history`, …); set them
+on the constructor.
+
 **Requires Python ≥ 3.12.**
 
 ---
@@ -201,13 +206,22 @@ silently never fires.
 from chatinho import build_chat_session, OpenAIConnector, DatabaseBackend, HelpCommand
 
 build_chat_session(
-    connectors = [OpenAIConnector(name="gpt", api_key="***")],
+    connectors = [OpenAIConnector(name="gpt", api_key="***", system="You are concise.")],
     commands   = [HelpCommand()],
     backend    = DatabaseBackend("sqlite:///chat.db"),
 ).run()
 ```
 
 Needs `chatinho[all]`, or whichever extras those three names ask for.
+
+`OpenAIConnector` talks to any OpenAI-compatible endpoint — `base_url="http://localhost:11434/v1"`
+for Ollama, or Azure, OpenRouter, LM Studio — and never blocks the chat while the model thinks. It
+remembers what its `memory` query selects — by default `Query(peer=SELF, errors=False).last(20)`,
+what passed between it and anyone without the failed replies; `Query(errors=False)` for the whole
+room, `None` for nothing — its own replies as `assistant` turns and everyone else's as `user`
+turns, prefixed with the speaker's name when it is not you. A key lent on the message under `credential` (`llm` by default) wins over
+its own `api_key`, which is therefore optional; a failure comes back as an `error` reply naming the
+kind of failure, never the key.
 
 ### Across machines — `pip install 'chatinho[mcp]'`
 
