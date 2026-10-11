@@ -318,7 +318,9 @@ src/chatinho/
   commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
                    attachments
-  connectors/      openai.py, mcp.py (McpConnector: asking a remote session over MCP)
+  connectors/      openai.py (OpenAIConnector: AsyncOpenAI, any compatible base_url; HookContext for
+                   memory, HookPeers for who said what; a lent `llm` key wins over its own),
+                   mcp.py (McpConnector: asking a remote session over MCP)
                    — plain classes, no base; each imported on first use, behind its own extra
   frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
     chat/          the terminal — the only package that imports Textual:
