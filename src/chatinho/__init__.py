@@ -70,6 +70,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
 
 from .session import ChatSession
 from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
+from .query import SELF, Query
 from .hooks import connector, tool, frontend, backend, require
 from .hooks import hooks_of, options_of, declares, declared_id, name_of
 from .hooks import Hook, HookSay, HookAsk, HookAnswer, HookInvoke, HookExecute, HookContext
@@ -145,6 +146,8 @@ __all__ = [
     "Secret",
     "LOCAL",
     "TOOL",
+    "SELF",
+    "Query",
     # declaring
     "connector",
     "tool",

@@ -10,8 +10,13 @@ from ..hooks import HookAnswer, HookContext, HookPeers
 from ..hooks import Context, Peers
 from ..hooks import connector, name_of, require
 from ..message import LOCAL, ChatMessage, Reply, ReplyStatus
+from ..query import SELF, Query
 
 logger = logging.getLogger(__name__)
+
+#: What the model remembers by default: what passed between it and anyone,
+#: without the replies that failed, the last twenty.
+MEMORY = Query(peer=SELF, errors=False).last(20)
 
 
 @connector("openai")
@@ -21,9 +26,9 @@ logger = logging.getLogger(__name__)
 class OpenAIConnector:
     """Answers with an OpenAI-compatible chat model, remembering the conversation.
 
-    It waits for the model without blocking the chat, sends the model the
-    conversation so far, and answers with the key lent on the message when
-    there is one, else with its own.
+    It waits for the model without blocking the chat, sends the model the part
+    of the conversation its ``memory`` query selects, and answers with the key
+    lent on the message when there is one, else with its own.
 
     Args:
         name: Its name in the chat.
@@ -34,7 +39,9 @@ class OpenAIConnector:
         base_url: Any OpenAI-compatible endpoint (Azure, OpenRouter, Ollama, …);
             OpenAI itself when left out.
         system: The system prompt, sent first with every question.
-        history: How many earlier messages of the conversation to send; 0 for none.
+        memory: Which earlier messages to send, as a :class:`~chatinho.query.Query`
+            the session applies; None for none. By default what passed between
+            it and anyone, without errors, the last twenty.
         credential: The name of the lent credential to answer with.
     """
 
@@ -51,7 +58,7 @@ class OpenAIConnector:
         max_tokens  : Optional[int] = None,
         base_url    : Optional[str] = None,
         system      : Optional[str] = None,
-        history     : int = 20,
+        memory      : Optional[Query] = MEMORY,
         credential  : str = "llm",
     ) -> None:
         self.name        = name
@@ -61,7 +68,7 @@ class OpenAIConnector:
         self.max_tokens  = max_tokens
         self.base_url    = base_url
         self.system      = system
-        self.history     = history
+        self.memory      = memory
         self.credential  = credential
         #: The client for the configured key, built on first use.
         self._client : Optional[AsyncOpenAI] = None
@@ -96,16 +103,21 @@ class OpenAIConnector:
         return Reply(response.choices[0].message.content or "")
 
     def _messages_for(self, msg: ChatMessage) -> List[Dict[str, str]]:
-        """The system prompt, up to ``history`` earlier messages, then the question."""
+        """The system prompt, what ``memory`` selects, then the question."""
         messages: List[Dict[str, str]] = []
         if self.system:
             messages.append({"role": "system", "content": self.system})
-        if self.history > 0:
+        if self.memory is not None:
             roster = self.peers()
             me     = next((at for at, peer in roster.items() if peer is self), None)
-            earlier = [m for m in self.context(limit=self.history + 1)
-                       if m.id != msg.id and m.status != ReplyStatus.ERROR]
-            for m in earlier[-self.history:]:
+            limit  = self.memory.limit
+            # The question is in the conversation too; ask for one more so it
+            # does not eat into the limit, then leave it out.
+            query  = self.memory if limit is None else self.memory.last(limit + 1)
+            earlier = [m for m in self.context(query) if m.id != msg.id]
+            if limit is not None:
+                earlier = earlier[-limit:] if limit > 0 else []
+            for m in earlier:
                 messages.append(self._turn(m, me, roster))
         messages.append({"role": "user", "content": msg.text})
         return messages

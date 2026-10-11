@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how `OpenAIConnector` answers: through any OpenAI-compatible endpoint, without blocking the chat, remembering the conversation, and answering with the key lent on the message when there is one.
+Defines how `OpenAIConnector` answers: through any OpenAI-compatible endpoint, without blocking the chat, remembering the part of the conversation its memory query selects, and answering with the key lent on the message when there is one.
 
 ## ADDED Requirements
 
@@ -29,18 +29,22 @@ The connector SHALL accept a `base_url` for any OpenAI-compatible endpoint, a `m
 - **THEN** its requests go to that endpoint
 
 ### Requirement: The conversation is remembered
-The connector SHALL send the model up to `history` earlier messages of the conversation (default 20), oldest first, before the question. The connector's own earlier replies MUST be sent as `assistant` messages. Every other message MUST be sent as a `user` message. A message from a peer other than the user MUST be prefixed with that peer's name, as `name: text`. The question itself MUST be sent once, last. With `history=0`, only the question (after any system prompt) MUST be sent.
+The connector SHALL take a `memory` query (a `Query`, default `Query(peer=SELF, errors=False).last(20)`) and send the model the messages `context()` returns for it, oldest first, before the question. The default covers what passed between it and anyone, without error replies. The connector's own earlier replies MUST be sent as `assistant` messages. Every other message MUST be sent as a `user` message. A message from a peer other than the user MUST be prefixed with that peer's name, as `name: text`. The question itself MUST be sent once, last, and never counts against the query's limit. With `memory=None`, only the question (after any system prompt) MUST be sent.
 
 #### Scenario: A follow-up question
 - **WHEN** the user said "My name is Ana", the connector answered "Hi Ana", and the user now asks "What is my name?"
 - **THEN** the model receives `user: My name is Ana`, `assistant: Hi Ana`, `user: What is my name?`, in that order
 
 #### Scenario: Another peer in the room
-- **WHEN** a peer named `coder` said "def f(): pass" before the connector is asked to review it
+- **WHEN** a connector created with `memory=Query(errors=False)` is asked to review, after a peer named `coder` said "def f(): pass" to everyone
 - **THEN** the model receives that message as a `user` message reading `coder: def f(): pass`
 
+#### Scenario: Only its own exchanges by default
+- **WHEN** a connector with the default memory is asked something, after two other peers talked to each other
+- **THEN** their exchange is not sent to the model
+
 #### Scenario: No memory
-- **WHEN** a connector created with `history=0` is asked a question after a long conversation
+- **WHEN** a connector created with `memory=None` is asked a question after a long conversation
 - **THEN** the model receives only the question
 
 ### Requirement: A lent key wins over the configured one

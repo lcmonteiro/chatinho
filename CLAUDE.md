@@ -313,13 +313,15 @@ src/chatinho/
                    imports both frontends, so it needs chatinho[tui,mcp]
   session.py       ChatSession: run, peers, commands, queues, routing, context      (545)
   hooks.py         Hook, the ten constants,    @require, the grant protocols       (489)
+  query.py         Query (peer/thread/errors/since/limit) and SELF: which part of the conversation
+                   context() returns; plain data, so a backend could answer it one day
   message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
                    Attachment, Reply (what peers attach; the backend keeps it)
   commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
                    attachments
-  connectors/      openai.py (OpenAIConnector: AsyncOpenAI, any compatible base_url; HookContext for
-                   memory, HookPeers for who said what; a lent `llm` key wins over its own),
+  connectors/      openai.py (OpenAIConnector: AsyncOpenAI, any compatible base_url; its `memory` is a
+                   Query it hands to context(), HookPeers for who said what; a lent `llm` key wins),
                    mcp.py (McpConnector: asking a remote session over MCP)
                    — plain classes, no base; each imported on first use, behind its own extra
   frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
@@ -794,8 +796,8 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 51 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
-`MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`; the declaring machinery
+`__init__.py` exports 53 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
 (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
 `declared_id`, `name_of`, `Hook`); the fourteen `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`, `Commands`, `Locate`); and the batteries

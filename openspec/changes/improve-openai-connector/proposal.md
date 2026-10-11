@@ -17,9 +17,10 @@ The useful examples planned next (an assistant that remembers, two LLM roles in 
 - New constructor options:
   - `base_url`, for any OpenAI-compatible endpoint;
   - `system`, the system prompt for this peer;
-  - `history`, how many earlier messages of the conversation to send (default 20, 0 for none);
+  - `memory`, the `Query` that selects which part of the conversation to send (default: what passed between it and anyone, without errors, the last 20; `None` for none);
   - `credential`, the name of the lent credential to answer with (default `llm`).
-- The connector declares `HookContext` and `HookPeers`. It builds the model's messages from the conversation. Its own earlier replies become `assistant` turns. Everything else becomes `user` turns, prefixed with the speaker's name when the speaker is not the user.
+- **New `Query` for the conversation context.** The `context` grant accepts a `Query`, which is plain data. Its filters are `peer`, `thread`, `errors`, `since` and `limit`. `SELF` resolves to whoever asks. Today the session applies the query to what it holds. A backend can translate the same query later. Calls without a query behave exactly as before.
+- The connector declares `HookContext` and `HookPeers`. It asks `context(memory)` for the messages to send. Its own earlier replies become `assistant` turns. Everything else becomes `user` turns, prefixed with the speaker's name when the speaker is not the user.
 - **BREAKING** `api_key` becomes optional. A key lent on the message wins over the configured one. With neither, the answer is an `error` reply that says which key is missing.
 - **BREAKING** `initialize()` no longer calls the API. Configuration errors surface on the first question, as an error reply, instead of preventing the chat from starting.
 - **BREAKING** The undocumented per-call `**kwargs` of `answer` (`model`, `temperature`, `max_tokens`, `system_message`, `conversation_history`) are removed. The session never passed them, and the new constructor options cover them.
@@ -30,6 +31,7 @@ Not in scope: streaming partial replies, tool calls, sending attachments to the 
 ## Capabilities
 
 ### New Capabilities
+- `conversation-context`: `Query` and `SELF`, and how `context()` applies them.
 - `openai-connector`: how the OpenAI connector answers. It covers:
   - non-blocking calls;
   - endpoint, model and system prompt;
@@ -43,8 +45,13 @@ None. `credential-delegation` already allows a peer to use the credentials lent 
 
 ## Impact
 
-- **Code:** `src/chatinho/connectors/openai.py` is rewritten.
-- **Tests:** a new `tests/test_openai_connector.py`.
-- **Docs:** `README.md` (the batteries example and a short connector section), `CLAUDE.md` and `docs/SPEC.md` where they describe the connector.
+- **Code:**
+  - `src/chatinho/connectors/openai.py` is rewritten;
+  - a new core module `src/chatinho/query.py` holds `Query` and `SELF`;
+  - `session.py` binds the context grant to the asking peer and applies the query;
+  - `hooks.py` updates the `Context` protocol;
+  - `__init__.py` exports `Query` and `SELF`.
+- **Tests:** a new `tests/test_openai_connector.py` and a new `tests/test_context_query.py`. The core module list in `tests/test_architecture.py` gains `query.py`.
+- **Docs:** `README.md` (the batteries example and a short connector section), `CLAUDE.md`, and `docs/SPEC.md` (the `HookContext` section).
 - **Dependencies:** none new. `openai>=1.0.0` already provides `AsyncOpenAI`.
 - **Users:** `OpenAIConnector(name=..., api_key=...)` keeps working. Callers that relied on `initialize()` failing fast, or that passed per-call kwargs, must adapt.

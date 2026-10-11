@@ -1,16 +1,32 @@
 # Tasks
 
+## 0. Conversation context
+
+- [x] 0.1 Add `src/chatinho/query.py`:
+  - `SELF = -2`;
+  - a frozen `Query(peer, thread, errors, since, limit)` with `last(n)` and `select(messages, asker)`.
+
+  Export `Query` and `SELF` from `chatinho`, and add `query.py` to `CORE_MODULES` in `tests/test_architecture.py`. Verify that `python -c "from chatinho import Query, SELF"` works.
+- [x] 0.2 Make the `context` grant per peer (`_context_for(at)`), taking an optional `Query` before the existing keywords and applying it first. Update the `Context` protocol in `hooks.py` and the `HookContext` section of `docs/SPEC.md`. Verify that the existing context tests pass unchanged.
+- [x] 0.3 Add `tests/test_context_query.py`, covering:
+  - last twenty without errors;
+  - a thread (A, B, C and not D);
+  - `peer=SELF` resolving to the asker;
+  - a reply to a peer counting for that peer;
+  - `since`;
+  - unchanged behaviour without a query.
+
 ## 1. Connector
 
 - [x] 1.1 Rewrite `src/chatinho/connectors/openai.py`:
-  - the constructor is `OpenAIConnector(name, api_key=None, *, model, temperature, max_tokens, base_url, system, history=20, credential="llm")`;
+  - the constructor is `OpenAIConnector(name, api_key=None, *, model, temperature, max_tokens, base_url, system, memory=Query(peer=SELF, errors=False).last(20), credential="llm")`;
   - `@require(HookAnswer)`, `@require(HookContext)` and `@require(HookPeers)`, with the grants annotated (`context: Context`, `peers: Peers`);
   - no `initialize()`, no `**kwargs`, no `self.config`.
 
   Verify that `python -c "from chatinho import OpenAIConnector; OpenAIConnector(name='gpt')"` makes no network call.
 - [x] 1.2 Build the messages in a helper:
   - the optional `system` prompt first;
-  - then up to `history` earlier messages from `context()`, without the message being answered and without `error` replies, mapped to `assistant` (own id, found via `peers()`), `user` (LOCAL) or `user` with a `name: text` prefix (other peers);
+  - then the messages `context(memory)` returns (with the limit raised by one), without the message being answered, mapped to `assistant` (own id, found via `peers()`), `user` (LOCAL) or `user` with a `name: text` prefix (other peers);
   - then the question last.
 
   Verify with the unit tests in 2.2.
@@ -24,7 +40,8 @@
   - the system prompt comes first;
   - the follow-up scenario gives `user`, `assistant`, `user` in order;
   - another peer is prefixed with its name;
-  - `history=0` sends only the question;
+  - `memory=None` sends only the question;
+  - by default, other peers' exchanges are left out;
   - the question appears exactly once;
   - error replies are left out.
 - [x] 2.3 Keys:
@@ -37,7 +54,7 @@
 
 - [x] 3.1 Update `README.md`:
   - the batteries example shows `system=`;
-  - a short "OpenAIConnector" paragraph covers `base_url` (compatible endpoints), `history` and `credential`;
+  - a short "OpenAIConnector" paragraph covers `base_url` (compatible endpoints), `memory` (with `Query`) and `credential`;
   - the BREAKING notes cover `initialize()` and the removed per-call kwargs.
 
   Update `CLAUDE.md` to describe the connector's hooks and options. Verify that `grep -n "conversation_history\|system_message" README.md CLAUDE.md src` returns only the README's BREAKING note.

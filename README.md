@@ -216,9 +216,10 @@ Needs `chatinho[all]`, or whichever extras those three names ask for.
 
 `OpenAIConnector` talks to any OpenAI-compatible endpoint — `base_url="http://localhost:11434/v1"`
 for Ollama, or Azure, OpenRouter, LM Studio — and never blocks the chat while the model thinks. It
-remembers the conversation: the last `history` messages (20 by default, 0 for none) go to the model,
-its own replies as `assistant` turns and everyone else's as `user` turns, prefixed with the speaker's
-name when it is not you. A key lent on the message under `credential` (`llm` by default) wins over
+remembers what its `memory` query selects — by default `Query(peer=SELF, errors=False).last(20)`,
+what passed between it and anyone without the failed replies; `Query(errors=False)` for the whole
+room, `None` for nothing — its own replies as `assistant` turns and everyone else's as `user`
+turns, prefixed with the speaker's name when it is not you. A key lent on the message under `credential` (`llm` by default) wins over
 its own `api_key`, which is therefore optional; a failure comes back as an `error` reply naming the
 kind of failure, never the key.
 

@@ -11,7 +11,8 @@ from typing import Any, Dict, List, Optional
 import openai
 import pytest
 
-from chatinho import ChatMessage, HookListen, HookSay, ReplyStatus, Say, Secret, connector, require
+from chatinho import SELF, ChatMessage, HookListen, HookSay, Query, ReplyStatus, Say, Secret
+from chatinho import connector, require
 from chatinho.connectors import openai as module
 from chatinho.connectors.openai import OpenAIConnector
 
@@ -175,20 +176,40 @@ async def test_a_follow_up_question():
         await session.close()
 
 
+def room(reviewer: OpenAIConnector, coder: Coder) -> list:
+    """Two answering peers, so a say to everyone stays a broadcast."""
+    return [reviewer, OpenAIConnector(name="other", api_key="k"), coder]
+
+
 async def test_another_peer_is_named():
-    coder = Coder()
-    session, view = await driven(connectors=[OpenAIConnector(name="reviewer", api_key="k"), coder])
+    coder    = Coder()
+    reviewer = OpenAIConnector(name="reviewer", api_key="k", memory=Query(errors=False))
+    session, view = await driven(connectors=room(reviewer, coder))
     try:
-        await coder.say("def f(): pass", to=None)
+        await coder.say("def f(): pass")
         await reply_to(view, await view.say("review it", to=view.id_of("reviewer")))
-        assert {"role": "user", "content": "coder: def f(): pass"} in sent()
-        assert sent()[-1] == {"role": "user", "content": "review it"}
+        assert sent() == [
+            {"role": "user", "content": "coder: def f(): pass"},
+            {"role": "user", "content": "review it"},
+        ]
+    finally:
+        await session.close()
+
+
+async def test_only_its_own_exchanges_by_default():
+    coder    = Coder()
+    reviewer = OpenAIConnector(name="reviewer", api_key="k")
+    session, view = await driven(connectors=room(reviewer, coder))
+    try:
+        await coder.say("def f(): pass")
+        await reply_to(view, await view.say("review it", to=view.id_of("reviewer")))
+        assert sent() == [{"role": "user", "content": "review it"}]
     finally:
         await session.close()
 
 
 async def test_no_memory():
-    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key="k", history=0)])
+    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key="k", memory=None)])
     try:
         await reply_to(view, await view.say("one"))
         await reply_to(view, await view.say("two"))
@@ -197,8 +218,9 @@ async def test_no_memory():
         await session.close()
 
 
-async def test_history_is_bounded_and_skips_errors():
-    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key="k", history=2)])
+async def test_memory_is_bounded_and_skips_errors():
+    gpt = OpenAIConnector(name="gpt", api_key="k", memory=Query(peer=SELF, errors=False).last(2))
+    session, view = await driven(connectors=[gpt])
     try:
         FakeOpenAI.error = failure("APIConnectionError")
         await reply_to(view, await view.say("first"))
