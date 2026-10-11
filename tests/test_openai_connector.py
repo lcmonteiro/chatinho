@@ -270,6 +270,19 @@ async def test_starting_without_a_key_makes_no_request():
         await session.close()
 
 
+async def test_a_lent_key_never_reaches_the_reply_or_the_logs(caplog):
+    FakeOpenAI.error = failure("AuthenticationError", "bad key sk-lent")
+    session, view = await driven(connectors=[OpenAIConnector(name="gpt")])
+    try:
+        with caplog.at_level(logging.DEBUG):
+            reply = await reply_to(view, await view.say("hello", credentials={"llm": Secret("sk-lent")}))
+        assert reply.status == ReplyStatus.ERROR
+        assert "sk-lent" not in reply.text
+        assert "sk-lent" not in caplog.text
+    finally:
+        await session.close()
+
+
 async def test_the_endpoint_refuses(caplog):
     FakeOpenAI.error = failure("AuthenticationError", "bad key sk-secret")
     session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key="sk-secret")])

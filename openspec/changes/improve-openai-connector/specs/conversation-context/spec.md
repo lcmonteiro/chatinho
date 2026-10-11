@@ -25,11 +25,15 @@ chatinho SHALL provide `Query`, an immutable value with these fields, all option
 - **THEN** `context(Query(thread=C.id))` returns A, B and C, and not D
 
 ### Requirement: SELF is whoever asks
-`SELF` SHALL be a peer value that `context()` resolves to the id of the peer asking, so a peer can write a query before it knows its own id.
+`SELF` SHALL be a peer value that `context()` resolves to the id of the peer asking, so a peer can write a query before it knows its own id. Applying a query that names `SELF` with nobody asking MUST raise `ValueError`, rather than silently match nothing.
 
 #### Scenario: What passed between me and anyone
 - **WHEN** the connector at id 2 asks `context(Query(peer=SELF))`, after the user asked it one question it answered and asked peer 3 another
 - **THEN** it gets its own question and answer, and not the exchange with peer 3
+
+#### Scenario: Nobody asking
+- **WHEN** `Query(peer=SELF)` is applied without saying who asks
+- **THEN** it raises `ValueError`
 
 ### Requirement: context() takes a Query
 The `context` grant SHALL accept an optional `Query` as its first argument. It MUST apply the query's filters before `since`, `start` and `limit` given as keywords. Called with no query, it MUST behave exactly as before.

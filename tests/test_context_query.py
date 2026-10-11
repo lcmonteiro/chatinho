@@ -5,6 +5,8 @@ See openspec/specs/conversation-context.
 
 from datetime import datetime, timedelta
 
+import pytest
+
 from chatinho import LOCAL, SELF, ChatMessage, MessageID, Query, ReplyStatus
 
 
@@ -50,6 +52,11 @@ def test_self_is_whoever_asks():
     mine  = [msg(1, frm=LOCAL, to=2), msg(2, frm=2, reply_to=1)]
     other = [msg(3, frm=LOCAL, to=3), msg(4, frm=3, reply_to=3)]
     assert texts(Query(peer=SELF).select(mine + other, asker=2)) == ["m1", "m2"]
+
+
+def test_self_with_nobody_asking_is_refused():
+    with pytest.raises(ValueError):
+        Query(peer=SELF).select([msg(1)])
 
 
 def test_since():

@@ -41,7 +41,13 @@ class Query:
         return replace(self, limit=n)
 
     def select(self, messages: Iterable[ChatMessage], asker: Optional[int] = None) -> List[ChatMessage]:
-        """Applies the query to *messages*, oldest first, as asked by *asker*."""
+        """Applies the query to *messages*, oldest first, as asked by *asker*.
+
+        Raises:
+            ValueError: The query names :data:`SELF` and nobody is asking.
+        """
+        if self.peer == SELF and asker is None:
+            raise ValueError("Query(peer=SELF) needs to know who is asking")
         msgs = list(messages)
         if not self.errors:
             msgs = [m for m in msgs if m.status != ReplyStatus.ERROR]
