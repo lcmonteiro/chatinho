@@ -164,7 +164,7 @@ async def main():
 asyncio.run(main())
 ```
 
-[`examples/headless.py`](examples/headless.py) is a complete stdin/stdout chat in about forty lines.
+[`examples/hooks.py`](examples/hooks.py) is a complete chat with no terminal, one peer for each hook.
 
 ### With the terminal — `pip install 'chatinho[tui]'`
 
@@ -345,12 +345,16 @@ content: an HTML attachment runs its scripts when your browser opens it.
 
 | | |
 |---|---|
-| [`examples/hooks.py`](examples/hooks.py) | **start here** — one peer for each of the eleven conversation hooks, no terminal |
-| [`examples/demo.py`](examples/demo.py) | the full TUI: Markdown, code blocks, autocomplete, replies |
-| [`examples/headless.py`](examples/headless.py) | the same chat wired to stdin/stdout |
-| [`examples/agent_inbox.py`](examples/agent_inbox.py) | inbound: an agent asks over HTTP, you answer |
-| [`examples/mcp_server.py`](examples/mcp_server.py) | a chat with no terminal, served over MCP for another session to ask |
-| [`examples/mcp_client.py`](examples/mcp_client.py) | a plain FastMCP client calling that server's `peers` and `ask` |
+| [`examples/assistant.py`](examples/assistant.py) | **start here** — a terminal assistant on any OpenAI-compatible model, remembering across runs |
+| [`examples/team.py`](examples/team.py) | a coder and a reviewer in one room; `@coder` writes, `@reviewer` critiques what it wrote |
+| [`examples/files.py`](examples/files.py) | `/read <path> [question]`: ask the model about a local text file |
+| [`examples/lab_server.py`](examples/lab_server.py) | a model served over MCP with no key of its own |
+| [`examples/lab_client.py`](examples/lab_client.py) | a chat asking that lab, lending it your key |
+| [`examples/lab_fastmcp_client.py`](examples/lab_fastmcp_client.py) | a plain FastMCP client asking the lab |
+| [`examples/inbox.py`](examples/inbox.py) | `POST /ask` from a script blocks until you answer in the chat |
+| [`examples/hooks.py`](examples/hooks.py) | one peer for each of the fourteen hooks, no terminal and no key |
+
+The LLM demos need `OPENAI_API_KEY`; see [`examples/README.md`](examples/README.md).
 
 ---
 
@@ -358,7 +362,7 @@ content: an HTML attachment runs its scripts when your browser opens it.
 
 ```bash
 ./setup.sh    # installs uv if missing, creates .venv, uv sync
-./run.sh      # runs examples/demo.py
+./run.sh      # runs examples/assistant.py (needs OPENAI_API_KEY)
 ```
 
 The three checks CI runs, from the repo root:

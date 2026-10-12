@@ -529,7 +529,7 @@ Stated rather than hidden, because each one is a real trade:
 | | |
 |---|---|
 | `examples/hooks.py` | this document, executable — one peer per hook |
-| `examples/demo.py` | the full TUI, built with `build_chat_session` |
-| `examples/headless.py` | the same chat with no terminal, in about forty lines |
-| `examples/agent_inbox.py` | the inbound direction: an agent asks over HTTP, you answer |
+| `examples/assistant.py` | a terminal assistant, built with `build_chat_session` |
+| `examples/inbox.py` | the inbound direction: a script asks over HTTP and waits for your answer |
+| `examples/README.md` | every demo, and what it needs to run |
 | `CLAUDE.md` | why the design is this shape, and what it was before |

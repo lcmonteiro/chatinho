@@ -9,7 +9,7 @@ What the library now offers that the demos build on:
 - `OpenAIConnector`: async, `base_url`, `system`, `memory=Query`, and the lent `llm` key;
 - `DatabaseBackend`, which keeps and recalls the conversation;
 - `McpConnector(delegate=...)`;
-- `@tool` commands, which may declare grants such as `HookAsk` and `HookPeers`.
+- `@tool` commands, which may declare grants such as `HookSay` and `HookPeers`.
 
 See proposal.md for the motivation and the list of demos.
 
@@ -43,11 +43,13 @@ The roster is `OpenAIConnector(name="coder", system=...)` and `OpenAIConnector(n
 With two answering peers, the lone-answerer rule does not apply, so the user writes `@coder ...` or `@reviewer ...` (the terminal's `@name` asks that peer). The reviewer's memory is the whole room, so it sees the coder's answer. The coder's memory is the default (its own exchanges). The welcome message says how to address them.
 
 ### `files.py`: a command that asks the LLM
-`@tool("read", "Ask the assistant about a local text file")` declares `HookExecute`, `HookAsk` and `HookPeers`. For `/read <path> [question]`, it:
+`@tool("read", "Ask the assistant about a local text file")` declares `HookExecute`, `HookSay` and `HookPeers`. For `/read <path> [question]`, it:
 1. resolves `path` relative to the current directory;
 2. refuses anything that is not a regular file, or that is larger than 64 KB, or that is not UTF-8, by returning an error `Reply`;
 3. finds the `assistant` peer by name in `peers()`;
-4. asks it the question, followed by the file in a fenced block, and returns the answer.
+4. addresses the question, followed by the file in a fenced block, to it with `say(..., to=assistant)`, and returns nothing.
+
+It says rather than asks. The terminal awaits a command, so an `ask` would freeze the input while the model thinks. An addressed say does not wait, and the assistant's answer arrives as a reply in the log. Returning that answer as well would post it twice.
 
 The file never leaves the machine except to the configured endpoint. That is the point of the demo, and the README says so.
 

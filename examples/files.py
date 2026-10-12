@@ -1,0 +1,101 @@
+"""Ask a model about a file on your disk: ``/read notes.md what are the open questions?``.
+
+The assistant from ``assistant.py``, plus a ``/read`` command. The command reads
+a local text file, checks it is small UTF-8 text, and addresses the question and
+the file's content to the assistant; its answer arrives as a reply in the chat,
+and follow-up questions keep the file in its memory.
+
+The file is sent to the endpoint you configured, and nowhere else. Only read
+files you are willing to send there.
+
+Run it::
+
+    export OPENAI_API_KEY=sk-...         # any OpenAI-compatible key
+    python examples/files.py
+
+``OPENAI_BASE_URL`` and ``CHATINHO_MODEL`` work as in ``assistant.py``.
+
+Needs ``pip install 'chatinho[all]'``.
+"""
+
+import os
+import pathlib
+from typing import Optional
+
+from chatinho import LOCAL, HelpCommand, HookExecute, HookPeers, HookSay, OpenAIConnector
+from chatinho import Peers, Reply, ReplyStatus, Say, build_chat_session, name_of, require, tool
+
+SYSTEM   = "You answer questions about the file the user shares, quoting it when useful."
+WELCOME  = ("/read <path> [question] sends a local text file (up to 64 KB) and your question to "
+            "the assistant — and so to the configured endpoint. Then just keep asking.")
+LIMIT    = 64 * 1024
+QUESTION = "Summarise this file."
+
+
+def config() -> dict:
+    """The model settings, from the environment; exits with a hint when there is no key."""
+    key = os.environ.get("OPENAI_API_KEY")
+    if not key:
+        raise SystemExit("set OPENAI_API_KEY (any OpenAI-compatible key); see examples/README.md")
+    return dict(api_key=key, base_url=os.environ.get("OPENAI_BASE_URL") or None,
+                model=os.environ.get("CHATINHO_MODEL", "gpt-4o-mini"))
+
+
+def refused(text: str) -> Reply:
+    return Reply("read: %s" % text, status=ReplyStatus.ERROR)
+
+
+@tool("read", "Ask the assistant about a local text file: /read <path> [question]")
+@require(HookExecute)
+@require(HookSay)
+@require(HookPeers)
+class ReadCommand:
+    """Reads a file and addresses it, with the question, to the assistant.
+
+    It says rather than asks: an addressed say does not wait, so the terminal
+    stays free while the model thinks, and the answer comes back as a reply.
+    Nothing is returned on success — the assistant's answer is the result.
+    """
+
+    say   : Say
+    peers : Peers
+
+    async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> Optional[Reply]:
+        del by, kwargs
+        where, _, question = args.strip().partition(" ")
+        if not where:
+            return refused("usage: /read <path> [question]")
+        path = pathlib.Path(where).expanduser()
+        if not path.is_file():
+            return refused("%s is not a file" % where)
+        if path.stat().st_size > LIMIT:
+            return refused("%s is larger than 64 KB" % where)
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            return refused("%s is not UTF-8 text" % where)
+        assistant = next((at for at, who in self.peers().items() if name_of(who) == "assistant"), None)
+        if assistant is None:
+            return refused("there is no assistant in this chat")
+        fence = "````" if "```" in text else "```"
+        await self.say("%s\n\nFile: %s\n%s\n%s\n%s" % (
+            question.strip() or QUESTION, path.name, fence, text, fence), to=assistant)
+        return None
+
+
+def parts() -> dict:
+    """The assistant, /read and /help."""
+    return dict(
+        connectors = [OpenAIConnector(name="assistant", system=SYSTEM, **config())],
+        commands   = [ReadCommand(), HelpCommand()],
+        backend    = None,
+    )
+
+
+def main() -> None:
+    """Opens the chat in the terminal."""
+    build_chat_session(**parts(), title="Files", welcome_message=WELCOME, name="me").run()
+
+
+if __name__ == "__main__":
+    main()

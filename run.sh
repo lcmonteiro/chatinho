@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run.sh — Run the chatinho demo app
+# run.sh — Run the chatinho assistant demo (needs OPENAI_API_KEY)
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -9,4 +9,4 @@ if [ ! -d "$DIR/.venv" ]; then
     bash "$DIR/setup.sh"
 fi
 
-exec "$DIR/.venv/bin/python" "$DIR/examples/demo.py" "$@"
+exec "$DIR/.venv/bin/python" "$DIR/examples/assistant.py" "$@"

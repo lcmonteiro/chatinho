@@ -1,37 +1,49 @@
 # Examples
 
-Ready-to-run demos for the chatinho library. Each file is a small,
-self-contained app that shows one way of using the library.
+Small, useful demos, one file each, that you can copy and adapt. Every one is
+executed by CI against a stubbed model (`tests/test_examples.py`), so none of them
+drifts from the library.
 
-## Running
-
-From the project root:
+## Setup
 
 ```bash
-bash run.sh                             # runs examples/demo.py
-python examples/demo.py                 # or directly
-python examples/headless.py             # the same chat, no TUI
-python examples/agent_inbox.py          # an agent asks, you answer
-python examples/hooks.py                # the eleven hooks, one example each
-printf '/help\nola\n' | python examples/headless.py   # or scripted
+pip install 'chatinho[all]'           # or ./setup.sh from the repo root
+export OPENAI_API_KEY=sk-...          # any OpenAI-compatible key
 ```
 
-## Available demos
+| Variable | Used by | Meaning |
+|---|---|---|
+| `OPENAI_API_KEY` | `assistant`, `team`, `files`, `lab_client`, `lab_fastmcp_client` | The key; the demos exit with a hint when it is missing. It is read from the environment only, never written anywhere. |
+| `OPENAI_BASE_URL` | the LLM demos and `lab_server` | Another OpenAI-compatible endpoint: Ollama (`http://localhost:11434/v1`), OpenRouter, Azure, … |
+| `CHATINHO_MODEL` | the LLM demos and `lab_server` | The model; `gpt-4o-mini` by default. |
+| `CHATINHO_DB` | `assistant` | Where the conversation is kept; `assistant.db` by default. Delete it to start fresh. |
+| `CHATINHO_MCP_TOKEN` | the lab trio | The bearer token between the lab and its clients. |
+| `CHATINHO_LAB_URL` | `lab_client` | Where the lab listens; `http://127.0.0.1:8000/mcp` by default. |
+| `CHATINHO_INBOX_TIMEOUT` | `inbox` | Seconds a `POST /ask` waits for your answer; 300 by default. |
 
-| File | What it shows |
+## The demos
+
+| File | What it solves | Run it |
+|---|---|---|
+| `assistant.py` | **Start here.** A terminal assistant on any OpenAI-compatible model. Markdown and code blocks are rendered, and the conversation is kept in SQLite, so the next run picks it up with the model's memory intact. | `python examples/assistant.py` (or `./run.sh`) |
+| `team.py` | Two models in one room. `@coder <task>` writes code; `@reviewer <question>` critiques it, because the reviewer's memory is the whole room. | `python examples/team.py` |
+| `files.py` | `/read <path> [question]` sends a local UTF-8 text file (up to 64 KB) and your question to the assistant; keep asking about it afterwards. The file goes to your configured endpoint — only read what you would send there. | `python examples/files.py` |
+| `lab_server.py` | A model served over MCP that holds **no key**: each client lends its own with every question, and the lab forgets it after answering. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_server.py 8000` |
+| `lab_client.py` | Your chat, with the lab as a peer, lending your `OPENAI_API_KEY` as the `llm` credential. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_client.py` |
+| `lab_fastmcp_client.py` | The same question from a plain FastMCP client, without chatinho: the MCP surface is all a client needs. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_fastmcp_client.py http://127.0.0.1:8000/mcp "what is MCP?"` |
+| `inbox.py` | A script asks you a question and waits: `answer=$(curl -s -d '{"text":"Deploy?"}' 127.0.0.1:8765/ask)` returns `{"answer": "..."}` once you reply in the chat, or a 504 after the timeout. No model and no key. | `python examples/inbox.py` |
+| `hooks.py` | The fourteen hooks, one peer each, in a chat with no terminal, printing what reaches each door. The runnable half of [`docs/SPEC.md`](../docs/SPEC.md). No key needed. | `python examples/hooks.py` |
+
+Every LLM demo has the same shape: `parts()` returns the connectors, commands and
+backend, and `main()` hands them to `build_chat_session` (or `build_mcp_session`).
+A test, or your own program, can build the same chat headless from `parts()`.
+
+## Replaced
+
+| Old file | Now |
 |---|---|
-| `hooks.py` | **Start here.** One peer per hook, all eleven, in a chat with no terminal: what each demands, what it grants, and what actually arrives at each door. The runnable half of [`docs/SPEC.md`](../docs/SPEC.md) |
-| `demo.py` | Full-featured TUI built on `build_chat_session`: Markdown rendering, code blocks with syntax highlighting, a custom `/code` command next to the library's `/help`, command autocomplete, click-to-reply, and an echo connector declared with `@connector` / `@require(HookListen)` |
-| `agent_inbox.py` | The inbound direction: a connector declaring `@require(HookAsk)` and running its own `http.server` on a background thread. An agent POSTs a question to `/ask`, it lands in the chat tagged with its origin and task id, and your reply is routed back to the task that asked. Shows why connectors own their listener — and why they need `shutdown()` |
-| `headless.py` | The same chat with no terminal UI: a `ChatSession` wired to stdin/stdout. Same commands, same connector, same hooks — the presentation layer is one `print`. Reads from a pipe when stdin is not a TTY, so it doubles as a scriptable transcript |
-
-The demo runs without credentials or a backend. The shipped `OpenAIConnector`
-and `McpConnector` reach the network, so an example using them needs real
-endpoints and keys.
-
-For what each hook means and what it costs, see [`docs/SPEC.md`](../docs/SPEC.md); `hooks.py` is
-that document made executable, so if the two ever disagree the example is the one that is right.
-
-Want to add your own? Drop a new file here — e.g. a themed variant
-(`build_chat_session(style=ChatStyle(...))`) or a WebSocket-connected chat — and list it
-in the table above.
+| `demo.py` | `assistant.py` — a real model instead of an echo, with the same Markdown rendering. |
+| `headless.py` | `hooks.py` — a chat with no terminal; `tests/test_examples.py` drives every demo headless. |
+| `agent_inbox.py` | `inbox.py` — the HTTP caller now gets the answer back. |
+| `mcp_server.py` | `lab_server.py` — a real model answering with the lent key. |
+| `mcp_client.py` | `lab_fastmcp_client.py`. |

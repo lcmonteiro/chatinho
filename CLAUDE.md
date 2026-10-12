@@ -334,8 +334,8 @@ src/chatinho/
   helpers/         mcp.py (what McpFrontend and McpConnector share: credentials key, names, attachments)
 docs/              SPEC.md — the fourteen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
-examples/          hooks.py (one peer per hook), demo.py (TUI), headless.py (stdin),
-                   agent_inbox.py (HTTP, inbound), mcp_server.py (served over MCP), mcp_client.py (a plain FastMCP client)
+examples/          assistant.py, team.py, files.py (LLM demos: parts() + main()), lab_server.py / lab_client.py /
+                   lab_fastmcp_client.py (a model over MCP, lent keys), inbox.py (HTTP, inbound), hooks.py (one peer per hook)
 tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_package_layout.py,
@@ -816,7 +816,8 @@ promises — which is also why the `TYPE_CHECKING` block in `__init__.py` matter
 lazy `__getattr__` hands them `Any` instead.
 
 For a chat without a terminal, build a `ChatSession` and attach your own presentation —
-`examples/headless.py` is exactly that, in about forty lines.
+`examples/hooks.py` does exactly that, and `tests/test_examples.py` drives every demo's `parts()`
+the same way, with a stubbed model.
 
 `ChatSession`'s own public surface is seven members: `run`, `add_connector`, `add_command`, `start`,
 `close`, `id_of`, `forget`. `run()` is the entry point for a program whose job *is* the chat;
@@ -830,7 +831,7 @@ Everything about the conversation is reached by declaring a hook — which is wh
 
 ```bash
 ./setup.sh    # idempotent; auto-installs uv (handles Termux via pkg), creates .venv, uv sync
-./run.sh      # runs examples/demo.py (calls setup.sh first if .venv is missing)
+./run.sh      # runs examples/assistant.py (calls setup.sh first if .venv is missing; needs OPENAI_API_KEY)
 ```
 
 Both scripts resolve paths relative to their own location, so they work from any cwd.
