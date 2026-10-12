@@ -42,6 +42,9 @@ class FakeOpenAI:
     async def __aexit__(self, *exc: Any) -> None:
         self.closed = True
 
+    async def close(self) -> None:
+        self.closed = True
+
     @classmethod
     def reset(cls) -> None:
         """Forgets every client and restores the defaults."""

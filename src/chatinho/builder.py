@@ -18,6 +18,7 @@ from .frontends.chat import ChatFrontend
 from .frontends.chat.composer import NEWLINE_ESCAPE
 from .frontends.chat.style import ChatStyle
 from .frontends.mcp import McpFrontend
+from .keys import KeyLike
 from .session import ChatSession
 
 
@@ -102,7 +103,7 @@ def build_mcp_session(
     backend     : Optional[Any] = None,
     name        : str = "master",
     *,
-    token       : str,
+    token       : KeyLike,
     host        : str = "127.0.0.1",
     port        : int = 8000,
     credentials : Optional[Dict[str, str]] = None,
@@ -118,7 +119,8 @@ def build_mcp_session(
         commands: Things a client runs with the ``invoke`` tool; not peers.
         backend: Backend used by ``save_data``/``load_data``.
         name: The frontend's name in the session, and the server's name.
-        token: The bearer token every request must carry.
+        token: The bearer token every request must carry: the token itself, or a
+            key source (:mod:`chatinho.keys`) read once, at startup.
         host: Where the server listens.
         port: The port it listens on.
         credentials: Lent with every message to the peers that answer it.

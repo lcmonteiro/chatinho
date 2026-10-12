@@ -223,6 +223,57 @@ turns, prefixed with the speaker's name when it is not you. A key lent on the me
 its own `api_key`, which is therefore optional; a failure comes back as an `error` reply naming the
 kind of failure, never the key.
 
+### Keys and endpoints
+
+A key or token argument takes the value itself (a string), or **where the value lives**: a key
+source from `chatinho.keys`, read when it is needed and never kept in plain text. Errors name the
+reference — the variable, the file, the command — never a value.
+
+```python
+from chatinho import Chain, Command, Env, File, Keyring, OpenAIConnector
+
+key = Chain(Env("OPENAI_API_KEY"),                     # the first that has a key wins
+            Keyring("chatinho", "openai"),             # the OS keychain: chatinho[keyring]
+            File("~/.config/chatinho/openai.key"))     # must be chmod 600
+gpt = OpenAIConnector(name="gpt", api_key=key)
+lab = OpenAIConnector(name="lab", api_key=Command("pass show api/openai"))   # run once, kept
+```
+
+`DotEnv(".env", "NAME")` reads one variable of a dotenv file. `Env`, `DotEnv` and `File` are read
+anew each time, so a rotated key is used without a restart; `Keyring` and `Command` are read once.
+The same sources work for `McpConnector(token=..., delegate={...})` and `McpFrontend(token=...)`.
+
+An `Endpoint` is the URL, the model and the key together, usually a named profile in
+`~/.config/chatinho/profiles.toml` (or `.chatinho.toml` in the project), where the key is only a
+reference:
+
+```toml
+default = "nvidia"
+
+[nvidia]
+base_url = "https://integrate.api.nvidia.com/v1"
+model    = "nvidia/nemotron-3-super-120b-a12b"
+api_key  = "env:ORBE_OPENAI_API_KEY"     # env:, dotenv:PATH#NAME, file:, keyring:SVC/USER, cmd:, literal:
+
+[local]
+base_url = "http://localhost:11434/v1"
+model    = "qwen2.5-coder"
+api_key  = "literal:ollama"
+```
+
+```python
+from chatinho import Endpoint
+
+assistant = OpenAIConnector(name="assistant", endpoint=Endpoint.load())       # CHATINHO_PROFILE, else default
+reviewer  = OpenAIConnector(name="reviewer", endpoint=Endpoint.load("nvidia").with_model("other"))
+```
+
+`CHATINHO_MODEL` and `CHATINHO_BASE_URL` override a profile's fields; with no profile, the endpoint
+comes from `OPENAI_API_KEY` and `OPENAI_BASE_URL`. `Endpoint.from_env("ORBE_OPENAI")` reads
+`ORBE_OPENAI_API_KEY`, `_BASE_URL` and `_MODEL`, and `endpoint.check()` reads the key once so a
+program can stop before it starts. A profiles file others can write is refused, since `cmd:` runs a
+command.
+
 ### Across machines — `pip install 'chatinho[mcp]'`
 
 One session can put questions to another over MCP (the modern protocol, 2026-07-28). On the machine

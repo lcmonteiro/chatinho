@@ -10,8 +10,9 @@ Run it::
     CHATINHO_MCP_TOKEN=s3cret python examples/lab_server.py 8000
 
 then ask it from a chat (``lab_client.py``) or any MCP client
-(``lab_fastmcp_client.py``). ``OPENAI_BASE_URL`` and ``CHATINHO_MODEL`` work as in
-``assistant.py``; ``OPENAI_API_KEY`` is not read here.
+(``lab_fastmcp_client.py``). ``CHATINHO_PROFILE``, ``OPENAI_BASE_URL`` and
+``CHATINHO_MODEL`` work as in ``assistant.py``; no key is read here, even if the
+profile names one.
 
 Needs ``pip install 'chatinho[all]'``.
 """
@@ -19,7 +20,7 @@ Needs ``pip install 'chatinho[all]'``.
 import os
 import sys
 
-from chatinho import OpenAIConnector, build_mcp_session
+from chatinho import Endpoint, OpenAIConnector, build_mcp_session
 
 SYSTEM      = "You are a research assistant answering other agents. Be precise and brief."
 CREDENTIALS = {"llm": "OpenAI-compatible API key"}
@@ -27,8 +28,8 @@ CREDENTIALS = {"llm": "OpenAI-compatible API key"}
 
 def parts() -> dict:
     """The lab: a model with no key, answering with the one each question lends."""
-    lab = OpenAIConnector(name="lab", system=SYSTEM, base_url=os.environ.get("OPENAI_BASE_URL") or None,
-                          model=os.environ.get("CHATINHO_MODEL", "gpt-4o-mini"))
+    found = Endpoint.load().without_key()
+    lab   = OpenAIConnector(name="lab", system=SYSTEM, endpoint=found, model=found.model or "gpt-4o-mini")
     return dict(connectors=[lab], commands=[], backend=None)
 
 

@@ -6,6 +6,7 @@ import pytest
 
 from chatinho import Attachment, HookAnswer, Reply, connector, require
 from chatinho.connectors.mcp import McpConnector
+from chatinho.keys import Env
 from conftest import driven
 from mcp_kit import Agent, Files, Weather, remote
 
@@ -171,7 +172,7 @@ async def test_not_declared_not_sent():
     session, view = await _local(lab)
     await view.ask(lab.peer_id, "go")
     assert agent.keys == [None]
-    assert lab._lending(lab._client) is None
+    assert await lab._lending(lab._client) is None
     await session.close()
     await remote_session.close()
 
@@ -201,7 +202,7 @@ async def test_nothing_is_lent_without_delegate():
     session, view = await _local(lab)
     await view.ask(lab.peer_id, "go")
     assert agent.keys == [None]
-    assert lab._lending(lab._client) is None
+    assert await lab._lending(lab._client) is None
     await session.close()
     await remote_session.close()
 
@@ -246,5 +247,30 @@ async def test_a_remote_error_is_said_briefly():
     session, view = await _local(lab)
     got = await _asked(view, lab, "rain?")
     assert got.status == "error" and got.text == "lab: error — the service is down"
+    await session.close()
+    await remote_session.close()
+
+
+async def test_lent_from_a_key_source(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+    agent = Agent(key=True)
+    remote_session, front = await remote(agent, credentials={"llm": "key"})
+    lab = McpConnector(server=front.server, name="lab", delegate={"llm": Env("OPENAI_API_KEY")})
+    session, view = await _local(lab)
+    await view.ask(lab.peer_id, "go")
+    assert agent.keys == ["sk-env"]
+    await session.close()
+    await remote_session.close()
+
+
+async def test_a_lent_source_that_cannot_read(monkeypatch):
+    monkeypatch.delenv("UNSET", raising=False)
+    agent = Agent(key=True)
+    remote_session, front = await remote(agent, credentials={"llm": "key"})
+    lab = McpConnector(server=front.server, name="lab", delegate={"llm": Env("UNSET")})
+    session, view = await _local(lab)
+    answer = await view.ask(lab.peer_id, "go")
+    assert "UNSET is not set" in answer
+    assert agent.keys == [] and agent.heard == []
     await session.close()
     await remote_session.close()

@@ -5,10 +5,14 @@ import socket
 
 import httpx2
 import mcp_types as types
+import pytest
 from fastmcp import Client
 
 from chatinho import ChatSession
+from chatinho.connectors.mcp import McpConnector
 from chatinho.frontends.mcp import McpFrontend
+from chatinho.keys import Env, KeyUnavailable
+from conftest import driven
 from mcp_kit import Weather
 
 
@@ -50,3 +54,34 @@ async def test_http_refuses_requests_without_the_token_and_serves_those_with_it(
         front.shutdown()
         await asyncio.wait_for(serving, 5)
         await session.close()
+
+
+async def test_tokens_from_key_sources(monkeypatch):
+    monkeypatch.setenv("CHATINHO_MCP_TOKEN", "s3cret")
+    front   = McpFrontend(port=_free_port(), token=Env("CHATINHO_MCP_TOKEN"))
+    session = ChatSession(frontend=front, connectors=[Weather("sunny")])
+    await session.start()
+    serving = await _serving(front)
+    url     = "http://127.0.0.1:%d/mcp" % front.port
+    try:
+        async with httpx2.AsyncClient() as http:
+            wrong = await http.post(url, json={}, headers={"Authorization": "Bearer nope"})
+        assert wrong.status_code == 401
+        lab = McpConnector(url=url, token=Env("CHATINHO_MCP_TOKEN"), name="lab")
+        here, view = await driven(connectors=[lab])
+        try:
+            assert await view.ask(lab.peer_id, "rain?") == "sunny"
+        finally:
+            await here.close()
+    finally:
+        front.shutdown()
+        await asyncio.wait_for(serving, 5)
+        await session.close()
+
+
+def test_a_missing_token_fails_at_startup(monkeypatch):
+    monkeypatch.delenv("UNSET", raising=False)
+    with pytest.raises(KeyUnavailable, match="UNSET"):
+        McpFrontend(token=Env("UNSET"))
+    with pytest.raises(KeyUnavailable, match="UNSET"):
+        McpConnector(url="http://127.0.0.1:1/mcp", token=Env("UNSET"))

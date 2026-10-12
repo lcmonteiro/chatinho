@@ -5,6 +5,7 @@ See openspec/specs/openai-connector.
 
 import asyncio
 import logging
+import os
 from typing import List
 
 import pytest
@@ -13,6 +14,8 @@ from chatinho import SELF, ChatMessage, HookListen, HookSay, Query, ReplyStatus,
 from chatinho import connector, require
 from chatinho.connectors import openai as module
 from chatinho.connectors.openai import OpenAIConnector
+from chatinho.endpoint import Endpoint
+from chatinho.keys import Env, File, Literal
 
 from conftest import driven
 from llm_kit import FakeOpenAI, failure, requests, sent
@@ -245,3 +248,66 @@ async def test_the_endpoint_refuses(caplog):
         assert "sk-secret" not in caplog.text
     finally:
         await session.close()
+
+
+# === Keys from sources, and endpoints =============================================
+
+async def test_from_an_endpoint():
+    local = Endpoint(base_url="http://localhost:11434/v1", model="qwen", api_key=Literal("ollama"))
+    session, view = await driven(connectors=[OpenAIConnector(name="gpt", endpoint=local)])
+    try:
+        await reply_to(view, await view.say("hi"))
+        client = FakeOpenAI.clients[-1]
+        assert (client.base_url, client.api_key, client.requests[-1]["model"]) == (
+            "http://localhost:11434/v1", "ollama", "qwen")
+    finally:
+        await session.close()
+
+
+async def test_an_explicit_model_wins():
+    local = Endpoint(base_url="http://localhost:11434/v1", model="qwen", api_key=Literal("ollama"))
+    session, view = await driven(connectors=[OpenAIConnector(name="gpt", endpoint=local, model="llama")])
+    try:
+        await reply_to(view, await view.say("hi"))
+        assert requests()[-1]["model"] == "llama"
+        assert FakeOpenAI.clients[-1].base_url == "http://localhost:11434/v1"
+    finally:
+        await session.close()
+
+
+def test_the_default_model():
+    assert OpenAIConnector(name="gpt").model == "gpt-4o"
+
+
+async def test_a_source_that_cannot_read(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key=Env("OPENAI_API_KEY"))])
+    try:
+        reply = await reply_to(view, await view.say("hello"))
+        assert reply.status == ReplyStatus.ERROR and "OPENAI_API_KEY is not set" in reply.text
+        assert requests() == []
+    finally:
+        await session.close()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
+async def test_a_rotated_key_is_used(tmp_path):
+    path = tmp_path / "openai.key"
+    path.write_text("sk-one")
+    path.chmod(0o600)
+    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key=File(path))])
+    try:
+        await reply_to(view, await view.say("one"))
+        await reply_to(view, await view.say("two"))
+        path.write_text("sk-two")
+        await reply_to(view, await view.say("three"))
+        assert [c.api_key for c in FakeOpenAI.clients] == ["sk-one", "sk-two"]
+        assert FakeOpenAI.clients[0].closed and len(FakeOpenAI.clients[0].requests) == 2
+    finally:
+        await session.close()
+
+
+def test_the_key_is_not_shown():
+    gpt = OpenAIConnector(name="gpt", api_key="sk-own")
+    assert "sk-own" not in repr(gpt) and "sk-own" not in repr(vars(gpt))
+    assert not hasattr(gpt, "api_key")

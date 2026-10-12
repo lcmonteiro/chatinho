@@ -14,13 +14,14 @@ is up to whoever builds the system.
 """
 
 import logging
-from typing import Any, Callable, Dict, Mapping, Optional, Union
+from typing import Any, Dict, Mapping, Optional
 
 import mcp_types as types
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
 from chatinho.hooks import HookAnswer
 from chatinho.hooks import connector, require
+from chatinho.keys import KeyLike, KeySource, KeyUnavailable, read_async, to_source
 from chatinho.message import ChatMessage, Reply, ReplyStatus
 from chatinho.helpers.mcp import CREDENTIALS_KEY, decode
 
@@ -58,40 +59,46 @@ class McpConnector:
 
     Args:
         url: The Streamable HTTP endpoint, e.g. ``https://lab.example/mcp``.
-        token: The bearer token the server requires; needed with *url*.
+        token: The bearer token the server requires; needed with *url*. A
+            string is the token itself; a key source (:mod:`chatinho.keys`) or a
+            function is read whenever the client is built.
         server: An in-process server, for tests and embedding.
         name: Its name in the chat, and the client name the server sees; the
             server's name when left out.
         peer: The remote peer to ask; the only remote peer that answers when
             left out.
-        delegate: Credentials to lend, by name: a value, or a function returning
-            one for each question. Only the ones the server declares are sent.
+        delegate: Credentials to lend, by name: a value, a function returning
+            one for each question, or a key source read for each question under
+            its own caching rules. Only the ones the server declares are sent.
 
     Raises:
         ValueError: Not exactly one server, or a *url* without a *token*.
+        KeyUnavailable: The token's source could not yield it.
     """
 
     def __init__(
         self,
         *,
         url         : Optional[str] = None,
-        token       : Optional[str] = None,
+        token       : Optional[KeyLike] = None,
         server      : Any = None,
         name        : Optional[str] = None,
         peer        : Optional[str] = None,
-        delegate    : Optional[Mapping[str, Union[str, Callable[[], str]]]] = None,
+        delegate    : Optional[Mapping[str, KeyLike]] = None,
     ) -> None:
         if (url is None) == (server is None):
             raise ValueError("Give exactly one of url or server")
-        if url is not None and not token:
+        self._token      = to_source(token or None)
+        if url is not None and self._token is None:
             raise ValueError("An HTTP server needs its bearer token")
         self._url        = url
-        self._token      = token
         self._server     = server
         self._named      = name is not None
         self.name        = name or "mcp"
         self.peer        = peer
-        self._delegate   = dict(delegate or {})
+        self._delegate   : Dict[str, KeySource] = {
+            lent: source for lent, value in (delegate or {}).items()
+            if (source := to_source(value)) is not None}
         self._client     : Any = self._make_client()
 
     # === Lifecycle ==================================================================
@@ -133,8 +140,12 @@ class McpConnector:
                 if peer is None:
                     return Reply("%s: no single remote peer answers; name one with peer=" % self.name,
                                  status=ReplyStatus.ERROR)
+                meta   = await self._lending(client)
                 result = await client.call_tool("ask", {"peer": peer, "text": text},
-                                                meta=self._lending(client), raise_on_error=False)
+                                                meta=meta, raise_on_error=False)
+        except KeyUnavailable as exc:
+            logger.warning("%s: nothing to lend (%s)", self.name, exc)
+            return Reply("%s: %s" % (self.name, exc), status=ReplyStatus.ERROR)
         except Exception as exc:
             logger.warning("%s could not ask its server: %r", self.name, exc)
             return Reply("%s: could not reach the remote session (%s)" % (self.name, type(exc).__name__),
@@ -148,14 +159,18 @@ class McpConnector:
 
     # === Lending ====================================================================
 
-    def _lending(self, client: Any) -> Optional[Dict[str, Any]]:
-        """The ``_meta`` for one question: the configured credentials the server declared."""
+    async def _lending(self, client: Any) -> Optional[Dict[str, Any]]:
+        """The ``_meta`` for one question: the configured credentials the server declared.
+
+        Raises:
+            KeyUnavailable: A declared credential's source could not yield it.
+        """
         if not self._delegate:
             return None
         found    = client.server_capabilities
         declared = ((found.extensions or {}).get(CREDENTIALS_KEY) or {}) if found else {}
-        lent     = {name: (value() if callable(value) else value)
-                    for name, value in self._delegate.items() if name in declared}
+        lent     = {name: (await read_async(source)).reveal()
+                    for name, source in self._delegate.items() if name in declared}
         return {CREDENTIALS_KEY: lent} if lent else None
 
     # === The client ===================================================================
@@ -164,6 +179,6 @@ class McpConnector:
         from fastmcp import Client
         return Client(
             self._server if self._server is not None else str(self._url),
-            auth        = self._token if self._server is None else None,
+            auth        = self._token.read().reveal() if self._server is None and self._token else None,
             client_info = types.Implementation(name=self.name, version="chatinho"),
         )

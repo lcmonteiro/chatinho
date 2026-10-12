@@ -56,9 +56,9 @@ On systems with POSIX permissions, a profiles file that group or other users can
 2. else `CHATINHO_PROFILE`;
 3. else the file's `default`.
 
-A chosen profile that the file does not have MUST fail with an error listing the profiles it has. After the profile is read, `CHATINHO_MODEL` and `CHATINHO_BASE_URL`, when set, MUST replace its model and URL.
+A chosen profile that the file does not have MUST fail with an error listing the profiles it has. A profile chosen while no profiles file exists MUST fail with an error naming the places searched, rather than being ignored. After the profile is read, `CHATINHO_MODEL` and `CHATINHO_BASE_URL`, when set, MUST replace its model and URL.
 
-With no profile chosen, or no profiles file, the endpoint MUST come from the environment instead:
+When no profile is chosen (no argument, no `CHATINHO_PROFILE`, and no profiles file or no `default` in it), the endpoint MUST come from the environment instead:
 - the key is read from `OPENAI_API_KEY`;
 - the URL comes from `OPENAI_BASE_URL`;
 - the model comes from `CHATINHO_MODEL`.
@@ -74,6 +74,10 @@ With no profile chosen, or no profiles file, the endpoint MUST come from the env
 #### Scenario: An unknown profile
 - **WHEN** `Endpoint.load("nvdia")` is called and the file has `nvidia` and `local`
 - **THEN** it fails with an error naming `nvdia` and listing `nvidia` and `local`
+
+#### Scenario: A profile but no file
+- **WHEN** `CHATINHO_PROFILE=nvidia` and no profiles file exists
+- **THEN** `Endpoint.load()` fails with an error naming `nvidia` and the places searched
 
 #### Scenario: No profiles file
 - **WHEN** no profiles file exists, and `OPENAI_API_KEY` and `OPENAI_BASE_URL` are set
