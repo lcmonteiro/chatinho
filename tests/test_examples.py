@@ -133,6 +133,19 @@ async def test_read_sends_the_file_and_the_question(tmp_path):
         await session.close()
 
 
+async def test_read_takes_a_quoted_path_with_spaces(tmp_path):
+    notes = tmp_path / "my notes.md"
+    notes.write_text("ship on Friday", encoding="utf-8")
+    session, view = await headless(example("files").parts())
+    try:
+        assert await view.command("read", '"%s" when do we ship?' % notes) is None
+        await until_requests(1)
+        question = sent()[-1]["content"]
+        assert question.startswith("when do we ship?") and "ship on Friday" in question
+    finally:
+        await session.close()
+
+
 async def _settled(view):
     for _ in range(300):
         if any(m.text == "Sunny" for m in view.context()):

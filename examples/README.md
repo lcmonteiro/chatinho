@@ -27,7 +27,7 @@ export OPENAI_API_KEY=sk-...          # any OpenAI-compatible key
 |---|---|---|
 | `assistant.py` | **Start here.** A terminal assistant on any OpenAI-compatible model. Markdown and code blocks are rendered, and the conversation is kept in SQLite, so the next run picks it up with the model's memory intact. | `python examples/assistant.py` (or `./run.sh`) |
 | `team.py` | Two models in one room. `@coder <task>` writes code; `@reviewer <question>` critiques it, because the reviewer's memory is the whole room. | `python examples/team.py` |
-| `files.py` | `/read <path> [question]` sends a local UTF-8 text file (up to 64 KB) and your question to the assistant; keep asking about it afterwards. The file goes to your configured endpoint — only read what you would send there. | `python examples/files.py` |
+| `files.py` | `/read <path> [question]` (quote a path with spaces) sends a local UTF-8 text file (up to 64 KB) and your question to the assistant; keep asking about it afterwards. The file goes to your configured endpoint — only read what you would send there. | `python examples/files.py` |
 | `lab_server.py` | A model served over MCP that holds **no key**: each client lends its own with every question, and the lab forgets it after answering. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_server.py 8000` |
 | `lab_client.py` | Your chat, with the lab as a peer, lending your `OPENAI_API_KEY` as the `llm` credential. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_client.py` |
 | `lab_fastmcp_client.py` | The same question from a plain FastMCP client, without chatinho: the MCP surface is all a client needs. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_fastmcp_client.py http://127.0.0.1:8000/mcp "what is MCP?"` |

@@ -135,8 +135,24 @@ class WeatherConnector:
 
     async def answer(self, msg: ChatMessage) -> Optional[Reply]:
         """Answers inline."""
-        note("HookAnswer", "was asked %r" % msg.text)
+        note("HookAnswer", "weather was asked %r" % msg.text)
         return Reply("sunny")
+
+
+@connector("clock")
+@require(HookAnswer)
+class ClockConnector:
+    """A second peer that answers, which keeps a say to the room a broadcast.
+
+    With exactly one answering peer in the chat, the session asks it whatever
+    is said to the room — the lone-answerer rule, so a chat with one model just
+    works. Two answering peers, and a say is heard by everyone and asked of no one.
+    """
+
+    async def answer(self, msg: ChatMessage) -> Optional[Reply]:
+        """Answers inline."""
+        note("HookAnswer", "clock was asked %r" % msg.text)
+        return Reply("noon")
 
 
 @tool("upper", "Upper-case the rest of the line")
@@ -255,7 +271,7 @@ async def main() -> None:
 
     screen  = Screen()
     session = ChatSession(
-        connectors = [EchoConnector(), WeatherConnector()],
+        connectors = [EchoConnector(), WeatherConnector(), ClockConnector()],
         commands   = [UpperCommand()],
         frontend   = screen,
         backend    = ListArchive(seeded),
@@ -270,7 +286,7 @@ async def main() -> None:
     async def settle() -> None:
         await asyncio.sleep(0.05)
 
-    print("\n-- HookSay: say reaches everyone but the speaker --")
+    print("\n-- HookSay: said to the room, it reaches everyone but the speaker --")
     await screen.say("good morning")
     await settle()
 

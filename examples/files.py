@@ -20,6 +20,7 @@ Needs ``pip install 'chatinho[all]'``.
 
 import os
 import pathlib
+import shlex
 from typing import Optional
 
 from chatinho import LOCAL, HelpCommand, HookExecute, HookPeers, HookSay, OpenAIConnector
@@ -42,10 +43,11 @@ def config() -> dict:
 
 
 def refused(text: str) -> Reply:
+    """An error answer from /read; the model is not asked."""
     return Reply("read: %s" % text, status=ReplyStatus.ERROR)
 
 
-@tool("read", "Ask the assistant about a local text file: /read <path> [question]")
+@tool("read", "Ask the assistant about a local text file: /read <path> [question]; quote a path with spaces")
 @require(HookExecute)
 @require(HookSay)
 @require(HookPeers)
@@ -62,9 +64,13 @@ class ReadCommand:
 
     async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> Optional[Reply]:
         del by, kwargs
-        where, _, question = args.strip().partition(" ")
-        if not where:
+        try:
+            words = shlex.split(args)
+        except ValueError:
+            return refused("unbalanced quotes in %r" % args)
+        if not words:
             return refused("usage: /read <path> [question]")
+        where, question = words[0], " ".join(words[1:])
         path = pathlib.Path(where).expanduser()
         if not path.is_file():
             return refused("%s is not a file" % where)
@@ -79,7 +85,7 @@ class ReadCommand:
             return refused("there is no assistant in this chat")
         fence = "````" if "```" in text else "```"
         await self.say("%s\n\nFile: %s\n%s\n%s\n%s" % (
-            question.strip() or QUESTION, path.name, fence, text, fence), to=assistant)
+            question or QUESTION, path.name, fence, text, fence), to=assistant)
         return None
 
 
