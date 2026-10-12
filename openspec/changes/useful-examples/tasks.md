@@ -50,4 +50,5 @@
   - `mypy src/chatinho` must report no issues;
   - `pytest -q` must pass;
   - `openspec validate --all --strict --no-interactive` must pass.
-- [ ] 7.2 Manual smoke check, outside CI: with a real `OPENAI_API_KEY`, run `assistant.py` and `team.py` once each and check that they answer. Report what was run in the PR.
+- [x] 7.2 Manual smoke check, outside CI: with a real `OPENAI_API_KEY`, run `assistant.py` and `team.py` once each and check that they answer. Report what was run in the PR.
+  Run headless through each demo's `parts()` against NVIDIA's OpenAI-compatible endpoint (`nvidia/nemotron-3-super-120b-a12b`): `assistant` answered and recalled the first exchange from a second session on the same database; `team`'s reviewer critiqued the coder's code.

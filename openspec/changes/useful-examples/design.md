@@ -44,7 +44,7 @@ With two answering peers, the lone-answerer rule does not apply, so the user wri
 
 ### `files.py`: a command that asks the LLM
 `@tool("read", "Ask the assistant about a local text file")` declares `HookExecute`, `HookSay` and `HookPeers`. For `/read <path> [question]`, it:
-1. resolves `path` relative to the current directory;
+1. splits its arguments like a shell (`shlex`), so a path with spaces is quoted, and resolves `path` relative to the current directory;
 2. refuses anything that is not a regular file, or that is larger than 64 KB, or that is not UTF-8, by returning an error `Reply`;
 3. finds the `assistant` peer by name in `peers()`;
 4. addresses the question, followed by the file in a fenced block, to it with `say(..., to=assistant)`, and returns nothing.
