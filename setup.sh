@@ -95,4 +95,4 @@ if [ "$EXTRA" = "tui" ] && is_termux; then
     echo "    and would be built from source — CHATINHO_EXTRA=dev bash setup.sh if"
     echo "    you have a working cargo and want the checks too.)"
 fi
-echo "✅ Setup complete — run: ./run.sh  (or .venv/bin/python demo.py)"
+echo "✅ Setup complete — run: ./run.sh  (or .venv/bin/python examples/assistant.py)"

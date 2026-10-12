@@ -5,10 +5,8 @@ See openspec/specs/openai-connector.
 
 import asyncio
 import logging
-from types import SimpleNamespace
-from typing import Any, Dict, List, Optional
+from typing import List
 
-import openai
 import pytest
 
 from chatinho import SELF, ChatMessage, HookListen, HookSay, Query, ReplyStatus, Say, Secret
@@ -17,61 +15,14 @@ from chatinho.connectors import openai as module
 from chatinho.connectors.openai import OpenAIConnector
 
 from conftest import driven
-
-
-def failure(kind: str, text: str = "") -> Exception:
-    """An SDK error of the given class name, built without a transport."""
-    return type(kind, (openai.OpenAIError,), {})(text)
-
-
-class FakeOpenAI:
-    """Stands in for AsyncOpenAI: records every client and every request."""
-
-    clients : List["FakeOpenAI"] = []
-    reply   : str = "Sunny"
-    error   : Optional[Exception] = None
-    gate    : Optional[asyncio.Event] = None
-
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None) -> None:
-        self.api_key  = api_key
-        self.base_url = base_url
-        self.requests : List[Dict[str, Any]] = []
-        self.closed   = False
-        self.chat     = SimpleNamespace(completions=SimpleNamespace(create=self._create))
-        FakeOpenAI.clients.append(self)
-
-    async def _create(self, **params: Any) -> Any:
-        self.requests.append(params)
-        if FakeOpenAI.gate is not None:
-            await FakeOpenAI.gate.wait()
-        if FakeOpenAI.error is not None:
-            raise FakeOpenAI.error
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=FakeOpenAI.reply))])
-
-    async def __aenter__(self) -> "FakeOpenAI":
-        return self
-
-    async def __aexit__(self, *exc: Any) -> None:
-        self.closed = True
+from llm_kit import FakeOpenAI, failure, requests, sent
 
 
 @pytest.fixture(autouse=True)
 def fake(monkeypatch):
-    FakeOpenAI.clients = []
-    FakeOpenAI.reply   = "Sunny"
-    FakeOpenAI.error   = None
-    FakeOpenAI.gate    = None
+    FakeOpenAI.reset()
     monkeypatch.setattr(module, "AsyncOpenAI", FakeOpenAI)
     return FakeOpenAI
-
-
-def requests() -> List[Dict[str, Any]]:
-    return [r for c in FakeOpenAI.clients for r in c.requests]
-
-
-def sent() -> List[Dict[str, str]]:
-    """The messages of the last request."""
-    return requests()[-1]["messages"]
 
 
 async def reply_to(view, said) -> ChatMessage:

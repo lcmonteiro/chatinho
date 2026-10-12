@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The eleven hooks, one example each, in a chat with no terminal.
+"""The fourteen hooks, one example each, in a chat with no terminal.
 
 Every other example shows a chat. This one shows the *declarations* — what each
 hook demands, what it grants, and what actually arrives at each door — by
@@ -11,17 +11,19 @@ Run it::
 
     python examples/hooks.py
 
-Nothing here needs a terminal, a network or a database: the archive is a list.
+Nothing here needs a terminal, a network or a database: the archive is a list,
+and what messages carry is kept in a dict.
 """
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional, Sequence
 
 from chatinho import (
     LOCAL,
     TOOL,
     Ask,
+    Attachment,
     ChatMessage,
     ChatSession,
     Context,
@@ -31,13 +33,18 @@ from chatinho import (
     HookExecute,
     HookForget,
     HookInvoke,
+    HookKeep,
+    HookLink,
     HookListen,
     HookLoad,
+    HookLocate,
     HookPeers,
     HookCommands,
     HookSay,
     Reply,
     Invoke,
+    Locate,
+    MessageID,
     Peers,
     Commands,
     Say,
@@ -57,8 +64,7 @@ def note(hook: str, what: str) -> None:
 # === The grants: what a peer may do =============================================
 #
 # A class that declares only grants is asked for nothing. This is the shape of a
-# presentation — the terminal in demo.py and headless.py declare exactly these,
-# plus the two demands below.
+# presentation — the terminal, ChatFrontend, declares these and more.
 
 
 @frontend("screen")     # the presentation: peer zero, and it says so itself
@@ -68,6 +74,7 @@ def note(hook: str, what: str) -> None:
 @require(HookContext)   # context(since=, start=, limit=) -> the conversation
 @require(HookPeers)     # peers() -> {id: peer}
 @require(HookCommands)  # commands() -> {name: command}
+@require(HookLocate)    # await locate(msg_id, name) -> a link, or None
 class Screen:
     """The presentation: peer zero, and nothing special.
 
@@ -85,6 +92,7 @@ class Screen:
     context  : Context
     peers    : Peers
     commands : Commands
+    locate   : Locate
 
 
 # === The demands: what a peer must write ========================================
@@ -127,8 +135,24 @@ class WeatherConnector:
 
     async def answer(self, msg: ChatMessage) -> Optional[Reply]:
         """Answers inline."""
-        note("HookAnswer", "was asked %r" % msg.text)
+        note("HookAnswer", "weather was asked %r" % msg.text)
         return Reply("sunny")
+
+
+@connector("clock")
+@require(HookAnswer)
+class ClockConnector:
+    """A second peer that answers, which keeps a say to the room a broadcast.
+
+    With exactly one answering peer in the chat, the session asks it whatever
+    is said to the room — the lone-answerer rule, so a chat with one model just
+    works. Two answering peers, and a say is heard by everyone and asked of no one.
+    """
+
+    async def answer(self, msg: ChatMessage) -> Optional[Reply]:
+        """Answers inline."""
+        note("HookAnswer", "clock was asked %r" % msg.text)
+        return Reply("noon")
 
 
 @tool("upper", "Upper-case the rest of the line")
@@ -164,15 +188,18 @@ class UpperCommand:
 @require(HookListen)    # to hear the conversation
 @require(HookLoad)      # to give it back at start()
 @require(HookForget)    # to drop it
+@require(HookKeep)      # to hold what a message carries
+@require(HookLink)      # to say where it can be opened
 class ListArchive:
-    """The three hooks a backend declares, over a list instead of a database.
+    """The five hooks a backend declares, over a list instead of a database.
 
     The backend is not a key-value store and nothing pushes at it: it is a peer
     that listens. ``DatabaseBackend`` is this, with SQLAlchemy in an executor.
     """
 
     def __init__(self, seeded: Optional[List[ChatMessage]] = None) -> None:
-        self.kept : List[ChatMessage] = list(seeded or [])
+        self.kept  : List[ChatMessage] = list(seeded or [])
+        self.files : Dict[str, bytes] = {}
 
     async def listen(self, msg: ChatMessage) -> None:
         """Keeps every message that crosses the session."""
@@ -208,6 +235,31 @@ class ListArchive:
         note("HookForget", "dropped %d" % dropped)
         return dropped
 
+    async def keep(self, msg_id: MessageID, attachments: Sequence[Attachment]) -> None:
+        """Holds what a message carries, before the message is posted.
+
+        Args:
+            msg_id: The message the attachments belong to; the key.
+            attachments: What it carries.
+        """
+        for item in attachments:
+            self.files["%s/%s" % (msg_id, item.name)] = item.data
+            note("HookKeep", "kept %s (%d bytes) for %s" % (item.name, len(item.data), msg_id))
+
+    async def link(self, msg_id: MessageID, name: str) -> Optional[str]:
+        """Where an attachment can be opened, or None when nothing by that name was kept.
+
+        Args:
+            msg_id: The message it was attached to.
+            name: The attachment's name.
+
+        Returns:
+            Optional[str]: A link; a real backend returns one a browser opens.
+        """
+        key = "%s/%s" % (msg_id, name)
+        note("HookLink", "asked for %s" % key)
+        return "memory://%s" % key if key in self.files else None
+
 
 # === Running the whole of it ====================================================
 
@@ -219,7 +271,7 @@ async def main() -> None:
 
     screen  = Screen()
     session = ChatSession(
-        connectors = [EchoConnector(), WeatherConnector()],
+        connectors = [EchoConnector(), WeatherConnector(), ClockConnector()],
         commands   = [UpperCommand()],
         frontend   = screen,
         backend    = ListArchive(seeded),
@@ -234,26 +286,33 @@ async def main() -> None:
     async def settle() -> None:
         await asyncio.sleep(0.05)
 
-    print("\n-- say: everyone but the speaker --")
+    print("\n-- HookSay: said to the room, it reaches everyone but the speaker --")
     await screen.say("good morning")
     await settle()
 
-    print("\n-- ask: one peer, and it owes a reply --")
+    print("\n-- HookAsk: ask one peer, and it owes a reply --")
     print("   →", await screen.ask(session.id_of("weather"), "what is the weather?"))
     await settle()
 
-    print("\n-- invoke: a command runs, and the running is recorded --")
+    print("\n-- HookInvoke: a command runs, and the running is recorded --")
     print("   →", await screen.invoke("upper", "nothing is hidden"))
     await settle()
 
-    print("\n-- peers: who is here, by id --")
+    print("\n-- HookPeers: who is here, by id --")
     print("   →", {at: getattr(who, "name", type(who).__name__)
                    for at, who in screen.peers().items()})
 
-    print("\n-- commands: what can be run, by name --")
+    print("\n-- HookCommands: what can be run, by name --")
     print("   →", list(screen.commands()))
 
-    print("\n-- context: one window over both tiers --")
+    print("\n-- HookLocate: a message carries a file, kept by the backend --")
+    noted = await screen.say("the notes, attached",
+                             attachments=[Attachment("notes.txt", "text/plain", b"buy milk")])
+    await settle()
+    print("   →", await screen.locate(noted, "notes.txt"))
+    print("   →", await screen.locate(noted, "missing.txt"))
+
+    print("\n-- HookContext: one window over both tiers --")
     for msg in screen.context():
         where = {None: "everyone", TOOL: "a command", LOCAL: "the user"}.get(msg.to, str(msg.to))
         print("   from=%-3d to=%-10s %r" % (msg.frm, where, msg.text))
