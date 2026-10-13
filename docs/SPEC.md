@@ -147,6 +147,11 @@ async def answer(self, msg) -> Reply:
     model = make_model(key.reveal()) if key else self.default_model
 ```
 
+Whoever lends chooses where the key comes from: `McpConnector(delegate={"llm": source})` takes a
+value, a function, or a key source from `chatinho.keys` (`Env`, `File`, `Keyring`, `Command`,
+`Chain`, …), read for each question. A source that cannot yield its key answers that question with an
+`error` reply naming the reference, and nothing is sent.
+
 **A room with one peer that answers is a conversation with it.** A say that is not a reply, said by
 a peer — not by a command — when exactly one peer declares `HookAnswer` besides the speaker and the
 frontend, is asked of that peer: it goes out addressed to it, its `answer` is called, and the reply

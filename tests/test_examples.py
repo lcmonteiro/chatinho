@@ -46,6 +46,10 @@ def llm(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test")
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
     monkeypatch.delenv("CHATINHO_MODEL", raising=False)
+    monkeypatch.delenv("CHATINHO_BASE_URL", raising=False)
+    monkeypatch.delenv("CHATINHO_PROFILE", raising=False)
+    monkeypatch.setenv("CHATINHO_PROFILES", os.devnull + ".missing")   # no profiles file
+    monkeypatch.setenv("XDG_CONFIG_HOME", os.devnull + ".missing")
     monkeypatch.setattr(module, "AsyncOpenAI", FakeOpenAI)
     return FakeOpenAI
 
@@ -98,6 +102,25 @@ async def test_the_assistant_answers_and_remembers_across_sessions(tmp_path, mon
         {"role": "user",      "content": "What is my name?"},
     ]
     await session.close()
+
+
+async def test_a_profile_picks_the_endpoint_and_model(tmp_path, monkeypatch):
+    profiles = tmp_path / "profiles.toml"
+    profiles.write_text('[local]\nbase_url = "http://localhost:11434/v1"\nmodel = "qwen"\n'
+                        'api_key = "literal:ollama"\n')
+    profiles.chmod(0o600)
+    monkeypatch.setenv("CHATINHO_PROFILES", str(profiles))
+    monkeypatch.setenv("CHATINHO_PROFILE", "local")
+    monkeypatch.delenv("OPENAI_API_KEY")
+    monkeypatch.setenv("CHATINHO_DB", str(tmp_path / "assistant.db"))
+    session, view = await headless(example("assistant").parts())
+    try:
+        await reply_to(view, await view.say("hi"))
+        client = FakeOpenAI.clients[-1]
+        assert (client.base_url, client.api_key, client.requests[-1]["model"]) == (
+            "http://localhost:11434/v1", "ollama", "qwen")
+    finally:
+        await session.close()
 
 
 # === team.py ======================================================================
@@ -184,7 +207,7 @@ def test_no_key_exits_with_a_hint(name, monkeypatch):
     monkeypatch.setattr(demo, "build_chat_session", _no_ui)
     with pytest.raises(SystemExit) as exited:
         demo.main()
-    assert str(exited.value) == "set OPENAI_API_KEY (any OpenAI-compatible key); see examples/README.md"
+    assert str(exited.value) == "OPENAI_API_KEY is not set; see examples/README.md"
 
 
 def _no_ui(**kwargs):

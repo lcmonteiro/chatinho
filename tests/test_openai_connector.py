@@ -5,6 +5,7 @@ See openspec/specs/openai-connector.
 
 import asyncio
 import logging
+import os
 from typing import List
 
 import pytest
@@ -13,6 +14,8 @@ from chatinho import SELF, ChatMessage, HookListen, HookSay, Query, ReplyStatus,
 from chatinho import connector, require
 from chatinho.connectors import openai as module
 from chatinho.connectors.openai import OpenAIConnector
+from chatinho.endpoint import Endpoint
+from chatinho.keys import Env, File, Literal
 
 from conftest import driven
 from llm_kit import FakeOpenAI, failure, requests, sent
@@ -54,7 +57,7 @@ class Bystander:
 # === Answering never blocks the chat ==============================================
 
 async def test_the_models_text_is_the_answer():
-    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key="sk-own")])
+    session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="sk-own"))])
     try:
         reply = await reply_to(view, await view.say("weather?"))
         assert (reply.text, reply.status) == ("Sunny", ReplyStatus.ANSWERED)
@@ -65,7 +68,8 @@ async def test_the_models_text_is_the_answer():
 async def test_the_chat_keeps_moving_while_the_model_thinks():
     FakeOpenAI.gate = asyncio.Event()
     coder, bystander = Coder(), Bystander()
-    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key="sk-own"), coder, bystander])
+    gpt = OpenAIConnector("gpt", Endpoint(api_key="sk-own"))
+    session, view = await driven(connectors=[gpt, coder, bystander])
     try:
         said = await view.say("think hard", to=view.id_of("gpt"))
         while not requests():
@@ -87,7 +91,7 @@ async def test_the_chat_keeps_moving_while_the_model_thinks():
 # === Endpoint, model and system prompt ============================================
 
 async def test_a_system_prompt_leads():
-    gpt = OpenAIConnector(name="gpt", api_key="k", system="You review code.")
+    gpt = OpenAIConnector("gpt", Endpoint(api_key="k"), system="You review code.")
     session, view = await driven(connectors=[gpt])
     try:
         await reply_to(view, await view.say("look"))
@@ -97,8 +101,8 @@ async def test_a_system_prompt_leads():
 
 
 async def test_model_temperature_max_tokens_and_endpoint():
-    gpt = OpenAIConnector(name="gpt", api_key="k", model="m-1", temperature=0.1, max_tokens=50,
-                          base_url="http://localhost:11434/v1")
+    gpt = OpenAIConnector("gpt", Endpoint(base_url="http://localhost:11434/v1", model="m-1", api_key="k"),
+                          temperature=0.1, max_tokens=50)
     session, view = await driven(connectors=[gpt])
     try:
         await reply_to(view, await view.say("hi"))
@@ -112,7 +116,7 @@ async def test_model_temperature_max_tokens_and_endpoint():
 # === The conversation is remembered ===============================================
 
 async def test_a_follow_up_question():
-    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key="k")])
+    session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="k"))])
     try:
         FakeOpenAI.reply = "Hi Ana"
         await reply_to(view, await view.say("My name is Ana"))
@@ -129,12 +133,12 @@ async def test_a_follow_up_question():
 
 def room(reviewer: OpenAIConnector, coder: Coder) -> list:
     """Two answering peers, so a say to everyone stays a broadcast."""
-    return [reviewer, OpenAIConnector(name="other", api_key="k"), coder]
+    return [reviewer, OpenAIConnector("other", Endpoint(api_key="k")), coder]
 
 
 async def test_another_peer_is_named():
     coder    = Coder()
-    reviewer = OpenAIConnector(name="reviewer", api_key="k", memory=Query(errors=False))
+    reviewer = OpenAIConnector("reviewer", Endpoint(api_key="k"), memory=Query(errors=False))
     session, view = await driven(connectors=room(reviewer, coder))
     try:
         await coder.say("def f(): pass")
@@ -149,7 +153,7 @@ async def test_another_peer_is_named():
 
 async def test_only_its_own_exchanges_by_default():
     coder    = Coder()
-    reviewer = OpenAIConnector(name="reviewer", api_key="k")
+    reviewer = OpenAIConnector("reviewer", Endpoint(api_key="k"))
     session, view = await driven(connectors=room(reviewer, coder))
     try:
         await coder.say("def f(): pass")
@@ -160,7 +164,7 @@ async def test_only_its_own_exchanges_by_default():
 
 
 async def test_no_memory():
-    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key="k", memory=None)])
+    session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="k"), memory=None)])
     try:
         await reply_to(view, await view.say("one"))
         await reply_to(view, await view.say("two"))
@@ -170,7 +174,7 @@ async def test_no_memory():
 
 
 async def test_memory_is_bounded_and_skips_errors():
-    gpt = OpenAIConnector(name="gpt", api_key="k", memory=Query(peer=SELF, errors=False).last(2))
+    gpt = OpenAIConnector("gpt", Endpoint(api_key="k"), memory=Query(peer=SELF, errors=False).last(2))
     session, view = await driven(connectors=[gpt])
     try:
         FakeOpenAI.error = failure("APIConnectionError")
@@ -188,7 +192,7 @@ async def test_memory_is_bounded_and_skips_errors():
 # === A lent key wins over the configured one ======================================
 
 async def test_answered_with_the_askers_key():
-    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key="sk-own")])
+    session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="sk-own"))])
     try:
         await reply_to(view, await view.say("one", credentials={"llm": Secret("sk-lent")}))
         await reply_to(view, await view.say("two"))
@@ -201,7 +205,7 @@ async def test_answered_with_the_askers_key():
 
 
 async def test_no_key_at_all():
-    session, view = await driven(connectors=[OpenAIConnector(name="gpt")])
+    session, view = await driven(connectors=[OpenAIConnector("gpt")])
     try:
         reply = await reply_to(view, await view.say("hello"))
         assert reply.status == ReplyStatus.ERROR
@@ -214,7 +218,7 @@ async def test_no_key_at_all():
 # === Failures are answers, and starting needs no network ==========================
 
 async def test_starting_without_a_key_makes_no_request():
-    session, _ = await driven(connectors=[OpenAIConnector(name="gpt")])
+    session, _ = await driven(connectors=[OpenAIConnector("gpt")])
     try:
         assert FakeOpenAI.clients == []
     finally:
@@ -223,7 +227,7 @@ async def test_starting_without_a_key_makes_no_request():
 
 async def test_a_lent_key_never_reaches_the_reply_or_the_logs(caplog):
     FakeOpenAI.error = failure("AuthenticationError", "bad key sk-lent")
-    session, view = await driven(connectors=[OpenAIConnector(name="gpt")])
+    session, view = await driven(connectors=[OpenAIConnector("gpt")])
     try:
         with caplog.at_level(logging.DEBUG):
             reply = await reply_to(view, await view.say("hello", credentials={"llm": Secret("sk-lent")}))
@@ -236,7 +240,7 @@ async def test_a_lent_key_never_reaches_the_reply_or_the_logs(caplog):
 
 async def test_the_endpoint_refuses(caplog):
     FakeOpenAI.error = failure("AuthenticationError", "bad key sk-secret")
-    session, view = await driven(connectors=[OpenAIConnector(name="gpt", api_key="sk-secret")])
+    session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="sk-secret"))])
     try:
         with caplog.at_level(logging.DEBUG):
             reply = await reply_to(view, await view.say("hello"))
@@ -245,3 +249,89 @@ async def test_the_endpoint_refuses(caplog):
         assert "sk-secret" not in caplog.text
     finally:
         await session.close()
+
+
+# === Keys from sources, and endpoints =============================================
+
+async def test_from_an_endpoint():
+    local = Endpoint(base_url="http://localhost:11434/v1", model="qwen", api_key=Literal("ollama"))
+    session, view = await driven(connectors=[OpenAIConnector("gpt", local)])
+    try:
+        await reply_to(view, await view.say("hi"))
+        client = FakeOpenAI.clients[-1]
+        assert (client.base_url, client.api_key, client.requests[-1]["model"]) == (
+            "http://localhost:11434/v1", "ollama", "qwen")
+    finally:
+        await session.close()
+
+
+async def test_another_model_same_endpoint():
+    local = Endpoint(base_url="http://localhost:11434/v1", model="qwen", api_key=Literal("ollama"))
+    session, view = await driven(connectors=[OpenAIConnector("gpt", local.with_model("llama"))])
+    try:
+        await reply_to(view, await view.say("hi"))
+        assert requests()[-1]["model"] == "llama"
+        assert FakeOpenAI.clients[-1].base_url == "http://localhost:11434/v1"
+    finally:
+        await session.close()
+
+
+def test_no_endpoint_asks_openai():
+    gpt = OpenAIConnector("gpt")
+    assert (gpt.model, gpt.base_url) == ("gpt-4o", None)
+
+
+async def test_a_source_that_cannot_read(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key=Env("OPENAI_API_KEY")))])
+    try:
+        reply = await reply_to(view, await view.say("hello"))
+        assert reply.status == ReplyStatus.ERROR and "OPENAI_API_KEY is not set" in reply.text
+        assert requests() == []
+    finally:
+        await session.close()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
+async def test_a_rotated_key_is_used(tmp_path):
+    path = tmp_path / "openai.key"
+    path.write_text("sk-one")
+    path.chmod(0o600)
+    session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key=File(path)))])
+    try:
+        await reply_to(view, await view.say("one"))
+        await reply_to(view, await view.say("two"))
+        path.write_text("sk-two")
+        await reply_to(view, await view.say("three"))
+        assert [c.api_key for c in FakeOpenAI.clients] == ["sk-one", "sk-two"]
+        assert FakeOpenAI.clients[0].closed and len(FakeOpenAI.clients[0].requests) == 2
+    finally:
+        await session.close()
+
+
+def test_the_key_is_not_shown():
+    gpt = OpenAIConnector("gpt", Endpoint(api_key="sk-own"))
+    assert "sk-own" not in repr(gpt) and "sk-own" not in repr(vars(gpt))
+    assert not hasattr(gpt, "api_key")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
+async def test_a_rotated_out_client_closes_only_when_idle(tmp_path):
+    path = tmp_path / "openai.key"
+    path.write_text("sk-one")
+    path.chmod(0o600)
+    gpt = OpenAIConnector("gpt", Endpoint(api_key=File(path)), memory=None)
+    FakeOpenAI.gate = asyncio.Event()
+    first = asyncio.create_task(gpt.answer(ChatMessage(id="q-1", text="one")))
+    while not requests():
+        await asyncio.sleep(0.01)
+    path.write_text("sk-two")
+    second = asyncio.create_task(gpt.answer(ChatMessage(id="q-2", text="two")))
+    while len(requests()) < 2:
+        await asyncio.sleep(0.01)
+    old, new = FakeOpenAI.clients
+    assert (old.api_key, new.api_key) == ("sk-one", "sk-two")
+    assert not old.closed                            # still answering the first question
+    FakeOpenAI.gate.set()
+    assert [r.text for r in await asyncio.gather(first, second)] == ["Sunny", "Sunny"]
+    assert old.closed and not new.closed

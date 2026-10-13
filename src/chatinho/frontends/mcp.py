@@ -34,6 +34,7 @@ from chatinho.hooks import HookAnswer, HookCommands, HookInvoke, HookListen, Hoo
 from chatinho.hooks import HookSay
 from chatinho.hooks import Commands, Invoke, Locate, Peers, Say
 from chatinho.hooks import declares, frontend, name_of, require
+from chatinho.keys import KeyLike, to_source
 from chatinho.message import LOCAL, Attachment, ChatMessage, MessageID, ReplyStatus, Secret
 from chatinho.helpers.mcp import CREDENTIALS_KEY, encode, media_type_of
 
@@ -91,7 +92,9 @@ class McpFrontend:
 
     Args:
         name: Its name in the session, and the server's name; ``master`` by default.
-        token: The bearer token every request must carry; required.
+        token: The bearer token every request must carry; required. A string is
+            the token itself; a key source (:mod:`chatinho.keys`) or a function
+            is read once, here, so a missing token fails at startup.
         host: Where the server listens.
         port: The server's port.
         credentials: The credentials the session's peers may use, by name, each
@@ -99,6 +102,7 @@ class McpFrontend:
 
     Raises:
         ValueError: No token.
+        KeyUnavailable: The token's source could not yield it.
     """
 
     say      : Say
@@ -111,20 +115,21 @@ class McpFrontend:
         self,
         name        : str = "master",
         *,
-        token       : str,
+        token       : KeyLike,
         host        : str = "127.0.0.1",
         port        : int = 8000,
         credentials : Optional[Dict[str, str]] = None,
     ) -> None:
-        if not token:
+        source = to_source(token or None)
+        if source is None:
             raise ValueError("McpFrontend needs a bearer token")
+        secret = source.read()
         self.name        = name
         self.host        = host
         self.port        = port
         self.credentials : Dict[str, str] = dict(credentials or {})
-        self._token      = token
         #: The MCP server itself; an in-process client can connect to it directly.
-        self.server = FastMCP(name, auth=_OneToken(token))
+        self.server = FastMCP(name, auth=_OneToken(secret.reveal()))
         self.server.tool(self._ask,    name="ask")
         self.server.tool(self._peers,  name="peers")
         self.server.tool(self._tools,  name="tools")

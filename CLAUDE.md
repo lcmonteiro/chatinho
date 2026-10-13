@@ -30,7 +30,7 @@ things:
 
 ```python
 build_chat_session(
-    connectors = [OpenAIConnector(name="gpt", api_key="…")],   # peers: id, queue, conversation
+    connectors = [OpenAIConnector("gpt", Endpoint.load())],     # peers: id, queue, conversation
     commands   = [HelpCommand(), TestCommand()],               # not peers: they just run
     backend    = DatabaseBackend("sqlite:///chat.db"),         # a peer that listens
 )
@@ -317,6 +317,9 @@ src/chatinho/
                    context() returns; plain data, so a backend could answer it one day
   message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
                    Attachment, Reply (what peers attach; the backend keeps it)
+  keys.py          key sources: Env, DotEnv, File, Keyring, Command, Literal, Chain, key("env:…");
+                   every key or token argument takes one (to_source), read late, always a Secret
+  endpoint.py      Endpoint: base_url + model + key source; named profiles in a TOML file
   commands/        help.py, test.py — commands: they run, they are not peers
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
                    attachments

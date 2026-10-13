@@ -203,10 +203,10 @@ silently never fires.
 ### With the batteries
 
 ```python
-from chatinho import build_chat_session, OpenAIConnector, DatabaseBackend, HelpCommand
+from chatinho import build_chat_session, OpenAIConnector, DatabaseBackend, Endpoint, HelpCommand
 
 build_chat_session(
-    connectors = [OpenAIConnector(name="gpt", api_key="***", system="You are concise.")],
+    connectors = [OpenAIConnector("gpt", Endpoint.load(), system="You are concise.")],
     commands   = [HelpCommand()],
     backend    = DatabaseBackend("sqlite:///chat.db"),
 ).run()
@@ -214,14 +214,67 @@ build_chat_session(
 
 Needs `chatinho[all]`, or whichever extras those three names ask for.
 
-`OpenAIConnector` talks to any OpenAI-compatible endpoint — `base_url="http://localhost:11434/v1"`
-for Ollama, or Azure, OpenRouter, LM Studio — and never blocks the chat while the model thinks. It
+`OpenAIConnector` talks to the `Endpoint` it is given — its URL, model and key, together (see
+[Keys and endpoints](#keys-and-endpoints)): any OpenAI-compatible one, such as
+`Endpoint(base_url="http://localhost:11434/v1", model="qwen")` for Ollama, or Azure, OpenRouter,
+LM Studio; OpenAI and `gpt-4o` when it is left out — and never blocks the chat while the model thinks. It
 remembers what its `memory` query selects — by default `Query(peer=SELF, errors=False).last(20)`,
 what passed between it and anyone without the failed replies; `Query(errors=False)` for the whole
 room, `None` for nothing — its own replies as `assistant` turns and everyone else's as `user`
 turns, prefixed with the speaker's name when it is not you. A key lent on the message under `credential` (`llm` by default) wins over
-its own `api_key`, which is therefore optional; a failure comes back as an `error` reply naming the
+its endpoint's key, which is therefore optional; a failure comes back as an `error` reply naming the
 kind of failure, never the key.
+
+### Keys and endpoints
+
+A key or token argument takes the value itself (a string), or **where the value lives**: a key
+source from `chatinho.keys`, read when it is needed and never kept in plain text. Errors name the
+reference — the variable, the file, the command — never a value.
+
+```python
+from chatinho import Chain, Command, Endpoint, Env, File, Keyring, OpenAIConnector
+
+key = Chain(Env("OPENAI_API_KEY"),                     # the first that has a key wins
+            Keyring("chatinho", "openai"),             # the OS keychain: chatinho[keyring]
+            File("~/.config/chatinho/openai.key"))     # must be chmod 600
+gpt = OpenAIConnector("gpt", Endpoint(api_key=key, model="gpt-4o-mini"))
+lab = OpenAIConnector("lab", Endpoint(api_key=Command("pass show api/openai")))   # run once, kept
+```
+
+`DotEnv(".env", "NAME")` reads one variable of a dotenv file. `Env`, `DotEnv` and `File` are read
+anew each time, so a rotated key is used without a restart; `Keyring` and `Command` are read once.
+The same sources work for `McpConnector(token=..., delegate={...})` and `McpFrontend(token=...)`.
+
+An `Endpoint` is the URL, the model and the key together, usually a named profile in
+`~/.config/chatinho/profiles.toml` (or `.chatinho.toml` in the project), where the key is only a
+reference:
+
+```toml
+default = "nvidia"
+
+[nvidia]
+base_url = "https://integrate.api.nvidia.com/v1"
+model    = "nvidia/nemotron-3-super-120b-a12b"
+api_key  = "env:ORBE_OPENAI_API_KEY"     # env:, dotenv:PATH#NAME, file:, keyring:SVC/USER, cmd:, literal:
+
+[local]
+base_url = "http://localhost:11434/v1"
+model    = "qwen2.5-coder"
+api_key  = "literal:ollama"
+```
+
+```python
+from chatinho import Endpoint
+
+assistant = OpenAIConnector("assistant", Endpoint.load())                       # CHATINHO_PROFILE, else default
+reviewer  = OpenAIConnector("reviewer", Endpoint.load("nvidia").with_model("other"))
+```
+
+`CHATINHO_MODEL` and `CHATINHO_BASE_URL` override a profile's fields; with no profile, the endpoint
+comes from `OPENAI_API_KEY` and `OPENAI_BASE_URL`. `Endpoint.from_env("ORBE_OPENAI")` reads
+`ORBE_OPENAI_API_KEY`, `_BASE_URL` and `_MODEL`, and `endpoint.check()` reads the key once so a
+program can stop before it starts. A profiles file others can write is refused, since `cmd:` runs a
+command.
 
 ### Across machines — `pip install 'chatinho[mcp]'`
 

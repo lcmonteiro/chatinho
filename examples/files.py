@@ -13,17 +13,17 @@ Run it::
     export OPENAI_API_KEY=sk-...         # any OpenAI-compatible key
     python examples/files.py
 
-``OPENAI_BASE_URL`` and ``CHATINHO_MODEL`` work as in ``assistant.py``.
+``CHATINHO_PROFILE``, ``OPENAI_BASE_URL`` and ``CHATINHO_MODEL`` work as in ``assistant.py``.
 
 Needs ``pip install 'chatinho[all]'``.
 """
 
-import os
 import pathlib
 import shlex
 from typing import Optional
 
-from chatinho import LOCAL, HelpCommand, HookExecute, HookPeers, HookSay, OpenAIConnector
+from chatinho import LOCAL, Endpoint, HelpCommand, HookExecute, HookPeers, HookSay, KeyUnavailable
+from chatinho import OpenAIConnector
 from chatinho import Peers, Reply, ReplyStatus, Say, build_chat_session, name_of, require, tool
 
 SYSTEM   = "You answer questions about the file the user shares, quoting it when useful."
@@ -33,13 +33,14 @@ LIMIT    = 64 * 1024
 QUESTION = "Summarise this file."
 
 
-def config() -> dict:
-    """The model settings, from the environment; exits with a hint when there is no key."""
-    key = os.environ.get("OPENAI_API_KEY")
-    if not key:
-        raise SystemExit("set OPENAI_API_KEY (any OpenAI-compatible key); see examples/README.md")
-    return dict(api_key=key, base_url=os.environ.get("OPENAI_BASE_URL") or None,
-                model=os.environ.get("CHATINHO_MODEL", "gpt-4o-mini"))
+def endpoint() -> Endpoint:
+    """The model to use: a profile, else ``OPENAI_*``; exits with a hint when there is no key."""
+    try:
+        found = Endpoint.load()
+        found.check()
+    except (KeyUnavailable, ValueError) as exc:
+        raise SystemExit("%s; see examples/README.md" % exc)
+    return found if found.model else found.with_model("gpt-4o-mini")
 
 
 def refused(text: str) -> Reply:
@@ -92,7 +93,7 @@ class ReadCommand:
 def parts() -> dict:
     """The assistant, /read and /help."""
     return dict(
-        connectors = [OpenAIConnector(name="assistant", system=SYSTEM, **config())],
+        connectors = [OpenAIConnector("assistant", endpoint(), system=SYSTEM)],
         commands   = [ReadCommand(), HelpCommand()],
         backend    = None,
     )
