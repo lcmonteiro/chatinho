@@ -62,7 +62,7 @@ Where `api_key` can point:
 | `dotenv:PATH#NAME`, `dotenv:#NAME` | one variable of a dotenv file (`.env` by default) | not permission-checked; keep it out of git |
 | `file:PATH` | a whole file | must be `chmod 600`; read anew each time |
 | `keyring:SERVICE/USER` | the OS keychain | needs `chatinho[keyring]`; none on Termux |
-| `cmd:COMMAND` | what a command prints (`pass show api/openai`, `op read …`, `age -d …`) | run once, without a shell; it runs code, so the file must not be writable by others |
+| `cmd:COMMAND` | what a command prints (`pass show api/openai`, `op read …`, `age -d …`) | run once, without a shell and with no stdin (password managers prompt through their own agent: pinentry, the 1Password app); it runs code, so the file must not be writable by others |
 | `literal:VALUE` | the value itself | for endpoints that ignore the key, such as Ollama |
 
 The profile is the one named in code, else `CHATINHO_PROFILE`, else the file's `default`.

@@ -207,6 +207,9 @@ class Command:
     For password managers and encrypted files: ``Command("pass show api/openai")``,
     ``Command(["op", "read", "op://dev/openai/key"])``. Its output never appears
     in an error, since a failing command may have printed part of a secret.
+
+    Its stdin is ``/dev/null``, so it never reads the chat's own input; password
+    managers prompt through their own agent (pinentry, the 1Password app).
     """
 
     TIMEOUT = 30.0

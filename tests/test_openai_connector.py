@@ -276,8 +276,9 @@ async def test_another_model_same_endpoint():
         await session.close()
 
 
-def test_the_default_model():
-    assert OpenAIConnector("gpt").model == "gpt-4o"
+def test_no_endpoint_asks_openai():
+    gpt = OpenAIConnector("gpt")
+    assert (gpt.model, gpt.base_url) == ("gpt-4o", None)
 
 
 async def test_a_source_that_cannot_read(monkeypatch):
@@ -312,3 +313,25 @@ def test_the_key_is_not_shown():
     gpt = OpenAIConnector("gpt", Endpoint(api_key="sk-own"))
     assert "sk-own" not in repr(gpt) and "sk-own" not in repr(vars(gpt))
     assert not hasattr(gpt, "api_key")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
+async def test_a_rotated_out_client_closes_only_when_idle(tmp_path):
+    path = tmp_path / "openai.key"
+    path.write_text("sk-one")
+    path.chmod(0o600)
+    gpt = OpenAIConnector("gpt", Endpoint(api_key=File(path)), memory=None)
+    FakeOpenAI.gate = asyncio.Event()
+    first = asyncio.create_task(gpt.answer(ChatMessage(id="q-1", text="one")))
+    while not requests():
+        await asyncio.sleep(0.01)
+    path.write_text("sk-two")
+    second = asyncio.create_task(gpt.answer(ChatMessage(id="q-2", text="two")))
+    while len(requests()) < 2:
+        await asyncio.sleep(0.01)
+    old, new = FakeOpenAI.clients
+    assert (old.api_key, new.api_key) == ("sk-one", "sk-two")
+    assert not old.closed                            # still answering the first question
+    FakeOpenAI.gate.set()
+    assert [r.text for r in await asyncio.gather(first, second)] == ["Sunny", "Sunny"]
+    assert old.closed and not new.closed

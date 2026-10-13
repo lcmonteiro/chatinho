@@ -54,7 +54,7 @@ Elsewhere every existing argument keeps its meaning, and a plain string is still
 - `endpoint-profiles`: the `Endpoint` bundle, the profiles file format and search order, profile selection, environment overrides and fallback, and early checking.
 
 ### Modified Capabilities
-- `openai-connector`: the endpoint and model come from an `Endpoint` when given. The configured key may be a key source, read when needed and never held in plain text. A source that fails becomes an error reply.
+- `openai-connector`: the connector takes one `Endpoint` instead of separate key, URL and model. The configured key may be a key source, read when needed and never held in plain text. A source that fails becomes an error reply.
 - `credential-delegation`: a delegated value may also be a key source, read once for each question.
 
 ## Impact

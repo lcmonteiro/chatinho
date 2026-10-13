@@ -85,6 +85,8 @@ class OpenAIConnector:
         self._key        = endpoint.key
         #: The client for its own key, and a digest of the key it was built with.
         self._client : Optional[Tuple[bytes, AsyncOpenAI]] = None
+        #: Requests in flight on each own client, so a rotated-out one is closed only once idle.
+        self._using  : Dict[AsyncOpenAI, int] = {}
 
     def __repr__(self) -> str:
         return "OpenAIConnector(name=%r, model=%r, base_url=%r)" % (self.name, self.model, self.base_url)
@@ -100,7 +102,7 @@ class OpenAIConnector:
             if lent is not None:
                 async with AsyncOpenAI(api_key=lent.reveal(), base_url=self.base_url) as client:
                     return await self._complete(client, messages)
-            return await self._complete(await self._own_client(), messages)
+            return await self._with_own_client(messages)
         except KeyUnavailable as exc:
             logger.warning("%s: no key (%s)", self.name, exc)
             return Reply("%s: %s" % (self.name, exc), status=ReplyStatus.ERROR)
@@ -109,6 +111,19 @@ class OpenAIConnector:
             return Reply("%s: could not get an answer (%s)" % (self.name, type(exc).__name__),
                          status=ReplyStatus.ERROR)
 
+    async def _with_own_client(self, messages: List[Dict[str, str]]) -> Reply:
+        """Asks with its own key's client, closing a rotated-out client once nothing uses it."""
+        client = await self._own_client()
+        self._using[client] = self._using.get(client, 0) + 1
+        try:
+            return await self._complete(client, messages)
+        finally:
+            self._using[client] -= 1
+            if not self._using[client]:
+                del self._using[client]
+                if self._client is None or self._client[1] is not client:
+                    await client.close()
+
     async def _own_client(self) -> AsyncOpenAI:
         """The client for its own key, rebuilt when the key it reads has changed."""
         assert self._key is not None
@@ -116,8 +131,8 @@ class OpenAIConnector:
         digest = hashlib.sha256(key.encode()).digest()
         if self._client is not None and self._client[0] == digest:
             return self._client[1]
-        if self._client is not None:
-            await self._client[1].close()
+        if self._client is not None and not self._using.get(self._client[1]):
+            await self._client[1].close()          # idle; a busy one closes when it is done
         client       = AsyncOpenAI(api_key=key, base_url=self.base_url)
         self._client = (digest, client)
         return client

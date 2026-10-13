@@ -58,7 +58,7 @@ The alternative was an async `get()` in the protocol. That makes `McpFrontend.__
 ### Safety rules live in the sources
 - **`File`:** on POSIX (`os.name == "posix"`), a file whose `st_mode & 0o077` is non-zero is refused, with "chmod 600 <path>". `~` is expanded.
 - **`DotEnv`:** not permission-checked, because `.env` files are routinely 0644. It parses `KEY=VALUE` lines itself, with optional `export`, `#` comments and surrounding single or double quotes; there is no `python-dotenv` dependency.
-- **`Command`:** runs `argv` with `shell=False`, `timeout=30`, and `stdin` closed so a passphrase prompt can use the TTY. A non-zero exit or empty output raises `KeyUnavailable` with the command name and exit code. The command's stdout and stderr are never included in the error, since they may hold a partial secret.
+- **`Command`:** runs `argv` with `shell=False`, `timeout=30`, and stdin set to `/dev/null`, so the command never reads the chat's own input. Password managers prompt through their own agent (pinentry for `pass`/GPG, the 1Password app for `op`), not through stdin. A non-zero exit or empty output raises `KeyUnavailable` with the command name and exit code. The command's stdout and stderr are never included in the error, since they may hold a partial secret.
 - **`Keyring`:** imports `keyring` inside `read()`. An `ImportError` becomes "install chatinho[keyring]", and a missing entry becomes "no keychain entry service/user".
 - **Profiles file:** on POSIX it is refused when group or others can write it (`st_mode & 0o022`), because a profile may hold `cmd:`. Reading by others is allowed, since it holds no secret values.
 
@@ -80,7 +80,7 @@ Rules for `load`:
 - **Arguments:** `OpenAIConnector(name, endpoint=None, *, temperature, max_tokens, system, memory, credential)`. The separate `api_key`, `base_url` and `model` arguments are removed: the three always travel together, and two ways to say the same thing invited conflicts about which one wins. Another model on the same endpoint is `endpoint.with_model(...)`. With no endpoint, the connector asks OpenAI with `gpt-4o` and no key of its own (lent keys still work).
 - **Hiding the key:** the public `api_key` attribute is removed (the key is never an attribute). A `__repr__` shows name, model and URL only, and the kept `endpoint` hides its key in its own `repr`.
 - **Reading the key:** in `answer()`, a lent key behaves as today. Otherwise `await read_async(endpoint.key)`, and a `KeyUnavailable` becomes `Reply("<name>: <reason>", status=ERROR)`.
-- **Reusing the client:** the cached own-client is keyed by a SHA-256 digest of the key, so a rotated key builds a new client and closes the old one. The digest, not the key, is kept to compare.
+- **Reusing the client:** the cached own-client is keyed by a SHA-256 digest of the key, so a rotated key builds a new client. The digest, not the key, is kept to compare. The old client is closed at once when idle, else when its last request in flight finishes; requests are counted per client. Through a session a peer answers one message at a time, so this only matters when `answer()` is called directly.
 - **Updated tests:** every `OpenAIConnector(name, api_key=...)` in the tests becomes `OpenAIConnector(name, Endpoint(api_key=...))`.
 
 The alternative was keeping the separate arguments beside `endpoint=`, with explicit ones winning. It was dropped in review, since it kept two spellings of the same configuration.
@@ -107,7 +107,7 @@ def endpoint() -> Endpoint:
     return found
 ```
 
-Each calls it from `parts()` and passes `endpoint=` to its connectors; `team.py` passes the same endpoint to both. `lab_server.py` uses `Endpoint.load().without_key()`, and `lab_client.py` delegates `{"llm": Endpoint.load().api_key}` after `check()`. The missing-key test asserts the new message. That message names `OPENAI_API_KEY` when no profiles file exists, which the test guarantees by pointing `CHATINHO_PROFILES` at a missing path and clearing `CHATINHO_PROFILE`.
+Each calls it from `parts()` and passes `endpoint=` to its connectors; `team.py` passes the same endpoint to both. `lab_server.py` uses `Endpoint.load().without_key()`, and `lab_client.py` delegates `{"llm": Endpoint.load().key}` after `check()`. The missing-key test asserts the new message. That message names `OPENAI_API_KEY` when no profiles file exists, which the test guarantees by pointing `CHATINHO_PROFILES` at a missing path and clearing `CHATINHO_PROFILE`.
 
 ## Risks / Trade-offs
 
