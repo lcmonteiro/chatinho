@@ -29,7 +29,7 @@ CREDENTIALS = {"llm": "OpenAI-compatible API key"}
 def parts() -> dict:
     """The lab: a model with no key, answering with the one each question lends."""
     found = Endpoint.load().without_key()
-    lab   = OpenAIConnector(name="lab", system=SYSTEM, endpoint=found, model=found.model or "gpt-4o-mini")
+    lab   = OpenAIConnector("lab", found if found.model else found.with_model("gpt-4o-mini"), system=SYSTEM)
     return dict(connectors=[lab], commands=[], backend=None)
 
 

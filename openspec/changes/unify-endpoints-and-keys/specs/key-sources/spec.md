@@ -83,14 +83,14 @@ A string with any other prefix, or none, MUST be refused with an error that list
 
 ### Requirement: Accepted wherever a key or token is
 Every argument that takes a key or a token SHALL accept a key source or a function returning a string, as well as a string:
-- the connector's own key (`OpenAIConnector(api_key=...)`);
+- an endpoint's key (`Endpoint(api_key=...)`), and so an `OpenAIConnector`'s own key;
 - MCP bearer tokens (`McpConnector(token=...)`, `McpFrontend(token=...)`, `build_mcp_session(token=...)`);
 - delegated credentials (`McpConnector(delegate={...})`).
 
 A plain string MUST keep meaning the value itself and MUST NOT be parsed as a reference. A server's token MUST be read when the frontend is created, so a missing token fails at startup.
 
 #### Scenario: A plain string is the value
-- **WHEN** a connector is created with `api_key="env:X"`
+- **WHEN** an endpoint is created with `api_key="env:X"`
 - **THEN** `env:X` itself is the key, and no variable is read
 
 #### Scenario: A server token from a source

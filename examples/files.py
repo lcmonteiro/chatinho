@@ -93,7 +93,7 @@ class ReadCommand:
 def parts() -> dict:
     """The assistant, /read and /help."""
     return dict(
-        connectors = [OpenAIConnector(name="assistant", system=SYSTEM, endpoint=endpoint())],
+        connectors = [OpenAIConnector("assistant", endpoint(), system=SYSTEM)],
         commands   = [ReadCommand(), HelpCommand()],
         backend    = None,
     )

@@ -4,7 +4,7 @@
 
 chatinho moves keys safely once it has them: it lends them per message, wraps them in `Secret`, and clears them after the reply. Where a key *comes from*, though, is left to every caller, and so is the endpoint and model it belongs to. As a result:
 - each demo repeats an environment-reading `config()`;
-- `OpenAIConnector.api_key` accepts only a fixed string, unlike `McpConnector(delegate=...)`, which accepts a function;
+- `OpenAIConnector` takes its key, URL and model as three separate arguments, and the key only as a fixed string, unlike `McpConnector(delegate=...)`, which accepts a function;
 - the connector's own key sits in a plain attribute;
 - the usual places people keep keys (environment, `.env`, a 0600 file, the OS keychain, a password manager) need glue code each time.
 
@@ -27,8 +27,8 @@ The endpoint and model fail together with the key. While smoke-testing the examp
   - `check()` resolves the key once, so a program can fail at startup instead of on the first question.
 - **`OpenAIConnector`:**
   - It accepts `endpoint=`.
-  - `api_key` also takes a key source or a function. The key is read when needed and held as a `Secret`.
-  - Explicit `api_key`, `model` and `base_url` arguments win over the endpoint.
+  - It takes an `Endpoint` (`OpenAIConnector(name, endpoint)`) in place of the separate `api_key`, `base_url` and `model` arguments; another model on the same endpoint is `endpoint.with_model(...)`.
+  - The key is read when needed and held as a `Secret`.
   - `model` defaults to the endpoint's model, else `gpt-4o`, as today.
   - A key source that cannot produce a key becomes an `error` reply naming the reference.
 - **MCP tokens and lending:**
@@ -45,7 +45,7 @@ The endpoint and model fail together with the key. While smoke-testing the examp
   - switching profiles inside a running chat;
   - checking the model against the endpoint's `/models`.
 
-Every existing argument keeps its meaning, and a plain string is still a literal key or token. **BREAKING** (minor): `OpenAIConnector` no longer exposes its key as the public `api_key` attribute, since the key is never held in plain text; nothing in the repository reads it.
+Elsewhere every existing argument keeps its meaning, and a plain string is still a literal key or token. **BREAKING**: `OpenAIConnector` no longer takes `api_key`, `base_url` or `model`; pass `Endpoint(base_url=..., model=..., api_key=...)` (a plain string key still works there) or `Endpoint.load()`. It no longer exposes its key as the public `api_key` attribute either, since the key is never held in plain text.
 
 ## Capabilities
 

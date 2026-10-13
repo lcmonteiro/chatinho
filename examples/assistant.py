@@ -40,7 +40,7 @@ def endpoint() -> Endpoint:
 def parts() -> dict:
     """What the chat is made of: the assistant, /help, and the database that remembers."""
     return dict(
-        connectors = [OpenAIConnector(name="assistant", system=SYSTEM, endpoint=endpoint())],
+        connectors = [OpenAIConnector("assistant", endpoint(), system=SYSTEM)],
         commands   = [HelpCommand()],
         backend    = DatabaseBackend("sqlite:///%s" % os.environ.get("CHATINHO_DB", "assistant.db")),
     )

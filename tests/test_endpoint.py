@@ -165,3 +165,11 @@ def test_no_profiles_file(monkeypatch):
     got = Endpoint.load()
     assert (got.base_url, got.model, got.profile) == ("https://compat/v1", "m", None)
     assert got.api_key.read().reveal() == "sk-env"
+
+
+def test_a_plain_string_key_is_the_value(monkeypatch):
+    monkeypatch.setenv("X", "from-env")
+    endpoint = Endpoint(api_key="env:X")
+    assert isinstance(endpoint.api_key, Literal) and endpoint.key.read().reveal() == "env:X"
+    assert Endpoint(api_key=lambda: "sk-fn").key.read().reveal() == "sk-fn"
+    assert Endpoint().key is None

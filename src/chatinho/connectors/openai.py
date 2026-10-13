@@ -11,7 +11,7 @@ from ..hooks import HookAnswer, HookContext, HookPeers
 from ..hooks import Context, Peers
 from ..hooks import connector, name_of, require
 from ..endpoint import Endpoint
-from ..keys import KeyLike, KeyUnavailable, read_async, to_source
+from ..keys import KeyUnavailable, read_async
 from ..message import LOCAL, ChatMessage, Reply, ReplyStatus
 from ..query import SELF, Query
 
@@ -33,22 +33,23 @@ class OpenAIConnector:
     of the conversation its ``memory`` query selects, and answers with the key
     lent on the message when there is one, else with its own.
 
+    Where to ask, which model, and with which key all come from one
+    :class:`~chatinho.endpoint.Endpoint` — usually a named profile::
+
+        OpenAIConnector("assistant", Endpoint.load())
+        OpenAIConnector("local", Endpoint(base_url="http://localhost:11434/v1", model="qwen"))
+
     Its own key is read when a question needs it — never at creation — and held
     only as a :class:`~chatinho.message.Secret`, so a rotated key is used
     without a restart and the key is never an attribute.
 
     Args:
         name: Its name in the chat.
-        api_key: Its own key: a string (the value itself), a key source from
-            :mod:`chatinho.keys`, or a function returning it. Optional when the
-            endpoint has one, or when every question comes with one lent.
-        model: The model to ask; the endpoint's, else ``gpt-4o``.
+        endpoint: The URL (any OpenAI-compatible one: Azure, OpenRouter, Ollama,
+            …; OpenAI itself when unset), the model (``gpt-4o`` when unset) and
+            the key. The key is optional when every question comes with one lent.
         temperature: Sampling temperature.
         max_tokens: A cap on the reply's length, or None for the model's own.
-        base_url: Any OpenAI-compatible endpoint (Azure, OpenRouter, Ollama, …);
-            the endpoint's, else OpenAI itself.
-        endpoint: An :class:`~chatinho.endpoint.Endpoint` supplying the URL, model
-            and key that are not given explicitly.
         system: The system prompt, sent first with every question.
         memory: Which earlier messages to send, as a :class:`~chatinho.query.Query`
             the session applies; None for none. By default what passed between
@@ -62,28 +63,26 @@ class OpenAIConnector:
     def __init__(
         self,
         name        : str,
-        api_key     : Optional[KeyLike] = None,
+        endpoint    : Optional[Endpoint] = None,
         *,
-        model       : Optional[str] = None,
         temperature : float = 0.7,
         max_tokens  : Optional[int] = None,
-        base_url    : Optional[str] = None,
         system      : Optional[str] = None,
         memory      : Optional[Query] = MEMORY,
         credential  : str = "llm",
-        endpoint    : Optional[Endpoint] = None,
     ) -> None:
         endpoint         = endpoint or Endpoint()
         self.name        = name
-        self.model       = model or endpoint.model or "gpt-4o"
+        self.endpoint    = endpoint
+        self.model       = endpoint.model or "gpt-4o"
+        self.base_url    = endpoint.base_url
         self.temperature = temperature
         self.max_tokens  = max_tokens
-        self.base_url    = base_url or endpoint.base_url
         self.system      = system
         self.memory      = memory
         self.credential  = credential
         #: Where its own key is read from, when a question needs it.
-        self._key        = to_source(api_key) or endpoint.api_key
+        self._key        = endpoint.key
         #: The client for its own key, and a digest of the key it was built with.
         self._client : Optional[Tuple[bytes, AsyncOpenAI]] = None
 

@@ -6,7 +6,7 @@ Today a key reaches chatinho in four places, each typed differently (see proposa
 
 | Place | Accepts today | Read when |
 |---|---|---|
-| `OpenAIConnector(api_key=)` | `str` | once, in the cached `AsyncOpenAI` client |
+| `OpenAIConnector(api_key=, base_url=, model=)` | `str` | once, in the cached `AsyncOpenAI` client |
 | `McpConnector(token=)` | `str` | when the FastMCP `Client` is built, in `__init__` and again in `initialize()` |
 | `McpConnector(delegate={...})` | `str` or callable | once per question, in `_lending()` |
 | `McpFrontend(token=)` | `str` | in `__init__`, by `_OneToken` |
@@ -63,11 +63,11 @@ The alternative was an async `get()` in the protocol. That makes `McpFrontend.__
 - **Profiles file:** on POSIX it is refused when group or others can write it (`st_mode & 0o022`), because a profile may hold `cmd:`. Reading by others is allowed, since it holds no secret values.
 
 ### `Endpoint` is a frozen dataclass in `chatinho/endpoint.py`
-Its fields are `base_url: Optional[str]`, `model: Optional[str]`, `api_key: Optional[KeySource]` (declared `repr=False`) and `profile: Optional[str]`. Its methods are:
+Its fields are `base_url: Optional[str]`, `model: Optional[str]`, `api_key` (declared `repr=False`) and `profile: Optional[str]`. `api_key` accepts any key form, and `__post_init__` normalises it with `to_source`, so `Endpoint(api_key="sk-…")` works and the field always holds a key source; `key` is the typed accessor. Its methods are:
 - `load(profile=None)`;
 - `from_env(prefix)`;
 - `with_model()` and `without_key()`, both through `dataclasses.replace`;
-- `check()`, which calls `api_key.read()` and discards the value.
+- `check()`, which reads `key` and discards the value.
 
 Rules for `load`:
 - **Finding the file:** `CHATINHO_PROFILES`, then `./.chatinho.toml`, then `$XDG_CONFIG_HOME/chatinho/profiles.toml` (falling back to `~/.config`). The first file that exists wins, and files are not merged. Merging would make it unclear which file a field came from.
@@ -76,12 +76,14 @@ Rules for `load`:
 - **Overrides:** `CHATINHO_MODEL` and `CHATINHO_BASE_URL` override the chosen profile's fields.
 - **Validation:** unknown keys in a profile and a non-string `default` raise `ValueError` naming the file and the profile.
 
-### `OpenAIConnector` resolves late and keeps only Secrets
-- **Arguments:** the new signature adds `endpoint: Optional[Endpoint] = None`, and `model` defaults to `None`. At construction, `model = model or endpoint.model or "gpt-4o"`, `base_url = base_url or endpoint.base_url`, and `self._key = to_source(api_key) or endpoint.api_key`.
-- **Hiding the key:** the public `api_key` attribute is removed (the key is never an attribute). A `__repr__` shows name, model and URL only.
-- **Reading the key:** in `answer()`, a lent key behaves as today. Otherwise `await read_async(self._key)`, and a `KeyUnavailable` becomes `Reply("<name>: <reason>", status=ERROR)`.
+### `OpenAIConnector` takes one Endpoint, resolves late and keeps only Secrets
+- **Arguments:** `OpenAIConnector(name, endpoint=None, *, temperature, max_tokens, system, memory, credential)`. The separate `api_key`, `base_url` and `model` arguments are removed: the three always travel together, and two ways to say the same thing invited conflicts about which one wins. Another model on the same endpoint is `endpoint.with_model(...)`. With no endpoint, the connector asks OpenAI with `gpt-4o` and no key of its own (lent keys still work).
+- **Hiding the key:** the public `api_key` attribute is removed (the key is never an attribute). A `__repr__` shows name, model and URL only, and the kept `endpoint` hides its key in its own `repr`.
+- **Reading the key:** in `answer()`, a lent key behaves as today. Otherwise `await read_async(endpoint.key)`, and a `KeyUnavailable` becomes `Reply("<name>: <reason>", status=ERROR)`.
 - **Reusing the client:** the cached own-client is keyed by a SHA-256 digest of the key, so a rotated key builds a new client and closes the old one. The digest, not the key, is kept to compare.
-- **Updated test:** `test_answered_with_the_askers_key` keeps working, because the stub records `api_key` at construction.
+- **Updated tests:** every `OpenAIConnector(name, api_key=...)` in the tests becomes `OpenAIConnector(name, Endpoint(api_key=...))`.
+
+The alternative was keeping the separate arguments beside `endpoint=`, with explicit ones winning. It was dropped in review, since it kept two spellings of the same configuration.
 
 ### MCP arguments take the same type
 - **`McpFrontend(token=)`:** calls `to_source(token).read()` in `__init__` and gives the string to `_OneToken`. `None` or empty raises `ValueError`, as today, and a `KeyUnavailable` propagates.
@@ -111,7 +113,7 @@ Each calls it from `parts()` and passes `endpoint=` to its connectors; `team.py`
 
 - **[`cmd:` in a profiles file runs code]** → The file is refused when group or others can write it; `Command` runs without a shell; the README says to treat the file like a shell rc file.
 - **[`Command` or `Keyring` caching keeps a key in memory for the process lifetime]** → This is the same exposure as `Env`, and it is held as a `Secret`. A caller who needs rotation can use a fresh source or a function.
-- **[Removing `OpenAIConnector.api_key` breaks code that reads it]** → No example or test reads it outside the connector, and keeping it would defeat the "never an attribute" rule. The release notes in the README call it out.
+- **[Removing `api_key`, `base_url` and `model` from `OpenAIConnector` breaks existing callers]** → The fix is mechanical (`Endpoint(...)` around the same values), the README shows it, and every caller in the repository is updated. The `api_key` attribute is gone for the same "never an attribute" rule. The release notes in the README call it out.
 - **[`.env` is not permission-checked]** → It is documented, and `File` is recommended for a dedicated key.
 - **[Keyring on headless Linux or Termux picks a weak or failing backend]** → `KeyUnavailable` carries keyring's reason, and `Chain(...)` lets a profile fall through to `env:` or `file:`.
 - **[`DotEnv`'s own parser differs from `python-dotenv` on edge cases]** → It supports the common subset; variable expansion and multi-line values are documented as unsupported.

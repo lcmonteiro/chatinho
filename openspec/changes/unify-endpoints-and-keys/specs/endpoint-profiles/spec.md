@@ -8,7 +8,7 @@ Treats an OpenAI-compatible endpoint, its default model and its key as one named
 chatinho SHALL provide `Endpoint`, an immutable value holding:
 - an optional `base_url`;
 - an optional `model`;
-- an optional key source for `api_key`;
+- an optional `api_key`, given as a key source, a string (the key itself) or a function, and kept as a key source;
 - the name of the profile it came from, if any.
 
 `with_model(model)` and `without_key()` MUST return copies differing only in that field. Showing an endpoint MUST NOT reveal its key.
@@ -16,6 +16,10 @@ chatinho SHALL provide `Endpoint`, an immutable value holding:
 #### Scenario: Another model, same provider
 - **WHEN** `with_model("gpt-4o")` is called on an endpoint for `https://example/v1` with model `gpt-4o-mini`
 - **THEN** the copy has model `gpt-4o`, the same URL and the same key source, and the original is unchanged
+
+#### Scenario: A string key is the value
+- **WHEN** an endpoint is created with `api_key="sk-1"`
+- **THEN** its key reads `sk-1`, and no reference is parsed from it
 
 #### Scenario: Never shows the key
 - **WHEN** an endpoint whose key source is `Literal("sk-1")` is printed

@@ -30,7 +30,7 @@ things:
 
 ```python
 build_chat_session(
-    connectors = [OpenAIConnector(name="gpt", api_key="…")],   # peers: id, queue, conversation
+    connectors = [OpenAIConnector("gpt", Endpoint.load())],     # peers: id, queue, conversation
     commands   = [HelpCommand(), TestCommand()],               # not peers: they just run
     backend    = DatabaseBackend("sqlite:///chat.db"),         # a peer that listens
 )

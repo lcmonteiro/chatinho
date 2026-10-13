@@ -33,15 +33,15 @@
 ## 3. Wiring the sources in
 
 - [x] 3.1 `OpenAIConnector`:
-  - add `endpoint=`, with `model=None` resolving to the argument, then the endpoint, then `gpt-4o`;
-  - make `api_key` take any key source, read in `answer()` via `read_async`;
+  - take an `endpoint` in place of `api_key`, `base_url` and `model`, with `gpt-4o` when the endpoint has no model;
+  - read the endpoint's key (any key form) in `answer()` via `read_async`;
   - turn a `KeyUnavailable` into an error reply;
   - key the own-client by a key digest, so a rotated key rebuilds the client and closes the old one;
   - remove the public `api_key` attribute and add a `__repr__` without the key.
 
   Verify that the existing `tests/test_openai_connector.py` passes, plus new tests:
   - from an endpoint;
-  - an explicit model wins;
+  - another model on the same endpoint (`with_model`);
   - an unset `Env` key gives an error reply and no request;
   - a rotated file key reaches the stub;
   - `repr()` and `vars()` do not contain `sk-own`.

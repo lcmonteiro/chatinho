@@ -28,7 +28,7 @@ import tomllib
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from .keys import Env, KeySource, KeyUnavailable, key
+from .keys import Env, KeyLike, KeySource, KeyUnavailable, key, to_source
 
 #: The fields a profile may set.
 FIELDS = ("base_url", "model", "api_key")
@@ -41,14 +41,23 @@ class Endpoint:
     Attributes:
         base_url: An OpenAI-compatible endpoint; None for OpenAI itself.
         model: The model to ask; None leaves the choice to whoever uses it.
-        api_key: Where the key is read from; None for an endpoint without one.
+        api_key: Where the key is read from: a key source, or a string (the key
+            itself) or a function, kept as a key source; None for no key.
         profile: The profile it was loaded from, if any.
     """
 
     base_url : Optional[str] = None
     model    : Optional[str] = None
-    api_key  : Optional[KeySource] = dataclasses.field(default=None, repr=False)
+    api_key  : Optional[KeyLike] = dataclasses.field(default=None, repr=False)
     profile  : Optional[str] = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "api_key", to_source(self.api_key))
+
+    @property
+    def key(self) -> Optional[KeySource]:
+        """Where the key is read from, or None."""
+        return to_source(self.api_key)
 
     def with_model(self, model: str) -> "Endpoint":
         """The same endpoint and key, with another model."""
@@ -66,9 +75,9 @@ class Endpoint:
         Raises:
             KeyUnavailable: There is no key source, or it cannot yield a key.
         """
-        if self.api_key is None:
+        if self.key is None:
             raise KeyUnavailable("%s has no API key configured" % self._called())
-        self.api_key.read()
+        self.key.read()
 
     def _called(self) -> str:
         return "profile %r" % self.profile if self.profile else "the endpoint"

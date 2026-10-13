@@ -39,9 +39,8 @@ def parts() -> dict:
     model = endpoint()
     return dict(
         connectors = [
-            OpenAIConnector(name="coder", system=CODER, endpoint=model),
-            OpenAIConnector(name="reviewer", system=REVIEWER,
-                            memory=Query(errors=False).last(30), endpoint=model),
+            OpenAIConnector("coder", model, system=CODER),
+            OpenAIConnector("reviewer", model, system=REVIEWER, memory=Query(errors=False).last(30)),
         ],
         commands   = [HelpCommand()],
         backend    = None,
