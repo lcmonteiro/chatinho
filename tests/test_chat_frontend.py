@@ -218,6 +218,73 @@ async def test_submitting_a_slash_runs_the_tool():
         assert [m.text for m in app.messages] == ["/eco bom dia", "eco: bom dia"]
 
 
+@tool("lento", "takes its time")
+@require(HookExecute)
+class _LentoCmd:
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
+        await asyncio.sleep(0.5)
+        return Reply("lento: done")
+
+
+@connector("lenta")
+@require(HookAnswer)
+class _LentaPeer:
+    async def answer(self, msg):
+        await asyncio.sleep(0.5)
+        return Reply("lenta: done")
+
+
+async def _wait_for(app, pilot, text, tries=100):
+    for _ in range(tries):
+        if text in [m.text for m in app.messages]:
+            return
+        await pilot.pause(0.02)
+    raise AssertionError("%r never arrived" % text)
+
+
+async def test_a_slow_command_does_not_freeze_the_input():
+    app = await chat_frontend(commands=[_LentoCmd()])
+    async with app.run_test() as pilot:
+        inp = app.query_one("#input-line", CommandInput)
+        inp.text = "/lento"
+        started = asyncio.get_running_loop().time()
+        await pilot.press("enter")
+        assert asyncio.get_running_loop().time() - started < 0.1
+        inp.text = "meanwhile"
+        await pilot.press("enter")
+        await _wait_for(app, pilot, "meanwhile")
+        assert "lento: done" not in [m.text for m in app.messages]
+        await _wait_for(app, pilot, "lento: done")
+        assert [m.text for m in app.messages] == ["/lento", "meanwhile", "lento: done"]
+
+
+async def test_a_slow_peer_does_not_freeze_the_input():
+    app = await chat_frontend(connectors=[_LentaPeer(), _Lua()])
+    async with app.run_test() as pilot:
+        inp = app.query_one("#input-line", CommandInput)
+        inp.text = "@lenta are you there?"
+        await pilot.press("enter")
+        inp.text = "meanwhile"
+        await pilot.press("enter")
+        await _wait_for(app, pilot, "meanwhile")
+        assert "lenta: done" not in [m.text for m in app.messages]
+        await _wait_for(app, pilot, "lenta: done")
+
+
+async def test_a_question_to_the_user_keeps_only_its_asker_waiting():
+    agente = _Agente()
+    app = await chat_frontend(connectors=[agente, _Lua()])
+    async with app.run_test() as pilot:
+        waiting = asyncio.create_task(agente.ask(LOCAL, "may I?"))
+        await _wait_for(app, pilot, "may I?")
+        inp = app.query_one("#input-line", CommandInput)
+        inp.text = "@lua hello"
+        await pilot.press("enter")
+        await _wait_for(app, pilot, "full")         # heard while the agent waits
+        assert not waiting.done()
+        waiting.cancel()
+
+
 async def test_an_unknown_command_says_so():
     app = await chat_frontend()
     async with app.run_test() as pilot:

@@ -37,8 +37,8 @@ def build_chat_session(
 ) -> ChatSession:
     """Builds a chat with a terminal from peers and a backend.
 
-    A **connector** is a peer: it has an id and a queue, and the conversation
-    reaches it. A **command** is not: it has neither, and it runs only when
+    A **connector** is a peer: it has an id, and the conversation reaches
+    it. A **command** is not: it has no id, and it runs only when
     someone runs it. They are separate parameters because they are separate
     things.
 

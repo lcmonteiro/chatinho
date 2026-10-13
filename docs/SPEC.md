@@ -61,10 +61,13 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 
 1. **You never hear yourself.** No peer is delivered a message it sent. That is the whole of the
    loop protection, and it is what lets a peer both listen and speak.
-2. **Nothing blocks.** Every peer has its own queue and its own task. A subsystem that takes a
-   second to answer holds up nobody but itself.
-3. **Hearing is queued, so it is not synchronous.** A listener sees a message shortly *after* it
-   was said, not during. Assert after `close()`, which drains every queue before cancelling
+2. **Nothing blocks.** Every delivery of a message to a peer is its own task. A subsystem that
+   takes a second to answer holds up nobody, not even its own next question, and a peer may ask
+   one that is asking it; nesting stops at `max_depth` (8) with an `ERROR` reply. Connectors
+   keep no state of the conversation and must tolerate being called concurrently; the backend
+   alone stores it. The frontend never waits on another peer or a command.
+3. **Hearing is not synchronous.** A listener sees a message shortly *after* it was said, not
+   during. Assert after `close()`, which waits for every delivery in flight before cancelling
    anything; asserting straight after `say()` is asserting on timing.
 4. **Everything that crosses is in the context.** A say, an ask, the answer to it, a command being
    run and what it answered — one conversation, and `context()` is the window onto it.
@@ -322,7 +325,7 @@ class UpperCommand:
         return Reply(args.upper())     # the answer: posted as TOOL, and its text returned
 ```
 
-A command is **not a peer**: no id, no queue, nothing addressed to it. It is registered with
+A command is **not a peer**: no id, nothing addressed to it. It is registered with
 `add_command`, not `add_connector`, and it is a separate parameter to `build_chat_session` for that reason.
 
 Running one is two messages:
@@ -491,10 +494,10 @@ hook, not by calling the session.
 | | |
 |---|---|
 | `run()` | owns the loop: `start()`, every peer's `serve()`, then `close()` |
-| `add_connector(connector, at=None) -> int` | registers a peer: an id, a queue, its grants |
+| `add_connector(connector, at=None) -> int` | registers a peer: an id, its grants |
 | `add_command(cmd) -> str` | registers a command: a name, its grants |
-| `await start()` | initializes every peer/command, loads the older context, then starts one task per peer |
-| `await close()` | drains every queue (5s, then a warning), then shuts everything down |
+| `await start()` | initializes every peer/command, loads the older context, then delivers what was said before it |
+| `await close()` | waits for every delivery in flight (5s, then a warning and a cancel), fails asks still waiting, then shuts everything down |
 | `id_of(name) -> Optional[int]` | the id of the peer with that visible name |
 | `await forget(before=None) -> int` | asks the backend to drop what it held |
 

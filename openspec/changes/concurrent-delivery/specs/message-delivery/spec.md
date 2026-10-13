@@ -29,7 +29,7 @@ A peer that is answering a question SHALL be able to ask any peer, including one
 - **THEN** A answers B's question, B answers A, and A answers the user, with no message left waiting
 
 ### Requirement: Nested asks are bounded
-The session SHALL track how deeply each question is nested: a question asked, or addressed with `say(to=...)`, by a peer while it answers a question of depth N has depth N + 1; any other question has depth 1. The limit SHALL be configurable on the session and default to 8. A question deeper than the limit MUST NOT reach its peer. Instead it SHALL get a reply with status `ERROR` saying there are too many nested asks, and whoever asked it receives that reply as it would any answer.
+The session SHALL track how deeply each question is nested: a question asked, or addressed with `say(to=...)`, by a peer while it answers a question of depth N has depth N + 1; any other question has depth 1. The limit SHALL be configurable on the session and default to 8. A question deeper than the limit MUST NOT reach its peer. Instead it SHALL get a reply with status `ERROR` saying there are too many nested asks, and whoever asked it receives that reply as it would any answer. An answer handed back to a peer that did not wait for it, and that is past the limit, MUST be dropped rather than answered, so error replies are never traded back and forth.
 
 #### Scenario: A loop stops at the limit
 - **WHEN** two peers answer every question by asking the other, and the user asks one of them in a session with the default limit

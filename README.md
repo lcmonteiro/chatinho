@@ -118,9 +118,11 @@ A peer is a **plain class** that declares what it does. No base class, no `isins
 the library. `require` checks at class-definition time, so a method left out or misspelled is an
 import error rather than a hook that silently never fires.
 
-Four rules hold everywhere: **you never hear yourself**; **nothing blocks** (one queue and one task
-per peer); **hearing is queued**, so a listener sees a message shortly after it was said; and
-**everything that crosses is in the context**.
+Four rules hold everywhere: **you never hear yourself**; **nothing blocks** (every delivery is its
+own task, so a peer can answer several questions at once and asks may recurse, up to
+`max_depth`); **hearing is not synchronous**, so a listener sees a message shortly after it was
+said; and **everything that crosses is in the context**. Connectors keep no state of the
+conversation: they read it with `context()`, and the backend alone stores it.
 
 [`docs/SPEC.md`](docs/SPEC.md) is the reference for all fourteen hooks — what each demands, what it
 grants, an example, and what it costs. [`examples/hooks.py`](examples/hooks.py) is that document
@@ -159,7 +161,7 @@ async def main():
     await screen.say("good morning")    # not printed: you never hear yourself
     await screen.invoke("help")         # printed: the answer comes from TOOL
 
-    await session.close()               # drains every queue before cancelling anything
+    await session.close()               # waits for every delivery before cancelling anything
 
 asyncio.run(main())
 ```
@@ -172,7 +174,7 @@ asyncio.run(main())
 from chatinho import build_chat_session, HelpCommand, TestCommand
 
 build_chat_session(
-    connectors = [],                                # peers: id, queue, conversation
+    connectors = [],                                # peers: id, conversation
     commands   = [HelpCommand(), TestCommand()],    # not peers: they just run
     backend    = None,                              # a peer that listens
 ).run()
@@ -349,7 +351,7 @@ class Terminal:
     async def listen(self, msg) -> None:
         print(msg.text)
 
-@connector("weather")               # a peer: it gets an id and a queue
+@connector("weather")               # a peer: it gets an id and its grants
 @require(HookAnswer)
 class Weather:
     async def answer(self, msg) -> Reply:

@@ -335,3 +335,23 @@ async def test_a_rotated_out_client_closes_only_when_idle(tmp_path):
     FakeOpenAI.gate.set()
     assert [r.text for r in await asyncio.gather(first, second)] == ["Sunny", "Sunny"]
     assert old.closed and not new.closed
+
+
+async def test_three_questions_at_once_share_one_client():
+    """Asked three times at once: three requests in flight together, on one client."""
+    FakeOpenAI.gate = asyncio.Event()
+    gpt = OpenAIConnector("gpt", Endpoint(api_key="sk-own"), memory=None)
+    session, view = await driven(connectors=[gpt])
+    try:
+        asking = asyncio.gather(*(view.ask(gpt.peer_id, "q%d" % n) for n in range(3)))
+        for _ in range(100):
+            if len(requests()) == 3:
+                break
+            await asyncio.sleep(0.01)
+        assert len(requests()) == 3, "the questions did not overlap"
+        FakeOpenAI.gate.set()
+        assert await asyncio.wait_for(asking, timeout=2) == ["Sunny"] * 3
+        assert len(FakeOpenAI.clients) == 1
+        assert sorted(r["messages"][-1]["content"] for r in requests()) == ["q0", "q1", "q2"]
+    finally:
+        await session.close()

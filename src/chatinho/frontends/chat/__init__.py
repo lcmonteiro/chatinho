@@ -336,7 +336,7 @@ class ChatFrontend(App):
         Focus the input, and show the history and welcome message.
 
         Whoever starts the session — ``run()``, or a test that mounts this app
-        directly — starts it before the queues can deliver anything here.
+        directly — starts it before anything can be delivered here.
         """
         self._app_thread_id = threading.get_ident()
         self.query_one("#%s" % INPUT_ID, CommandInput).focus()
@@ -351,12 +351,16 @@ class ChatFrontend(App):
 
         The text arrives on the message already stripped, and a blank input
         sends nothing at all, so there is nothing to check here.
+
+        Nothing here waits on anyone else. Text is posted and the answers come
+        back as messages; a command runs in a worker, so a slow one leaves the
+        input free, and what it answers is in the log like anything else.
         """
         text = message.text
         message.input.clear()
         if text.startswith(COMMAND_PREFIX):
             name, _, args = text[1:].strip().partition(" ")
-            await self.command(name, args)
+            self.run_worker(self.command(name, args), exclusive=False)
         else:
             target   = self._reply_target
             self._clear_reply_target()

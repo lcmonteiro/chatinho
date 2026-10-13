@@ -58,6 +58,10 @@ an ask, an addressed `say(to=...)`, or a `say` routed to the only answerer.
   through the same path as a returned Reply, so the waiting `ask` resolves and the error is in the
   conversation. Listeners still hear the question.
 - **Cleanup.** The entry in `_depth` is removed when the question's delivery ends.
+- **An answer past the limit is dropped, not answered.** An answer to an addressed `say` is handed
+  back to the asker's `answer` (nobody is waiting on it). If one of those is past the limit, it is
+  dropped with a warning instead of getting the error reply. Otherwise two peers that answer
+  answers would trade error replies forever.
 - *Alternative: a depth field on `ChatMessage`.* Rejected: it would be public, archived and part of
   the message model for something only the session uses.
 - *Alternative: an ancestry chain to detect cycles.* Rejected: A -> B -> A is legitimate, and a
@@ -85,8 +89,9 @@ on the shared in-memory SQLite connection (`StaticPool`), and each write commits
 - **`OpenAIConnector`.** Concurrent questions are already handled: the client swap in `_own_client`
   has no `await` between the check and the assignment, and `_using` counts the requests in flight.
 - **`McpConnector`.** It shares one FastMCP `Client` and enters it with `async with` for every
-  question. That is safe only if the client's context is reentrant across tasks. A test settles
-  it; if it is not, the connector makes one client per question.
+  question. That is safe only if the client's context is reentrant across tasks. A test confirmed
+  it is: three questions at once on one client overlap and each gets its own answer. So the
+  connector is unchanged.
 
 ## Risks / Trade-offs
 

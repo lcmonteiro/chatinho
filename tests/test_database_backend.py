@@ -5,6 +5,7 @@ window at startup, and every method is a coroutine that does its SQLAlchemy
 work off the event loop.
 """
 
+import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -129,6 +130,33 @@ async def test_a_conversation_survives_the_session_that_had_it(tmp_path):
     await second.start()
     assert [m.text for m in again.context()] == ["lembra-te disto"]
     await second.close()
+
+
+async def test_concurrent_messages_are_all_archived_in_order(tmp_path):
+    """The session hands the backend messages concurrently; none is lost or reordered."""
+    store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
+    first = ChatSession(backend=store)
+    view  = Driver()
+    first.add_connector(view, at=LOCAL)
+    await first.start()
+    for n in range(50):
+        await view.say("message %02d" % n)
+    await first.close()
+
+    second = ChatSession(backend=store, recall=100)
+    again  = Driver()
+    second.add_connector(again, at=LOCAL)
+    await second.start()
+    assert [m.text for m in again.context()] == ["message %02d" % n for n in range(50)]
+    await second.close()
+
+
+async def test_an_in_memory_archive_takes_concurrent_writes(archive):
+    """One shared connection, fifty writers at once: every row arrives."""
+    start    = datetime(2026, 1, 1)
+    messages = [message(MessageID.new(), "m%02d" % n, start + timedelta(seconds=n)) for n in range(50)]
+    await asyncio.gather(*(archive.listen(m) for m in messages))
+    assert [m.text for m in await archive.load()] == ["m%02d" % n for n in range(50)]
 
 
 async def test_a_session_without_a_backend_simply_has_no_older_tier():

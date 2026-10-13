@@ -16,8 +16,8 @@ and two ways of being told:
     listen(msg)   someone spoke to everyone
     answer(msg)   someone asked *you*; return the answer, or answer() later
 
-Everything is a coroutine and every peer has its own queue, so a slow
-subsystem holds up nobody but itself.
+Everything is a coroutine and every delivery is its own task, so a slow
+subsystem holds up nobody, and a peer may ask one that is asking it.
 
     @connector("weather")
     @require(HookAnswer)
@@ -114,7 +114,7 @@ class Commands(Protocol):
 class Invoke(Protocol):
     """Granted by ``HookInvoke``: invoking a command and getting its result back.
 
-    A command is not a peer — it has no id, no queue and receives nothing. It
+    A command is not a peer — it has no id and receives nothing. It
     runs, it may write into the conversation, and it answers whoever ran it.
     """
 
@@ -256,7 +256,7 @@ HookExecute = Hook(
     name="HookExecute",
     method="execute",
     # async execute(args, **kwargs) -> Reply | None. What a command is. It is
-    # not a peer: no id, no queue, nothing addressed to it. Declare HookSay too
+    # not a peer: no id, nothing addressed to it. Declare HookSay too
     # and it can write as it works; return a Reply, with or without
     # attachments, and its text goes to whoever ran it.
 )
