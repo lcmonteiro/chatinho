@@ -18,15 +18,26 @@ Defines how `OpenAIConnector` answers: through any OpenAI-compatible endpoint, w
 - **THEN** the connector answers with a `Reply` whose text is "Sunny" and whose status is `answered`
 
 ### Requirement: Endpoint, model and system prompt are configurable
-The connector SHALL accept a `base_url` for any OpenAI-compatible endpoint, a `model`, a `temperature`, an optional `max_tokens` and an optional `system` prompt. When `system` is given, it MUST be the first message sent to the model. When `base_url` is given, every request MUST go to it.
+The connector SHALL take where to ask, which model and which key as one `endpoint` (an `Endpoint`), rather than as separate arguments. It SHALL also accept a `temperature`, an optional `max_tokens` and an optional `system` prompt.
+- The endpoint's URL may be any OpenAI-compatible endpoint. When it is set, every request MUST go to it; when it is unset, requests go to OpenAI itself.
+- The endpoint's model MUST be the model asked; when it is unset, or no endpoint is given, the model MUST be `gpt-4o`.
+- When `system` is given, it MUST be the first message sent to the model.
 
 #### Scenario: A system prompt leads
 - **WHEN** a connector created with `system="You review code."` is asked something
 - **THEN** the first message sent to the model is a `system` message with that text
 
 #### Scenario: Another endpoint
-- **WHEN** a connector is created with `base_url="http://localhost:11434/v1"`
-- **THEN** its requests go to that endpoint
+- **WHEN** a connector is created with an endpoint for `http://localhost:11434/v1`, model `qwen`, and a key
+- **THEN** its requests go to that URL with model `qwen` and that key
+
+#### Scenario: Another model on the same endpoint
+- **WHEN** a connector is created with that endpoint's `with_model("llama")`
+- **THEN** its requests use model `llama` and the endpoint's URL and key
+
+#### Scenario: No endpoint
+- **WHEN** a connector is created without an endpoint
+- **THEN** it asks OpenAI itself, with model `gpt-4o`
 
 ### Requirement: The conversation is remembered
 The connector SHALL take a `memory` query (a `Query`, default `Query(peer=SELF, errors=False).last(20)`) and send the model the messages `context()` returns for it, oldest first, before the question. The default covers what passed between it and anyone, without error replies. The connector's own earlier replies MUST be sent as `assistant` messages. Every other message MUST be sent as a `user` message. A message from a peer other than the user MUST be prefixed with that peer's name, as `name: text`. The question itself MUST be sent once, last, and never counts against the query's limit. With `memory=None`, only the question (after any system prompt) MUST be sent.
@@ -48,15 +59,33 @@ The connector SHALL take a `memory` query (a `Query`, default `Query(peer=SELF, 
 - **THEN** the model receives only the question
 
 ### Requirement: A lent key wins over the configured one
-The connector SHALL answer with the credential lent on the message under its `credential` name (default `llm`) when there is one, and with its configured `api_key` otherwise. A lent key MUST be used for that message only, and MUST NOT be kept, logged, or reused for another message. With neither key, the connector MUST answer with an `error` reply naming the missing key, without calling the model.
+The connector SHALL answer with the credential lent on the message under its `credential` name (default `llm`) when there is one. Otherwise it SHALL answer with its endpoint's key, which may be given as a string, a key source or a function returning a string.
+
+The configured key MUST be read when a question needs it, not when the connector is created, and MUST be held only as a `Secret`. A lent key MUST be used for that message only, and MUST NOT be kept, logged, or reused for another message.
+
+The connector MUST answer with an `error` reply, without calling the model:
+- when it has neither a lent key nor an endpoint key, naming the missing key;
+- when the endpoint's key source cannot yield a key, carrying the source's error, which names the reference and never a value.
 
 #### Scenario: Answered with the asker's key
-- **WHEN** a connector configured with `api_key="sk-own"` answers a message that was lent `llm` = `sk-lent`
+- **WHEN** a connector whose endpoint key is `sk-own` answers a message that was lent `llm` = `sk-lent`
 - **THEN** the request for that message uses `sk-lent`, and the next message without a lent key uses `sk-own`
 
 #### Scenario: No key at all
-- **WHEN** a connector with no `api_key` answers a message lent nothing
+- **WHEN** a connector whose endpoint has no key answers a message lent nothing
 - **THEN** it answers with an `error` reply that says no key was configured or lent, and the model is not called
+
+#### Scenario: A source that cannot read
+- **WHEN** a connector whose endpoint key is `Env("OPENAI_API_KEY")` answers while that variable is unset
+- **THEN** it answers with an `error` reply naming `OPENAI_API_KEY`, and the model is not called
+
+#### Scenario: A rotated key is used
+- **WHEN** a connector's endpoint key is a file, it answers once, the file is rewritten with a new key, and it answers again
+- **THEN** the second request uses the new key
+
+#### Scenario: The key is not shown
+- **WHEN** a connector whose endpoint key is `sk-own` is printed, or its attributes are listed
+- **THEN** `sk-own` appears nowhere
 
 ### Requirement: Failures are answers, and starting needs no network
 `initialize()` SHALL NOT call the model's API, so a chat starts even when its key arrives only with each message. A failed request (network, authentication, rate limit) MUST become an `error` reply that names the connector and the kind of failure. It MUST NOT include any key.
