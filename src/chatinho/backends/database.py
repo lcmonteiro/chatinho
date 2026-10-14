@@ -104,7 +104,7 @@ class DatabaseBackend:
         self.SessionLocal : Optional[Any] = None
         # Where linked attachments are written; made on the first link.
         self._files       : Optional[Path] = None
-        # The one thread all database work runs on, made on first use.
+        # The one thread all database work runs on; see _off_loop.
         self._worker      : Optional[ThreadPoolExecutor] = None
 
     # === Lifecycle ==================================================================
@@ -125,6 +125,8 @@ class DatabaseBackend:
             if ":memory:" in self.database_url or "mode=memory" in self.database_url:
                 options["poolclass"] = StaticPool
         self.engine = create_engine(self.database_url, **options)
+        if self._worker is None:
+            self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chatinho-db")
         Base.metadata.create_all(self.engine)
         self.SessionLocal = sessionmaker(bind=self.engine, future=True)
 
@@ -209,13 +211,17 @@ class DatabaseBackend:
     async def _off_loop(self, work: Any, *args: Any) -> Any:
         """Runs *work* on the backend's own thread, so SQLAlchemy never blocks the loop.
 
-        One thread, not the loop's pool: the session hands the backend messages
-        concurrently, and an in-memory database is a single shared connection
-        that two threads must not use at once. On one thread, every call runs
-        whole and in the order it was made.
+        One thread, not the loop's pool: the session now hands the backend
+        messages concurrently (each delivery is its own task), and an in-memory
+        database is a single shared connection that two threads must not use
+        at once. On one thread, every call runs whole and in the order it was
+        made. The thread is made by :meth:`initialize`.
+
+        Raises:
+            RuntimeError: If the backend was never initialized.
         """
         if self._worker is None:
-            self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chatinho-db")
+            raise RuntimeError("Backend not initialized: call initialize() first")
         return await asyncio.get_running_loop().run_in_executor(self._worker, work, *args)
 
     def _session(self) -> Any:

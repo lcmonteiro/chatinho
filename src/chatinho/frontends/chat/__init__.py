@@ -354,13 +354,13 @@ class ChatFrontend(App):
 
         Nothing here waits on anyone else. Text is posted and the answers come
         back as messages; a command runs in a worker, so a slow one leaves the
-        input free, and what it answers is in the log like anything else.
+        input free.
         """
         text = message.text
         message.input.clear()
         if text.startswith(COMMAND_PREFIX):
             name, _, args = text[1:].strip().partition(" ")
-            self.run_worker(self.command(name, args), exclusive=False)
+            self.run_worker(self._typed_command(name, args), exclusive=False, exit_on_error=False)
         else:
             target   = self._reply_target
             self._clear_reply_target()
@@ -412,6 +412,20 @@ class ChatFrontend(App):
             await self.say("Unknown command: %s%s" % (COMMAND_PREFIX, name))
             return None
         return await self.invoke(name, args)
+
+    async def _typed_command(self, name: str, args: str) -> None:
+        """Runs a command the user typed, in a worker, and says so when it fails.
+
+        What the command answers needs no handling here: the session has
+        already put it in the log, replying to the invocation, and the user
+        reads it there. Only a failure would otherwise go unseen, since the
+        session logs it and raises it to whoever ran the command, and nobody
+        waits on this worker.
+        """
+        try:
+            await self.command(name, args)
+        except Exception as exc:
+            await self.say("%s%s failed: %s" % (COMMAND_PREFIX, name, type(exc).__name__))
 
     async def listen(self, msg: ChatMessage, **kwargs) -> None:
         """Someone spoke to everyone: repaint."""

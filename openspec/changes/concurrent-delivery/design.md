@@ -74,8 +74,11 @@ still pending gets `RuntimeError("the chat closed")` set on its future, so no ca
 `shutdown()` runs as today.
 
 ### The terminal runs commands in a worker
-`on_command_input_submitted` calls `self.run_worker(self.command(name, args), exclusive=False)`
-instead of awaiting it. Textual cancels workers when the app exits, and `close()` cancels any
+`on_command_input_submitted` starts a worker (`exclusive=False, exit_on_error=False`) instead of
+awaiting the command. The worker's return value needs no handling, because the session has already
+posted the command's answer in the log. A failure would otherwise go unseen, and with Textual's
+default `exit_on_error` it would close the terminal. So the worker catches it and says
+"/name failed: <error type>". Textual cancels workers when the app exits, and `close()` cancels any
 delivery the command started. Plain text and `@peer` already return after posting.
 
 ### The database backend owns its ordering

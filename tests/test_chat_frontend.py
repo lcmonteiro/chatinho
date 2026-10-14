@@ -258,6 +258,26 @@ async def test_a_slow_command_does_not_freeze_the_input():
         assert [m.text for m in app.messages] == ["/lento", "meanwhile", "lento: done"]
 
 
+@tool("boom", "always fails")
+@require(HookExecute)
+class _BoomCmd:
+    async def execute(self, args="", by=LOCAL, **kwargs) -> Reply:
+        raise RuntimeError("kaboom")
+
+
+async def test_a_failing_command_is_said_and_the_terminal_stays():
+    app = await chat_frontend(commands=[_BoomCmd()])
+    async with app.run_test() as pilot:
+        inp = app.query_one("#input-line", CommandInput)
+        inp.text = "/boom"
+        await pilot.press("enter")
+        await _wait_for(app, pilot, "/boom failed: RuntimeError")
+        inp.text = "still here"
+        await pilot.press("enter")
+        await _wait_for(app, pilot, "still here")
+        assert app.is_running
+
+
 async def test_a_slow_peer_does_not_freeze_the_input():
     app = await chat_frontend(connectors=[_LentaPeer(), _Lua()])
     async with app.run_test() as pilot:
