@@ -249,7 +249,8 @@ async def test_a_slow_command_does_not_freeze_the_input():
         inp.text = "/lento"
         started = asyncio.get_running_loop().time()
         await pilot.press("enter")
-        assert asyncio.get_running_loop().time() - started < 0.1
+        # Well under the command's 0.5 s; the press includes painting "/lento".
+        assert asyncio.get_running_loop().time() - started < 0.3
         inp.text = "meanwhile"
         await pilot.press("enter")
         await _wait_for(app, pilot, "meanwhile")
@@ -276,6 +277,23 @@ async def test_a_failing_command_is_said_and_the_terminal_stays():
         await pilot.press("enter")
         await _wait_for(app, pilot, "still here")
         assert app.is_running
+
+
+async def test_a_slow_command_shows_while_it_runs():
+    """The invocation is painted when it is posted, not when the answer lands."""
+    app = await chat_frontend(commands=[_LentoCmd()])
+    async with app.run_test() as pilot:
+        app.query_one("#input-line", CommandInput).text = "/lento"
+        await pilot.press("enter")
+        await _wait_for(app, pilot, "/lento")
+        invocation = next(m.id for m in app.messages if m.text == "/lento")
+        for _ in range(10):
+            if invocation in app._chat_log._rendered_msg_ids:
+                break
+            await pilot.pause(0.02)
+        assert "lento: done" not in [m.text for m in app.messages]
+        assert invocation in app._chat_log._rendered_msg_ids
+        await _wait_for(app, pilot, "lento: done")
 
 
 async def test_a_slow_peer_does_not_freeze_the_input():

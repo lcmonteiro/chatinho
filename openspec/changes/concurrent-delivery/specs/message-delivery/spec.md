@@ -63,7 +63,7 @@ Whatever the user sends through the frontend (text, an addressed `@peer` questio
 
 #### Scenario: A slow command does not freeze the input
 - **WHEN** the user runs a command that takes one second, and then sends a message
-- **THEN** running the command returns in under 0.1 seconds, the message is posted before the command answers, and the command's answer then appears as a message
+- **THEN** running the command returns well before the command finishes, the command's invocation is shown while it runs, the message is posted before the command answers, and the command's answer then appears as a message
 
 #### Scenario: A slow peer does not freeze the input
 - **WHEN** the user asks a peer that takes one second to answer, and then says something else

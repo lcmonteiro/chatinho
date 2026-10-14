@@ -183,6 +183,21 @@ What follows, before it surprises you:
   still waiting fails: a peer that will not finish must not hang the shutdown.
 - **The frontend never waits on others.** What the user sends returns once it is posted; a
   `/command` runs in a worker; answers arrive as messages.
+- **Never block the loop.** Every peer, command and the terminal share one event loop on one
+  thread, and a Textual worker is a task on it, not a thread. `answer`, `listen` and `execute`
+  must `await` their waiting; a blocking call (`time.sleep`, `requests`, `subprocess.run`,
+  SQLAlchemy, heavy computation) freezes the whole chat until it returns. Hand it to a thread:
+
+  ```python
+  async def execute(self, args="", **kwargs) -> Reply:
+      text = await asyncio.to_thread(slow_blocking_function, args)   # goes to the thread pool
+      return Reply(text)
+  ```
+
+  The function on the thread must not touch the chat (`say`, `ask`, `context`, `invoke`
+  belong to the loop): talk before or after the `await`. A cancelled `await` does not stop
+  the thread; the function runs to the end and its result is dropped. The database backend
+  and the key sources already work this way.
 
 ## Context has two tiers and one interface
 
