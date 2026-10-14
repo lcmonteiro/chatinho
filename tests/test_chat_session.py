@@ -144,10 +144,9 @@ async def test_a_say_reaches_everyone_but_the_speaker():
     ouvinte = _Ouvinte()
     session, view = await driven(connectors=[ouvinte])
     await view.say("bom dia")
-    await asyncio.sleep(0.02)
+    await session.close()              # waits for every delivery in flight
     assert ouvinte.heard == ["bom dia"]
     assert view.heard == []            # the speaker does not hear itself
-    await session.close()
 
 
 async def test_a_reply_to_a_say_is_another_say():
@@ -170,7 +169,7 @@ async def test_ask_returns_the_answer():
 async def test_running_a_command_answers_the_peer_that_ran_it():
     """The answer goes back to whoever ran it, and the whole of it is recorded.
 
-    A command is still not a peer — it has no id and no queue — but there is
+    A command is still not a peer — it has no id and nothing is addressed to it — but there is
     one conversation, so the invocation and what it answered cross the session
     like anything else. The invocation is *addressed* to TOOL rather than said
     to the room, which is what keeps a peer from answering somebody else's
@@ -242,7 +241,7 @@ async def test_asking_an_unknown_id_raises():
 
 
 async def test_a_slow_peer_holds_up_only_itself():
-    """Each peer has its own queue: one second is not two."""
+    """Each delivery runs on its own: one second is not two."""
     session, view = await driven(connectors=[_Lento(), _Rapido()])
     started = time.perf_counter()
     slow, quick = await asyncio.gather(view.ask(1, "?"), view.ask(2, "ola"))
@@ -367,7 +366,7 @@ async def test_context_returns_a_copy():
 
 
 async def test_what_is_said_reaches_the_one_that_listens():
-    """Listening runs on the listener's own queue, and close() drains it.
+    """Listening runs on its own task, and close() waits for it.
 
     Asserting straight after ``say`` would be asserting on timing; asserting
     after ``close`` is the guarantee that matters — nothing said is lost.
@@ -442,7 +441,10 @@ async def test_forget_reaches_the_one_that_holds():
     store = _Archive()
     session, view = await driven(backend=store)
     await view.say("efémera")
-    await asyncio.sleep(0.02)          # let its queue run
+    for _ in range(100):               # hearing is not synchronous
+        if store.kept:
+            break
+        await asyncio.sleep(0.01)
     assert await session.forget() == 1
     assert store.kept == []
     await session.close()

@@ -160,7 +160,7 @@ class ClockConnector:
 class UpperCommand:
     """``HookExecute`` demands ``execute(args, by)``: what a command *is*.
 
-    A command is not a peer — no id, no queue, nothing addressed to it. What it
+    A command is not a peer — no id, nothing addressed to it. What it
     returns is the answer: the session posts it in ``TOOL``'s name, replying to
     the invocation, so a command that should be seen just returns. Declare
     ``HookSay`` as well only for what *differs* from the answer — progress while
@@ -280,7 +280,7 @@ async def main() -> None:
     print("\n-- start(): HookLoad runs before anyone can ask for context --")
     await session.start()
 
-    # Hearing is queued: a listener sees a message shortly after it was said,
+    # Hearing is its own task: a listener sees a message shortly after it was said,
     # not during. The pauses below are only so each step's lines land under its
     # own heading — nothing in the library needs them.
     async def settle() -> None:
@@ -320,8 +320,8 @@ async def main() -> None:
     print("\n-- forget: the archive drops what it held --")
     print("   →", await session.forget(), "dropped")
 
-    await session.close()                   # drains every queue, then shuts down
-    print("\n-- close() drained the queues: the last lines above are why --")
+    await session.close()                   # waits for every delivery, then shuts down
+    print("\n-- close() waited for every delivery: the last lines above are why --")
 
 
 if __name__ == "__main__":

@@ -23,14 +23,14 @@ Most of them run without mounting anything; only `test_chat_frontend.py` and
 A chat is peers exchanging messages. Each has an integer id, and `LOCAL` — zero — is the user.
 Connectors are numbered from one.
 
-**A command is not a peer.** It has no id and no queue, nothing is addressed to it, and it hears
+**A command is not a peer.** It has no id, nothing is addressed to it, and it hears
 nothing. It runs when someone runs it, and it answers whoever did. Treating commands as peers meant
 giving `answer` to things that only execute; they are separate parameters because they are separate
 things:
 
 ```python
 build_chat_session(
-    connectors = [OpenAIConnector("gpt", Endpoint.load())],     # peers: id, queue, conversation
+    connectors = [OpenAIConnector("gpt", Endpoint.load())],     # peers: id, conversation
     commands   = [HelpCommand(), TestCommand()],               # not peers: they just run
     backend    = DatabaseBackend("sqlite:///chat.db"),         # a peer that listens
 )
@@ -124,7 +124,7 @@ rather than `Other`. A command that should be *seen* just returns; `HookSay` is 
 from the answer: progress while it works. Saying *and* returning the same text puts it in the log
 twice, which is what `/help`, `/upper` and the demo's `/code` all used to do.
 
-A command is still **not a peer** — no id, no queue, nothing addressed to it — so the invocation is
+A command is still **not a peer** — no id, nothing addressed to it — so the invocation is
 addressed to `TOOL`, id −1, and not said to the room. That is what keeps a connector that answers
 what the user says from answering somebody else's `/help`: the invocation is not a broadcast, and
 the answer comes from `TOOL` rather than from the user. Both halves matter, and the demo answered
@@ -160,19 +160,29 @@ and speaks from answering its own words forever.
 
 ## Nothing blocks
 
-Everything is a coroutine, and **every peer has its own queue and its own task**. A
-subsystem that takes a second to answer holds up nobody but itself —
-`test_a_slow_peer_holds_up_only_itself` sends two asks, one to a peer that sleeps
-0.3s and one that answers instantly, and fails if together they take more than 0.45s.
+Everything is a coroutine, and **every delivery of a message to a peer is its own task**. A
+subsystem that takes a second to answer holds up nobody, not even its own next question —
+`test_a_peer_answers_two_questions_at_once` asks one peer that sleeps 0.3s twice, and fails if
+together they take more than 0.45s. There are no queues: the conversation's order is the
+store's, and nothing a peer hears depends on what order its calls finish in.
 
-Two consequences worth knowing before they surprise you:
+What follows, before it surprises you:
 
-- **Listening is queued, so it is not synchronous.** A listener sees a message shortly after it
-  was said, not during. Tests assert after `close()`, not straight after `say()`, because the
-  former is a guarantee and the latter is timing.
-- **`close()` drains every queue before cancelling anything.** A message still in a queue is a
-  message a listener has not held yet. Five seconds, then a warning: a peer that will not
-  finish must not hang the shutdown.
+- **A peer may be called concurrently.** `answer` and `listen` can be running for several
+  messages at once. Connectors keep no state of the conversation (they read it with
+  `context()`; the backend alone stores it), and anything they hold between calls — a client,
+  a connection — must tolerate that. A peer that truly needs order holds its own `asyncio.Lock`.
+- **Asks may recurse.** A asks B, B asks A back, and A answers: nobody waits on a busy peer.
+  Nesting is bounded by `ChatSession(max_depth=8)`; a question deeper than that is not
+  delivered, and gets an `ERROR` reply ("too many nested asks") that travels back up.
+- **Listening is not synchronous.** A listener sees a message shortly after it was said, not
+  during. Tests assert after `close()`, not straight after `say()`, because the former is a
+  guarantee and the latter is timing.
+- **`close()` waits for every delivery in flight before cancelling anything** — and for what
+  those set off. Five seconds (`CLOSE_TIMEOUT`), then a warning and a cancel, and every ask
+  still waiting fails: a peer that will not finish must not hang the shutdown.
+- **The frontend never waits on others.** What the user sends returns once it is posted; a
+  `/command` runs in a worker; answers arrive as messages.
 
 ## Context has two tiers and one interface
 
@@ -270,8 +280,8 @@ that is not a choice a presentation gets to make. The name defaults to `chat`, s
 is enough; `@frontend` without the parentheses is refused, the class having arrived where the name
 belongs.
 
-`ChatSession.add_connector(obj)` registers a peer: an id, a queue, its grants. `ChatSession.add_command(cmd)`
-registers a command: a name, its grants — no id and no queue, because there is nothing to address
+`ChatSession.add_connector(obj)` registers a peer: an id, its grants. `ChatSession.add_command(cmd)`
+registers a command: a name, its grants — no id, because there is nothing to address
 or deliver. Neither calls `initialize()`; `start()` does, for both, once each has a loop to use.
 
 Lifecycle is deliberately **not** a hook: `initialize()`, `serve()` and `shutdown()` are called
@@ -311,7 +321,7 @@ src/chatinho/
   __init__.py      public API
   builder.py       build_chat_session, build_mcp_session — a ChatSession with its frontend;
                    imports both frontends, so it needs chatinho[tui,mcp]
-  session.py       ChatSession: run, peers, commands, queues, routing, context      (545)
+  session.py       ChatSession: run, peers, commands, delivery, routing, context    (733)
   hooks.py         Hook, the ten constants,    @require, the grant protocols       (489)
   query.py         Query (peer/thread/errors/since/limit) and SELF: which part of the conversation
                    context() returns; plain data, so a backend could answer it one day

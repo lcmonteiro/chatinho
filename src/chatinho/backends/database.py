@@ -20,6 +20,7 @@ import asyncio
 import logging
 import shutil
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional, Sequence
@@ -81,9 +82,10 @@ class ArchivedAttachment(Base):
 class DatabaseBackend:
     """Listens to the conversation and keeps it, one row per message.
 
-    Nothing pushes at it: it is a peer with its own queue that declared
-    ``HookListen``, so every message crosses it the way a message crosses
-    anyone, and it writes what it hears. ``HookLoad`` is the other half — it
+    Nothing pushes at it: it is a peer that declared ``HookListen``, so every
+    message crosses it the way a message crosses anyone, and it writes what it
+    hears. It is the one peer that holds the conversation, and it may hear
+    several messages at once, so all its database work runs on one thread. ``HookLoad`` is the other half — it
     gives back what it held when the next session starts.
     """
 
@@ -102,6 +104,8 @@ class DatabaseBackend:
         self.SessionLocal : Optional[Any] = None
         # Where linked attachments are written; made on the first link.
         self._files       : Optional[Path] = None
+        # The one thread all database work runs on; see _off_loop.
+        self._worker      : Optional[ThreadPoolExecutor] = None
 
     # === Lifecycle ==================================================================
 
@@ -121,11 +125,16 @@ class DatabaseBackend:
             if ":memory:" in self.database_url or "mode=memory" in self.database_url:
                 options["poolclass"] = StaticPool
         self.engine = create_engine(self.database_url, **options)
+        if self._worker is None:
+            self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chatinho-db")
         Base.metadata.create_all(self.engine)
         self.SessionLocal = sessionmaker(bind=self.engine, future=True)
 
     def shutdown(self) -> None:
         """Disposes of the engine, so its pool does not outlive the chat."""
+        if self._worker is not None:
+            self._worker.shutdown(wait=True)
+            self._worker = None
         if self.engine is not None:
             self.engine.dispose()
             self.engine = None
@@ -199,10 +208,21 @@ class DatabaseBackend:
 
     # === Internals ==================================================================
 
-    @staticmethod
-    async def _off_loop(work: Any, *args: Any) -> Any:
-        """Runs *work* in an executor, so SQLAlchemy never blocks the loop."""
-        return await asyncio.get_running_loop().run_in_executor(None, work, *args)
+    async def _off_loop(self, work: Any, *args: Any) -> Any:
+        """Runs *work* on the backend's own thread, so SQLAlchemy never blocks the loop.
+
+        One thread, not the loop's pool: the session now hands the backend
+        messages concurrently (each delivery is its own task), and an in-memory
+        database is a single shared connection that two threads must not use
+        at once. On one thread, every call runs whole and in the order it was
+        made. The thread is made by :meth:`initialize`.
+
+        Raises:
+            RuntimeError: If the backend was never initialized.
+        """
+        if self._worker is None:
+            raise RuntimeError("Backend not initialized: call initialize() first")
+        return await asyncio.get_running_loop().run_in_executor(self._worker, work, *args)
 
     def _session(self) -> Any:
         """Returns a database session.

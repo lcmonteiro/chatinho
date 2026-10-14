@@ -13,21 +13,28 @@ The conversation is protected: ``_say``, ``_ask``, ``_answer`` and
 ``_load_messages`` are never called directly. Declaring a hook is the only door
 in, and implementing ``listen`` or ``answer`` is the only door out.
 
-Every peer has its own queue and its own task draining it, so a
-subsystem that takes a second to answer holds up nobody but itself.
+Every delivery of a message to a peer is its own task, so a subsystem that
+takes a second to answer holds up nobody, not even its own next question, and
+a peer may ask a peer that is already asking it. Peers keep no state of the
+conversation: it lives here, and in the backend.
 """
 
 import asyncio
 import logging
+from contextvars import ContextVar
 from datetime import datetime
 from inspect import isawaitable
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from .hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, HookListen, HookLoad
 from .hooks import declared_id, declares, hooks_of, name_of
 from .message import LOCAL, TOOL
 from .message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
 from .query import Query
+
+#: How deeply the question being answered in this task is nested; 0 when none is.
+#: Set by the session around ``answer``, read when that answer asks again.
+_ANSWERING : ContextVar[int] = ContextVar("chatinho_answering", default=0)
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +59,9 @@ class ChatSession:
     are talking to, ``commands`` only run, and ``backend`` listens and recalls.
     """
 
+    #: How long :meth:`close` waits for the deliveries in flight, in seconds.
+    CLOSE_TIMEOUT : float = 5.0
+
     def __init__(
         self,
         connectors : Optional[List[Any]] = None,
@@ -59,6 +69,7 @@ class ChatSession:
         frontend   : Optional[Any] = None,
         backend    : Optional[Any] = None,
         recall     : int = 200,
+        max_depth  : int = 8,
     ) -> None:
         #: Who speaks for the person: a terminal, a stdin reader, an inbox.
         self.frontend : Optional[Any] = frontend
@@ -66,19 +77,35 @@ class ChatSession:
         self.backend  : Optional[Any] = backend
         #: How much of the archive ``start()`` pulls back into the session.
         self.recall   : int = recall
+        #: How deeply asks may nest; a deeper question is answered with an error.
+        self.max_depth : int = max_depth
 
-        self._store    : MessageStore = MessageStore()
-        self._connectors    : Dict[int, Any] = {}
-        self._queues   : Dict[int, "asyncio.Queue[ChatMessage]"] = {}
-        self._tasks    : Dict[int, asyncio.Task] = {}
-        self._pending  : Dict[MessageID, "asyncio.Future[str]"] = {}
-        self._next_id  : int = 1
-        self._started  : bool = False
-        self._closed   : bool = False
+        #: The conversation, in the order it was posted: the one source of its order.
+        self._store       : MessageStore = MessageStore()
+        #: Every peer, by id; the frontend is at LOCAL.
+        self._connectors  : Dict[int, Any] = {}
+        #: Asks still waiting for their answer, by the id of the question.
+        self._pending     : Dict[MessageID, "asyncio.Future[str]"] = {}
+        #: Peers that start() has started; deliveries to the others are held.
+        self._running     : Set[int] = set()
+        #: Deliveries waiting for their peer to start, in the order they were posted.
+        self._held        : List[Tuple[int, ChatMessage]] = []
+        #: Deliveries in flight, one task each; close() waits for them.
+        self._deliveries  : Set["asyncio.Task[None]"] = set()
+        #: How deeply each question still being delivered is nested.
+        self._depth       : Dict[MessageID, int] = {}
+        #: The id the next peer without a declared or pinned one gets.
+        self._next_id     : int = 1
+        #: Whether start() has recalled the archive; it does so only once.
+        self._started     : bool = False
+        #: Whether close() is waiting for the deliveries in flight.
+        self._closing     : bool = False
+        #: Whether close() has finished waiting; nothing is delivered after it.
+        self._closed      : bool = False
         #: ids of peers/commands whose initialize() has already run.
         self._initialized : set = set()
 
-        #: Commands are not peers: no id, no queue, nothing addressed to them.
+        #: Commands are not peers: no id, nothing addressed to them.
         #: They run when someone runs them, and answer whoever did.
         self.commands : Dict[str, Any] = {}
 
@@ -94,7 +121,7 @@ class ChatSession:
         for cmd in commands or []:
             self.add_command(cmd)
         if backend is not None:
-            # A peer like any other: it gets an id and a queue, and it
+            # A peer like any other: it gets an id, and it
             # hears the conversation rather than being pushed at. `backend` is
             # only sugar for the role — the session finds what it needs by what
             # the thing declared, not by which parameter it arrived in.
@@ -137,14 +164,13 @@ class ChatSession:
         # grants bind `frm` for it — but knowing it costs nothing.
         connector.peer_id = at
         self._connectors[at] = connector
-        self._queues[at] = asyncio.Queue()
         self._grant(connector, at)
         return at
 
     def add_command(self, cmd: Any) -> str:
         """Registers a command under its declared name and returns it.
 
-        A command is not a peer. It has no id and no queue, nothing is
+        A command is not a peer. It has no id, nothing is
         addressed to it, and it hears nothing — it runs when someone runs it.
         What it may do to the conversation is whatever it declared: nothing at
         all, or ``HookSay`` to write while it works.
@@ -345,7 +371,11 @@ class ChatSession:
 
     async def _post(self, msg: ChatMessage) -> MessageID:
         """
-        Keeps *msg* and puts it in the queue of everyone it is for.
+        Keeps *msg* and starts delivering it to everyone it is for.
+
+        Each delivery is its own task, so this returns before anyone has heard
+        it. A question, anything addressed to a peer, is given its depth: one
+        more than the question being answered in this task, if any.
 
         An answer to an ask that is still waiting resolves that wait, and is
         not delivered to the asker a second time — it is already holding it.
@@ -362,11 +392,38 @@ class ChatSession:
         listeners = {at for at, who in self._connectors.items()
                      if at != msg.frm and declares(who, HookListen)}
         audience  = {msg.to} if msg.to is not None and not resolved else set()
-        for at in listeners | audience:
-            queue = self._queues.get(at)
-            if queue is not None:
-                queue.put_nowait(msg)
+        audience &= self._connectors.keys()
+        if audience:
+            self._depth[msg.id] = _ANSWERING.get() + 1
+        for at in sorted(listeners | audience):
+            self._dispatch(at, msg)
         return msg.id
+
+    def _dispatch(self, at: int, msg: ChatMessage) -> None:
+        """Delivers *msg* to peer *at* now, or once it has started."""
+        if self._closed:
+            return
+        if at in self._running:
+            task = asyncio.create_task(self._delivery(at, msg))
+            self._deliveries.add(task)
+            task.add_done_callback(self._deliveries.discard)
+        else:
+            self._held.append((at, msg))
+
+    async def _delivery(self, at: int, msg: ChatMessage) -> None:
+        """
+        One message, to one peer, on its own task.
+
+        A peer that raises is logged and nothing else stops: one bad
+        subsystem must not take the chat down.
+        """
+        try:
+            await self._deliver(self._connectors[at], msg)
+        except Exception:
+            logger.error("Peer %d failed on %s", at, msg.id, exc_info=True)
+        finally:
+            if msg.to == at:
+                self._depth.pop(msg.id, None)
 
     async def _deliver(self, who: Any, msg: ChatMessage) -> None:
         """
@@ -380,6 +437,7 @@ class ChatSession:
         with ``reply_to`` set resolves it.
         """
         if declares(who, HookListen):
+            _ANSWERING.set(0)              # hearing is not answering
             await who.listen(msg)
 
         if msg.is_broadcast:
@@ -389,6 +447,18 @@ class ChatSession:
             return
         if not declares(who, HookAnswer):
             logger.warning("%r was asked but does not declare %s", name_of(who), HookAnswer)
+            return
+        depth = self._depth.get(msg.id, 1)
+        _ANSWERING.set(depth)
+        if depth > self.max_depth:
+            if msg.reply_to is not None:
+                # An answer handed back to whoever it answers: nobody waits on
+                # a reply to it, so it is dropped rather than answered with an
+                # error that would be handed back in turn.
+                logger.warning("Dropped %s: nested deeper than %d", msg.id, self.max_depth)
+                return
+            await self._answered(at, msg, Reply("too many nested asks (limit %d)" % self.max_depth,
+                                                status=ReplyStatus.ERROR))
             return
         try:
             reply = await who.answer(msg)
@@ -408,27 +478,14 @@ class ChatSession:
                     frm=at, to=msg.frm, reply_to=msg.id, status=ReplyStatus.ERROR))
             raise
         if reply is not None:
-            answered = ChatMessage(id=self._store.new_id(), text=reply.text, frm=at, to=msg.frm,
-                                   reply_to=msg.id, status=reply.status)
-            await self._kept(answered, reply.attachments)
-            await self._post(answered)
+            await self._answered(at, msg, reply)
 
-    async def _drain(self, at: int) -> None:
-        """
-        One peer's queue, one message at a time.
-
-        A peer that raises is logged and its queue carries on: one bad
-        subsystem must not take the chat down, nor stall its own backlog.
-        """
-        queue = self._queues[at]
-        while True:
-            msg = await queue.get()
-            try:
-                await self._deliver(self._connectors[at], msg)
-            except Exception:
-                logger.error("Peer %d failed on %s", at, msg.id, exc_info=True)
-            finally:
-                queue.task_done()
+    async def _answered(self, at: int, msg: ChatMessage, reply: Reply) -> None:
+        """Posts *reply* in the name of peer *at*, as its answer to *msg*."""
+        answered = ChatMessage(id=self._store.new_id(), text=reply.text, frm=at, to=msg.frm,
+                               reply_to=msg.id, status=reply.status)
+        await self._kept(answered, reply.attachments)
+        await self._post(answered)
 
     # === History ====================================================================
 
@@ -530,6 +587,8 @@ class ChatSession:
                 done, pending = await asyncio.wait(serving, return_when=asyncio.FIRST_COMPLETED)
                 for task in pending:
                     task.cancel()
+                if pending:
+                    await asyncio.wait(pending)   # let each finish being cancelled
                 for task in done:
                     task.result()            # let a peer's failure be seen
             else:
@@ -543,7 +602,7 @@ class ChatSession:
 
     async def start(self) -> None:
         """
-        Initializes every peer and command, then starts one drain task per peer.
+        Initializes every peer and command, then starts delivering to them.
 
         Separate from construction because both need a running loop, and a
         session is usually built before there is one — ``initialize()`` runs
@@ -554,10 +613,11 @@ class ChatSession:
 
         Calling it twice is a no-op *for the archive*: :meth:`run` starts the
         session, and a presentation that also starts it when it mounts must not
-        load the older context on top of itself. Initializing and the drain
-        tasks are another matter — calling it again picks up whatever was
-        attached since, which is how a peer added after the session started
-        ever runs, or is initialized, at all.
+        load the older context on top of itself. Initializing and delivering
+        are another matter — calling it again picks up whatever was attached
+        since, which is how a peer added after the session started ever hears
+        anything, or is initialized, at all. What was said to a peer before it
+        started is delivered to it now, in the order it was said.
         """
         for who in list(self._connectors.values()) + list(self.commands.values()):
             if id(who) not in self._initialized:
@@ -566,34 +626,54 @@ class ChatSession:
         if not self._started:
             self._started = True
             await self._recall()
-        for at in self._queues:
-            if at not in self._tasks or self._tasks[at].done():
-                self._tasks[at] = asyncio.create_task(self._drain(at))
+        if self._closed:
+            return
+        self._running.update(self._connectors)
+        held, self._held = self._held, []
+        for at, msg in held:
+            self._dispatch(at, msg)
 
     async def close(self) -> None:
         """
-        Stops the drain tasks and shuts every peer down.
+        Lets the deliveries in flight finish, then shuts every peer down.
+
+        It waits up to :attr:`CLOSE_TIMEOUT` seconds, for what is in flight and
+        for what that sets off, then warns and cancels the rest, and fails
+        every ask still waiting, so nothing hangs on a chat that is gone.
 
         A peer holding a server or a thread would otherwise outlive the
         chat it was serving. Calling it twice is a no-op, for the same reason
         :meth:`start` is.
         """
-        if self._closed:
+        if self._closed or self._closing:
             return
+        self._closing = True
+        # Wait before cancelling: a delivery in flight is a message a listener
+        # has not held yet, and cancelling first made "the conversation
+        # survives" true only sometimes.
+        loop     = asyncio.get_running_loop()
+        deadline = loop.time() + self.CLOSE_TIMEOUT
+        current  = asyncio.current_task()
+        while True:
+            busy = {t for t in self._deliveries if t is not current}
+            if not busy:
+                break
+            left = deadline - loop.time()
+            if left <= 0:
+                logger.warning("Gave up waiting for %d deliveries to finish", len(busy))
+                break
+            await asyncio.wait(busy, timeout=left)
         self._closed = True
-        # Drain before cancelling: a message still in a queue is a message a
-        # listener has not held yet, and cancelling first made "the
-        # conversation survives" true only sometimes.
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*(q.join() for q in self._queues.values())),
-                timeout=5.0,
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Gave up waiting for the queues to drain")
-        for task in self._tasks.values():
+        self._held.clear()
+        busy = {t for t in self._deliveries if t is not current}
+        for task in busy:
             task.cancel()
-        self._tasks.clear()
+        if busy:
+            await asyncio.wait(busy, timeout=1.0)
+        for future in list(self._pending.values()):
+            if not future.done():
+                future.set_exception(RuntimeError("the chat closed"))
+        self._pending.clear()
         for who in list(self._connectors.values()) + list(self.commands.values()):
             shutdown = getattr(who, "shutdown", None)
             if callable(shutdown):

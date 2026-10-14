@@ -107,6 +107,31 @@ async def test_asked_directly():
     await remote_session.close()
 
 
+@connector("echo")
+@require(HookAnswer)
+class _SlowEcho:
+    """A remote peer that takes its time and answers with what it was asked."""
+
+    async def answer(self, msg):
+        await asyncio.sleep(0.2)
+        return Reply("echo: %s" % msg.text)
+
+
+async def test_three_questions_at_once():
+    """The connector may be inside answer() three times over: each gets its own reply."""
+    remote_session, front = await remote(_SlowEcho())
+    lab = McpConnector(server=front.server, name="lab")
+    session, view = await _local(lab)
+    started = asyncio.get_running_loop().time()
+    answers = await asyncio.wait_for(
+        asyncio.gather(*(view.ask(lab.peer_id, "q%d" % n) for n in range(3))), timeout=5)
+    elapsed = asyncio.get_running_loop().time() - started
+    assert answers == ["echo: q0", "echo: q1", "echo: q2"]
+    assert elapsed < 0.5, "the three questions took turns: %.2fs" % elapsed
+    await session.close()
+    await remote_session.close()
+
+
 # === One reply per question ========================================================
 
 async def test_an_answer_with_an_attachment_is_kept_here(tmp_path):

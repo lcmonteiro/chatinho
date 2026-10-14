@@ -11,9 +11,9 @@ each is a pair: the word you call, and the word the other side writes.
     ask(to, text)          ->  answer(msg)          one peer, awaiting its reply
     invoke(name, args)     ->  execute(args, by)    a command run by name
 
-Everything is a coroutine and every peer has its own queue, so a slow subsystem
-holds up nobody but itself. ``docs/SPEC.md`` is the reference for all fourteen hooks,
-and ``examples/hooks.py`` is that document executable.
+Everything is a coroutine and every delivery is its own task, so a slow subsystem
+holds up nobody, and a peer may ask one that is asking it. ``docs/SPEC.md`` is the
+reference for all fourteen hooks, and ``examples/hooks.py`` is that document executable.
 
 Headless — no terminal, and nothing to install beyond this package::
 
