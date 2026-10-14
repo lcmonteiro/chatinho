@@ -80,21 +80,28 @@ class ChatSession:
         #: How deeply asks may nest; a deeper question is answered with an error.
         self.max_depth : int = max_depth
 
-        self._store    : MessageStore = MessageStore()
-        self._connectors    : Dict[int, Any] = {}
-        self._pending  : Dict[MessageID, "asyncio.Future[str]"] = {}
+        #: The conversation, in the order it was posted: the one source of its order.
+        self._store       : MessageStore = MessageStore()
+        #: Every peer, by id; the frontend is at LOCAL.
+        self._connectors  : Dict[int, Any] = {}
+        #: Asks still waiting for their answer, by the id of the question.
+        self._pending     : Dict[MessageID, "asyncio.Future[str]"] = {}
         #: Peers that start() has started; deliveries to the others are held.
-        self._running  : Set[int] = set()
+        self._running     : Set[int] = set()
         #: Deliveries waiting for their peer to start, in the order they were posted.
-        self._held     : List[Tuple[int, ChatMessage]] = []
-        #: Deliveries in flight, one task each.
-        self._deliveries : Set["asyncio.Task[None]"] = set()
+        self._held        : List[Tuple[int, ChatMessage]] = []
+        #: Deliveries in flight, one task each; close() waits for them.
+        self._deliveries  : Set["asyncio.Task[None]"] = set()
         #: How deeply each question still being delivered is nested.
-        self._depth    : Dict[MessageID, int] = {}
-        self._next_id  : int = 1
-        self._started  : bool = False
-        self._closed   : bool = False
-        self._closing  : bool = False
+        self._depth       : Dict[MessageID, int] = {}
+        #: The id the next peer without a declared or pinned one gets.
+        self._next_id     : int = 1
+        #: Whether start() has recalled the archive; it does so only once.
+        self._started     : bool = False
+        #: Whether close() is waiting for the deliveries in flight.
+        self._closing     : bool = False
+        #: Whether close() has finished waiting; nothing is delivered after it.
+        self._closed      : bool = False
         #: ids of peers/commands whose initialize() has already run.
         self._initialized : set = set()
 
