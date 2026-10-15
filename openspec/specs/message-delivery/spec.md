@@ -1,10 +1,10 @@
-# Spec Delta
+# message-delivery Specification
 
 ## Purpose
 
 Defines how the session hands each message to the peers it is for: concurrently, without one peer's work holding up another or itself, with asks that may recurse through peers already answering, and with the frontend never left waiting.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Every delivery runs on its own
 The session SHALL hand each message to each peer it is for (its listeners and, when it is addressed, its recipient) without waiting for that or any other peer to finish with an earlier message. A peer MAY therefore be inside `answer` or `listen` for several messages at once. Posting a message MUST return once the message is in the conversation, before any peer has heard or answered it. The conversation's order is the order messages were posted, whatever order peers finish in.
@@ -63,7 +63,7 @@ Whatever the user sends through the frontend (text, an addressed `@peer` questio
 
 #### Scenario: A slow command does not freeze the input
 - **WHEN** the user runs a command that takes one second, and then sends a message
-- **THEN** running the command returns in under 0.1 seconds, the message is posted before the command answers, and the command's answer then appears as a message
+- **THEN** running the command returns well before the command finishes, the command's invocation is shown while it runs, the message is posted before the command answers, and the command's answer then appears as a message
 
 #### Scenario: A slow peer does not freeze the input
 - **WHEN** the user asks a peer that takes one second to answer, and then says something else

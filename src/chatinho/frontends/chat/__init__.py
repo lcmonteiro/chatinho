@@ -27,6 +27,7 @@ and the core it talks to, which imports no UI framework, lives above it in
 :mod:`chatinho.session`, :mod:`chatinho.message` and :mod:`chatinho.hooks`.
 """
 
+import asyncio
 import logging
 import threading
 from typing import Any, Dict, List, Optional, Tuple
@@ -418,12 +419,22 @@ class ChatFrontend(App):
 
         What the command answers needs no handling here: the session has
         already put it in the log, replying to the invocation, and the user
-        reads it there. Only a failure would otherwise go unseen, since the
-        session logs it and raises it to whoever ran the command, and nobody
-        waits on this worker.
+        reads it there. The invocation itself is painted as soon as it is
+        posted, so a slow command shows ``/name`` while it runs.
+
+        Only a failure would otherwise go unseen, since the session logs it and
+        raises it to whoever ran the command, and nobody waits on this worker.
         """
+        running = asyncio.ensure_future(self.command(name, args))
         try:
-            await self.command(name, args)
+            # The invocation is posted on the command's first step, before it
+            # starts executing; paint it now rather than when the answer lands.
+            await asyncio.sleep(0)
+            self._repaint()
+            await running
+        except asyncio.CancelledError:
+            running.cancel()
+            raise
         except Exception as exc:
             await self.say("%s%s failed: %s" % (COMMAND_PREFIX, name, type(exc).__name__))
 

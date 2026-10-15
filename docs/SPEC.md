@@ -65,7 +65,9 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
    takes a second to answer holds up nobody, not even its own next question, and a peer may ask
    one that is asking it; nesting stops at `max_depth` (8) with an `ERROR` reply. Connectors
    keep no state of the conversation and must tolerate being called concurrently; the backend
-   alone stores it. The frontend never waits on another peer or a command.
+   alone stores it. The frontend never waits on another peer or a command. All of this runs on
+   one event loop, so nothing may block it: `answer`, `listen` and `execute` hand blocking work
+   to a thread with `await asyncio.to_thread(fn, ...)`, and talk to the chat only from the loop.
 3. **Hearing is not synchronous.** A listener sees a message shortly *after* it was said, not
    during. Assert after `close()`, which waits for every delivery in flight before cancelling
    anything; asserting straight after `say()` is asserting on timing.
