@@ -1,6 +1,6 @@
 """AgentConnector: a LangChain agent as a peer, with the chat as its tools.
 
-Every agent here runs on a scripted model (``agent_kit``), so no key and no
+Every agent here runs on a scripted model (``fakes.agent``), so no key and no
 network: the script decides each call from the messages of that run alone.
 """
 
@@ -32,7 +32,7 @@ from chatinho.connectors import agent as module
 from chatinho.connectors.agent import AgentConnector
 from chatinho.keys import Env
 
-from agent_kit import calls, fake, question, says
+from fakes.agent import calls, fake, question, says
 from conftest import driven
 
 

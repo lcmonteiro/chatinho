@@ -3,7 +3,7 @@
 ## 1. Package and test kit
 
 - [x] 1.1 Add the `langchain` extra (`langchain>=1.0`, `langchain-openai>=1.0`) to `pyproject.toml`, also in `all` and `dev`; regenerate `uv.lock` with `uv lock` and install it into `.venv`. Verify: `python -c "import langchain.agents, langchain_openai"` works, and `pytest -q tests/test_mcp_*.py` still passes with the resolved `websockets`.
-- [x] 1.2 Add `tests/agent_kit.py`: a scripted fake chat model (subclass of `BaseChatModel` whose `bind_tools` records the tool names it was given, and whose replies are chosen per question from the messages it receives: a tool call, then a final text), so tests run without network. Verify: used by every test in group 2-5.
+- [x] 1.2 Add `tests/fakes/agent.py` (with the other test doubles in `tests/fakes/`): a scripted fake chat model (subclass of `BaseChatModel` whose `bind_tools` records the tool names it was given, and whose replies are chosen per question from the messages it receives: a tool call, then a final text), so tests run without network. Verify: used by every test in group 2-5.
 
 ## 2. The connector
 

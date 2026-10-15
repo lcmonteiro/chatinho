@@ -25,7 +25,7 @@ from chatinho.connectors.mcp import McpConnector
 from chatinho.frontends.mcp import McpFrontend
 
 from conftest import Driver, driven
-from llm_kit import FakeOpenAI, requests, sent
+from fakes.llm import FakeOpenAI, requests, sent
 
 EXAMPLES = pathlib.Path(__file__).resolve().parent.parent / "examples"
 
@@ -141,7 +141,7 @@ async def test_the_reviewer_sees_what_the_coder_wrote():
 # === agent.py =====================================================================
 
 async def test_the_lead_asks_the_coder_and_answers():
-    from agent_kit import calls, fake
+    from fakes.agent import calls, fake
 
     parts = example("agent").parts()
     lead  = parts["connectors"][0]

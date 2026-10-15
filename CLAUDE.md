@@ -370,9 +370,12 @@ tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_package_layout.py,
                    test_clipboard.py, test_answer_details.py,
-                   test_lending.py, test_mcp_*.py with mcp_kit.py,
-                   test_context_query.py, test_openai_connector.py and test_examples.py
-                   with llm_kit.py (a stubbed AsyncOpenAI) (no terminal)
+                   test_lending.py, test_mcp_*.py, test_message_delivery.py,
+                   test_context_query.py, test_openai_connector.py, test_agent_connector.py
+                   and test_examples.py (no terminal)
+  tests/fakes/     test doubles, never the real thing: llm.py (a stubbed AsyncOpenAI),
+                   agent.py (a scripted LangChain chat model), mcp.py (a remote session
+                   served over MCP, a client onto it, and peers to ask)
 ```
 
 The split follows one rule: **anything that does not need Textual moves out**, because that is

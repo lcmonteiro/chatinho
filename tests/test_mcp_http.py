@@ -13,7 +13,7 @@ from chatinho.connectors.mcp import McpConnector
 from chatinho.frontends.mcp import McpFrontend
 from chatinho.keys import Env, KeyUnavailable
 from conftest import driven
-from mcp_kit import Weather
+from fakes.mcp import Weather
 
 
 def _free_port() -> int:
