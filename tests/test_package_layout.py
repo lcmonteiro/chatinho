@@ -99,7 +99,7 @@ def blocked(name, *a, **k):
 builtins.__import__ = blocked
 
 import chatinho
-for name in ("build_chat_session", "build_mcp_session", "ChatFrontend", "McpFrontend"):
+for name in ("build_chat_session", "build_mcp_session", "ChatFrontend", "McpFrontend", "AgentConnector"):
     try:
         getattr(chatinho, name)
     except ImportError as exc:
@@ -135,3 +135,21 @@ def test_each_frontend_needs_only_its_own_extra():
     without_tui = _read_without("textual")
     assert without_tui["McpFrontend"] == ["ok"]
     assert "chatinho[tui]" in without_tui["ChatFrontend"][1]
+
+
+def test_the_agent_connector_needs_its_extra():
+    status, message = _read_without("langchain")["AgentConnector"]
+    assert status == "missing"
+    assert "chatinho[langchain]" in message
+    assert _read_without("textual")["AgentConnector"] == ["ok"]
+
+
+def test_the_core_stays_light():
+    done = subprocess.run(
+        [sys.executable, "-c",
+         "import sys, chatinho, chatinho.connectors; "
+         "print(sorted(m for m in sys.modules if m.split('.')[0].startswith('lang')))"],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "[]"

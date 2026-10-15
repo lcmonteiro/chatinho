@@ -39,16 +39,17 @@ Served over MCP, which needs ``pip install chatinho[mcp]``::
 Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both in
 :mod:`chatinho.frontends` — and either can be passed to ``ChatSession`` by hand.
 
-Eight names need an extra, and say so if it is missing:
+Nine names need an extra, and say so if it is missing:
 
-    build_chat_session  chatinho[tui,mcp]  textual, fastmcp
-    build_mcp_session   chatinho[tui,mcp]  textual, fastmcp
-    ChatFrontend        chatinho[tui]      textual
-    ChatStyle           chatinho[tui]      textual
-    McpFrontend         chatinho[mcp]      fastmcp
-    McpConnector        chatinho[mcp]      fastmcp
-    OpenAIConnector     chatinho[openai]   openai
-    DatabaseBackend     chatinho[sql]      sqlalchemy
+    build_chat_session  chatinho[tui,mcp]    textual, fastmcp
+    build_mcp_session   chatinho[tui,mcp]    textual, fastmcp
+    ChatFrontend        chatinho[tui]        textual
+    ChatStyle           chatinho[tui]        textual
+    McpFrontend         chatinho[mcp]        fastmcp
+    McpConnector        chatinho[mcp]        fastmcp
+    OpenAIConnector     chatinho[openai]     openai
+    AgentConnector      chatinho[langchain]  langchain
+    DatabaseBackend     chatinho[sql]        sqlalchemy
 
 Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand`` —
 imports nothing but the standard library.
@@ -62,6 +63,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     # Importing them here restores that without importing anything at run time.
     from .backends import DatabaseBackend
     from .builder import build_chat_session, build_mcp_session
+    from .connectors.agent import AgentConnector
     from .connectors.mcp import McpConnector
     from .connectors.openai import OpenAIConnector
     from .frontends.chat import ChatFrontend
@@ -93,6 +95,7 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
     "McpFrontend"        : (".frontends.mcp",        (_MCP,)),
     "McpConnector"       : (".connectors.mcp",       (_MCP,)),
     "OpenAIConnector"    : (".connectors.openai",    (("openai", "openai"),)),
+    "AgentConnector"     : (".connectors.agent",     (("langchain", "langchain"),)),
     "DatabaseBackend"    : (".backends",             (("sql", "sqlalchemy"),)),
 }
 
@@ -200,6 +203,7 @@ __all__ = [
     "Locate",
     # batteries
     "OpenAIConnector",
+    "AgentConnector",
     "DatabaseBackend",
     "ChatFrontend",
     "ChatStyle",

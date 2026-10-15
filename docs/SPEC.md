@@ -486,6 +486,15 @@ open as they always did.
 Something that listens **and** answers gets both calls for the same message, because it declared
 both.
 
+### An agent is a peer whose tools are the chat
+
+`AgentConnector` (`chatinho[langchain]`) declares `HookAnswer` and grants itself the rest of the
+chat: `HookPeers` and `HookAsk` become one `ask_<peer>` tool per other peer that answers, and
+`HookCommands` and `HookInvoke` become one `run_<command>` tool per command. `HookContext` is its
+memory. It answers each question with one run of a LangChain `create_agent` agent, built from the
+same parameters. A peer it asks through a tool may ask it back: the nested question is one level
+deeper, and `max_depth` stops a loop.
+
 ---
 
 ## 6. The session's own surface

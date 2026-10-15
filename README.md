@@ -65,8 +65,9 @@ true. These names live behind an extra:
 | `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` |
 | `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
+| `AgentConnector` — a LangChain agent | `chatinho[langchain]` | `langchain`, `langchain-openai` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
-| all of them | `chatinho[all]` | all five |
+| all of them | `chatinho[all]` | all of the above |
 
 They are resolved on first use, so `import chatinho` never drags in a terminal for a script that
 wanted a session. A missing extra reports itself:
@@ -278,6 +279,28 @@ comes from `OPENAI_API_KEY` and `OPENAI_BASE_URL`. `Endpoint.from_env("ORBE_OPEN
 program can stop before it starts. A profiles file others can write is refused, since `cmd:` runs a
 command.
 
+### Agents — `pip install 'chatinho[langchain]'`
+
+`AgentConnector` is a LangChain agent as a peer. It takes what `create_agent` takes and builds the
+agent itself, adding **the chat as tools**: `ask_<peer>` for every other peer that answers, and
+`run_<command>` for every command. Each question it is asked is one run of the agent:
+
+```python
+from chatinho import AgentConnector, Endpoint, OpenAIConnector
+
+lead  = AgentConnector("lead", Endpoint.load(), tools=[search_docs],
+                       system_prompt="Plan the work; ask coder for any code.", peers=["coder"])
+coder = OpenAIConnector("coder", Endpoint.load())
+```
+
+`model` is anything `create_agent` takes (`"openai:gpt-4o"`, a chat model) or an `Endpoint`, whose
+key is read only when the model is called. Its memory is the chat (`memory=`, the same `Query` as
+`OpenAIConnector`), so it needs no checkpointer; given one, each question runs on its own thread.
+`peers=` and `commands=` limit what becomes a tool, `ask_user=True` lets it ask you, and the agent
+never gets a tool for itself. A peer it asks may ask it back; `ChatSession(max_depth=8)` bounds how
+deep that goes. Its tools run on the chat's event loop, so blocking work belongs in
+`asyncio.to_thread`.
+
 ### Across machines — `pip install 'chatinho[mcp]'`
 
 One session can put questions to another over MCP (the modern protocol, 2026-07-28). On the machine
@@ -403,6 +426,7 @@ content: an HTML attachment runs its scripts when your browser opens it.
 | [`examples/assistant.py`](examples/assistant.py) | **start here** — a terminal assistant on any OpenAI-compatible model, remembering across runs |
 | [`examples/team.py`](examples/team.py) | a coder and a reviewer in one room; `@coder` writes, `@reviewer` critiques what it wrote |
 | [`examples/files.py`](examples/files.py) | `/read <path> [question]`: ask the model about a local text file |
+| [`examples/agent.py`](examples/agent.py) | a LangChain agent that asks the coder through its `ask_coder` tool |
 | [`examples/lab_server.py`](examples/lab_server.py) | a model served over MCP with no key of its own |
 | [`examples/lab_client.py`](examples/lab_client.py) | a chat asking that lab, lending it your key |
 | [`examples/lab_fastmcp_client.py`](examples/lab_fastmcp_client.py) | a plain FastMCP client asking the lab |
