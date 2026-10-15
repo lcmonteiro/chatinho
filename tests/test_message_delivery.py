@@ -278,3 +278,33 @@ async def test_answers_traded_past_the_limit_are_dropped():
     texts = view.texts()
     assert texts[0] == "hi" and len(texts) == 1 + 8
     assert not [m for m in view.context() if m.status == ReplyStatus.ERROR]
+
+
+# === A resolved reply is heard, not answered ======================================
+
+async def test_a_reply_to_ones_own_ask_is_heard_not_answered():
+    """A peer that listens and answers gets the reply to its ask only as a listener."""
+    @connector("curious")
+    @require(HookListen)
+    @require(HookAnswer)
+    @require(HookAsk)
+    class Curious:
+        ask : Ask
+
+        def __init__(self) -> None:
+            self.heard    : List[str] = []
+            self.answered : List[str] = []
+
+        async def listen(self, msg: ChatMessage) -> None:
+            self.heard.append(msg.text)
+
+        async def answer(self, msg: ChatMessage) -> Reply:
+            self.answered.append(msg.text)
+            return Reply("curious<%s>" % await self.ask(2, "and you?"))
+
+    curious = Curious()
+    session, view = await driven(connectors=[curious, _Slow()])
+    assert await asyncio.wait_for(view.ask(1, "go"), timeout=2) == "curious<slow: and you?>"
+    await session.close()
+    assert curious.answered == ["go"]
+    assert "slow: and you?" in curious.heard

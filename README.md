@@ -301,6 +301,25 @@ never gets a tool for itself. A peer it asks may ask it back; `ChatSession(max_d
 deep that goes. Its tools run on the chat's event loop, so blocking work belongs in
 `asyncio.to_thread`.
 
+Every answer goes through one graph, `extract -> agent -> verify -> load`, which
+`await lead.graph()` returns for inspection. A tool makes a **file** by returning an artifact
+(`response_format="content_and_artifact"`) that is an `Attachment`, or anything with `name`,
+`media_type` and `data`; the files the run made are attached to the answer, which should link them
+by name, `[chart](revenue.html)`. When it does not, `verify` sends the model back with a reminder,
+at most `link_retries` times (default 1; 0 turns it off):
+
+```python
+@tool(response_format="content_and_artifact")
+def draw(name: str, svg: str):
+    """Draw an SVG picture the chat can show."""
+    return "made %s" % name, Attachment(name=name, media_type="image/svg+xml", data=svg.encode())
+
+painter = AgentConnector("painter", Endpoint.load(), tools=[draw])
+```
+
+A question gets a reply; what **you** say to everyone gets a say from the agent, replying to it.
+What other peers say is only memory, so two agents never trade says.
+
 ### Across machines — `pip install 'chatinho[mcp]'`
 
 One session can put questions to another over MCP (the modern protocol, 2026-07-28). On the machine
