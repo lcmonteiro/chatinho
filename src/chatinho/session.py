@@ -89,7 +89,7 @@ class ChatSession:
         #: Peers that start() has started; deliveries to the others are held.
         self._running     : Set[int] = set()
         #: Deliveries waiting for their peer to start, in the order they were posted.
-        self._held        : List[Tuple[int, ChatMessage]] = []
+        self._held        : List[Tuple[int, ChatMessage, bool]] = []
         #: Deliveries in flight, one task each; close() waits for them.
         self._deliveries  : Set["asyncio.Task[None]"] = set()
         #: How deeply each question still being delivered is nested.
@@ -396,21 +396,21 @@ class ChatSession:
         if audience:
             self._depth[msg.id] = _ANSWERING.get() + 1
         for at in sorted(listeners | audience):
-            self._dispatch(at, msg)
+            self._dispatch(at, msg, at in audience)
         return msg.id
 
-    def _dispatch(self, at: int, msg: ChatMessage) -> None:
-        """Delivers *msg* to peer *at* now, or once it has started."""
+    def _dispatch(self, at: int, msg: ChatMessage, asked: bool) -> None:
+        """Delivers *msg* to peer *at* now, or once it has started; *asked* if it is put to *at*."""
         if self._closed:
             return
         if at in self._running:
-            task = asyncio.create_task(self._delivery(at, msg))
+            task = asyncio.create_task(self._delivery(at, msg, asked))
             self._deliveries.add(task)
             task.add_done_callback(self._deliveries.discard)
         else:
-            self._held.append((at, msg))
+            self._held.append((at, msg, asked))
 
-    async def _delivery(self, at: int, msg: ChatMessage) -> None:
+    async def _delivery(self, at: int, msg: ChatMessage, asked: bool) -> None:
         """
         One message, to one peer, on its own task.
 
@@ -418,19 +418,21 @@ class ChatSession:
         subsystem must not take the chat down.
         """
         try:
-            await self._deliver(self._connectors[at], msg)
+            await self._deliver(self._connectors[at], msg, asked)
         except Exception:
             logger.error("Peer %d failed on %s", at, msg.id, exc_info=True)
         finally:
-            if msg.to == at:
+            if asked:
                 self._depth.pop(msg.id, None)
 
-    async def _deliver(self, who: Any, msg: ChatMessage) -> None:
+    async def _deliver(self, who: Any, msg: ChatMessage, asked: bool) -> None:
         """
         Hands one message to one peer, every way it declared to get it.
 
         The two are not exclusive: something that listens *and* answers gets
-        both calls for the same message, because it asked for both.
+        both calls for the same message, because it asked for both. Only a
+        message put to the peer (*asked*) is answered: a reply that resolved
+        the peer's own ask is only heard, never answered again.
 
         What ``answer`` returns is posted in the peer's name. Returning None is
         not a failure: the ask stays waiting, and whatever the peer says later
@@ -440,10 +442,10 @@ class ChatSession:
             _ANSWERING.set(0)              # hearing is not answering
             await who.listen(msg)
 
-        if msg.is_broadcast:
+        if not asked:
             return
         at = getattr(who, "peer_id", None)
-        if at is None or msg.to != at:
+        if at is None:
             return
         if not declares(who, HookAnswer):
             logger.warning("%r was asked but does not declare %s", name_of(who), HookAnswer)
@@ -630,8 +632,8 @@ class ChatSession:
             return
         self._running.update(self._connectors)
         held, self._held = self._held, []
-        for at, msg in held:
-            self._dispatch(at, msg)
+        for at, msg, asked in held:
+            self._dispatch(at, msg, asked)
 
     async def close(self) -> None:
         """

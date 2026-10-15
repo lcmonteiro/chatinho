@@ -157,6 +157,25 @@ async def test_the_lead_asks_the_coder_and_answers():
         await session.close()
 
 
+async def test_the_lead_responds_to_what_you_say():
+    from fakes.agent import fake, says
+
+    parts = example("agent").parts()
+    lead  = parts["connectors"][0]
+    lead.model = fake(says("On it."))
+    session, view = await headless(parts)
+    try:
+        said = await view.say("I need an add function")
+        for _ in range(200):
+            response = [m for m in view.context() if m.frm == lead.peer_id]
+            if response:
+                break
+            await asyncio.sleep(0.01)
+        assert [(m.text, m.reply_to) for m in response] == [("On it.", said)]
+    finally:
+        await session.close()
+
+
 # === files.py =====================================================================
 
 async def test_read_sends_the_file_and_the_question(tmp_path):

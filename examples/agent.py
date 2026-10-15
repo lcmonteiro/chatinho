@@ -2,9 +2,10 @@
 
 ``lead`` is an ``AgentConnector``: a LangChain agent built with ``create_agent``.
 Besides any tools of its own, it gets the chat as tools: ``ask_coder`` asks the
-coder peer and returns its answer, and ``run_help`` runs ``/help``. Ask the lead
-for something that needs code and watch it delegate: the question it puts to
-the coder and the coder's answer appear in the chat, then the lead's own answer.
+coder peer and returns its answer, and ``run_help`` runs ``/help``. Say what you
+need — no ``@lead`` needed, the lead responds to what you say to everyone — and
+watch it delegate: the question it puts to the coder and the coder's answer
+appear in the chat, then the lead's own answer.
 
 ``coder`` is an ordinary ``OpenAIConnector``; address it directly with
 ``@coder <task>`` if you like.
@@ -26,7 +27,7 @@ from chatinho import build_chat_session
 LEAD    = ("You lead a small team in a terminal chat. For anything that needs code, ask the coder "
            "with the ask_coder tool, check what it wrote, then answer the user in Markdown.")
 CODER   = "You are a senior Python developer. Answer with code first, then one short paragraph."
-WELCOME = ("Ask the lead for something that needs code: it will ask the coder for you. "
+WELCOME = ("Say what you need: the lead answers, and asks the coder for any code. "
            "'@coder <task>' asks the coder directly; /help lists the commands.")
 
 

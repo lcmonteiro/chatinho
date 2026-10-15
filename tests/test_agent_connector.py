@@ -6,7 +6,7 @@ network: the script decides each call from the messages of that run alone.
 
 import asyncio
 import json
-from typing import List
+from typing import Any, Dict, List, Optional
 
 import pytest
 from langchain.agents.structured_output import ToolStrategy
@@ -22,9 +22,13 @@ from chatinho import (
     HelpCommand,
     HookAnswer,
     HookAsk,
+    HookKeep,
+    HookSay,
     LOCAL,
     Reply,
     ReplyStatus,
+    Say,
+    backend,
     connector,
     require,
 )
@@ -32,7 +36,7 @@ from chatinho.connectors import agent as module
 from chatinho.connectors.agent import AgentConnector
 from chatinho.keys import Env
 
-from fakes.agent import calls, fake, question, says
+from fakes.agent import File, calls, fake, maker, makes, question, reminders, says
 from conftest import driven
 
 
@@ -135,6 +139,221 @@ async def test_two_questions_at_once():
     answers = await asyncio.gather(view.ask(agent.peer_id, "one"), view.ask(agent.peer_id, "two"))
     assert sorted(answers) == ["re: one", "re: two"]
     await session.close()
+
+
+# === The graph =====================================================================
+
+async def test_the_graph_has_the_four_steps():
+    agent = AgentConnector("agent", fake(says("x")))
+    session, view = await driven(connectors=[agent])
+    graph = (await agent.graph()).get_graph()
+    assert set(graph.nodes) == {"__start__", "extract", "agent", "verify", "load", "__end__"}
+    assert {(e.source, e.target) for e in graph.edges} == {
+        ("__start__", "extract"), ("extract", "agent"), ("agent", "verify"),
+        ("verify", "agent"), ("verify", "load"), ("load", "__end__"),
+    }
+    await session.close()
+
+
+# === Files the agent made are attached =============================================
+
+@backend("keeper")
+@require(HookKeep)
+class _Keeper:
+    """Keeps what is attached, by message id: the names only."""
+
+    def __init__(self) -> None:
+        self.kept : Dict[Any, List[str]] = {}
+
+    async def keep(self, msg_id: Any, attachments: Any) -> None:
+        self.kept[msg_id] = [a.name for a in attachments]
+
+    async def link(self, msg_id: Any, name: str) -> Optional[str]:
+        return None
+
+
+async def _responses(view, agent, count: int) -> List[ChatMessage]:
+    """Waits until the agent has said *count* messages, and returns them."""
+    for _ in range(200):
+        said = [m for m in view.context() if m.frm == agent.peer_id]
+        if len(said) >= count:
+            return said
+        await asyncio.sleep(0.01)
+    raise AssertionError("the agent said %d of %d messages" % (len(said), count))
+
+
+async def test_a_tool_makes_a_diagram():
+    model = fake(makes("flow.svg", answers=["Here: [Flow](flow.svg)"]))
+    agent = AgentConnector("agent", model, tools=[maker()])
+    session, view = await driven(connectors=[agent])
+    reply = await agent.answer(ChatMessage(id="q-1", text="Draw the flow", frm=LOCAL, to=1))
+    assert reply.text == "Here: [Flow](flow.svg)"
+    (made,) = reply.attachments
+    assert (made.name, made.media_type, made.data) == ("flow.svg", "image/svg+xml", b"<svg/>")
+    await session.close()
+
+
+async def test_an_attachment_is_kept_as_it_is():
+    from chatinho import Attachment
+    from langchain_core.tools import StructuredTool
+
+    file = Attachment(name="raw.bin", media_type="application/octet-stream", data=b"\x00\x01")
+    tool = StructuredTool.from_function(lambda name: ("made", file), name="make_file",
+                                        description="Make a file.", response_format="content_and_artifact")
+    agent = AgentConnector("agent", fake(makes("raw.bin", answers=["[raw](raw.bin)"])), tools=[tool])
+    session, view = await driven(connectors=[agent])
+    reply = await agent.answer(ChatMessage(id="q-1", text="go", frm=LOCAL, to=1))
+    assert reply.attachments == (file,)
+    await session.close()
+
+
+async def test_a_plain_answer_has_no_attachments():
+    agent = AgentConnector("agent", fake(says("just text")), tools=[maker()])
+    session, view = await driven(connectors=[agent])
+    reply = await agent.answer(ChatMessage(id="q-1", text="hi", frm=LOCAL, to=1))
+    assert (reply.text, reply.attachments) == ("just text", ())
+    await session.close()
+
+
+async def test_only_this_runs_files():
+    def script(messages):
+        if question(messages) == "draw":
+            return makes("flow.svg", answers=["[Flow](flow.svg)"])(messages)
+        return AIMessage(content="nothing new")
+
+    agent = AgentConnector("agent", fake(script), tools=[maker()])
+    session, view = await driven(connectors=[agent])
+    await view.ask(agent.peer_id, "draw")
+    reply = await agent.answer(ChatMessage(id="q-2", text="and now?", frm=LOCAL, to=1))
+    assert (reply.text, reply.attachments) == ("nothing new", ())
+    await session.close()
+
+
+async def test_the_last_file_of_a_name_is_kept():
+    first, second = File("a.svg", "image/svg+xml", "<one/>"), File("a.svg", "image/svg+xml", "<two/>")
+    files = iter([first, second])
+    from langchain_core.tools import StructuredTool
+    tool = StructuredTool.from_function(lambda name: ("made", next(files)), name="make_file",
+                                        description="Make a file.", response_format="content_and_artifact")
+    agent = AgentConnector("agent", fake(makes("a.svg", "a.svg", answers=["[A](a.svg)"])), tools=[tool])
+    session, view = await driven(connectors=[agent])
+    reply = await agent.answer(ChatMessage(id="q-1", text="go", frm=LOCAL, to=1))
+    assert [(a.name, a.data) for a in reply.attachments] == [("a.svg", b"<two/>")]
+    await session.close()
+
+
+async def test_the_files_reach_the_backend():
+    keeper = _Keeper()
+    agent  = AgentConnector("agent", fake(makes("flow.svg", answers=["[Flow](flow.svg)"])), tools=[maker()])
+    session, view = await driven(connectors=[agent], backend=keeper)
+    assert await view.ask(agent.peer_id, "draw") == "[Flow](flow.svg)"
+    reply = next(m for m in view.context() if m.frm == agent.peer_id)
+    assert keeper.kept[reply.id] == ["flow.svg"]
+    await session.close()
+
+
+# === The answer links its files ====================================================
+
+async def test_a_missing_link_is_asked_for():
+    model = fake(makes("report.svg", answers=["Ready.", "Here: [Report](report.svg)."]))
+    agent = AgentConnector("agent", model, tools=[maker()])
+    session, view = await driven(connectors=[agent])
+    reply = await agent.answer(ChatMessage(id="q-1", text="report?", frm=LOCAL, to=1))
+    assert len(model.sent) == 3
+    (reminder,) = reminders(model.sent[2])
+    assert isinstance(model.sent[2][-1], HumanMessage) and "(report.svg)" in reminder
+    assert reply.text == "Here: [Report](report.svg)."
+    assert [a.name for a in reply.attachments] == ["report.svg"]
+    await session.close()
+
+
+async def test_sent_back_at_most_link_retries_times():
+    model = fake(makes("report.svg", answers=["Ready.", "Still ready."]))
+    agent = AgentConnector("agent", model, tools=[maker()])
+    session, view = await driven(connectors=[agent])
+    reply = await agent.answer(ChatMessage(id="q-1", text="report?", frm=LOCAL, to=1))
+    assert len(model.sent) == 3
+    assert reply.text == "Still ready." and [a.name for a in reply.attachments] == ["report.svg"]
+    await session.close()
+
+
+async def test_more_retries_when_asked_for():
+    model = fake(makes("report.svg", answers=["Ready.", "Still ready.", "[Report](report.svg)"]))
+    agent = AgentConnector("agent", model, tools=[maker()], link_retries=2)
+    session, view = await driven(connectors=[agent])
+    reply = await agent.answer(ChatMessage(id="q-1", text="report?", frm=LOCAL, to=1))
+    assert len(model.sent) == 4 and reply.text == "[Report](report.svg)"
+    await session.close()
+
+
+async def test_verify_turned_off():
+    model = fake(makes("report.svg", answers=["Ready.", "never"]))
+    agent = AgentConnector("agent", model, tools=[maker()], link_retries=0)
+    session, view = await driven(connectors=[agent])
+    reply = await agent.answer(ChatMessage(id="q-1", text="report?", frm=LOCAL, to=1))
+    assert len(model.sent) == 2
+    assert reply.text == "Ready." and [a.name for a in reply.attachments] == ["report.svg"]
+    await session.close()
+
+
+async def test_linked_the_first_time():
+    model = fake(makes("flow.svg", answers=["Here: [Flow](flow.svg)"]))
+    agent = AgentConnector("agent", model, tools=[maker()])
+    session, view = await driven(connectors=[agent])
+    await agent.answer(ChatMessage(id="q-1", text="draw", frm=LOCAL, to=1))
+    assert len(model.sent) == 2 and not any(reminders(sent) for sent in model.sent)
+    await session.close()
+
+
+# === The user's says are responded to with a say ===================================
+
+async def test_the_user_says_something_to_everyone():
+    keeper = _Keeper()
+    model  = fake(makes("login.svg", answers=["Here: [Login](login.svg)"]))
+    agent  = AgentConnector("agent", model, tools=[maker()])
+    # Two peers answer, so what the user says stays a say to everyone.
+    session, view = await driven(connectors=[agent, _Echo("coder")], backend=keeper)
+    said = await view.say("Draw the login flow")
+    await session.close()
+    (response,) = [m for m in view.context() if m.frm == agent.peer_id]
+    assert (response.text, response.to, response.reply_to) == ("Here: [Login](login.svg)", None, said)
+    assert keeper.kept[response.id] == ["login.svg"]
+
+
+async def test_another_peer_says_something_to_everyone():
+    @connector("lab")
+    @require(HookSay)
+    class Lab:
+        say : Say
+
+    model = fake(says("never"))
+    agent, lab = AgentConnector("agent", model), Lab()
+    session, view = await driven(connectors=[agent, _Echo("coder"), lab])
+    await lab.say("hello")
+    await session.close()
+    assert model.sent == []
+    assert not [m for m in view.context() if m.frm == agent.peer_id]
+
+
+async def test_asked_directly():
+    model = fake(says("once"))
+    agent = AgentConnector("agent", model)
+    session, view = await driven(connectors=[agent, _Echo("coder")])
+    assert await view.ask(agent.peer_id, "hi") == "once"
+    await session.close()
+    assert len(model.sent) == 1
+    assert [m.text for m in view.context() if m.frm == agent.peer_id] == ["once"]
+
+
+async def test_the_run_fails_on_a_say():
+    model = fake(says("never"))
+    model.error = RuntimeError("the prompt was secret")
+    agent = AgentConnector("agent", model)
+    session, view = await driven(connectors=[agent, _Echo("coder")])
+    said = await view.say("hi")
+    await session.close()
+    (response,) = [m for m in view.context() if m.frm == agent.peer_id]
+    assert (response.text, response.reply_to) == ("agent: could not answer (RuntimeError)", said)
 
 
 # === The chat as tools =============================================================
@@ -323,6 +542,20 @@ async def test_other_peers_are_named():
     await view.ask(agent.peer_id, "anything new?")
     assert [m.content for m in model.sent[-1]][:2] == ["lab: results are in", "ok"]
     await session.close()
+
+
+async def test_it_remembers_what_the_user_said_to_everyone():
+    model = fake(lambda messages: AIMessage(content="noted: " + question(messages)))
+    agent = AgentConnector("agent", model)
+    session, view = await driven(connectors=[agent, _Echo("coder")])
+    await view.say("My name is Ana")
+    await _responses(view, agent, 1)
+    await view.say("What is my name?")
+    await _responses(view, agent, 2)
+    await session.close()
+    second = model.sent[-1]
+    assert [type(m) for m in second] == [HumanMessage, AIMessage, HumanMessage]
+    assert [m.content for m in second] == ["My name is Ana", "noted: My name is Ana", "What is my name?"]
 
 
 async def test_one_thread_per_question():
