@@ -44,6 +44,11 @@ seven, which is what the terminal shows.
 | `to is TOOL` | `invoke` | a command was run |
 | `reply_to` set | `answer` | it answers that message, by id |
 
+What a peer's `answer` returns is an **answer**: it is addressed to whoever asked and every listener
+hears it, but it is never put to anyone's `answer`. That is what keeps two peers that answer from
+trading answers back and forth, and it is marked where the answer is made — a follow-up to an
+answer and the answer to that follow-up look exactly alike.
+
 `msg.is_local` is `frm == LOCAL`: the user said it. `msg.is_broadcast` is `to is None`.
 
 ### Three verbs, three pairs
@@ -162,6 +167,13 @@ a peer — not by a command — when exactly one peer declares `HookAnswer` besi
 frontend, is asked of that peer: it goes out addressed to it, its `answer` is called, and the reply
 comes back with `reply_to` set to the say. Everyone who listens still hears both. With two or more
 such peers, or none, a say is a broadcast, as before.
+
+**A reply goes back to whoever it replies to.** A say with `reply_to` set and no `to`, said by a
+peer, is asked of the author of the message it replies to — when that author is a peer other than
+the speaker and the frontend, and declares `HookAnswer`. Selecting an answer in the terminal and
+typing is a follow-up, and the peer that answered is the one asked. A reply to the user, to a
+command's output, to a peer that only listens, or to oneself stays a broadcast; an explicit `to`
+always wins.
 
 ### HookAsk
 

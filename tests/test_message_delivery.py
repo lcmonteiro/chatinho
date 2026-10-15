@@ -24,6 +24,7 @@ from chatinho import (
     ReplyStatus,
     Say,
     connector,
+    frontend,
     require,
 )
 from conftest import Driver, driven
@@ -255,8 +256,12 @@ async def test_listening_is_not_nesting():
     assert curious.answers == ["slow: from listen"]
 
 
-async def test_answers_traded_past_the_limit_are_dropped():
-    """Two peers that answer every answer stop at the limit, without trading errors."""
+async def test_replies_traded_past_the_limit_are_dropped():
+    """Two peers that answer by saying a reply stop at the limit, without trading errors.
+
+    What ``answer`` returns is never asked of anyone, so the only chain left is
+    one a peer builds by *saying* its reply from inside ``answer``.
+    """
     @require(HookAnswer)
     @require(HookSay)
     class Chatty:
@@ -265,8 +270,8 @@ async def test_answers_traded_past_the_limit_are_dropped():
         def __init__(self, name: str) -> None:
             self.name = name
 
-        async def answer(self, msg: ChatMessage) -> Reply:
-            return Reply("re: %s" % msg.text)
+        async def answer(self, msg: ChatMessage) -> None:
+            await self.say("re: %s" % msg.text, reply_to=msg.id)
 
     session, view = await driven()
     first, second = Chatty("first"), Chatty("second")
@@ -278,6 +283,78 @@ async def test_answers_traded_past_the_limit_are_dropped():
     texts = view.texts()
     assert texts[0] == "hi" and len(texts) == 1 + 8
     assert not [m for m in view.context() if m.status == ReplyStatus.ERROR]
+
+
+# === An answer is heard, never asked ==============================================
+
+@require(HookAnswer)
+@require(HookListen)
+@require(HookSay)
+class _Chatty:
+    """Answers whatever it is asked, and records what it answered and heard."""
+
+    say : Say
+
+    def __init__(self, name: str) -> None:
+        self.name     = name
+        self.answered : List[str] = []
+        self.heard    : List[str] = []
+
+    async def answer(self, msg: ChatMessage) -> Reply:
+        self.answered.append(msg.text)
+        return Reply("%s: re %s" % (self.name, msg.text))
+
+    async def listen(self, msg: ChatMessage) -> None:
+        self.heard.append(msg.text)
+
+
+async def test_an_answer_to_an_addressed_say_is_heard_not_answered():
+    session, view = await driven()
+    first, second = _Chatty("first"), _Chatty("second")
+    session.add_connector(first)
+    to = session.add_connector(second)
+    await session.start()
+    await first.say("hi", to=to)
+    await session.close()
+    assert view.texts() == ["hi", "second: re hi"]
+    assert first.answered == [] and second.answered == ["hi"]
+    assert "second: re hi" in first.heard
+
+
+async def test_two_answering_peers_do_not_trade_answers():
+    """One unprompted say between the only two answering peers costs one answer."""
+    session, view = await driven()
+    a, b = _Chatty("a"), _Chatty("b")
+    session.add_connector(a)
+    session.add_connector(b)
+    await session.start()
+    await a.say("a note")
+    await session.close()
+    assert a.answered == [] and b.answered == ["a note"]
+    assert view.texts() == ["a note", "b: re a note"]
+
+
+async def test_a_frontend_that_does_not_answer_is_not_asked(caplog):
+    @frontend("screen")
+    @require(HookSay)
+    @require(HookListen)
+    class Screen:
+        say : Say
+
+        def __init__(self) -> None:
+            self.heard : List[str] = []
+
+        async def listen(self, msg: ChatMessage) -> None:
+            self.heard.append(msg.text)
+
+    screen  = Screen()
+    session = ChatSession(frontend=screen, connectors=[_Slow()])
+    await session.start()
+    with caplog.at_level(logging.WARNING, logger="chatinho.session"):
+        await screen.say("hi", to=1)
+        await session.close()
+    assert "slow: hi" in screen.heard
+    assert "was asked but does not declare" not in caplog.text
 
 
 # === A resolved reply is heard, not answered ======================================
