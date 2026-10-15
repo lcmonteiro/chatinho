@@ -25,7 +25,7 @@ from chatinho.connectors.mcp import McpConnector
 from chatinho.frontends.mcp import McpFrontend
 
 from conftest import Driver, driven
-from llm_kit import FakeOpenAI, requests, sent
+from fakes.llm import FakeOpenAI, requests, sent
 
 EXAMPLES = pathlib.Path(__file__).resolve().parent.parent / "examples"
 
@@ -138,6 +138,25 @@ async def test_the_reviewer_sees_what_the_coder_wrote():
         await session.close()
 
 
+# === agent.py =====================================================================
+
+async def test_the_lead_asks_the_coder_and_answers():
+    from fakes.agent import calls, fake
+
+    parts = example("agent").parts()
+    lead  = parts["connectors"][0]
+    lead.model = fake(calls("ask_coder", question="write add", then=lambda code: "Here it is:\n" + code))
+    session, view = await headless(parts)
+    try:
+        FakeOpenAI.reply = "def add(a, b): return a + b"
+        answer = await view.ask(lead.peer_id, "I need an add function")
+        assert answer == "Here it is:\ndef add(a, b): return a + b"
+        assert sent()[-1] == {"role": "user", "content": "write add"}
+        assert lead.model.tools[-1] == ["ask_coder", "run_help"]
+    finally:
+        await session.close()
+
+
 # === files.py =====================================================================
 
 async def test_read_sends_the_file_and_the_question(tmp_path):
@@ -200,7 +219,7 @@ def _write(path: pathlib.Path, data: bytes) -> pathlib.Path:
 
 # === A missing key ================================================================
 
-@pytest.mark.parametrize("name", ["assistant", "team", "files", "lab_client"])
+@pytest.mark.parametrize("name", ["assistant", "team", "files", "lab_client", "agent"])
 def test_no_key_exits_with_a_hint(name, monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY")
     demo = example(name)

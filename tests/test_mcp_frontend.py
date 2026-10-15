@@ -7,7 +7,7 @@ import pytest
 from chatinho import LOCAL, Attachment, HookAnswer, HookExecute, Reply, connector, declares, require, tool
 from chatinho.frontends.mcp import McpFrontend
 from chatinho.helpers.mcp import CREDENTIALS_KEY, decode
-from mcp_kit import Agent, Files, Weather, ask, call, client, remote
+from fakes.mcp import Agent, Files, Weather, ask, call, client, remote
 
 
 # === The frontend itself ===========================================================

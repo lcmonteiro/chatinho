@@ -14,6 +14,7 @@ from typing import Any
 _WHERE = {
     "OpenAIConnector" : "chatinho.connectors.openai",
     "McpConnector"    : "chatinho.connectors.mcp",
+    "AgentConnector"  : "chatinho.connectors.agent",
 }
 
 __all__ = sorted(_WHERE)

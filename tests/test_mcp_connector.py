@@ -8,7 +8,7 @@ from chatinho import Attachment, HookAnswer, Reply, connector, require
 from chatinho.connectors.mcp import McpConnector
 from chatinho.keys import Env
 from conftest import driven
-from mcp_kit import Agent, Files, Weather, remote
+from fakes.mcp import Agent, Files, Weather, remote
 
 
 async def _local(connector, **kwargs):

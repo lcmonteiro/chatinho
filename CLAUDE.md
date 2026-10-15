@@ -350,7 +350,9 @@ src/chatinho/
                    attachments
   connectors/      openai.py (OpenAIConnector: AsyncOpenAI, any compatible base_url; its `memory` is a
                    Query it hands to context(), HookPeers for who said what; a lent `llm` key wins),
-                   mcp.py (McpConnector: asking a remote session over MCP)
+                   mcp.py (McpConnector: asking a remote session over MCP),
+                   agent.py (AgentConnector: a LangChain create_agent agent, built lazily, with the
+                   chat as tools: ask_<peer>, run_<command>; its memory is context())
                    — plain classes, no base; each imported on first use, behind its own extra
   frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
     chat/          the terminal — the only package that imports Textual:
@@ -368,9 +370,12 @@ tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_package_layout.py,
                    test_clipboard.py, test_answer_details.py,
-                   test_lending.py, test_mcp_*.py with mcp_kit.py,
-                   test_context_query.py, test_openai_connector.py and test_examples.py
-                   with llm_kit.py (a stubbed AsyncOpenAI) (no terminal)
+                   test_lending.py, test_mcp_*.py, test_message_delivery.py,
+                   test_context_query.py, test_openai_connector.py, test_agent_connector.py
+                   and test_examples.py (no terminal)
+  tests/fakes/     test doubles, never the real thing: llm.py (a stubbed AsyncOpenAI),
+                   agent.py (a scripted LangChain chat model), mcp.py (a remote session
+                   served over MCP, a client onto it, and peers to ask)
 ```
 
 The split follows one rule: **anything that does not need Textual moves out**, because that is
@@ -801,7 +806,7 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 `dependencies = []`. `ChatSession`, the fourteen hooks, `HelpCommand` and `TestCommand` import nothing
 but the standard library — which the fitness tests already enforced, so the packaging now says it
-too. Eight names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
+too. Nine names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
 | name | extra | brings |
 |---|---|---|
@@ -809,10 +814,11 @@ too. Eight names live behind an extra and are resolved on first use with PEP 562
 | `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` (4.0+, on the official `mcp` SDK) |
 | `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
+| `AgentConnector` | `chatinho[langchain]` | `langchain`, `langchain-openai` (langgraph with them) |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
 
 `chatinho[mcp]` brings pydantic, starlette and uvicorn with it, so it is the heavy one — on Termux
-especially. `chatinho[all]` is all four; `chatinho[dev]` is those plus pytest, ruff and mypy, which is what CI
+especially, and `chatinho[langchain]` brings langgraph. `chatinho[all]` is all of them; `chatinho[dev]` is those plus pytest, ruff and mypy, which is what CI
 installs and what `setup.sh` syncs. A missing extra raises an `ImportError` that names it, rather
 than surfacing as somebody else's `ModuleNotFoundError`.
 
@@ -826,13 +832,14 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 53 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`__init__.py` exports 65 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
 `MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
 (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
 `declared_id`, `name_of`, `Hook`); the fourteen `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`, `Commands`, `Locate`); and the batteries
-(`OpenAIConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`, `McpConnector`,
-`HelpCommand`, `TestCommand`).
+(`OpenAIConnector`, `AgentConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`,
+`McpConnector`, `HelpCommand`, `TestCommand`), with the keys and endpoints (`Endpoint`, `KeySource`,
+`KeyUnavailable`, `Env`, `DotEnv`, `File`, `Keyring`, `Command`, `Literal`, `Chain`, `key`).
 
 **Both frontends are public, and both have a builder.** `ChatFrontend` (in `chatinho.frontends.chat`)
 and `McpFrontend` (in `chatinho.frontends.mcp`) take no session: either can be passed to

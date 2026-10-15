@@ -46,8 +46,10 @@ sql    = ["sqlalchemy>=2.0.0"]
 mcp    = ["fastmcp>=4.0"]
 # Keys from the OS keychain: chatinho.keys.Keyring.
 keyring = ["keyring>=24"]
+# A LangChain agent as a peer: chatinho.connectors.agent.AgentConnector.
+langchain = ["langchain>=1.0", "langchain-openai>=1.0"]
 all    = ["textual>=0.45.0", "markdown-it-py>=2.0.0", "openai>=1.0.0", "sqlalchemy>=2.0.0",
-          "fastmcp>=4.0", "keyring>=24"]
+          "fastmcp>=4.0", "keyring>=24", "langchain>=1.0", "langchain-openai>=1.0"]
 dev = [
     "textual>=0.45.0",
     "markdown-it-py>=2.0.0",
@@ -55,6 +57,8 @@ dev = [
     "sqlalchemy>=2.0.0",
     "fastmcp>=4.0",
     "keyring>=24",
+    "langchain>=1.0",
+    "langchain-openai>=1.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.6",

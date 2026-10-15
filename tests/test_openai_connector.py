@@ -18,7 +18,7 @@ from chatinho.endpoint import Endpoint
 from chatinho.keys import Env, File, Literal
 
 from conftest import driven
-from llm_kit import FakeOpenAI, failure, requests, sent
+from fakes.llm import FakeOpenAI, failure, requests, sent
 
 
 @pytest.fixture(autouse=True)

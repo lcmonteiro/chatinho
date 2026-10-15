@@ -15,7 +15,7 @@ export OPENAI_API_KEY=sk-...          # any OpenAI-compatible key
 |---|---|---|
 | `CHATINHO_PROFILE` | the LLM demos and `lab_server` | A profile from your profiles file (below): endpoint, model and where the key is. Without one, the three `OPENAI_*`/`CHATINHO_MODEL` variables below are used. |
 | `CHATINHO_PROFILES` | the LLM demos and `lab_server` | Another profiles file; by default `./.chatinho.toml`, else `~/.config/chatinho/profiles.toml`. |
-| `OPENAI_API_KEY` | `assistant`, `team`, `files`, `lab_client`, `lab_fastmcp_client` | The key, when no profile is chosen; the demos exit with a hint when it is missing. It is read, never written anywhere. |
+| `OPENAI_API_KEY` | `assistant`, `team`, `files`, `agent`, `lab_client`, `lab_fastmcp_client` | The key, when no profile is chosen; the demos exit with a hint when it is missing. It is read, never written anywhere. |
 | `OPENAI_BASE_URL` | the LLM demos and `lab_server` | Another OpenAI-compatible endpoint, when no profile is chosen: Ollama (`http://localhost:11434/v1`), OpenRouter, Azure, … |
 | `CHATINHO_MODEL` | the LLM demos and `lab_server` | The model; overrides the profile's. `gpt-4o-mini` when neither says. |
 | `CHATINHO_BASE_URL` | the LLM demos and `lab_server` | Overrides the profile's endpoint. |
@@ -75,6 +75,7 @@ reference, never a key.
 |---|---|---|
 | `assistant.py` | **Start here.** A terminal assistant on any OpenAI-compatible model. Markdown and code blocks are rendered, and the conversation is kept in SQLite, so the next run picks it up with the model's memory intact. | `python examples/assistant.py` (or `./run.sh`) |
 | `team.py` | Two models in one room. `@coder <task>` writes code; `@reviewer <question>` critiques it, because the reviewer's memory is the whole room. | `python examples/team.py` |
+| `agent.py` | A LangChain agent (`AgentConnector`) that leads: ask it for code and it asks `coder` through its `ask_coder` tool, then answers you. The chat is its toolbox. The model must support tool calling; needs `chatinho[langchain]`. | `python examples/agent.py` |
 | `files.py` | `/read <path> [question]` (quote a path with spaces) sends a local UTF-8 text file (up to 64 KB) and your question to the assistant; keep asking about it afterwards. The file goes to your configured endpoint — only read what you would send there. | `python examples/files.py` |
 | `lab_server.py` | A model served over MCP that holds **no key**: each client lends its own with every question, and the lab forgets it after answering. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_server.py 8000` |
 | `lab_client.py` | Your chat, with the lab as a peer, lending your key (your profile's, else `OPENAI_API_KEY`) as the `llm` credential. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_client.py` |

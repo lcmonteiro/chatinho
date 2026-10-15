@@ -8,7 +8,7 @@ from chatinho import LOCAL, Attachment, ChatSession
 from chatinho import frontend, require
 from chatinho.connectors.mcp import McpConnector
 from chatinho.frontends.mcp import McpFrontend
-from mcp_kit import Agent, Files, Weather
+from fakes.mcp import Agent, Files, Weather
 
 
 @frontend("me")
