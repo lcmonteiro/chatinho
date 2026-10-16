@@ -208,8 +208,13 @@ class AgentConnector:
         return Reply(text, tuple(files))
 
     async def listen(self, msg: ChatMessage) -> None:
-        """Responds to what the user says to everyone with a say; ignores everyone else."""
-        if not (msg.is_broadcast and msg.is_local):
+        """Responds to what the user says to everyone with a say; ignores everyone else.
+
+        A say the session asked of this agent is answered through ``answer``, so
+        it is not also responded to here — or the agent would answer it twice.
+        """
+        asked_me = msg.asked_of is not None and msg.asked_of == getattr(self, "peer_id", None)
+        if not (msg.is_broadcast and msg.is_local) or asked_me:
             return
         try:
             text, files = await self._run(msg)

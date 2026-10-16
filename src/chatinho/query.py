@@ -21,8 +21,8 @@ class Query:
     """Which messages of the conversation to return.
 
     Attributes:
-        peer: Messages from this peer, to it, or replying to one of its
-            messages. :data:`SELF` means the peer asking.
+        peer: Messages from this peer, to it, asked of it, or replying to one
+            of its messages. :data:`SELF` means the peer asking.
         thread: The reply chain of this message: it, every message it replies
             to up to the root, and every reply to a message in that chain.
         errors: When False, replies whose status is ``error`` are left out.
@@ -56,7 +56,8 @@ class Query:
         if self.peer is not None:
             peer  = asker if self.peer == SELF else self.peer
             from_ = {m.id for m in msgs if m.frm == peer}
-            msgs  = [m for m in msgs if m.frm == peer or m.to == peer or m.reply_to in from_]
+            msgs  = [m for m in msgs
+                     if m.frm == peer or m.to == peer or m.asked_of == peer or m.reply_to in from_]
         if self.thread is not None:
             chain = _chain(msgs, self.thread)
             msgs  = [m for m in msgs if m.id in chain or m.reply_to in chain]

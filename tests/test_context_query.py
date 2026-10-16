@@ -48,6 +48,14 @@ def test_a_peer_and_the_replies_to_it():
     assert texts(Query(peer=3).select([said, answer, to_it, other])) == ["m1", "m2", "m3"]
 
 
+def test_what_a_peer_was_asked_is_its_own():
+    """A say routed to peer 1 is not addressed to it, and still in its memory."""
+    asked = msg(1)
+    asked.asked_of = 1
+    other = msg(2)
+    assert texts(Query(peer=1).select([asked, other])) == ["m1"]
+
+
 def test_self_is_whoever_asks():
     mine  = [msg(1, frm=LOCAL, to=2), msg(2, frm=2, reply_to=1)]
     other = [msg(3, frm=LOCAL, to=3), msg(4, frm=3, reply_to=3)]

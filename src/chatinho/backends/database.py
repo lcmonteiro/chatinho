@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence
 from urllib.parse import quote
 
-from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, create_engine
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -56,6 +56,7 @@ class ArchivedMessage(Base):
     to        = Column(Integer, nullable=True)
     reply_to  = Column(String, nullable=True)
     timestamp = Column(DateTime(timezone=False), nullable=False, index=True)
+    asked_of  = Column(Integer, nullable=True)
 
 
 class ArchivedAttachment(Base):
@@ -128,7 +129,21 @@ class DatabaseBackend:
         if self._worker is None:
             self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chatinho-db")
         Base.metadata.create_all(self.engine)
+        self._upgrade(self.engine)
         self.SessionLocal = sessionmaker(bind=self.engine, future=True)
+
+    def _upgrade(self, engine: Any) -> None:
+        """Adds to an archive written by an older version what this one needs.
+
+        ``create_all`` makes missing tables and never touches existing ones, so
+        a database from before ``asked_of`` existed would fail every read. The
+        column is nullable: what was archived before loads asked of nobody.
+        """
+        columns = {column["name"] for column in inspect(engine).get_columns("messages")}
+        if "asked_of" not in columns:
+            logger.info("Adding asked_of to the message archive at %s", self.database_url)
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE messages ADD COLUMN asked_of INTEGER"))
 
     def shutdown(self) -> None:
         """Disposes of the engine, so its pool does not outlive the chat."""
@@ -241,7 +256,7 @@ class DatabaseBackend:
                 session.merge(ArchivedMessage(
                     id=str(msg.id), text=msg.text, frm=msg.frm, to=msg.to,
                     reply_to=None if msg.reply_to is None else str(msg.reply_to),
-                    timestamp=msg.timestamp,
+                    timestamp=msg.timestamp, asked_of=msg.asked_of,
                 ))
             session.commit()
 
@@ -258,7 +273,7 @@ class DatabaseBackend:
             return [
                 ChatMessage(id=MessageID.parse(r.id), text=r.text, frm=r.frm, to=r.to,
                             reply_to=None if r.reply_to is None else MessageID.parse(r.reply_to),
-                            timestamp=r.timestamp)
+                            timestamp=r.timestamp, asked_of=r.asked_of)
                 for r in rows
             ]
 

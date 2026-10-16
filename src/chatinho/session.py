@@ -318,8 +318,12 @@ class ChatSession:
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, reply_to=reply_to)
             if credentials is not None:
                 msg.credentials = credentials     # the lender's own mapping, so it can clear it
-            if to is None and frm != TOOL:
-                msg.to = self._answerer_of(frm, reply_to)
+            # The speaker's `to` is never changed: who the session asks goes
+            # beside it, so a say routed to a peer is still said to the room.
+            if to is not None:
+                msg.asked_of = to
+            elif frm != TOOL:
+                msg.asked_of = self._answerer_of(frm, reply_to)
             await self._kept(msg, attachments)
             return await self._post(msg)
         return say
@@ -353,7 +357,7 @@ class ChatSession:
         ) -> str:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
-            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
+            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, asked_of=to)
             await self._kept(msg, attachments)
             future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
@@ -387,20 +391,19 @@ class ChatSession:
         except Exception:
             logger.error("Keeping the attachments of %s failed", msg.id, exc_info=True)
 
-    async def _post(self, msg: ChatMessage, answer: bool = False) -> MessageID:
+    async def _post(self, msg: ChatMessage) -> MessageID:
         """
         Keeps *msg* and starts delivering it to everyone it is for.
 
         Each delivery is its own task, so this returns before anyone has heard
-        it. A question, anything addressed to a peer, is given its depth: one
-        more than the question being answered in this task, if any.
+        it. A question, anything asked of a peer, is given its depth: one more
+        than the question being answered in this task, if any.
 
-        An *answer* — what a peer's ``answer`` returned, or a reply the session
-        posts in its name — is never put to anyone's ``answer``: it may resolve
-        an ask that is waiting, and everyone who listens hears it, but nobody is
-        asked it. Telling that from the message's shape is not possible: the
-        user following up on an answer and the answer to that follow-up look
-        alike, so it is marked where it is made.
+        Who is asked is ``asked_of``, set where the message was made, never its
+        shape: the user following up on an answer and the answer to that
+        follow-up look alike. An answer — what a peer's ``answer`` returned, or
+        a reply the session posts in its name — is asked of nobody: it may
+        resolve an ask that is waiting, and everyone who listens hears it.
         """
         self._store.add(msg)
         waiting  = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
@@ -411,7 +414,7 @@ class ChatSession:
         # You never hear yourself; that is the whole of the loop protection.
         listeners = {at for at, who in self._connectors.items()
                      if at != msg.frm and declares(who, HookListen)}
-        audience  = {msg.to} if msg.to is not None and not resolved and not answer else set()
+        audience  = {msg.asked_of} if msg.asked_of is not None and not resolved else set()
         audience &= self._connectors.keys()
         if audience:
             self._depth[msg.id] = _ANSWERING.get() + 1
@@ -494,7 +497,7 @@ class ChatSession:
             else:
                 await self._post(ChatMessage(
                     id=self._store.new_id(), text="%s failed: %s" % (name_of(who), type(exc).__name__),
-                    frm=at, to=msg.frm, reply_to=msg.id, status=ReplyStatus.ERROR), answer=True)
+                    frm=at, to=msg.frm, reply_to=msg.id, status=ReplyStatus.ERROR))
             raise
         if reply is not None:
             await self._answered(at, msg, reply)
@@ -504,7 +507,7 @@ class ChatSession:
         answered = ChatMessage(id=self._store.new_id(), text=reply.text, frm=at, to=msg.frm,
                                reply_to=msg.id, status=reply.status)
         await self._kept(answered, reply.attachments)
-        await self._post(answered, answer=True)
+        await self._post(answered)
 
     # === History ====================================================================
 
