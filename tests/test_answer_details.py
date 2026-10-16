@@ -97,7 +97,7 @@ async def test_a_say_is_asked_of_the_only_peer_that_answers():
     assert [m.text for m in eco.asked] == ["will it rain?"]
     said  = [m for m in view.context() if m.id == said_id][0]
     reply = view.context()[-1]
-    assert said.to == eco.peer_id
+    assert (said.to, said.asked_of) == (None, eco.peer_id)
     assert (reply.text, reply.reply_to, reply.to) == ("sunny", said_id, falador.peer_id)
     assert said in view.heard                       # listeners still hear it
     await session.close()
@@ -130,7 +130,8 @@ async def test_with_two_peers_that_answer_a_say_is_a_broadcast():
     said_id = await falador.say("anyone?")
     await _settle()
     assert one.asked == two.asked == []
-    assert [m for m in view.context() if m.id == said_id][0].is_broadcast
+    said = [m for m in view.context() if m.id == said_id][0]
+    assert said.is_broadcast and said.asked_of is None
     await session.close()
 
 
@@ -140,7 +141,8 @@ async def test_the_speaker_and_the_frontend_do_not_count():
     said_id = await session._say_for(eco.peer_id)("talking to myself")
     await _settle()
     assert eco.asked == [] and view.asked == []
-    assert [m for m in view.context() if m.id == said_id][0].is_broadcast
+    said = [m for m in view.context() if m.id == said_id][0]
+    assert said.is_broadcast and said.asked_of is None
     await session.close()
 
 
@@ -256,7 +258,8 @@ async def test_replying_to_a_peer_that_does_not_answer():
     reply = await view.say("me", reply_to=first)
     await _settle()
     assert eco.asked == []
-    assert [m for m in view.context() if m.id == reply][0].is_broadcast
+    said = [m for m in view.context() if m.id == reply][0]
+    assert said.is_broadcast and said.asked_of is None
     await session.close()
 
 
@@ -269,7 +272,8 @@ async def test_replying_to_a_commands_output():
     reply = await view.say("thanks", reply_to=output.id)
     await _settle()
     assert eco.asked == []
-    assert [m for m in view.context() if m.id == reply][0].is_broadcast
+    said = [m for m in view.context() if m.id == reply][0]
+    assert said.is_broadcast and said.asked_of is None
     await session.close()
 
 
@@ -294,5 +298,51 @@ async def test_replying_to_oneself():
     await _settle()
     reply = await say("and another", reply_to=mine)
     await _settle()
-    assert [m for m in view.context() if m.id == reply][0].is_broadcast
+    said = [m for m in view.context() if m.id == reply][0]
+    assert said.is_broadcast and said.asked_of is None
+    await session.close()
+
+
+# === Said to, asked of =============================================================
+
+@connector("echo")
+@require(HookListen)
+class _Echo:
+    """Hears what the user says to the room, as the echo examples do, and nothing else."""
+
+    def __init__(self):
+        self.heard = []
+
+    async def listen(self, msg):
+        if msg.is_broadcast and msg.is_local:
+            self.heard.append(msg.text)
+
+
+async def test_routed_and_still_said_to_the_room():
+    bot, echo = _Eco("hello"), _Echo()
+    session, view = await driven(connectors=[bot, echo])
+    said_id = await view.say("hi")
+    await session.close()
+    said = [m for m in view.context() if m.id == said_id][0]
+    assert (said.to, said.asked_of) == (None, bot.peer_id)
+    assert [m.text for m in bot.asked] == ["hi"]
+    assert echo.heard == ["hi"]
+
+
+async def test_asked_directly_is_asked_of_that_peer():
+    sol = _Eco("sunny")
+    session, view = await driven(connectors=[sol])
+    await view.ask(sol.peer_id, "rain?")
+    question, answer = view.context()[-2:]
+    assert (question.to, question.asked_of) == (sol.peer_id, sol.peer_id)
+    assert (answer.to, answer.asked_of) == (view.peer_id, None)
+    await session.close()
+
+
+async def test_a_command_is_asked_of_nobody():
+    session, view = await driven(connectors=[_Eco()], commands=[_Upper()])
+    await view.command("upper", "shout")
+    invocation, result = view.context()[-2:]
+    assert (invocation.to, invocation.asked_of) == (TOOL, None)
+    assert result.asked_of is None
     await session.close()

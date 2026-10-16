@@ -44,8 +44,12 @@ seven, which is what the terminal shows.
 | `to is TOOL` | `invoke` | a command was run |
 | `reply_to` set | `answer` | it answers that message, by id |
 
+`to` is what the **speaker** chose, and the session never changes it. Which peer the session puts a
+message to — whose `answer` it calls — is a second field, `msg.asked_of`: `to` itself for an
+addressed say or an ask, the peer the session routes a say to (below), and None for everything else.
+
 What a peer's `answer` returns is an **answer**: it is addressed to whoever asked and every listener
-hears it, but it is never put to anyone's `answer`. That is what keeps two peers that answer from
+hears it, but it is asked of nobody, so it is never put to anyone's `answer`. That is what keeps two peers that answer from
 trading answers back and forth, and it is marked where the answer is made — a follow-up to an
 answer and the answer to that follow-up look exactly alike.
 
@@ -164,16 +168,16 @@ value, a function, or a key source from `chatinho.keys` (`Env`, `File`, `Keyring
 
 **A room with one peer that answers is a conversation with it.** A say that is not a reply, said by
 a peer — not by a command — when exactly one peer declares `HookAnswer` besides the speaker and the
-frontend, is asked of that peer: it goes out addressed to it, its `answer` is called, and the reply
-comes back with `reply_to` set to the say. Everyone who listens still hears both. With two or more
-such peers, or none, a say is a broadcast, as before.
+frontend, is asked of that peer: `asked_of` is that peer, its `answer` is called, and the reply comes
+back with `reply_to` set to the say. `to` stays unset, so the say is still a broadcast and everyone
+who listens hears it as one. With two or more such peers, or none, a say is asked of nobody.
 
 **A reply goes back to whoever it replies to.** A say with `reply_to` set and no `to`, said by a
 peer, is asked of the author of the message it replies to — when that author is a peer other than
 the speaker and the frontend, and declares `HookAnswer`. Selecting an answer in the terminal and
-typing is a follow-up, and the peer that answered is the one asked. A reply to the user, to a
-command's output, to a peer that only listens, or to oneself stays a broadcast; an explicit `to`
-always wins.
+typing is a follow-up, and the peer that answered is the one asked; `to` stays unset here too. A
+reply to the user, to a command's output, to a peer that only listens, or to oneself is asked of
+nobody; an explicit `to` always wins.
 
 ### HookAsk
 
@@ -273,7 +277,9 @@ lines = ["/%s - %s" % (name, cmd.description) for name, cmd in self.commands().i
 **Every** message that crosses the session, whoever said it and whoever it was for.
 
 There is one way to hear, not two. A peer that only wants what was said to the room checks
-`msg.is_broadcast` itself — and it **must**:
+`msg.is_broadcast` itself — and it **must**. A say the session routed to an answering peer is still
+a broadcast, so such a listener hears it; a peer that both listens *and* answers checks
+`msg.asked_of` too, or it responds twice to a say it is also asked:
 
 ```python
 @connector("echo")

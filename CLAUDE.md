@@ -41,7 +41,7 @@ things: the id routes, the name is what the chat displays and what the user type
 older design routed on the display name, so renaming a connector broke the replies already in
 flight.
 
-A message says where it came from and where it is going, and that is all the routing there is:
+A message says where it came from and where its speaker sent it:
 
 ```
 to is None    → everyone heard it          (say)
@@ -50,13 +50,15 @@ to is TOOL    → a command was run          (invoke)
 reply_to set  → it answers that message    (answer)
 ```
 
-Two rules sit on top of that table, both in `ChatSession`. **What `answer` returns is an answer**:
-addressed to the asker and heard by every listener, but never put to anyone's `answer` — the
-session marks it where it is made, because a follow-up and the answer to it look identical. And
-**a say that replies, with no `to`, is asked of whoever said what it replies to**, when that is a
-peer that answers and is neither the speaker nor the frontend; otherwise it stays a broadcast.
-Before both, a follow-up to an assistant's answer reached nobody, and two answering peers traded
-answers until `max_depth`.
+**`to` is what the speaker chose; `asked_of` is whose `answer` the session calls.** They used to
+be one field, so a say routed to the room's lone answering peer stopped being a broadcast, and a
+listener checking `is_broadcast` went deaf to the user the moment one answering peer joined. The
+session sets `asked_of` where it makes a message and never writes `to`. Two rules decide it beyond
+`to`: **a say with no `to` is asked of the lone answering peer**, and **a say that replies is asked
+of whoever said what it replies to**, when that is a peer that answers and is neither the speaker
+nor the frontend. **What `answer` returns is asked of nobody**, so it is heard by every listener
+and never put to anyone's `answer`. `Query(peer=)` matches `asked_of`, and `DatabaseBackend`
+archives it. That schema is the baseline: an archive from before `asked_of` existed is not upgraded.
 
 **The presentation is peer zero, and says so itself.** `ChatFrontend` is `@frontend("chat")` — being
 the person is what it *is*, not a favour whoever attaches it does — and it declares the same hooks

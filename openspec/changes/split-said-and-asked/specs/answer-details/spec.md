@@ -1,0 +1,68 @@
+## MODIFIED Requirements
+
+### Requirement: A say in a room with one peer that answers is asked of it
+When a peer says something that is neither addressed (`to` is not set) nor a reply (`reply_to` is not set), and exactly one peer other than the speaker and the frontend declares `HookAnswer`, the session SHALL ask the say of that peer without addressing it: `to` MUST stay unset, so the say is still a broadcast, its `asked_of` MUST be that peer, its `answer` MUST be called, and its reply posted with `reply_to` set to the say. Everyone who listens MUST still hear the say. What a command writes, and a say in a room with no such peer or with several, MUST be asked of no peer; a say that is a reply is routed as the requirement on replies says. When the peer's `answer` raises and no `ask` waits on the message, the session MUST post an `error` reply to it.
+
+#### Scenario: One peer answers
+- **WHEN** a peer says "will it rain?" and the only other peer that answers is `weather`
+- **THEN** `weather`'s `answer` is called with it, and its reply comes back with `reply_to` set to the say
+
+#### Scenario: Several peers answer
+- **WHEN** a peer says something in a room where two peers answer
+- **THEN** the say is asked of no peer, and neither peer's `answer` is called
+
+#### Scenario: A reply stays a reply
+- **WHEN** a peer says something with `reply_to` set to a message the user said
+- **THEN** it is asked of no peer, even with one peer that answers
+
+#### Scenario: A lone peer fails
+- **WHEN** a say is asked of the lone peer and its `answer` raises
+- **THEN** an `error` reply to the say is posted in that peer's name
+
+#### Scenario: Routed, and still said to the room
+- **WHEN** the user says "hi" in a room whose only answering peer is `bot`, and another peer listens for broadcasts
+- **THEN** the say has `to` unset and `asked_of` set to `bot`, `bot`'s `answer` is called once, and the listener hears it as a broadcast
+
+### Requirement: A reply is asked of the peer it replies to
+A say with `reply_to` set and no `to`, said by a peer and not by a command, SHALL be asked of the author of the message it replies to when that author is a peer other than the speaker and the frontend and declares `HookAnswer`: `to` MUST stay unset, its `asked_of` MUST be that author, its `answer` MUST be called, and everyone who listens MUST still hear the say. Otherwise the say MUST be asked of no peer. A say with `to` set MUST be asked of `to`.
+
+#### Scenario: The user follows up on an answer
+- **WHEN** the user says "hello" in a chat whose only answering peer is `bot`, `bot` answers, and the user then says "and tomorrow?" with `reply_to` set to that answer
+- **THEN** `bot`'s `answer` is called with "and tomorrow?", and its reply comes back with `reply_to` set to it
+
+#### Scenario: Following up in a room with several peers
+- **WHEN** two peers answer, the user asks `sol` with `@sol`, and then replies to `sol`'s answer
+- **THEN** only `sol`'s `answer` is called for the reply
+
+#### Scenario: Replying to a peer that does not answer
+- **WHEN** the user replies to a message said by a peer that only listens
+- **THEN** the reply is asked of no peer, and no peer's `answer` is called for it
+
+#### Scenario: Replying to a command's output
+- **WHEN** the user replies to what a command answered
+- **THEN** the reply is asked of no peer
+
+#### Scenario: An explicit recipient wins
+- **WHEN** the user replies to `sol`'s answer with `to` set to `lua`
+- **THEN** only `lua`'s `answer` is called
+
+#### Scenario: Replying to oneself
+- **WHEN** a peer says something with `reply_to` set to a message it said itself
+- **THEN** the reply is asked of no peer
+
+## ADDED Requirements
+
+### Requirement: A message says who it was asked of
+`ChatMessage` SHALL carry `asked_of`, the id of the peer whose `answer` the session calls for it, or None. It MUST be `to` for a say with `to` set and for an `ask`; the routed peer for a say the session routes; and None for every other message, including what a peer's `answer` returned, an `error` reply the session posts, and a command's invocation and its result. Whether a peer's `answer` is called for a message MUST depend on `asked_of`, and `is_broadcast` MUST stay `to is None`.
+
+#### Scenario: Asked directly
+- **WHEN** a peer asks `sol` with `ask(sol, "rain?")`
+- **THEN** the question has `to` and `asked_of` both set to `sol`
+
+#### Scenario: An answer is asked of nobody
+- **WHEN** `sol` answers that question
+- **THEN** the answer has `to` set to the asker and `asked_of` unset
+
+#### Scenario: A command is asked of nobody
+- **WHEN** the user runs `/help`
+- **THEN** the invocation and its result both have `asked_of` unset

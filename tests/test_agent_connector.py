@@ -345,6 +345,18 @@ async def test_asked_directly():
     assert [m.text for m in view.context() if m.frm == agent.peer_id] == ["once"]
 
 
+async def test_the_only_answering_peer_answers_once():
+    """Alone, the agent is asked the user's say, which is still a broadcast: one run, one reply."""
+    model = fake(says("once"))
+    agent = AgentConnector("agent", model)
+    session, view = await driven(connectors=[agent])
+    said = await view.say("hi")
+    await session.close()
+    assert len(model.sent) == 1
+    mine = [m for m in view.context() if m.frm == agent.peer_id]
+    assert [(m.text, m.reply_to, m.to) for m in mine] == [("once", said, view.peer_id)]
+
+
 async def test_the_run_fails_on_a_say():
     model = fake(says("never"))
     model.error = RuntimeError("the prompt was secret")
