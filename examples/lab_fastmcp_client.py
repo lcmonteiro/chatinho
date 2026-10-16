@@ -24,7 +24,8 @@ async def talk(client: Client, text: str, key: str) -> None:
             print("peer:", peer.name, "(answers)" if peer.answers else "")
         result = await client.call_tool("ask", {"peer": "lab", "text": text},
                                         meta={"chatinho/credentials": {"llm": key}})
-        print(result.structured_content["status"], "-", result.structured_content["text"])
+        answer = result.structured_content or {}
+        print(answer.get("status"), "-", answer.get("text"))
 
 
 def main() -> None:

@@ -169,8 +169,8 @@ async def test_an_at_name_asks_that_peer_without_the_name():
 async def test_a_follow_up_to_an_answer_is_asked_of_whoever_answered():
     """Tap an answer, type, Enter: the peer that answered is asked the follow-up.
 
-    Through the input, not ``send_pending_reply``, because the input is the
-    path a person takes, and the reply it says carries no ``to``.
+    Through the input, because the input is the path a person takes, and the
+    reply it says carries no ``to``.
     """
     sol = _Sol()
     app = await chat_frontend(connectors=[sol])
@@ -451,22 +451,23 @@ async def test_get_replies_reads_the_thread_back():
         assert app.get_replies(MessageID.parse("msg-999")) == []
 
 
-async def test_send_pending_reply_uses_the_clicked_target():
+async def test_what_is_typed_replies_to_the_selected_target():
     app = await chat_frontend()
     async with app.run_test() as pilot:
         target = await app.say("alvo")
         await pilot.pause()
         app._set_reply_target(target)
-        reply = await app.send_pending_reply("resposta")
-        assert app._find_message(reply).reply_to == target
+        await _submit(app, pilot, "resposta")
+        assert (app.messages[-1].text, app.messages[-1].reply_to) == ("resposta", target)
         assert app._reply_target is None
 
 
-async def test_send_pending_reply_does_nothing_without_a_target():
+async def test_without_a_target_what_is_typed_replies_to_nothing():
     app = await chat_frontend()
-    async with app.run_test():
-        assert await app.send_pending_reply("resposta") is None
-        assert app.messages == []
+    async with app.run_test() as pilot:
+        await app.say("alvo")
+        await _submit(app, pilot, "resposta")
+        assert (app.messages[-1].text, app.messages[-1].reply_to) == ("resposta", None)
 
 
 # === Short ids =================================================================
@@ -498,8 +499,8 @@ async def test_a_reply_still_carries_the_full_id():
         said = await app.say("alvo")
         await pilot.pause()
         app._set_reply_target(said)
-        reply = await app.send_pending_reply("resposta")
-        assert app._find_message(reply).reply_to == said
+        await _submit(app, pilot, "resposta")
+        assert app.messages[-1].reply_to == said
         assert re.fullmatch(r"msg-[0-9a-f]{16}", str(said))
 
 

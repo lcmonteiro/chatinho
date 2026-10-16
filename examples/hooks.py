@@ -267,7 +267,7 @@ class ListArchive:
 async def main() -> None:
     """Drives one message of every kind past every hook."""
     yesterday = datetime.now() - timedelta(days=1)
-    seeded    = [ChatMessage(id="old-1", text="said yesterday", frm=LOCAL, timestamp=yesterday)]
+    seeded    = [ChatMessage(id=MessageID.new(), text="said yesterday", frm=LOCAL, timestamp=yesterday)]
 
     screen  = Screen()
     session = ChatSession(
@@ -291,7 +291,9 @@ async def main() -> None:
     await settle()
 
     print("\n-- HookAsk: ask one peer, and it owes a reply --")
-    print("   →", await screen.ask(session.id_of("weather"), "what is the weather?"))
+    weather = session.id_of("weather")
+    assert weather is not None
+    print("   →", await screen.ask(weather, "what is the weather?"))
     await settle()
 
     print("\n-- HookInvoke: a command runs, and the running is recorded --")

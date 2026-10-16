@@ -467,7 +467,7 @@ The three checks CI runs, from the repo root:
 
 ```bash
 ruff check src tests examples
-mypy src/chatinho
+mypy src/chatinho examples
 pytest -q
 ```
 

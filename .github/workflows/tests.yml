@@ -11,22 +11,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # uv, as setup.sh and the conventions use, from the committed uv.lock: the
+      # cache keeps a warm run to seconds, and --locked fails when pyproject.toml
+      # and the lock disagree instead of resolving something else.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
+          enable-cache: true
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: uv sync --locked --extra dev
 
       - name: Lint
-        run: ruff check src tests examples
+        run: uv run --no-sync ruff check src tests examples
 
+      # The examples are type-checked too: hooks.py is docs/SPEC.md executable,
+      # and an example that teaches the wrong type teaches it to everyone.
       - name: Type check
-        run: mypy src/chatinho
+        run: uv run --no-sync mypy src/chatinho examples
 
       - name: Test
-        run: pytest -q
+        run: uv run --no-sync pytest -q
 
   openspec:
     runs-on: ubuntu-latest

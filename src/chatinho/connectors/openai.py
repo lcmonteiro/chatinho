@@ -151,7 +151,7 @@ class OpenAIConnector:
             messages.append({"role": "system", "content": self.system})
         if self.memory is not None:
             roster = self.peers()
-            me     = next((at for at, peer in roster.items() if peer is self), None)
+            me     = getattr(self, "peer_id", None)
             limit  = self.memory.limit
             # The question is in the conversation too; ask for one more so it
             # does not eat into the limit, then leave it out.
