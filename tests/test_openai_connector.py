@@ -355,3 +355,21 @@ async def test_three_questions_at_once_share_one_client():
         assert sorted(r["messages"][-1]["content"] for r in requests()) == ["q0", "q1", "q2"]
     finally:
         await session.close()
+
+
+# === Its client closes with the chat ==============================================
+
+async def test_asked_then_closed():
+    gpt = OpenAIConnector("gpt", Endpoint(api_key="sk-own"), memory=None)
+    session, view = await driven(connectors=[gpt])
+    assert await view.ask(gpt.peer_id, "weather?") == "Sunny"
+    own, = FakeOpenAI.clients
+    assert not own.closed
+    await session.close()
+    assert own.closed
+
+
+async def test_never_asked():
+    session, _ = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="sk-own"))])
+    await session.close()
+    assert FakeOpenAI.clients == []

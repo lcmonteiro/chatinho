@@ -119,3 +119,37 @@ def test_the_copy_shares_the_messages_themselves():
     store = MessageStore()
     stored = store.add(message(mid("msg-1")))
     assert store.messages[0] is stored
+
+
+# === Forgetting ====================================================================
+
+def _three():
+    from datetime import datetime
+    store = MessageStore()
+    at = lambda h: datetime(2026, 1, 1, h)                       # noqa: E731
+    first  = store.add(message(mid("msg-01"), "first", timestamp=at(1)))
+    second = store.add(message(mid("msg-02"), "second", timestamp=at(2), reply_to=first.id))
+    third  = store.add(message(mid("msg-03"), "third", timestamp=at(3), reply_to=second.id))
+    return store, at, first, second, third
+
+
+def test_forget_drops_what_is_older_everywhere():
+    store, at, first, second, third = _three()
+    assert store.forget(before=at(3)) == 2
+    assert [m.text for m in store.messages] == ["third"]
+    assert store.find(first.id) is None and store.find(second.id) is None
+    assert store.replies(first.id) == []             # its only reply is forgotten too
+    assert store.replies(second.id) == [third.id]    # a kept reply still answers what is gone
+
+
+def test_a_kept_reply_keeps_its_reply_to():
+    store, at, first, second, third = _three()
+    store.forget(before=at(2))
+    assert store.find(third.id).reply_to == second.id
+    assert store.replies(second.id) == [third.id]
+
+
+def test_forget_with_no_cut_drops_everything():
+    store, *_ = _three()
+    assert store.forget() == 3
+    assert store.messages == []

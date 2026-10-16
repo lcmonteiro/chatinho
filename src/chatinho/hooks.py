@@ -343,9 +343,9 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookLocate,
 )
 
-# Lifecycle is not a hook: initialize() and shutdown() are optional and called
-# when present. A peer holding nothing needs neither, and making it
-# declare that it holds nothing is ceremony.
+# Lifecycle is not a hook: initialize() and shutdown() are optional, called
+# when present, and either may be a coroutine. A peer holding nothing needs
+# neither, and making it declare that it holds nothing is ceremony.
 
 
 def connector(name: str, id: Optional[int] = None) -> Callable[[type], type]:

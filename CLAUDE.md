@@ -311,7 +311,7 @@ nothing is ceremony.
 |---|---|---|
 | `initialize()` | at `start()` | may be `async def` — `start()` awaits it when it is, and just calls it when it isn't |
 | `async serve()` | during `run()` | **runs until it is finished.** A terminal, a stdin reader, a server |
-| `shutdown()` | at `close` | synchronous; a connector holding a thread must not outlive the chat |
+| `shutdown()` | at `close` | may be `async def` too — `close()` awaits those together, within `CLOSE_TIMEOUT`; a connector holding a thread or a client must not outlive the chat |
 
 **`ChatSession.run()` owns the loop**: `asyncio.run(...)` inside, `start()`, then every `serve()`
 as its own task, and `close()` on the way out. The **first** `serve()` to return ends the chat —

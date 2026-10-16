@@ -696,13 +696,38 @@ class ChatSession:
             if not future.done():
                 future.set_exception(RuntimeError("the chat closed"))
         self._pending.clear()
+        await self._shutdown()
+
+    async def _shutdown(self) -> None:
+        """Calls every ``shutdown()``, then awaits the ones that are coroutines.
+
+        Synchronous ones run in order, as they always did. The asynchronous
+        ones run together, within :attr:`CLOSE_TIMEOUT`: one that will not
+        finish is cancelled with a warning, so it cannot hang the close.
+        """
+        pending : Dict["asyncio.Future[Any]", str] = {}
         for who in list(self._connectors.values()) + list(self.commands.values()):
             shutdown = getattr(who, "shutdown", None)
-            if callable(shutdown):
-                try:
-                    shutdown()
-                except Exception:
-                    logger.error("Shutting %r down failed", name_of(who), exc_info=True)
+            if not callable(shutdown):
+                continue
+            try:
+                result = shutdown()
+            except Exception:
+                logger.error("Shutting %r down failed", name_of(who), exc_info=True)
+                continue
+            if isawaitable(result):
+                pending[asyncio.ensure_future(result)] = name_of(who)
+        if not pending:
+            return
+        done, late = await asyncio.wait(pending, timeout=self.CLOSE_TIMEOUT)
+        for task in done:
+            if not task.cancelled() and task.exception() is not None:
+                logger.error("Shutting %r down failed", pending[task], exc_info=task.exception())
+        for task in late:
+            logger.warning("Gave up waiting for %r to shut down", pending[task])
+            task.cancel()
+        if late:
+            await asyncio.wait(late, timeout=1.0)
 
     # === The older tier =============================================================
 
@@ -748,14 +773,19 @@ class ChatSession:
 
     async def forget(self, before: Optional[datetime] = None) -> int:
         """
-        Drops archived messages older than *before*, or all of them.
+        Drops the messages older than *before*, or all of them, here and in the archive.
+
+        The conversation forgets first, with or without a backend, so
+        ``context()`` stops returning them at once; then the backend that
+        declared ``HookForget`` drops them from the archive.
 
         Args:
             before: Keep everything from this moment on; None forgets the lot.
 
         Returns:
-            int: How many the backend dropped, or zero when it cannot forget.
+            int: How many the backend dropped, or zero when there is none.
         """
+        self._store.forget(before)
         holder = self._first(HookForget)
         if holder is None:
             return 0

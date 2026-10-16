@@ -268,6 +268,28 @@ class MessageStore:
             self._replies.setdefault(msg.reply_to, []).append(msg.id)
         return msg
 
+    def forget(self, before: Optional[datetime] = None) -> int:
+        """Drops the messages stamped before *before*, or all of them.
+
+        The index and the reply map are rebuilt from what is kept, so nothing
+        forgotten can still be found. A kept reply keeps its ``reply_to``,
+        as it does in the archive, even when what it answered is gone.
+
+        Args:
+            before: Keep everything from this moment on; None forgets the lot.
+
+        Returns:
+            int: How many messages were dropped.
+        """
+        kept = [] if before is None else [m for m in self._messages if m.timestamp >= before]
+        dropped = len(self._messages) - len(kept)
+        self._messages = []
+        self._index    = {}
+        self._replies  = {}
+        for msg in kept:
+            self.add(msg)
+        return dropped
+
     def find(self, msg_id: MessageID) -> Optional[ChatMessage]:
         """Returns the message with *msg_id*, or None."""
         return self._index.get(msg_id)
