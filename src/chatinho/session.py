@@ -5,13 +5,13 @@ framework, so it can be driven from a TUI, a script or a test without a
 terminal.
 
 Everyone in a chat is a **peer** with an integer id. :data:`LOCAL` —
-zero — is the user; every connector and every tool is numbered from one. A
-peer is a plain class that declares what it can do, and the session
-hands the capabilities over at :meth:`add_connector`.
+zero — is the user; every other peer is numbered from one. A command is not
+a peer and has no id. A peer is a plain class that declares what it can do,
+and the session hands the capabilities over at :meth:`add_connector`.
 
-The conversation is protected: ``_say``, ``_ask``, ``_answer`` and
-``_load_messages`` are never called directly. Declaring a hook is the only door
-in, and implementing ``listen`` or ``answer`` is the only door out.
+The conversation is protected: no peer calls the session's own methods.
+Declaring a hook is the only door in, and implementing ``listen`` or
+``answer`` is the only door out.
 
 Every delivery of a message to a peer is its own task, so a subsystem that
 takes a second to answer holds up nobody, not even its own next question, and
@@ -44,11 +44,11 @@ COMMAND_PREFIX : str = "/"
 class ChatSession:
     """Routes messages between peers, and keeps the history.
 
-    The five interfaces onto the conversation are reached only by declaring a
-    hook — three the session grants, two it calls:
+    The conversation is reached only by declaring a hook. The five most used
+    are below; ``docs/SPEC.md`` has all fourteen:
 
-    - ``HookSay``      grants  ``say(text, reply_to=None, attachments=())``.
-    - ``HookAsk``      grants  ``ask(to, text, attachments=())``, which awaits the answer.
+    - ``HookSay``      grants  ``say(text, *, to=None, reply_to=None, attachments=())``.
+    - ``HookAsk``      grants  ``ask(to, text, *, attachments=())``, which awaits the answer.
     - ``HookContext``  grants  ``context(since=, start=, limit=)``.
     - ``HookListen``   demands ``listen(msg)`` — every message that crosses.
     - ``HookAnswer``   demands ``answer(msg)`` — someone asked you.

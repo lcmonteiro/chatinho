@@ -5,16 +5,11 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 
 ---
 
-## Status: green
+## Checks
 
-| check | result |
-|---|---|
-| `pytest -q` | **254 pass** |
-| `ruff check src tests examples` | clean |
-| `mypy src/chatinho examples` | clean |
-
-Most of them run without mounting anything; only `test_chat_frontend.py` and
-`test_command_suggestions.py` need a Textual app. That ratio is the point of the layout below, not an accident of it.
+The three CI runs are under **Workflow** below, and all of them pass on `main`. Most tests run
+without mounting anything; only `test_chat_frontend.py` and `test_command_suggestions.py` need a
+Textual app. That ratio is the point of the layout below, not an accident of it.
 
 ---
 
@@ -264,9 +259,8 @@ message, so a peer can work with a different key for each one. `McpFrontend` put
 keys there and clears them once the message is answered. MCP sampling was tried and dropped: it is
 deprecated in the modern protocol, and lending a key covers the same need.
 
-Eleven became ten when the second way of hearing was folded into the first. `HookInvoke` and
-`HookExecute` are still two hooks where a single one used to serve, badly — that is the honest
-cost of a command not being a peer.
+`HookInvoke` and `HookExecute` are two hooks where a single one used to serve, badly — that is
+the honest cost of a command not being a peer.
 
 Every hook is one or the other — a demand or a grant, never both. `HookAnswer` was the single
 exception until `answer` became the method a peer writes; the grant it also carried turned out to
@@ -344,8 +338,8 @@ src/chatinho/
   __init__.py      public API
   builder.py       build_chat_session, build_mcp_session — a ChatSession with its frontend;
                    imports both frontends, so it needs chatinho[tui,mcp]
-  session.py       ChatSession: run, peers, commands, delivery, routing, context    (733)
-  hooks.py         Hook, the ten constants,    @require, the grant protocols       (489)
+  session.py       ChatSession: run, peers, commands, delivery, routing, context
+  hooks.py         Hook, the fourteen constants, @require, the grant protocols
   query.py         Query (peer/thread/errors/since/limit) and SELF: which part of the conversation
                    context() returns; plain data, so a backend could answer it one day
   message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,

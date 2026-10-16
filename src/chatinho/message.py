@@ -6,8 +6,10 @@ subsystem and carries both an ``id``, which is how messages are addressed, and
 a ``name``, which is what the chat displays. Keeping them apart is what lets a
 connector be renamed without breaking the replies already in flight.
 
-A message says where it came from and where it is going, and that is all the
-routing there is:
+A message says where it came from and where it is going, and that is what the
+routing starts from — :class:`~chatinho.session.ChatSession` adds the rest
+(which peer a say without ``to`` is asked of, and that an answer is never
+asked of anyone):
 
     to is None   → everyone heard it          (say)
     to is an id  → one peer was asked  (ask)
@@ -76,8 +78,9 @@ class ReplyStatus(str, Enum):
 class Reply:
     """What ``answer`` or a command's ``execute`` returns when it says more than text.
 
-    Returning a plain string still works; a Reply is for an answer that carries
-    attachments, or that is not a plain answer.
+    Every ``answer`` and ``execute`` returns one, or None; a plain string
+    raises ``TypeError``. Its attachments go to the backend, and its status
+    says whether it answered, asked back, or failed.
 
     Attributes:
         text: The answer, as Markdown.
