@@ -18,7 +18,7 @@ See proposal.md for why. Today `_say_for` writes the routed peer into `msg.to` (
 
 **Non-Goals:**
 - Changing which peer a say is routed to (the rules from #37 stay as they are).
-- A general migration framework for the archive.
+- Upgrading an archive written before this change.
 
 ## Decisions
 
@@ -48,20 +48,19 @@ The guard becomes `if not (msg.is_broadcast and msg.is_local) or msg.asked_of ==
 
 That is the one-line change. `to == peer` stays, for addressed messages and for answers addressed back to the peer.
 
-### 5. The archive gets an `asked_of` column, added in place
+### 5. The archive gets an `asked_of` column, and this schema is the baseline
 
-`ArchivedMessage.asked_of = Column(Integer, nullable=True)`, written by `_write` and read by `_read`. In `initialize()`, after `create_all`, the backend inspects the `messages` table. If `asked_of` is missing, it runs `ALTER TABLE messages ADD COLUMN asked_of INTEGER`. That is standard SQL, valid on SQLite and on the other databases SQLAlchemy targets. It only adds a nullable column, so existing rows load with `asked_of` None.
+`ArchivedMessage.asked_of = Column(Integer, nullable=True)`, written by `_write` and read by `_read`.
 
-**Alternative rejected: Alembic.** It is a new dependency and a migrations directory for one nullable column. If the schema keeps changing, it becomes worth it.
+There is no upgrade path for a database written before this change: this schema is treated as the starting version, by the user's decision. `create_all` creates the table with the column on a new database. An older database file is not altered, and reading it fails with `no such column: messages.asked_of`.
 
 **Alternative rejected (chosen with the user): widen `Query(peer=)` to include the messages a peer replied to, instead of storing `asked_of`.** It avoids the schema change, but a question that was never answered would drop out of memory after a restart, and it changes what `peer` means for every query, not just this case.
 
 ## Risks / Trade-offs
 
 - [A third-party peer read `msg.to` in `listen` to tell whether a routed say was for it] → It reads `msg.asked_of` now. The proposal marks this as breaking. Nothing in the library or the examples relies on it.
-- [The in-place `ALTER TABLE` runs on a database another process is writing] → It runs once, in `initialize()`, before the backend reads or writes. Concurrent writers to one archive were never supported.
-- [Rows archived before the upgrade have no `asked_of`] → They load with `asked_of` None, as the spec says. Questions routed before the upgrade are in a peer's memory only if they were addressed, which is no worse than before #37 introduced routing.
+- [An archive written before this change fails to load] → Accepted: this schema is the baseline, and there are no archives to carry over. If one ever must be kept, `ALTER TABLE messages ADD COLUMN asked_of INTEGER` brings it up to date by hand.
 
 ## Migration Plan
 
-Code and tests land in one change. An existing database is upgraded the first time the new backend starts. Rolling back the code leaves an unused nullable column, which the old code ignores, because it names its columns explicitly.
+Code and tests land in one change. There is nothing to migrate: this schema is the baseline. Rolling back the code leaves an unused nullable column in databases created since, which the old code ignores, because it names its columns explicitly.

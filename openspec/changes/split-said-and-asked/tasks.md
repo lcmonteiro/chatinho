@@ -13,7 +13,7 @@
 ## 3. Memory finds what a peer was asked
 
 - [x] 3.1 In `src/chatinho/query.py`, the `peer` filter also matches `m.asked_of == peer`; update the `Query.peer` docstring. Add a test in `tests/test_context_query.py` for "What a peer was asked is its own". Verify it fails without the new clause.
-- [x] 3.2 In `src/chatinho/backends/database.py`: add the `asked_of` column, write it in `_write`, read it in `_read`, and in `initialize()` add the column with `ALTER TABLE messages ADD COLUMN asked_of INTEGER` when the inspected `messages` table lacks it. Add tests in `tests/test_database_backend.py` for "Asked, closed and reopened" and "An older database" (create the old table by hand in a temp SQLite file, insert one row, start the backend, load, archive a new message). Verify the older-database test fails without the `ALTER TABLE`.
+- [x] 3.2 In `src/chatinho/backends/database.py`: add the `asked_of` column, write it in `_write`, read it in `_read`, with no upgrade of older databases (this schema is the baseline). Add a test in `tests/test_database_backend.py` for "Asked, closed and reopened". Verify it fails without the column.
 
 ## 4. Docs
 

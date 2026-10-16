@@ -25,12 +25,8 @@ chatinho SHALL provide `Query`, an immutable value with these fields, all option
 ## ADDED Requirements
 
 ### Requirement: The archive keeps who a message was asked of
-The database backend SHALL keep each message's `asked_of` and give it back when it loads the message. An existing database archived before `asked_of` existed MUST keep working: the backend MUST add what it needs to the database when it starts, without losing what is there, and messages archived before that MUST load with `asked_of` unset.
+The database backend SHALL keep each message's `asked_of` and give it back when it loads the message.
 
 #### Scenario: Asked, closed and reopened
 - **WHEN** the user says "hi" asked of `bot`, and the chat is closed and reopened on the same database
 - **THEN** the reloaded say has `asked_of` set to `bot`, and `context(Query(peer=bot))` includes it
-
-#### Scenario: An older database
-- **WHEN** the backend starts on a database written before `asked_of` existed, holding one message
-- **THEN** it starts without error, loads that message with `asked_of` unset, and archives new messages with their `asked_of`

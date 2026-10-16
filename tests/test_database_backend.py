@@ -6,7 +6,6 @@ work off the event loop.
 """
 
 import asyncio
-import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -346,24 +345,3 @@ async def test_asked_closed_and_reopened(tmp_path):
     assert said in [m.id for m in Query(peer=bot.peer_id).select(again.context())]
     await second.close()
 
-
-async def test_an_older_database(tmp_path):
-    """A database archived before asked_of existed gains the column, and loses nothing."""
-    path = tmp_path / "old.db"
-    with sqlite3.connect(path) as db:
-        db.execute("CREATE TABLE messages (id VARCHAR PRIMARY KEY, text TEXT NOT NULL, "
-                   "frm INTEGER NOT NULL, \"to\" INTEGER, reply_to VARCHAR, timestamp DATETIME NOT NULL)")
-        db.execute("INSERT INTO messages VALUES ('msg-00000000000000aa', 'from before', 0, NULL, NULL, "
-                   "'2026-01-01 00:00:00.000000')")
-
-    store = DatabaseBackend("sqlite:///%s" % path)
-    store.initialize()
-    try:
-        old, = await store.load()
-        assert (old.text, old.asked_of) == ("from before", None)
-        new = ChatMessage(id=MessageID.new(), text="asked", frm=LOCAL, asked_of=1,
-                          timestamp=datetime(2026, 1, 2))
-        await store.listen(new)
-        assert [m.asked_of for m in await store.load()] == [None, 1]
-    finally:
-        store.shutdown()

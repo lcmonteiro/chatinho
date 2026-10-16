@@ -11,7 +11,7 @@
 - **Who is asked comes from `asked_of`.** That also replaces the `answer=True` flag `_post` gained in #37: an answer is simply asked of nobody.
 - **`AgentConnector` responds to the user's says only when it is not the one asked.** Otherwise a lone agent would answer the same message twice, once through `answer` and once through `listen`.
 - **`Query(peer=)` matches `asked_of`**, so the questions a peer was asked stay in its memory.
-- **`DatabaseBackend` archives `asked_of`**, in a new nullable column. On `initialize()`, an existing database without the column has it added in place, so a chat reopened after the upgrade keeps working and a restarted peer still remembers what it was asked.
+- **`DatabaseBackend` archives `asked_of`**, in a new nullable column, so a restarted peer still remembers what it was asked. This schema is the baseline: an archive written before it is not upgraded.
 - **BREAKING** for code that read `msg.to` to learn which peer was routed a say: it is `msg.asked_of` now. Nothing in the library or the examples does this, apart from the routing being changed here.
 
 ## Capabilities
@@ -21,7 +21,7 @@
 
 ### Modified Capabilities
 - `answer-details`: the lone-answerer and reply rules ask a peer without addressing the say to it; a new requirement defines `asked_of`.
-- `conversation-context`: `Query(peer=)` also matches what was asked of the peer; a new requirement says the archive keeps `asked_of`, upgrading an older database in place.
+- `conversation-context`: `Query(peer=)` also matches what was asked of the peer; a new requirement says the archive keeps `asked_of`.
 - `agent-connector`: "The user's says are responded to with a say" now names the says asked of the connector, not the ones addressed to it.
 
 ## Impact
@@ -30,6 +30,6 @@
 - `src/chatinho/session.py`: `_say_for`, `_ask_for` and `_post` set and read `asked_of`; the `answer` flag on `_post` goes away.
 - `src/chatinho/query.py`: the `peer` filter.
 - `src/chatinho/connectors/agent.py`: the guard in `listen`.
-- `src/chatinho/backends/database.py`: the column, writing and reading it, and the in-place upgrade.
+- `src/chatinho/backends/database.py`: the column, and writing and reading it.
 - Tests across `test_answer_details.py`, `test_message_delivery.py`, `test_context_query.py`, `test_agent_connector.py`, `test_database_backend.py`, `test_chat_frontend.py`, and the MCP tests that assert on `to`.
 - Docs: `docs/SPEC.md` (the routing table, the lone-answerer and reply paragraphs, `HookListen`), CLAUDE.md's routing paragraph.

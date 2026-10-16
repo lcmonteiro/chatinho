@@ -58,7 +58,7 @@ session sets `asked_of` where it makes a message and never writes `to`. Two rule
 of whoever said what it replies to**, when that is a peer that answers and is neither the speaker
 nor the frontend. **What `answer` returns is asked of nobody**, so it is heard by every listener
 and never put to anyone's `answer`. `Query(peer=)` matches `asked_of`, and `DatabaseBackend`
-archives it — adding the column in place to a database from before it existed.
+archives it. That schema is the baseline: an archive from before `asked_of` existed is not upgraded.
 
 **The presentation is peer zero, and says so itself.** `ChatFrontend` is `@frontend("chat")` — being
 the person is what it *is*, not a favour whoever attaches it does — and it declares the same hooks
