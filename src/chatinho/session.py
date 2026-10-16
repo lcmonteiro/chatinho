@@ -41,6 +41,13 @@ logger = logging.getLogger(__name__)
 COMMAND_PREFIX : str = "/"
 
 
+def _checked(reply: Any, what: str) -> Optional[Reply]:
+    """*reply* itself if it is a Reply or None; anything else, a bare string most often, raises TypeError."""
+    if reply is not None and not isinstance(reply, Reply):
+        raise TypeError("%s returned %s; it must return a Reply or None" % (what, type(reply).__name__))
+    return reply
+
+
 class ChatSession:
     """Routes messages between peers, and keeps the history.
 
@@ -222,11 +229,8 @@ class ChatSession:
             except Exception:
                 logger.error("Command %r failed", name, exc_info=True)
                 raise
-            if reply is None:
+            if _checked(reply, "Command %r's execute" % name) is None:
                 return None
-            if not isinstance(reply, Reply):
-                raise TypeError("Command %r returned %s; execute must return a Reply or None"
-                                % (name, type(reply).__name__))
             result = ChatMessage(
                 id=self._store.new_id(), text=reply.text, frm=TOOL, to=None, reply_to=asked.id,
             )
@@ -251,6 +255,10 @@ class ChatSession:
     def _peers(self) -> Dict[int, Any]:
         """Everyone registered, by id. Granted by ``HookPeers``."""
         return dict(self._connectors)
+
+    def _first(self, hook: Any) -> Optional[Any]:
+        """The first peer that declares *hook*, or None: the backend, for the hooks only it has."""
+        return next((who for who in self._connectors.values() if declares(who, hook)), None)
 
     def _commands(self) -> Dict[str, Any]:
         """Every command registered, by name. Granted by ``HookCommands``."""
@@ -370,7 +378,7 @@ class ChatSession:
         """
         if not attachments:
             return
-        keeper = next((w for w in self._connectors.values() if declares(w, HookKeep)), None)
+        keeper = self._first(HookKeep)
         if keeper is None:
             logger.debug("No backend keeps attachments; dropping %d of %s", len(attachments), msg.id)
             return
@@ -475,10 +483,7 @@ class ChatSession:
                                                 status=ReplyStatus.ERROR))
             return
         try:
-            reply = await who.answer(msg)
-            if reply is not None and not isinstance(reply, Reply):
-                raise TypeError("%s answered with %s; answer must return a Reply or None"
-                                % (name_of(who), type(reply).__name__))
+            reply = _checked(await who.answer(msg), "%s's answer" % name_of(who))
         except Exception as exc:
             # The asker is owed one reply, and a failure is one. An ask that is
             # waiting raises; a say that was asked of this peer gets an error
@@ -706,7 +711,7 @@ class ChatSession:
         chat reopens where it left off. A backend that cannot recall is not an
         error: it simply has nothing to give back.
         """
-        holder = next((w for w in self._connectors.values() if declares(w, HookLoad)), None)
+        holder = self._first(HookLoad)
         if holder is None:
             return
         try:
@@ -729,7 +734,7 @@ class ChatSession:
         Returns:
             Optional[str]: A link a browser can open, or None.
         """
-        linker = next((w for w in self._connectors.values() if declares(w, HookLink)), None)
+        linker = self._first(HookLink)
         if linker is None:
             return None
         try:
@@ -748,7 +753,7 @@ class ChatSession:
         Returns:
             int: How many the backend dropped, or zero when it cannot forget.
         """
-        holder = next((w for w in self._connectors.values() if declares(w, HookForget)), None)
+        holder = self._first(HookForget)
         if holder is None:
             return 0
         return await holder.forget(before=before)
