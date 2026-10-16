@@ -464,19 +464,6 @@ class ChatFrontend(App):
 
     # === Presentation-owned behaviour ===============================================
 
-    async def send_pending_reply(self, text: str) -> Optional[MessageID]:
-        """
-        Says *text* as a reply to the selected message, if there is one.
-
-        The reply target is a UI concept — it comes from a click — so this
-        lives here rather than in the session.
-        """
-        target = self._reply_target
-        if target is None:
-            return None
-        self._clear_reply_target()
-        return await self.say(text, reply_to=target)
-
     def has_command_suggestions(self) -> bool:
         """Whether the command-suggestion popup currently has entries."""
         return self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).has_suggestions
