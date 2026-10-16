@@ -310,20 +310,30 @@ class ChatSession:
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, reply_to=reply_to)
             if credentials is not None:
                 msg.credentials = credentials     # the lender's own mapping, so it can clear it
-            if to is None and reply_to is None and frm != TOOL:
-                msg.to = self._only_answerer(frm)
+            if to is None and frm != TOOL:
+                msg.to = self._answerer_of(frm, reply_to)
             await self._kept(msg, attachments)
             return await self._post(msg)
         return say
 
-    def _only_answerer(self, frm: int) -> Optional[int]:
-        """The one peer a say is asked of: the only one that answers, or None.
+    def _answerer_of(self, frm: int, reply_to: Optional[MessageID]) -> Optional[int]:
+        """The peer a say with no ``to`` is asked of, or None for a broadcast.
 
-        The speaker and the frontend do not count — the frontend speaks for the
-        person, and a say must not turn into a question put to them.
+        A reply goes back to whoever said what it replies to; any other say,
+        to the only peer that answers. Either way the speaker and the frontend
+        do not count — the frontend speaks for the person, and a say must not
+        turn into a question put to them — and a peer that does not answer
+        cannot be asked. A reply to something no longer in the session, or
+        said by a command, is a broadcast.
         """
-        answering = [at for at, who in self._connectors.items()
-                     if at not in (frm, LOCAL) and declares(who, HookAnswer)]
+        def answers(at: int) -> bool:
+            return at not in (frm, LOCAL) and declares(self._connectors[at], HookAnswer)
+
+        if reply_to is not None:
+            parent = self._store.find(reply_to)
+            author = parent.frm if parent is not None else None
+            return author if author in self._connectors and answers(author) else None
+        answering = [at for at in self._connectors if answers(at)]
         return answering[0] if len(answering) == 1 else None
 
     def _ask_for(self, frm: int):
@@ -369,7 +379,7 @@ class ChatSession:
         except Exception:
             logger.error("Keeping the attachments of %s failed", msg.id, exc_info=True)
 
-    async def _post(self, msg: ChatMessage) -> MessageID:
+    async def _post(self, msg: ChatMessage, answer: bool = False) -> MessageID:
         """
         Keeps *msg* and starts delivering it to everyone it is for.
 
@@ -377,10 +387,12 @@ class ChatSession:
         it. A question, anything addressed to a peer, is given its depth: one
         more than the question being answered in this task, if any.
 
-        An answer to an ask that is still waiting resolves that wait, and is
-        not delivered to the asker a second time — it is already holding it.
-        Everyone who listens still hears it: there is one conversation, and the
-        replies are part of it.
+        An *answer* — what a peer's ``answer`` returned, or a reply the session
+        posts in its name — is never put to anyone's ``answer``: it may resolve
+        an ask that is waiting, and everyone who listens hears it, but nobody is
+        asked it. Telling that from the message's shape is not possible: the
+        user following up on an answer and the answer to that follow-up look
+        alike, so it is marked where it is made.
         """
         self._store.add(msg)
         waiting  = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
@@ -391,7 +403,7 @@ class ChatSession:
         # You never hear yourself; that is the whole of the loop protection.
         listeners = {at for at, who in self._connectors.items()
                      if at != msg.frm and declares(who, HookListen)}
-        audience  = {msg.to} if msg.to is not None and not resolved else set()
+        audience  = {msg.to} if msg.to is not None and not resolved and not answer else set()
         audience &= self._connectors.keys()
         if audience:
             self._depth[msg.id] = _ANSWERING.get() + 1
@@ -454,9 +466,9 @@ class ChatSession:
         _ANSWERING.set(depth)
         if depth > self.max_depth:
             if msg.reply_to is not None:
-                # An answer handed back to whoever it answers: nobody waits on
-                # a reply to it, so it is dropped rather than answered with an
-                # error that would be handed back in turn.
+                # A reply said back to whoever it replies to: nobody waits on
+                # it, so it is dropped rather than answered with an error that
+                # would be said back in turn.
                 logger.warning("Dropped %s: nested deeper than %d", msg.id, self.max_depth)
                 return
             await self._answered(at, msg, Reply("too many nested asks (limit %d)" % self.max_depth,
@@ -477,7 +489,7 @@ class ChatSession:
             else:
                 await self._post(ChatMessage(
                     id=self._store.new_id(), text="%s failed: %s" % (name_of(who), type(exc).__name__),
-                    frm=at, to=msg.frm, reply_to=msg.id, status=ReplyStatus.ERROR))
+                    frm=at, to=msg.frm, reply_to=msg.id, status=ReplyStatus.ERROR), answer=True)
             raise
         if reply is not None:
             await self._answered(at, msg, reply)
@@ -487,7 +499,7 @@ class ChatSession:
         answered = ChatMessage(id=self._store.new_id(), text=reply.text, frm=at, to=msg.frm,
                                reply_to=msg.id, status=reply.status)
         await self._kept(answered, reply.attachments)
-        await self._post(answered)
+        await self._post(answered, answer=True)
 
     # === History ====================================================================
 

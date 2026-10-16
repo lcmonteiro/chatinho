@@ -55,6 +55,14 @@ to is TOOL    → a command was run          (invoke)
 reply_to set  → it answers that message    (answer)
 ```
 
+Two rules sit on top of that table, both in `ChatSession`. **What `answer` returns is an answer**:
+addressed to the asker and heard by every listener, but never put to anyone's `answer` — the
+session marks it where it is made, because a follow-up and the answer to it look identical. And
+**a say that replies, with no `to`, is asked of whoever said what it replies to**, when that is a
+peer that answers and is neither the speaker nor the frontend; otherwise it stays a broadcast.
+Before both, a follow-up to an assistant's answer reached nobody, and two answering peers traded
+answers until `max_depth`.
+
 **The presentation is peer zero, and says so itself.** `ChatFrontend` is `@frontend("chat")` — being
 the person is what it *is*, not a favour whoever attaches it does — and it declares the same hooks
 a connector does. There is no privileged path: a terminal reaches the conversation through exactly

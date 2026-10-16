@@ -7,12 +7,14 @@ import pytest
 from chatinho import (
     TOOL,
     HookAnswer,
+    HookExecute,
     HookListen,
     HookSay,
     Reply,
     ReplyStatus,
     connector,
     require,
+    tool,
 )
 from conftest import driven
 
@@ -111,6 +113,7 @@ async def test_the_user_saying_asks_the_lone_peer():
 
 
 async def test_a_reply_stays_a_broadcast():
+    """A reply to what the user said is not put to the user, nor to the lone peer."""
     eco, falador = _Eco(), _Falador()
     session, view = await driven(connectors=[eco, falador])
     first = await view.say("hello")
@@ -201,4 +204,95 @@ async def test_an_answer_must_be_a_reply():
     await _settle()
     reply = view.context()[-1]
     assert (reply.reply_to, reply.status) == (said_id, "error") and "TypeError" in reply.text
+    await session.close()
+
+
+# === A reply, asked of the peer it replies to =======================================
+
+@tool("upper", "Upper-cases the rest of the line")
+@require(HookExecute)
+class _Upper:
+    async def execute(self, args="", **kwargs):
+        return Reply(args.upper())
+
+
+async def _answer_of(view, eco, text):
+    """Says *text* as the user and returns the id of *eco*'s answer to it."""
+    said = await view.say(text)
+    await _settle()
+    return [m for m in view.context() if m.reply_to == said and m.frm == eco.peer_id][0].id
+
+
+async def test_the_user_follows_up_on_an_answer():
+    bot = _Eco("sunny")
+    session, view = await driven(connectors=[bot])
+    answer   = await _answer_of(view, bot, "hello")
+    followed = await view.say("and tomorrow?", reply_to=answer)
+    await _settle()
+    assert [m.text for m in bot.asked] == ["hello", "and tomorrow?"]
+    reply = view.context()[-1]
+    assert (reply.frm, reply.reply_to) == (bot.peer_id, followed)
+    await session.close()
+
+
+async def test_following_up_in_a_room_with_several_peers():
+    sol, lua = _Eco("sunny"), _Eco("full moon")
+    session, view = await driven(connectors=[sol, lua])
+    asked = await view.say("will it rain?", to=sol.peer_id)
+    await _settle()
+    answer = [m for m in view.context() if m.reply_to == asked][0].id
+    await view.say("and tomorrow?", reply_to=answer)
+    await _settle()
+    assert [m.text for m in sol.asked] == ["will it rain?", "and tomorrow?"]
+    assert lua.asked == []
+    await session.close()
+
+
+async def test_replying_to_a_peer_that_does_not_answer():
+    eco, falador = _Eco(), _Falador()
+    session, view = await driven(connectors=[eco, falador])
+    first = await falador.say("anyone?", to=view.peer_id)
+    await _settle()
+    reply = await view.say("me", reply_to=first)
+    await _settle()
+    assert eco.asked == []
+    assert [m for m in view.context() if m.id == reply][0].is_broadcast
+    await session.close()
+
+
+async def test_replying_to_a_commands_output():
+    eco = _Eco()
+    session, view = await driven(connectors=[eco], commands=[_Upper()])
+    await view.command("upper", "shout")
+    output = view.context()[-1]
+    assert output.frm == TOOL
+    reply = await view.say("thanks", reply_to=output.id)
+    await _settle()
+    assert eco.asked == []
+    assert [m for m in view.context() if m.id == reply][0].is_broadcast
+    await session.close()
+
+
+async def test_an_explicit_recipient_wins():
+    sol, lua = _Eco("sunny"), _Eco("full moon")
+    session, view = await driven(connectors=[sol, lua])
+    asked = await view.say("will it rain?", to=sol.peer_id)
+    await _settle()
+    answer = [m for m in view.context() if m.reply_to == asked][0].id
+    await view.say("and you?", to=lua.peer_id, reply_to=answer)
+    await _settle()
+    assert [m.text for m in sol.asked] == ["will it rain?"]
+    assert [m.text for m in lua.asked] == ["and you?"]
+    await session.close()
+
+
+async def test_replying_to_oneself():
+    eco = _Eco()
+    session, view = await driven(connectors=[eco])
+    say  = session._say_for(eco.peer_id)
+    mine = await say("a thought")
+    await _settle()
+    reply = await say("and another", reply_to=mine)
+    await _settle()
+    assert [m for m in view.context() if m.id == reply][0].is_broadcast
     await session.close()

@@ -166,6 +166,24 @@ async def test_an_at_name_asks_that_peer_without_the_name():
         assert app.messages[-1].text == "sunny" and app.messages[-1].reply_to == asked.id
 
 
+async def test_a_follow_up_to_an_answer_is_asked_of_whoever_answered():
+    """Tap an answer, type, Enter: the peer that answered is asked the follow-up.
+
+    Through the input, not ``send_pending_reply``, because the input is the
+    path a person takes, and the reply it says carries no ``to``.
+    """
+    sol = _Sol()
+    app = await chat_frontend(connectors=[sol])
+    async with app.run_test() as pilot:
+        await _submit(app, pilot, "will it rain?")
+        answer = app.messages[-1]
+        assert answer.frm == sol.peer_id
+        app._set_reply_target(answer.id)
+        await _submit(app, pilot, "and tomorrow?")
+        assert [m.text for m in sol.asked] == ["will it rain?", "and tomorrow?"]
+        assert app.messages[-1].reply_to == app.messages[-2].id
+
+
 @pytest.mark.parametrize("typed", ["@nobody hi", "@sol", "hello @sol"])
 async def test_anything_else_is_said_as_typed(typed):
     sol = _Sol()
