@@ -31,8 +31,10 @@ def parts(**where) -> dict:
     try:
         found = Endpoint.load()
         found.check()
+        key   = found.key
+        assert key is not None                   # check() raised otherwise
         where = where or dict(url=URL, token=Env("CHATINHO_MCP_TOKEN"))
-        lab   = McpConnector(**where, name="lab", delegate={"llm": found.key})
+        lab   = McpConnector(**where, name="lab", delegate={"llm": key})
     except (KeyUnavailable, ValueError) as exc:
         raise SystemExit("%s; see examples/README.md" % exc)
     return dict(connectors=[lab], commands=[HelpCommand()], backend=None)

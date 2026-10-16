@@ -11,7 +11,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 |---|---|
 | `pytest -q` | **254 pass** |
 | `ruff check src tests examples` | clean |
-| `mypy src/chatinho` | clean |
+| `mypy src/chatinho examples` | clean |
 
 Most of them run without mounting anything; only `test_chat_frontend.py` and
 `test_command_suggestions.py` need a Textual app. That ratio is the point of the layout below, not an accident of it.
@@ -896,13 +896,18 @@ exercised off a phone: a stub on `PREFIX` and a stub uv show which extra each pl
 **Requires Python >= 3.12.** Many sandboxes default `python3` to 3.11, where the install fails
 with `Package 'chatinho' requires a different Python`. Use `python3.12` explicitly if so.
 
-The three checks CI runs (`.github/workflows/tests.yml`), all from the repo root:
+The three checks CI runs (`.github/workflows/tests.yml`), all from the repo root. CI installs
+with `uv sync --locked --extra dev` from the committed `uv.lock`, so a `pyproject.toml` change
+needs `uv lock` beside it or CI fails:
 
 ```bash
 ruff check src tests examples
-mypy src/chatinho
+mypy src/chatinho examples
 pytest -q
 ```
+
+The examples are type-checked because `examples/hooks.py` is `docs/SPEC.md` made executable, and
+an example that passes the wrong type teaches it to everyone who copies it.
 
 CI also runs a fourth job, `openspec`: `openspec validate --all --strict --no-interactive`.
 
