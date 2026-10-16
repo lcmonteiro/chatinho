@@ -259,7 +259,8 @@ class McpFrontend:
         """What a reply attached: each name it links to that the backend can read back."""
         found: List[Attachment] = []
         for name in _linked_names(text):
-            data = _read_link(await self.locate(msg_id, name))
+            # A file read, so it goes to a thread rather than holding up the loop.
+            data = await asyncio.to_thread(_read_link, await self.locate(msg_id, name))
             if data is not None:
                 found.append(Attachment(name, media_type_of(name), data))
         return found

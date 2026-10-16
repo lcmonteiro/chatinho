@@ -345,3 +345,19 @@ async def test_asked_closed_and_reopened(tmp_path):
     assert said in [m.id for m in Query(peer=bot.peer_id).select(again.context())]
     await second.close()
 
+
+
+async def test_forgotten_here_not_only_in_the_archive(tmp_path):
+    """forget(before=t) drops the older messages from the conversation as well as the archive."""
+    session, view = ChatSession(backend=DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))), Driver()
+    session.add_connector(view, at=LOCAL)
+    await session.start()
+    await view.say("first")
+    await view.say("second")
+    cut = datetime.now()
+    await asyncio.sleep(0.01)
+    await view.say("third")
+    await asyncio.sleep(0.05)                    # hearing is not synchronous: let the archive catch up
+    assert await session.forget(before=cut) == 2
+    assert [m.text for m in view.context()] == ["third"]
+    await session.close()

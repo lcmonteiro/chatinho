@@ -91,6 +91,16 @@ class OpenAIConnector:
     def __repr__(self) -> str:
         return "OpenAIConnector(name=%r, model=%r, base_url=%r)" % (self.name, self.model, self.base_url)
 
+    async def shutdown(self) -> None:
+        """Closes the client kept for its own key, so its connections do not outlive the chat.
+
+        By now ``close()`` has finished or cancelled every question, so nothing
+        is using it; a lent key's client was already closed with its question.
+        """
+        if self._client is not None:
+            client, self._client = self._client[1], None
+            await client.close()
+
     async def answer(self, msg: ChatMessage) -> Reply:
         """Asks the model, with the conversation so far, and answers with its text."""
         lent = msg.credentials.get(self.credential)

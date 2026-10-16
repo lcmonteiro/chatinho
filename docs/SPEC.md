@@ -386,7 +386,9 @@ logged, and the chat starts empty rather than failing.
 > **demands** `async forget(before=None) -> int`
 
 Drops what was held — everything, or only what is older than *before*. Returns how many went.
-Reached from outside by `ChatSession.forget(before=None)`.
+Reached from outside by `ChatSession.forget(before=None)`, which drops the same messages from the
+session's own conversation first — with or without a backend — so `context()` stops returning them
+at once, and returns the backend's count (0 without one).
 
 ### HookKeep
 
@@ -536,7 +538,8 @@ routed on the display name, so renaming a connector broke the replies already in
 
 **Lifecycle is deliberately not a hook.** `initialize()` (at `start()`, and may be `async def` since
 there is a loop to await it by then), `async serve()` (during `run()`, and it *runs until it is
-finished*) and `shutdown()` (at `close`) are called when present. A peer holding nothing needs none
+finished*) and `shutdown()` (at `close`, and may be `async def` too: `close()` awaits those
+together, within its timeout, and cancels one that will not finish) are called when present. A peer holding nothing needs none
 of them, and making it declare that it holds nothing is ceremony.
 
 `run()` waits for the **first** `serve()` to return and cancels the rest: quitting the terminal is

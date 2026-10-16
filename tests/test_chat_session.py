@@ -6,6 +6,7 @@ a Driver that declared the hooks and was handed the capabilities at add_connecto
 """
 
 import asyncio
+import logging
 import time
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -431,9 +432,13 @@ async def test_a_listener_that_fails_does_not_lose_the_message():
     await session.close()
 
 
-async def test_forget_without_a_backend_drops_nothing():
-    session, _ = await driven()
+async def test_forget_without_a_backend():
+    """Nothing archived, so it reports 0 — and the conversation forgets all the same."""
+    session, view = await driven()
+    await view.say("one")
+    await view.say("two")
     assert await session.forget() == 0
+    assert view.context() == []
     await session.close()
 
 
@@ -645,3 +650,63 @@ async def test_an_async_initialize_is_awaited_by_start():
     await session.start()
     assert tarde.initialized is True
     await session.close()
+
+
+# === Shutting down ==============================================================
+
+@connector("closer")
+class _Closer:
+    """A peer whose shutdown is a coroutine, recording that it ran to the end."""
+
+    def __init__(self, fails: bool = False, hangs: bool = False) -> None:
+        self.fails, self.hangs, self.closed = fails, hangs, False
+
+    async def shutdown(self) -> None:
+        await asyncio.sleep(0)
+        if self.hangs:
+            await asyncio.Event().wait()
+        if self.fails:
+            raise RuntimeError("could not close")
+        self.closed = True
+
+
+@connector("plain")
+class _PlainCloser:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def shutdown(self) -> None:
+        self.calls += 1
+
+
+async def test_an_asynchronous_shutdown_is_awaited():
+    closer = _Closer()
+    session, _ = await driven(connectors=[closer])
+    await session.close()
+    assert closer.closed
+
+
+async def test_a_synchronous_shutdown_still_works():
+    plain = _PlainCloser()
+    session, _ = await driven(connectors=[plain])
+    await session.close()
+    assert plain.calls == 1
+
+
+async def test_one_failing_shutdown_does_not_stop_the_others(caplog):
+    failing, other = _Closer(fails=True), _Closer()
+    session, _ = await driven(connectors=[failing, other])
+    with caplog.at_level(logging.ERROR, logger="chatinho.session"):
+        await session.close()
+    assert other.closed and not failing.closed
+    assert "could not close" in caplog.text
+
+
+async def test_a_shutdown_that_never_returns(monkeypatch, caplog):
+    monkeypatch.setattr(ChatSession, "CLOSE_TIMEOUT", 0.2)
+    session, _ = await driven(connectors=[_Closer(hangs=True)])
+    started = time.monotonic()
+    with caplog.at_level(logging.WARNING, logger="chatinho.session"):
+        await session.close()
+    assert time.monotonic() - started < 1.0
+    assert "to shut down" in caplog.text
