@@ -1,4 +1,5 @@
-"""Chatinho: an extensible chat library.
+"""
+Chatinho: an extensible chat library.
 
 Everyone in a chat is a **peer** with an integer id. ``LOCAL`` — zero — is the
 user; connectors are numbered from one. ``TOOL`` — minus one — is the name a
@@ -101,7 +102,8 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
 
 
 def __getattr__(name: str) -> Any:
-    """Imports the batteries only when one is asked for (PEP 562).
+    """
+    Imports the batteries only when one is asked for (PEP 562).
 
     ``import chatinho`` must not drag in a terminal, an HTTP client and an ORM
     for a script that wanted a ``ChatSession``. These are resolved on first

@@ -1,4 +1,5 @@
-"""Key sources: where a key lives, read when needed, and never shown.
+"""
+Key sources: where a key lives, read when needed, and never shown.
 
 See openspec/specs/key-sources.
 """

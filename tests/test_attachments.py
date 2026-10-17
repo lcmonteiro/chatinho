@@ -1,4 +1,5 @@
-"""Tests for attachments: they go to the backend, and the message stays text.
+"""
+Tests for attachments: they go to the backend, and the message stays text.
 
 A peer attaches through every door it speaks through; the session hands what
 it attached to whoever declared ``HookKeep``, under the new message's id,

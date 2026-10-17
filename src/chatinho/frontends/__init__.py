@@ -1,4 +1,5 @@
-"""Frontends for chatinho: the terminal and the MCP server.
+"""
+Frontends for chatinho: the terminal and the MCP server.
 
 A frontend is peer zero: it speaks for whoever is on the other side of the
 chat. Each one needs its own extra, so they are imported on first use.

@@ -9,7 +9,8 @@ from ..message import LOCAL, Reply
 @require(HookPeers)
 @require(HookCommands)
 class HelpCommand:
-    """Answers with the commands registered in the chat it belongs to.
+    """
+    Answers with the commands registered in the chat it belongs to.
 
     A command is not a peer: nothing is addressed to it and it hears nothing.
     It runs, and it answers whoever ran it. ``HookPeers`` is only so the
@@ -20,7 +21,8 @@ class HelpCommand:
     commands : Commands
 
     async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> Reply:
-        """Answers with the listing.
+        """
+        Answers with the listing.
 
         It does not say it: what a command answers is posted by the session, in
         ``TOOL``'s name, replying to the invocation. Saying it too would put it

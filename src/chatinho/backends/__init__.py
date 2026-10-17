@@ -1,4 +1,5 @@
-"""Backends for chatinho.
+"""
+Backends for chatinho.
 
 A backend is a plain class that declares what it can do with
 :func:`~chatinho.hooks.require`; there is no base class to inherit.

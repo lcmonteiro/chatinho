@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 @require(HookContext)
 @require(HookPeers)
 class OpenAIConnector:
-    """Answers with an OpenAI-compatible chat model, remembering the conversation.
+    """
+    Answers with an OpenAI-compatible chat model, remembering the conversation.
 
     It waits for the model without blocking the chat, sends the model the part
     of the conversation its ``memory`` query selects, and answers with the key
@@ -89,7 +90,8 @@ class OpenAIConnector:
         return "OpenAIConnector(name=%r, model=%r, base_url=%r)" % (self.name, self.model, self.base_url)
 
     async def shutdown(self) -> None:
-        """Closes the client kept for its own key, so its connections do not outlive the chat.
+        """
+        Closes the client kept for its own key, so its connections do not outlive the chat.
 
         By now ``close()`` has finished or cancelled every question, so nothing
         is using it; a lent key's client was already closed with its question.

@@ -1,4 +1,5 @@
-"""The scrollable chat log and the message bubbles it mounts.
+"""
+The scrollable chat log and the message bubbles it mounts.
 
 :class:`ChatLog` owns its own children: which messages are currently rendered,
 their widgets, and which one is selected as the reply target. The application
@@ -61,7 +62,8 @@ _HEADER_SLACK : int = 2
 
 
 def _newlines_are_breaks(state) -> None:
-    """Rewrites every soft break in the token stream as a hard one.
+    """
+    Rewrites every soft break in the token stream as a hard one.
 
     **A fenced block is safe because it has no children at all**, not because
     anything checks its type: across headings, links, images, quotes, tables,
@@ -81,7 +83,8 @@ def _newlines_are_breaks(state) -> None:
 
 
 def chat_markdown() -> MarkdownIt:
-    """The parser a message body is rendered with: Markdown, but chat-shaped.
+    """
+    The parser a message body is rendered with: Markdown, but chat-shaped.
 
     A lone newline is a *soft* break in Markdown, and Textual renders one as a
     space — so a message typed over three lines arrived as one line. Nobody
@@ -105,7 +108,8 @@ def chat_markdown() -> MarkdownIt:
 
 
 def _attachment_name(href: str) -> Optional[str]:
-    """The attachment a link names, or None when it is an ordinary link.
+    """
+    The attachment a link names, or None when it is an ordinary link.
 
     A scheme (``https:``, ``mailto:``), a leading ``/`` or ``//``, or a
     fragment (``#``) make it an ordinary link; anything else is relative and
@@ -126,7 +130,8 @@ def _attachment_name(href: str) -> Optional[str]:
 
 
 def preview_of(text: str, width: int = 60) -> str:
-    """A single line of *text*, short enough to sit in a popup.
+    """
+    A single line of *text*, short enough to sit in a popup.
 
     The confirmation shows what was copied rather than only that something
     was: on a phone, where the clipboard cannot be checked without leaving
@@ -144,7 +149,8 @@ def preview_of(text: str, width: int = 60) -> str:
 
 
 class TouchScrollableContainer(ScrollableContainer):
-    """Scrollable container that pans by dragging, where there is nothing to select.
+    """
+    Scrollable container that pans by dragging, where there is nothing to select.
 
     **A terminal cannot tell a finger from a mouse.** Termux turns a swipe into
     the same SGR mouse report a trackpad sends, and no mouse protocol any
@@ -165,7 +171,8 @@ class TouchScrollableContainer(ScrollableContainer):
         self._scroll_start_y : int  = 0
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
-        """Starts a pan, if the press landed where there is no text to select.
+        """
+        Starts a pan, if the press landed where there is no text to select.
 
         The screen reports no content offset for a coordinate holding nothing
         selectable — the log's background, the margin beside a bubble — and
@@ -209,7 +216,8 @@ class TouchScrollableContainer(ScrollableContainer):
 
 
 class _MessageContainer(Vertical):
-    """One message: its header, the bubble under it, and what a tap means.
+    """
+    One message: its header, the bubble under it, and what a tap means.
 
     One tap selects the message as the reply target; **two copy its text**.
     """
@@ -232,7 +240,8 @@ class _MessageContainer(Vertical):
         self._last_tap_y  : int = 0
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
-        """Remembers where the press landed, to tell a tap from a drag.
+        """
+        Remembers where the press landed, to tell a tap from a drag.
 
         Deliberately does not stop the event: a drag across a message is
         Textual's to read as a text selection, and the log reads the same
@@ -243,7 +252,8 @@ class _MessageContainer(Vertical):
         self._pressed_y = event.screen_y
 
     def on_click(self, event: events.Click) -> None:
-        """Selects on one tap and copies on two, ignoring a scroll.
+        """
+        Selects on one tap and copies on two, ignoring a scroll.
 
         ``event.chain`` is deliberately not used. Textual counts a double
         click only when both land on the *exact same cell*, which is right for
@@ -285,7 +295,8 @@ class _MessageContainer(Vertical):
 
 
 class ChatLog(TouchScrollableContainer):
-    """Renders the last ``max_displayed`` messages the chat will hand over.
+    """
+    Renders the last ``max_displayed`` messages the chat will hand over.
 
     Reads through ``context`` — the capability the presentation was
     granted — rather than holding the history itself. Messages leaving the
@@ -336,7 +347,8 @@ class ChatLog(TouchScrollableContainer):
             yield Static(self._banner, classes="chat-banner")
 
     def sync(self) -> None:
-        """Brings the rendered widgets in line with the store's window.
+        """
+        Brings the rendered widgets in line with the store's window.
 
         Mounts messages that entered the window and unmounts those that left,
         keeping the number of widgets in the terminal bounded.
@@ -368,7 +380,8 @@ class ChatLog(TouchScrollableContainer):
             self.scroll_to_bottom()
 
     async def on_markdown_link_clicked(self, event: Markdown.LinkClicked) -> None:
-        """Opens a link in a message: an attachment through ``locate``, anything else as is.
+        """
+        Opens a link in a message: an attachment through ``locate``, anything else as is.
 
         A relative link names an attachment of the message it is in, so the
         backend is asked where that is; nothing to open says "Not found" rather
@@ -399,7 +412,8 @@ class ChatLog(TouchScrollableContainer):
         self.scroll_end(animate=False)
 
     def _name_of_peer(self, frm: int) -> str:
-        """What to call whoever said it, as the header writes it.
+        """
+        What to call whoever said it, as the header writes it.
 
         A command is not a peer and is in no roster, so ``TOOL`` is named
         outright. A peer that has since gone — history reloaded from a backend
@@ -479,7 +493,8 @@ class ChatLog(TouchScrollableContainer):
         return container
 
     def _bubble_width(self, text: str, quote: Optional[str] = None, floor: int = 0) -> int:
-        """How wide this bubble wants to be, in cells.
+        """
+        How wide this bubble wants to be, in cells.
 
         The widest line it has to show — the quote, or a line of the body —
         plus the bubble's own padding and border, and never narrower than the
@@ -504,7 +519,8 @@ class ChatLog(TouchScrollableContainer):
         return min(max(widest, floor + _HEADER_SLACK), self.style.bubble_max_width)
 
     def copy_message(self, msg_id: MessageID) -> None:
-        """Puts the message's text on the clipboard, by both routes at once.
+        """
+        Puts the message's text on the clipboard, by both routes at once.
 
         OSC 52 goes out immediately — it is one escape sequence — and a
         clipboard helper, if the system has one, runs in a worker because it

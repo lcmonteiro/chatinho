@@ -1,4 +1,5 @@
-"""AgentConnector: a LangChain agent as a peer, with the chat as its tools.
+"""
+AgentConnector: a LangChain agent as a peer, with the chat as its tools.
 
 Every agent here runs on a scripted model (``fakes.agent``), so no key and no
 network: the script decides each call from the messages of that run alone.

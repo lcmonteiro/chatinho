@@ -1,4 +1,5 @@
-"""What ``OpenAIConnector`` and ``AgentConnector`` agree on: what a model remembers, and who said it.
+"""
+What ``OpenAIConnector`` and ``AgentConnector`` agree on: what a model remembers, and who said it.
 
 Standard library only, so either connector can import it without the other's
 library.
@@ -16,7 +17,8 @@ MEMORY = Query(peer=SELF, errors=False).last(20)
 
 
 def earlier(context: Context, memory: Optional[Query], question: ChatMessage) -> List[ChatMessage]:
-    """What *memory* selects from the conversation, without *question* itself.
+    """
+    What *memory* selects from the conversation, without *question* itself.
 
     The question is in the conversation too, so one more is asked for and the
     question left out: it must not eat into the limit.
@@ -40,7 +42,8 @@ def earlier(context: Context, memory: Optional[Query], question: ChatMessage) ->
 
 
 def speaker(m: ChatMessage, me: Optional[int], roster: Dict[int, Any]) -> Tuple[str, str]:
-    """The role *m* plays for the model remembering it, and its text as the model reads it.
+    """
+    The role *m* plays for the model remembering it, and its text as the model reads it.
 
     The model's own words are the ``assistant``'s; the user's are the ``user``'s
     as they were said; anyone else's are the ``user``'s too, prefixed with the

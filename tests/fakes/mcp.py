@@ -63,7 +63,8 @@ class Weather:
 @require(HookSay)
 @require(HookPeers)
 class Agent:
-    """Answers questions asked to it, and replies to questions said to the room.
+    """
+    Answers questions asked to it, and replies to questions said to the room.
 
     With ``key``, it reads the credential ``llm`` the message carries, or None.
     """

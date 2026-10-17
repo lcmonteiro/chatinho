@@ -1,4 +1,5 @@
-"""The older tier of the conversation, kept in a SQL database.
+"""
+The older tier of the conversation, kept in a SQL database.
 
 The backend is not a key-value store, and nothing pushes at it: it is a
 peer that declared ``HookListen``, so the conversation crosses it the
@@ -41,7 +42,8 @@ class Base(DeclarativeBase):
 
 
 class ArchivedMessage(Base):
-    """One archived message, addressed exactly as it was when it was said.
+    """
+    One archived message, addressed exactly as it was when it was said.
 
     ``id`` is the message's own id, as ``str()`` writes it, and the primary
     key: it is unique across chats, it is what a reply points at, and it is what makes archiving the same
@@ -62,7 +64,8 @@ class ArchivedMessage(Base):
 
 
 class ArchivedAttachment(Base):
-    """One attachment, kept under the message it was attached to.
+    """
+    One attachment, kept under the message it was attached to.
 
     ``(msg_id, name)`` is the key: a name is what the message's text links to,
     and keeping the same attachment twice is a no-op rather than a second row.
@@ -83,7 +86,8 @@ class ArchivedAttachment(Base):
 @require(HookKeep)
 @require(HookLink)
 class DatabaseBackend:
-    """Listens to the conversation and keeps it, one row per message.
+    """
+    Listens to the conversation and keeps it, one row per message.
 
     Nothing pushes at it: it is a peer that declared ``HookListen``, so every
     message crosses it the way a message crosses anyone, and it writes what it
@@ -93,7 +97,8 @@ class DatabaseBackend:
     """
 
     def __init__(self, database_url: str, echo: bool = False) -> None:
-        """Prepares the backend; the connection opens in :meth:`initialize`.
+        """
+        Prepares the backend; the connection opens in :meth:`initialize`.
 
         Args:
             database_url: Any URL SQLAlchemy accepts.
@@ -115,7 +120,8 @@ class DatabaseBackend:
     # === Lifecycle ==================================================================
 
     def initialize(self) -> None:
-        """Opens the connection and creates the table if it is not there.
+        """
+        Opens the connection and creates the table if it is not there.
 
         Every call runs in an executor thread, so SQLite is opened with
         ``check_same_thread`` off; and an in-memory database is one database
@@ -151,7 +157,8 @@ class DatabaseBackend:
     # === The archive ================================================================
 
     async def listen(self, msg: ChatMessage) -> None:
-        """Keeps one message that crossed the session.
+        """
+        Keeps one message that crossed the session.
 
         Args:
             msg: What was said, addressed exactly as it was said.
@@ -163,7 +170,8 @@ class DatabaseBackend:
         since : Optional[datetime] = None,
         limit : Optional[int] = None,
     ) -> List[ChatMessage]:
-        """Reads the tail of what was heard back, oldest first.
+        """
+        Reads the tail of what was heard back, oldest first.
 
         Args:
             since: Keep only messages stamped at or after this moment.
@@ -175,7 +183,8 @@ class DatabaseBackend:
         return await self._off_loop(self._read, since, limit)
 
     async def forget(self, before: Optional[datetime] = None) -> int:
-        """Drops archived messages older than *before*, or all of them.
+        """
+        Drops archived messages older than *before*, or all of them.
 
         Args:
             before: Keep everything from this moment on; None forgets the lot.
@@ -188,7 +197,8 @@ class DatabaseBackend:
     # === What messages carry =========================================================
 
     async def keep(self, msg_id: MessageID, attachments: Sequence[Attachment]) -> None:
-        """Keeps what message *msg_id* carries, before the message is posted.
+        """
+        Keeps what message *msg_id* carries, before the message is posted.
 
         Args:
             msg_id: The message the attachments belong to.
@@ -197,7 +207,8 @@ class DatabaseBackend:
         await self._off_loop(self._keep, str(msg_id), tuple(attachments))
 
     async def link(self, msg_id: MessageID, name: str) -> Optional[str]:
-        """A ``file://`` link to attachment *name* of message *msg_id*, or None.
+        """
+        A ``file://`` link to attachment *name* of message *msg_id*, or None.
 
         The file is written on the first request, into a directory this backend
         removes at :meth:`shutdown`.
@@ -214,7 +225,8 @@ class DatabaseBackend:
     # === Internals ==================================================================
 
     async def _off_loop(self, work: Any, *args: Any) -> Any:
-        """Runs *work* on the backend's own thread, so SQLAlchemy never blocks the loop.
+        """
+        Runs *work* on the backend's own thread, so SQLAlchemy never blocks the loop.
 
         One thread, not the loop's pool: the session now hands the backend
         messages concurrently (each delivery is its own task), and an in-memory
@@ -230,7 +242,8 @@ class DatabaseBackend:
         return await asyncio.get_running_loop().run_in_executor(self._worker, work, *args)
 
     def _session(self) -> Any:
-        """Returns a database session.
+        """
+        Returns a database session.
 
         Raises:
             RuntimeError: If the backend was never initialized.

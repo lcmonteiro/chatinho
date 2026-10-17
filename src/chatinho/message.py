@@ -1,4 +1,5 @@
-"""Message model and history for chatinho.
+"""
+Message model and history for chatinho.
 
 Every peer in a chat has an integer id, and :data:`LOCAL` — zero — is
 the chat itself: the user. A connector links the chat to one agent or
@@ -41,7 +42,8 @@ _HEX    = re.compile(r"[0-9a-f]+")
 
 @dataclass(frozen=True)
 class Attachment:
-    """Something a peer attaches to what it says: a page, an image, a file.
+    """
+    Something a peer attaches to what it says: a page, an image, a file.
 
     It never rides on the message. The session hands it to the backend that
     declared ``HookKeep``, under the message's id, and the message's Markdown
@@ -60,7 +62,8 @@ class Attachment:
 
 
 class ReplyStatus(str, Enum):
-    """What an answer says about itself.
+    """
+    What an answer says about itself.
 
     A ``str`` enum, so it compares equal to its value: ``ReplyStatus.ASKED ==
     "asked"``.
@@ -76,7 +79,8 @@ class ReplyStatus(str, Enum):
 
 @dataclass(frozen=True)
 class Reply:
-    """What ``answer`` or a command's ``execute`` returns when it says more than text.
+    """
+    What ``answer`` or a command's ``execute`` returns when it says more than text.
 
     Every ``answer`` and ``execute`` returns one, or None; a plain string
     raises ``TypeError``. Its attachments go to the backend, and its status
@@ -98,7 +102,8 @@ class Reply:
         object.__setattr__(self, "status", ReplyStatus(self.status))
 
     def __str__(self) -> str:
-        """The text, led by the status when it did not answer: ``error: quota exceeded``.
+        """
+        The text, led by the status when it did not answer: ``error: quota exceeded``.
 
         Whatever reads a Reply as text reads this, an agent's model given a
         tool's result included, so it is what the reply says rather than how
@@ -110,7 +115,8 @@ class Reply:
 
 
 class Secret:
-    """A value that must never be shown: a credential lent for one question.
+    """
+    A value that must never be shown: a credential lent for one question.
 
     ``repr`` and ``str`` are redacted, so a Secret in a log line, an error or a
     traceback's locals says nothing. :meth:`reveal` is the one way to the value.
@@ -133,7 +139,8 @@ class Secret:
 
 @dataclass(frozen=True)
 class MessageID:
-    """A message's id: random, unique across sessions, and not a string.
+    """
+    A message's id: random, unique across sessions, and not a string.
 
     ``str()`` gives the form that is stored and logged — ``msg-`` and 16 hex
     characters — and :meth:`parse` reads it back. :attr:`short` is what a person
@@ -152,7 +159,8 @@ class MessageID:
 
     @classmethod
     def new(cls) -> "MessageID":
-        """Returns a fresh id: 16 random hex characters.
+        """
+        Returns a fresh id: 16 random hex characters.
 
         Random, not counted, so a chat that reopens on an archive never hands
         out an id already in it — a counter would start at one again. 64 bits
@@ -163,7 +171,8 @@ class MessageID:
 
     @classmethod
     def parse(cls, text: str) -> "MessageID":
-        """Reads back what ``str()`` wrote.
+        """
+        Reads back what ``str()`` wrote.
 
         Args:
             text: ``msg-`` and hex digits, e.g. ``msg-3f9a1c2e7b04d5a6``.
@@ -180,7 +189,8 @@ class MessageID:
 
     @property
     def short(self) -> str:
-        """What to show a person: ``3f9a1c2`` for ``msg-3f9a1c2e7b04d5a6``.
+        """
+        What to show a person: ``3f9a1c2`` for ``msg-3f9a1c2e7b04d5a6``.
 
         Only for display. An id not 16 hex characters long — from an older
         archive — is shown whole, as ``str()`` writes it.
@@ -193,7 +203,8 @@ class MessageID:
 
 @dataclass
 class ChatMessage:
-    """One message, addressed.
+    """
+    One message, addressed.
 
     Attributes:
         id: Unique across every chat that shares an archive, assigned by the
@@ -240,7 +251,8 @@ class ChatMessage:
 
 
 class MessageStore:
-    """The chat's message history: ids, lookup and reply threading.
+    """
+    The chat's message history: ids, lookup and reply threading.
 
     The full history is kept here; how much of it a widget paints is the
     widget's business.
@@ -253,7 +265,8 @@ class MessageStore:
 
     @property
     def messages(self) -> List[ChatMessage]:
-        """The full history, oldest first.
+        """
+        The full history, oldest first.
 
         A copy: the list is the store's own state, and handing callers a
         reference to it lets them append or clear the history by accident.
@@ -266,7 +279,8 @@ class MessageStore:
         return MessageID.new()
 
     def add(self, msg: ChatMessage) -> ChatMessage:
-        """Appends *msg*, indexes it and records it against what it answers.
+        """
+        Appends *msg*, indexes it and records it against what it answers.
 
         Args:
             msg: The message to keep.
@@ -281,7 +295,8 @@ class MessageStore:
         return msg
 
     def forget(self, before: Optional[datetime] = None) -> int:
-        """Drops the messages stamped before *before*, or all of them.
+        """
+        Drops the messages stamped before *before*, or all of them.
 
         The index and the reply map are rebuilt from what is kept, so nothing
         forgotten can still be found. A kept reply keeps its ``reply_to``,

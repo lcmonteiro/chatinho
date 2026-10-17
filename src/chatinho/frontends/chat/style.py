@@ -1,4 +1,5 @@
-"""ChatStyle: programmatic style builder for chatinho.
+"""
+ChatStyle: programmatic style builder for chatinho.
 
 Build the chat UI theme in Python instead of editing raw CSS:
 
@@ -185,7 +186,8 @@ $peer_header_rules
 
 @dataclass(frozen=True)
 class ChatStyle:
-    """Theme colours for the chat UI.
+    """
+    Theme colours for the chat UI.
 
     Every colour field is a hex string; the size fields are Textual lengths
     (cells, or a percentage), except ``scrollbar_size``, which Textual takes
@@ -288,7 +290,8 @@ class ChatStyle:
     quote_bg: str = "#262624"
 
     def __post_init__(self) -> None:
-        """Refuses a palette with nothing in it, a side or a frame that is neither, and a bar of no width.
+        """
+        Refuses a palette with nothing in it, a side or a frame that is neither, and a bar of no width.
 
         Raises:
             ValueError: ``peer_headers`` is empty, which would leave the
@@ -318,7 +321,8 @@ class ChatStyle:
             )
 
     def header_class(self, frm: int) -> str:
-        """The header class carrying *frm*'s colour.
+        """
+        The header class carrying *frm*'s colour.
 
         A command is not a peer and has no id of its own, so ``TOOL`` gets a
         name rather than a slot. Every other id wraps round the palette.
@@ -349,7 +353,8 @@ class ChatStyle:
         )
 
     def _input_frame_rules(self) -> str:
-        """The border declarations for the input, resting and focused.
+        """
+        The border declarations for the input, resting and focused.
 
         They are computed rather than written into the template because the
         two shapes do not differ by a value: a box sets one `border`, and two

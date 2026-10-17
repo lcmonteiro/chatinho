@@ -1,4 +1,5 @@
-"""An agent whose tools are the chat: a lead plans, asks the coder, and answers you.
+"""
+An agent whose tools are the chat: a lead plans, asks the coder, and answers you.
 
 ``lead`` is an ``AgentConnector``: a LangChain agent built with ``create_agent``.
 Besides any tools of its own, it gets the chat as tools: ``ask_coder`` asks the

@@ -1,4 +1,5 @@
-"""Capabilities a peer declares, and the registry that dispatches them.
+"""
+Capabilities a peer declares, and the registry that dispatches them.
 
 A peer — a connector, a tool, or the presentation — is a plain class. It
 says what it can do by declaring hooks, and :func:`require` checks at
@@ -55,7 +56,8 @@ class Say(Protocol):
         attachments : Sequence[Attachment] = (),
         credentials : Optional[Dict[str, Secret]] = None,
     ) -> MessageID:
-        """Adds *text* to the conversation and returns the new message's id.
+        """
+        Adds *text* to the conversation and returns the new message's id.
 
         With *to*, the message is addressed: it is asked of that peer, without
         waiting, and its answer comes back as a reply to it. Raises
@@ -73,7 +75,8 @@ class Ask(Protocol):
     """Granted by ``HookAsk``: a message for one peer, and its reply."""
 
     async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> Reply:
-        """Asks peer *to* and waits for the answer it sends back.
+        """
+        Asks peer *to* and waits for the answer it sends back.
 
         Only *to*'s reply resolves it; anyone else's is heard, not taken for it.
         *attachments* go to the backend, as with ``say``.
@@ -90,7 +93,8 @@ class Ask(Protocol):
 
 
 class Locate(Protocol):
-    """Granted by ``HookLocate``: where an attachment can be opened.
+    """
+    Granted by ``HookLocate``: where an attachment can be opened.
 
     The session asks the backend that declared ``HookLink``; with none, or when
     it has nothing by that name, the answer is None.
@@ -118,14 +122,16 @@ class Commands(Protocol):
 
 
 class Invoke(Protocol):
-    """Granted by ``HookInvoke``: invoking a command and getting its result back.
+    """
+    Granted by ``HookInvoke``: invoking a command and getting its result back.
 
     A command is not a peer — it has no id and receives nothing. It
     runs, it may write into the conversation, and it answers whoever ran it.
     """
 
     async def __call__(self, name: str, args: str = "") -> Optional[str]:
-        """Runs the command called *name* and returns what it answered.
+        """
+        Runs the command called *name* and returns what it answered.
 
         Returns None when there is no such command, or when the command chose
         to write its output rather than answer with it.
@@ -134,7 +140,8 @@ class Invoke(Protocol):
 
 
 class Context(Protocol):
-    """Granted by ``HookContext``: the conversation so far, at any depth.
+    """
+    Granted by ``HookContext``: the conversation so far, at any depth.
 
     One interface over two tiers. The recent turns live in the session; older
     ones live in the backend and are recalled into it at ``start()``. Whoever
@@ -152,7 +159,8 @@ class Context(Protocol):
 
 @dataclass(frozen=True)
 class Hook:
-    """One capability: the method it demands, and what the chat gives back.
+    """
+    One capability: the method it demands, and what the chat gives back.
 
     A hook can demand a method, grant an attribute, or both. A grant-only hook
     validates nothing — there is nothing on the class to check — but declaring
@@ -351,7 +359,8 @@ ALL_HOOKS: Tuple[Hook, ...] = (
 
 
 def connector(name: str, id: Optional[int] = None) -> Callable[[type], type]:
-    """Names a connector class, and optionally pins the id it answers to.
+    """
+    Names a connector class, and optionally pins the id it answers to.
 
     The name is what the chat displays and what the user types after ``/``; an
     instance may override it by setting ``self.name``, for two links of the same
@@ -393,7 +402,8 @@ def connector(name: str, id: Optional[int] = None) -> Callable[[type], type]:
 
 
 def declared_id(obj: Any) -> Optional[int]:
-    """Returns the id a peer's declaration pins, or None if it takes any.
+    """
+    Returns the id a peer's declaration pins, or None if it takes any.
 
     Args:
         obj: A peer, or its class.
@@ -406,7 +416,8 @@ def declared_id(obj: Any) -> Optional[int]:
 
 
 def tool(name: str, description: str = "") -> Callable[[type], type]:
-    """Names a tool and gives it the text the UI shows.
+    """
+    Names a tool and gives it the text the UI shows.
 
     A tool is not a peer: it has no id and nothing is addressed to it. It runs
     when someone invokes it — typing ``/help`` runs the tool named "help". The
@@ -434,7 +445,8 @@ def tool(name: str, description: str = "") -> Callable[[type], type]:
 
 
 def frontend(name: str = "chat") -> Callable[[type], type]:
-    """Names the presentation, and pins it to :data:`~chatinho.message.LOCAL`.
+    """
+    Names the presentation, and pins it to :data:`~chatinho.message.LOCAL`.
 
     A frontend is the peer that **is** the person — a terminal, a stdin reader,
     an HTTP inbox — and being peer zero is what that *is*, not an id whoever
@@ -468,7 +480,8 @@ def frontend(name: str = "chat") -> Callable[[type], type]:
 
 
 def backend(name: str) -> Callable[[type], type]:
-    """Names a backend class.
+    """
+    Names a backend class.
 
     The name only identifies the backend in logs — a chat has one — but naming
     it keeps the four roles reading the same way.
@@ -492,7 +505,8 @@ def backend(name: str) -> Callable[[type], type]:
 
 
 def require(hook: Hook, *extra: Any, **options: Any) -> Callable[[type], type]:
-    """Declares one hook a connector implements, and checks that it does.
+    """
+    Declares one hook a connector implements, and checks that it does.
 
     Validation is presence and callability of the hook's method — the error
     this actually catches is a method left out or misspelled. It runs when the
@@ -551,7 +565,8 @@ def hooks_of(obj: Any) -> FrozenSet[Hook]:
 
 
 def options_of(obj: Any, hook: Hook) -> Dict[str, Any]:
-    """Returns the options *obj* declared for *hook*, empty when it gave none.
+    """
+    Returns the options *obj* declared for *hook*, empty when it gave none.
 
     Args:
         obj: The connector.

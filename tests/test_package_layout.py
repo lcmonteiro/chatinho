@@ -1,4 +1,5 @@
-"""Where the public names live, and the two builders.
+"""
+Where the public names live, and the two builders.
 
 The core is unprefixed, each frontend lives under ``chatinho.frontends``, and
 the builders need both extras. See openspec/specs/package-layout.

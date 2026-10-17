@@ -1,4 +1,5 @@
-"""Where a key or token lives, read when it is needed and always as a :class:`Secret`.
+"""
+Where a key or token lives, read when it is needed and always as a :class:`Secret`.
 
 A key source says *where* a secret is — the environment, a ``.env`` file, a
 private file, the OS keychain, a password manager's command — instead of
@@ -99,7 +100,8 @@ def _dotenv(text: str) -> Dict[str, str]:
 
 
 class DotEnv:
-    """One variable of a dotenv file, read anew each time.
+    """
+    One variable of a dotenv file, read anew each time.
 
     The file is not permission-checked: ``.env`` files usually sit, readable,
     with the project's other settings. For a dedicated key file, use :class:`File`.
@@ -127,7 +129,8 @@ class DotEnv:
 
 
 class File:
-    """A whole file holding one key, read anew each time.
+    """
+    A whole file holding one key, read anew each time.
 
     On POSIX systems the file must be private: one its group or others can read
     or write is refused, since anyone who can read it has the key.
@@ -170,7 +173,8 @@ class _Once:
 
 
 class Keyring:
-    """An entry of the operating system's keychain, read once and kept.
+    """
+    An entry of the operating system's keychain, read once and kept.
 
     Needs ``pip install 'chatinho[keyring]'``; without it, reading says so.
     """
@@ -202,7 +206,8 @@ class Keyring:
 
 
 class Command:
-    """What a command prints, run once (without a shell) and kept.
+    """
+    What a command prints, run once (without a shell) and kept.
 
     For password managers and encrypted files: ``Command("pass show api/openai")``,
     ``Command(["op", "read", "op://dev/openai/key"])``. Its output never appears
@@ -241,7 +246,8 @@ class Command:
 
 
 class Chain:
-    """The first of several sources that yields a key, tried in order.
+    """
+    The first of several sources that yields a key, tried in order.
 
     Only a source with no key (:class:`KeyUnavailable`) passes to the next; when
     every one fails, the error lists each reason.
@@ -310,7 +316,8 @@ PREFIXES = ("env:", "dotenv:", "file:", "keyring:", "cmd:", "literal:")
 
 
 def key(reference: str) -> KeySource:
-    """Parses a reference string into a key source.
+    """
+    Parses a reference string into a key source.
 
     ``env:NAME``, ``dotenv:PATH#NAME`` (``dotenv:#NAME`` for ``.env``),
     ``file:PATH``, ``keyring:SERVICE/USER``, ``cmd:COMMAND`` and ``literal:VALUE``.

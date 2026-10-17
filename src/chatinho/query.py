@@ -1,4 +1,5 @@
-"""What part of the conversation a peer asks for.
+"""
+What part of the conversation a peer asks for.
 
 A :class:`Query` is plain data — no callables — so the session can apply it to
 what it holds today, and a backend could translate the same value into its own
@@ -18,7 +19,8 @@ SELF : int = -2
 
 @dataclass(frozen=True)
 class Query:
-    """Which messages of the conversation to return.
+    """
+    Which messages of the conversation to return.
 
     Attributes:
         peer: Messages from this peer, to it, asked of it, or replying to one
@@ -41,7 +43,8 @@ class Query:
         return replace(self, limit=n)
 
     def select(self, messages: Iterable[ChatMessage], asker: Optional[int] = None) -> List[ChatMessage]:
-        """Applies the query to *messages*, oldest first, as asked by *asker*.
+        """
+        Applies the query to *messages*, oldest first, as asked by *asker*.
 
         Raises:
             ValueError: The query names :data:`SELF` and nobody is asking.

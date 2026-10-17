@@ -1,4 +1,5 @@
-"""Commands for chatinho.
+"""
+Commands for chatinho.
 
 A command is a plain class that declares what it can do with
 :func:`~chatinho.hooks.require`; there is no base class to inherit.

@@ -1,4 +1,5 @@
-"""context(Query(...)): which part of the conversation a peer gets.
+"""
+context(Query(...)): which part of the conversation a peer gets.
 
 See openspec/specs/conversation-context.
 """

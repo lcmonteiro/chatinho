@@ -1,4 +1,5 @@
-"""The terminal: a Textual frontend for a :class:`~chatinho.session.ChatSession`.
+"""
+The terminal: a Textual frontend for a :class:`~chatinho.session.ChatSession`.
 
 The class here, :class:`ChatFrontend`, is peer zero of a session. Either
 :func:`~chatinho.builder.build_chat_session` builds one and attaches it, or
@@ -64,7 +65,8 @@ _MODIFIERS = frozenset({"ctrl", "shift", "alt", "meta", "super", "hyper"})
 
 
 def _swallowed_keys() -> Dict[str, str]:
-    """The ctrl combos a terminal never delivers as themselves.
+    """
+    The ctrl combos a terminal never delivers as themselves.
 
     A terminal sends one control byte for ``ctrl+h`` and for Backspace alike,
     so Textual reports ``backspace`` for both and a ``ctrl+h`` binding can
@@ -94,7 +96,8 @@ _SWALLOWED : Dict[str, str] = _swallowed_keys()
 
 
 def _validate_key(key: str, what: str = "quit_key") -> str:
-    """Returns *key* if Textual could ever receive it, and raises if not.
+    """
+    Returns *key* if Textual could ever receive it, and raises if not.
 
     ``Binding`` itself only rejects the empty string — ``Binding("not a key",
     "quit")`` is built happily and then never fires, which is a keybinding that
@@ -276,7 +279,8 @@ class ChatFrontend(App):
         bindings.bind(quit_key, "quit", description="Quit", show=False, priority=True)
 
     def action_copy_selected(self) -> None:
-        """Copies the message selected as the reply target.
+        """
+        Copies the message selected as the reply target.
 
         The keyboard way in, because the long press is not always reachable: a
         phone terminal may take the gesture for its own menu before the
@@ -350,7 +354,8 @@ class ChatFrontend(App):
             self._chat_log.scroll_to_bottom()
 
     async def on_command_input_submitted(self, message: CommandInput.Submitted) -> None:
-        """Handle the user sending what they typed.
+        """
+        Handle the user sending what they typed.
 
         The text arrives on the message already stripped, and a blank input
         sends nothing at all, so there is nothing to check here.
@@ -371,7 +376,8 @@ class ChatFrontend(App):
             await self.say(text, to=to, reply_to=target)
 
     def _addressed(self, text: str) -> Tuple[Optional[int], str]:
-        """``@name rest`` asks the peer called *name* (``rest`` alone); anything else is said to all.
+        """
+        ``@name rest`` asks the peer called *name* (``rest`` alone); anything else is said to all.
 
         The ask is an addressed say: the peer is asked, the answer comes back
         as a reply, and nothing waits on it here, so the input stays free.
@@ -419,7 +425,8 @@ class ChatFrontend(App):
         return await self.invoke(name, args)
 
     async def _typed_command(self, name: str, args: str) -> None:
-        """Runs a command the user typed, in a worker, and tells the person when it fails.
+        """
+        Runs a command the user typed, in a worker, and tells the person when it fails.
 
         What the command answers needs no handling here: the session has
         already put it in the log, replying to the invocation, and the user

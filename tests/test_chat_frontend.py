@@ -1,4 +1,5 @@
-"""Tests for the Textual presentation.
+"""
+Tests for the Textual presentation.
 
 The app is built with ``build_chat_session`` and mounted via ``App.run_test()``, so
 the widgets are available to the code under test. The presentation is a
@@ -45,7 +46,8 @@ from chatinho import (
 
 
 async def chat_frontend(connectors=None, commands=None, backend=None, **kwargs):
-    """The terminal peer, built and attached the way build_chat_session does it.
+    """
+    The terminal peer, built and attached the way build_chat_session does it.
 
     ``build_chat_session`` returns the *session* — the terminal is one of its
     peers, not its owner — so a test that drives the app builds it the same way
@@ -63,7 +65,8 @@ async def chat_frontend(connectors=None, commands=None, backend=None, **kwargs):
 @tool("eco", "repete")
 @require(HookExecute)
 class _Eco:
-    """A command that answers; the session is what puts the answer in the log.
+    """
+    A command that answers; the session is what puts the answer in the log.
 
     It does not also say it: what it answers is posted in TOOL's name, so
     saying it too would put the same line in the conversation twice.
@@ -129,7 +132,8 @@ class _Model:
 
 
 async def test_the_terminal_never_puts_its_own_notices_to_a_peer():
-    """The welcome and an unknown command are the terminal's, not the user's words.
+    """
+    The welcome and an unknown command are the terminal's, not the user's words.
 
     Said as the user, both were asked of the room's lone answering peer, so
     every demo opened by sending its welcome to the model.
@@ -204,7 +208,8 @@ async def test_an_at_name_asks_that_peer_without_the_name():
 
 
 async def test_a_follow_up_to_an_answer_is_asked_of_whoever_answered():
-    """Tap an answer, type, Enter: the peer that answered is asked the follow-up.
+    """
+    Tap an answer, type, Enter: the peer that answered is asked the follow-up.
 
     Through the input, because the input is the path a person takes, and the
     reply it says carries no ``to``.
@@ -247,7 +252,8 @@ async def test_running_a_command_is_recorded_whole():
 
 
 async def test_what_a_command_writes_is_not_the_user_speaking():
-    """A connector answering the user must not answer /help's output.
+    """
+    A connector answering the user must not answer /help's output.
 
     Two things keep that true now that both cross the session: what the command
     answered comes from TOOL, and the invocation is addressed to TOOL rather
@@ -452,7 +458,8 @@ async def test_a_message_from_another_thread_reaches_the_log():
 
 
 async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
-    """What a command answered quotes the invocation, and is headed @tool.
+    """
+    What a command answered quotes the invocation, and is headed @tool.
 
     The invocation and the answer are both messages now, and the answer carries
     ``reply_to``, so the log renders it the way it renders any reply.
@@ -621,7 +628,8 @@ async def test_the_quit_key_defaults_to_textuals_own():
 
 
 async def test_a_given_quit_key_replaces_the_default_rather_than_joining_it():
-    """ChatFrontend declares no BINDINGS: quit is inherited, and Textual *merges*.
+    """
+    ChatFrontend declares no BINDINGS: quit is inherited, and Textual *merges*.
 
     Declaring a new binding in the subclass would leave ctrl+q quitting as
     well, which is the bug this guards. The instance's own map is what moves.
@@ -674,7 +682,8 @@ def test_build_chat_returns_the_session_with_the_terminal_attached():
 
 
 async def test_the_terminal_serves_until_the_user_quits():
-    """serve() is what ChatSession.run() runs, and it is run_async underneath.
+    """
+    serve() is what ChatSession.run() runs, and it is run_async underneath.
 
     ``run()`` would try to start a second event loop inside the session's own.
     """
@@ -741,7 +750,8 @@ async def test_a_bubble_has_no_background_until_it_is_the_reply_target():
 
 
 async def test_who_spoke_is_on_the_container_whichever_side_it_takes():
-    """The side is a style; the class is what the log routes on.
+    """
+    The side is a style; the class is what the log routes on.
 
     Alignment itself is asserted where ``local_align`` is — both defaults and
     the other side, in one place. What matters here is that every message
@@ -765,7 +775,8 @@ async def test_who_spoke_is_on_the_container_whichever_side_it_takes():
 
 @pytest.mark.parametrize("newline_key", NEWLINE_KEYS)
 async def test_a_newline_key_opens_a_line_and_enter_sends_both(newline_key):
-    """Input is single-line by construction; this is why it became a TextArea.
+    """
+    Input is single-line by construction; this is why it became a TextArea.
 
     Parametrized over the constant rather than over a list written out here, so
     a key added to it cannot arrive untested.
@@ -784,7 +795,8 @@ async def test_a_newline_key_opens_a_line_and_enter_sends_both(newline_key):
 
 
 async def test_a_space_before_enter_opens_a_line_and_is_consumed():
-    """The default escape, and the way in that needs no key at all.
+    """
+    The default escape, and the way in that needs no key at all.
 
     Ending a line with a space and carrying on is what continuing already
     feels like, so the gesture is the intention rather than a code for it.
@@ -801,7 +813,8 @@ async def test_a_space_before_enter_opens_a_line_and_is_consumed():
 
 
 async def test_a_message_that_really_ends_in_the_escape_can_still_be_sent():
-    """Which is why the check is anchored to the cursor, not to the text.
+    """
+    Which is why the check is anchored to the cursor, not to the text.
 
     Move off the end and Enter means what it usually means. There is no other
     escape, so without this the character would be unsendable at the end of a
@@ -835,7 +848,8 @@ async def test_the_escape_is_configurable_and_can_be_turned_off():
 
 @pytest.mark.parametrize("bad", ["", "  ", "\n", 7])
 def test_an_escape_that_could_never_fire_is_refused(bad):
-    """`\n` is the silent one: the escape is looked for on the cursor's own
+    """
+    `\n` is the silent one: the escape is looked for on the cursor's own
     line, which never holds a newline, so it would simply never match."""
     with pytest.raises(ValueError, match="newline_escape"):
         CommandInput(newline_escape=bad)
@@ -865,7 +879,8 @@ _WITHOUT_THE_PROTOCOL = {
 
 
 def test_at_least_one_newline_key_arrives_without_the_enhanced_protocol():
-    """What a key is *called* is ours; whether it arrives is the terminal's.
+    """
+    What a key is *called* is ours; whether it arrives is the terminal's.
 
     `pilot.press` synthesises the name directly, so every test above proves the
     handling and nothing at all about the wire. This one feeds Textual's own
@@ -974,7 +989,8 @@ def test_a_palette_with_no_colours_is_refused():
 
 
 async def test_the_scrollbar_wears_the_palette_too():
-    """Textual styles a scrollbar with properties, not with a class of its own.
+    """
+    Textual styles a scrollbar with properties, not with a class of its own.
 
     The four ``scrollbar_*`` fields used to be rendered into a ``.scrollbar``
     rule, which is a valid selector matching nothing — so the fields were set,
@@ -1000,7 +1016,8 @@ async def test_the_scrollbar_wears_the_palette_too():
 
 
 async def test_the_scrollbar_is_one_cell_wide():
-    """Textual's own is two, which is a lot to give up beside a narrow chat.
+    """
+    Textual's own is two, which is a lot to give up beside a narrow chat.
 
     ``scrollbar_size_vertical`` is what the widget actually reserves, so this
     fails on the default rather than merely on a field being unset — the
@@ -1029,7 +1046,8 @@ async def test_the_scrollbar_width_is_a_style_field():
 
 
 def test_a_scrollbar_with_no_width_is_refused_at_construction():
-    """Textual refuses it too, but at mount, pointing at the generated CSS.
+    """
+    Textual refuses it too, but at mount, pointing at the generated CSS.
 
     `local_align`'s argument exactly: a stylesheet error names a line the
     caller never wrote.
@@ -1055,7 +1073,8 @@ async def _scrollbar_column(app, pilot):
 
 
 async def test_the_track_is_the_chat_behind_it_until_you_reach_for_it():
-    """One cell is the floor, so the thinning left is what the cell is painted with.
+    """
+    One cell is the floor, so the thinning left is what the cell is painted with.
 
     A track in a colour of its own is a strip down the whole height of the
     chat whether or not anyone is scrolling. `transparent` leaves the thumb
@@ -1076,7 +1095,8 @@ async def test_the_track_is_the_chat_behind_it_until_you_reach_for_it():
 
 
 async def test_a_transparent_track_follows_the_chat_background():
-    """Which is why it is `transparent` and not `chat_bg`'s hex written twice.
+    """
+    Which is why it is `transparent` and not `chat_bg`'s hex written twice.
 
     Textual composites a translucent scrollbar background onto the parent's,
     so recolouring the chat carries the track with it. Spelling the hex again
@@ -1105,7 +1125,8 @@ async def _both_bars_up(pilot, app):
 
 
 async def test_the_input_scrollbar_wears_the_same_palette_as_the_log():
-    """The input is a TextArea with a bar of its own, and nothing named it.
+    """
+    The input is a TextArea with a bar of its own, and nothing named it.
 
     It wore Textual's default — two cells of dark blue — beside a one-cell
     grey one, which is the same silence the dead `.scrollbar` rule kept. Both
@@ -1128,7 +1149,8 @@ async def test_the_input_scrollbar_wears_the_same_palette_as_the_log():
 
 
 async def test_both_scrollbars_line_up_against_the_edge():
-    """One column down the right side, not two bars in two places.
+    """
+    One column down the right side, not two bars in two places.
 
     A scrollbar is inset by its widget's *right padding*, which is what the
     two had different amounts of — so zeroing both is what aligns them and
@@ -1223,7 +1245,8 @@ async def test_the_bubble_border_is_the_headers_colour():
 
 
 async def test_a_bubble_is_never_narrower_than_the_header_above_it():
-    """The header sits on top of the bubble, so the bubble has to reach it.
+    """
+    The header sits on top of the bubble, so the bubble has to reach it.
 
     A two-word message would otherwise get a bubble far narrower than its own
     header, which reads as two things rather than one.
@@ -1251,7 +1274,8 @@ async def test_a_bubble_is_never_narrower_than_the_header_above_it():
     ("ctrl+[", "escape"),
 ])
 async def test_a_quit_key_the_terminal_cannot_send_is_refused(combo, arrives):
-    """A terminal sends one byte for these and for the key they alias.
+    """
+    A terminal sends one byte for these and for the key they alias.
 
     Textual reports the alias, so the binding never fires — which is the same
     silent nothing `_validate_key` already existed to prevent.
@@ -1316,7 +1340,8 @@ def _press_at(widget, screen_y, screen_x=None):
 
 
 def _click_at(widget, screen_y, screen_x=None):
-    """The Click Textual synthesises when the release lands at *screen_y*.
+    """
+    The Click Textual synthesises when the release lands at *screen_y*.
 
     Built by hand because ``pilot.mouse_down``/``mouse_up`` do not produce one
     — Textual synthesises a Click in the app, from a release on the widget the
@@ -1366,7 +1391,8 @@ async def test_a_tap_that_barely_moves_is_still_a_tap():
 
 
 def _mouse(cls, x, y, button=1):
-    """A raw mouse event in *screen* coordinates, for the screen to route.
+    """
+    A raw mouse event in *screen* coordinates, for the screen to route.
 
     The pilot cannot express this: it presses and releases in one spot, and
     what is under test here is a press that travels across widgets.
@@ -1375,7 +1401,8 @@ def _mouse(cls, x, y, button=1):
 
 
 def _a_cell_holding_text(screen, log):
-    """The first coordinate in *log* that has selectable content under it.
+    """
+    The first coordinate in *log* that has selectable content under it.
 
     ``get_widget_and_offset_at`` reports no offset where there is nothing to
     select, which is the whole of what tells a pan from a selection.
@@ -1402,7 +1429,8 @@ async def _a_full_log(pilot, app, count=30):
 
 
 async def test_dragging_across_text_selects_it_and_the_log_holds_still():
-    """The reported bug: selecting across a bubble made the scroll shake.
+    """
+    The reported bug: selecting across a bubble made the scroll shake.
 
     Two things read the same drag. From Textual 3 a mouse drag is a text
     selection, started by the screen before the event reaches any widget, and
@@ -1430,7 +1458,8 @@ async def test_dragging_across_text_selects_it_and_the_log_holds_still():
 
 
 async def test_dragging_the_background_still_pans_the_log():
-    """A drag with nothing to select under it is still how the log is panned.
+    """
+    A drag with nothing to select under it is still how the log is panned.
 
     A finger and a mouse arrive as the same bytes, so the touch gesture cannot
     be kept by asking which device sent it. It is kept by where it starts: the
@@ -1463,7 +1492,8 @@ async def test_dragging_the_background_still_pans_the_log():
 
 
 async def test_selecting_sideways_does_not_retarget_the_reply():
-    """Textual makes a Click from any release on the widget the press landed on.
+    """
+    Textual makes a Click from any release on the widget the press landed on.
 
     Dragging across a line to select a few words never moves a row, so the
     guard that watched only `screen_y` let it through as a tap — and the tap
@@ -1486,7 +1516,8 @@ async def test_selecting_sideways_does_not_retarget_the_reply():
 
 
 async def test_the_header_stays_inside_a_phone_width_terminal():
-    """`_bubble_width` caps at `bubble_max_width`, which is 72 — wider than a phone.
+    """
+    `_bubble_width` caps at `bubble_max_width`, which is 72 — wider than a phone.
 
     The bubble survives that because `max-width: 100%` clamps it; the header
     was given the same measured span and nothing to clamp it with, so its box
@@ -1515,7 +1546,8 @@ async def test_the_header_stays_inside_a_phone_width_terminal():
 
 
 async def test_selecting_one_character_is_not_a_tap_either():
-    """`_A_DRAG` has to allow a cell of wobble, so it cannot catch a short drag.
+    """
+    `_A_DRAG` has to allow a cell of wobble, so it cannot catch a short drag.
 
     Textual clears the selection when the press and the release share a cell,
     so a selection the screen is *still holding* at click time means the
@@ -1577,7 +1609,8 @@ async def test_a_tap_that_selects_nothing_still_taps():
 
 
 async def test_the_input_is_ruled_off_above_and_below_with_open_sides():
-    """Two lines, not a bubble: the sides were costing the text two columns.
+    """
+    Two lines, not a bubble: the sides were costing the text two columns.
 
     A box is a widget sitting in the chat; a rule above and below is somewhere
     to write. On a phone those two columns are the difference, which is why
@@ -1602,7 +1635,8 @@ async def test_the_input_is_ruled_off_above_and_below_with_open_sides():
 
 
 async def test_the_rules_brighten_while_the_input_has_focus():
-    """`_input_frame_rules` writes the colour twice, once per state.
+    """
+    `_input_frame_rules` writes the colour twice, once per state.
 
     Wiring both to one colour is the easy slip, and it is invisible until you
     look away from the input — which nothing else in the suite does. Focus
@@ -1629,7 +1663,8 @@ async def test_the_rules_brighten_while_the_input_has_focus():
 
 
 async def test_the_input_rules_carry_no_hue_of_their_own():
-    """Two orange bars across the width is not an accent, it is a stripe.
+    """
+    Two orange bars across the width is not an accent, it is a stripe.
 
     The accent stays on the quote border and the popup's highlighted row,
     where it marks one thing rather than framing the whole screen.
@@ -1666,7 +1701,8 @@ def test_a_frame_that_is_neither_shape_is_refused_at_construction():
 
 
 def test_the_chat_parser_turns_a_soft_break_into_a_hard_one():
-    """Markdown's own answer to a lone newline is a space, and Textual obeys it.
+    """
+    Markdown's own answer to a lone newline is a space, and Textual obeys it.
 
     This asserts on the **token stream**, because that is what Textual walks.
     markdown-it's `breaks` option looks like the fix and is not: it belongs to
@@ -1692,7 +1728,8 @@ def test_the_parser_leaves_a_fenced_block_alone():
 
 
 async def test_a_message_typed_over_three_lines_is_three_lines_in_the_bubble():
-    """The report: the Enters pressed in the input did not reach the bubble.
+    """
+    The report: the Enters pressed in the input did not reach the bubble.
 
     Short words on purpose. With long ones the bubble wraps them onto separate
     rows anyway, and the joined text looks exactly like the broken text — which
@@ -1710,7 +1747,8 @@ async def test_a_message_typed_over_three_lines_is_three_lines_in_the_bubble():
 
 
 async def test_the_enters_reach_the_bubble_from_the_keyboard():
-    """End to end, by the gesture: space+Enter opens a line, Ctrl+J opens one.
+    """
+    End to end, by the gesture: space+Enter opens a line, Ctrl+J opens one.
 
     The input is where the report came from, so the test presses keys rather
     than calling `say` — nothing between the two is allowed to eat a newline.
@@ -1809,7 +1847,8 @@ async def test_a_blank_terminal_name_is_refused():
 
 
 def test_naming_an_instance_works_only_because_the_decorator_shadows_the_property():
-    """DOMNode.name is read-only; @frontend's class attribute is what allows this.
+    """
+    DOMNode.name is read-only; @frontend's class attribute is what allows this.
 
     Worth a test of its own: the same assignment on a plain App raises, so
     dropping the decorator's `cls.name` would break naming with no other sign.
@@ -1843,7 +1882,8 @@ async def test_the_bubble_clears_its_header_by_a_space():
 
 
 async def test_a_line_measured_to_fit_does_not_wrap():
-    """Markdown carries `padding: 0 2 0 2` of its own, inside what we measured.
+    """
+    Markdown carries `padding: 0 2 0 2` of its own, inside what we measured.
 
     Four cells the bubble's width never counted, so a line sized to fit wrapped
     anyway. The stylesheet zeroes it rather than the measurement adding four.
@@ -2029,7 +2069,8 @@ async def test_two_taps_far_apart_in_time_are_two_taps():
 
 
 async def test_the_confirmation_is_a_popup_that_actually_appears(monkeypatch):
-    """The one that matters, and the one nothing was checking.
+    """
+    The one that matters, and the one nothing was checking.
 
     ``run_test`` disables notifications by default, so every other test here
     asserts on ``notify`` being *called*. This one turns them on and looks for
@@ -2070,7 +2111,8 @@ def test_the_confirmation_shows_what_was_copied_on_one_line():
 
 
 def test_the_double_tap_does_not_use_textuals_chain_count():
-    """Textual counts a double click only on the *exact same cell*.
+    """
+    Textual counts a double click only on the *exact same cell*.
 
     That is right for a mouse and wrong for a thumb, which is the whole reason
     this was asked for — so the tolerance is ours, and wider than Textual's in
@@ -2102,7 +2144,8 @@ def _sides(app):
 
 
 def _header_text_span(container):
-    """The columns the header's *text* occupies, not the box holding it.
+    """
+    The columns the header's *text* occupies, not the box holding it.
 
     The box spans the bubble on both sides now, so a box measurement would
     pass with the text stranded at either end of it. This renders the header
@@ -2171,7 +2214,8 @@ async def test_your_own_messages_are_on_the_right_by_default():
 
 
 async def test_a_header_hugs_the_same_edge_its_bubble_does():
-    """Textual's ``align`` moves the header and the bubble as one block.
+    """
+    Textual's ``align`` moves the header and the bubble as one block.
 
     It does not align *within* that block, so a header left to size itself
     stays against the bubble's left edge whichever side the block landed on —

@@ -1,4 +1,5 @@
-"""Two models in one room: a coder writes, a reviewer reads everything and critiques.
+"""
+Two models in one room: a coder writes, a reviewer reads everything and critiques.
 
 Both are ``OpenAIConnector`` peers with their own system prompt. Address one by
 name — ``@coder write a function that…`` then ``@reviewer what would you

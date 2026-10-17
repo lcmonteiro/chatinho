@@ -1,4 +1,5 @@
-"""Connectors for chatinho.
+"""
+Connectors for chatinho.
 
 A connector is a plain class that declares what it can do with
 :func:`~chatinho.hooks.require`; there is no base class to inherit.

@@ -1,4 +1,5 @@
-"""Every demo in examples/, built headless against a stubbed model and run once.
+"""
+Every demo in examples/, built headless against a stubbed model and run once.
 
 Each LLM demo exposes ``parts()``, the connectors, commands and backend its
 ``main()`` hands to a builder; here they go to a ``ChatSession`` with a

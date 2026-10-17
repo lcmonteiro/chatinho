@@ -1,4 +1,5 @@
-"""What the agent tests share: a scripted chat model that stands in for a real one.
+"""
+What the agent tests share: a scripted chat model that stands in for a real one.
 
 The model answers from a *script*, a function of the messages it is sent, so
 each run of the agent is decided by its own conversation and concurrent runs
@@ -65,7 +66,8 @@ def _reminder(m: BaseMessage) -> bool:
 
 
 def this_run(messages: List[BaseMessage]) -> List[BaseMessage]:
-    """The messages since the question being answered: the last human message on.
+    """
+    The messages since the question being answered: the last human message on.
 
     A link reminder is a human message too, but it is part of the same run.
     """
@@ -115,7 +117,8 @@ def question(messages: List[BaseMessage]) -> str:
 
 
 def makes(*names: str, answers: Sequence[str] = ("done",)) -> Script:
-    """A script that calls ``make_file`` once per name, then answers from *answers*.
+    """
+    A script that calls ``make_file`` once per name, then answers from *answers*.
 
     The first answer of the run is ``answers[0]``, the answer after a reminder
     ``answers[1]``, and so on; the last one repeats.

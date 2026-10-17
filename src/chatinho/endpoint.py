@@ -1,4 +1,5 @@
-"""An OpenAI-compatible endpoint, its default model and its key, as one named profile.
+"""
+An OpenAI-compatible endpoint, its default model and its key, as one named profile.
 
 :class:`Endpoint` bundles the three, so the same program can switch provider or
 model without code changes::
@@ -36,7 +37,8 @@ FIELDS = ("base_url", "model", "api_key")
 
 @dataclass(frozen=True)
 class Endpoint:
-    """Where to ask, which model, and with which key.
+    """
+    Where to ask, which model, and with which key.
 
     Attributes:
         base_url: An OpenAI-compatible endpoint; None for OpenAI itself.
@@ -68,7 +70,8 @@ class Endpoint:
         return dataclasses.replace(self, api_key=None)
 
     def check(self) -> None:
-        """Reads the key once, so a program can stop before it starts its interface.
+        """
+        Reads the key once, so a program can stop before it starts its interface.
 
         It does not contact the endpoint.
 
@@ -93,7 +96,8 @@ class Endpoint:
 
     @classmethod
     def load(cls, profile: Optional[str] = None) -> "Endpoint":
-        """A profile from the profiles file, or the ``OPENAI_*`` environment without one.
+        """
+        A profile from the profiles file, or the ``OPENAI_*`` environment without one.
 
         The profile is *profile*, else ``$CHATINHO_PROFILE``, else the file's
         ``default``. ``$CHATINHO_MODEL`` and ``$CHATINHO_BASE_URL`` then replace
