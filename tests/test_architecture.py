@@ -286,3 +286,17 @@ def test_the_lazy_names_are_visible_to_a_type_checker():
         "every lazily resolved name needs a TYPE_CHECKING import, or it is Any "
         "to everyone who installs this"
     )
+
+
+_COUNTS = ("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen "
+           "sixteen seventeen eighteen nineteen twenty").split()
+
+
+def test_the_package_description_counts_the_hooks():
+    """The description said eighteen while there were fourteen, and nothing noticed."""
+    from chatinho.hooks import ALL_HOOKS
+    root = pathlib.Path(__file__).resolve().parent.parent
+    description = tomllib.loads((root / "pyproject.toml").read_text())["project"]["description"]
+    said = [word for word in description.replace(",", " ").split() if word in _COUNTS]
+    assert said[-1:] and description.split(said[-1])[1].lstrip().startswith("hooks"), description
+    assert _COUNTS.index(said[-1]) == len(ALL_HOOKS)

@@ -49,7 +49,7 @@ def build_chat_session(
     Args:
         connectors: Links to agents or APIs; peers, numbered from one.
         commands: Things the user runs as ``/name``; not peers.
-        backend: Backend used by ``save_data``/``load_data``.
+        backend: The peer that keeps the conversation and gives it back at start.
         title: Title of the chat application.
         welcome_message: Message displayed on mount; empty means none.
         max_displayed: How many messages are rendered at once (sliding window).
@@ -117,7 +117,7 @@ def build_mcp_session(
     Args:
         connectors: Links to agents or APIs; peers, numbered from one.
         commands: Things a client runs with the ``invoke`` tool; not peers.
-        backend: Backend used by ``save_data``/``load_data``.
+        backend: The peer that keeps the conversation and gives it back at start.
         name: The frontend's name in the session, and the server's name.
         token: The bearer token every request must carry: the token itself, or a
             key source (:mod:`chatinho.keys`) read once, at startup.

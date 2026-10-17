@@ -34,13 +34,13 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 
 ## 5. Stale documentation
 
-- [ ] 5.1 Correct the stale docstrings and comments:
+- [x] 5.1 Correct the stale docstrings and comments:
   - `hooks.py`: the module docstring's `answer(msg, text)` and "spoke to everyone"; `HookInvoke` (`run`, "nothing … enters the conversation"); `HookExecute` ("goes to whoever ran it"); `HookPeers` (`load_messages`); and `tool()` ("a tool is a peer… a command is an ask").
   - `builder.py`: `save_data`/`load_data`.
   - `composer.py`: the Shift+Enter claim.
 
   Verify with `grep -rn "save_data\|load_data\|answer(msg, text)\|run(name, args)\|is an ask addressed\|load_messages" src` returning nothing.
-- [ ] 5.2 Change the `pyproject.toml` description to "fourteen hooks", run `uv lock`, and extend `tests/test_architecture.py` to fail when the description's hook count disagrees with `len(ALL_HOOKS)`. Verify by setting it back to "eighteen" once and watching the test fail, then restoring it.
+- [x] 5.2 Change the `pyproject.toml` description to "fourteen hooks", run `uv lock`, and extend `tests/test_architecture.py` to fail when the description's hook count disagrees with `len(ALL_HOOKS)`. Verify by setting it back to "eighteen" once and watching the test fail, then restoring it.
 
 ## 6. Simplification (no behaviour change)
 

@@ -5,9 +5,10 @@
 reaching up into the application.
 
 The input is a :class:`~textual.widgets.TextArea` rather than an ``Input``
-because a message may span lines: **Enter sends, Shift+Enter (or Alt+Enter)
-opens a new line.** ``Input`` is single-line by construction, so there was
-nowhere to put the second line.
+because a message may span lines: **Enter sends; Ctrl+J, or a space typed
+before Enter, opens a new line** — as do Ctrl+Enter, Shift+Enter and Alt+Enter
+where the terminal reports them, which Termux does not. ``Input`` is
+single-line by construction, so there was nowhere to put the second line.
 """
 
 import logging
