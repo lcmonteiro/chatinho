@@ -60,11 +60,11 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 
 ## 8. Workflow
 
-- [ ] 8.1 Add a `python-version: ["3.12", "3.13"]` matrix to the `test` job in `.github/workflows/tests.yml`. Verify the workflow YAML parses (`python -c "import yaml; yaml.safe_load(open('.github/workflows/tests.yml'))"`, or by eye if PyYAML is absent) and that the existing steps use `${{ matrix.python-version }}`.
-- [ ] 8.2 Fill `openspec/config.yaml` `context:` with the project conventions (design Decision 9). Verify with `openspec validate --all --strict --no-interactive`.
+- [x] 8.1 Add a `python-version: ["3.12", "3.13"]` matrix to the `test` job in `.github/workflows/tests.yml`. Verify the workflow YAML parses (`python -c "import yaml; yaml.safe_load(open('.github/workflows/tests.yml'))"`, or by eye if PyYAML is absent) and that the existing steps use `${{ matrix.python-version }}`.
+- [x] 8.2 Fill `openspec/config.yaml` `context:` with the project conventions (design Decision 9). Verify with `openspec validate --all --strict --no-interactive`.
 - [ ] 8.3 Find the pinned OpenSpec 1.13 CLI option that installs skills only (`openspec init --help`, `openspec update --help`). If one exists, regenerate and confirm `.claude/commands/opsx/` is gone and every `openspec-*` skill remains. If none exists, record that in this task's line and change nothing. Verify with `ls .claude/commands .claude/skills`.
 
 ## 9. Integration
 
-- [ ] 9.1 Run the checks and `openspec validate --all --strict --no-interactive`. All must pass.
-- [ ] 9.2 Re-run the four review reproductions (welcome/unknown command, bystander reply plus pinned id, error status through `ask`, archive status after restart). Each must now show the fixed behaviour.
+- [x] 9.1 Run the checks and `openspec validate --all --strict --no-interactive`. All must pass.
+- [x] 9.2 Re-run the four review reproductions (welcome/unknown command, bystander reply plus pinned id, error status through `ask`, archive status after restart). Each must now show the fixed behaviour.

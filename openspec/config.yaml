@@ -2,6 +2,16 @@ schema: spec-driven
 
 context: |
   All artifacts must be written in English.
+  chatinho is a Python 3.12+ chat library (see CLAUDE.md): a stdlib-only core
+  (session, hooks, message, query) and batteries behind extras.
+  Code conventions: typing.List/Optional/Dict, never PEP 585/604 builtins; no
+  `from __future__ import annotations`; %-style logging args; align `:` and `=`
+  in related blocks; Google-style docstrings; catch specific exceptions.
+  Checks, all from the repo root: `ruff check src tests examples`,
+  `mypy src/chatinho examples`, `pytest -q`; a pyproject.toml change needs
+  `uv lock` beside it.
+  A bug fix starts with a test that fails on the current code. When behaviour
+  changes, update CLAUDE.md and docs/SPEC.md in the same task.
 
 # Project context (optional)
 # This is shown to AI when creating artifacts.
