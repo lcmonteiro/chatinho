@@ -30,9 +30,11 @@ from fastmcp.server.auth import AccessToken, TokenVerifier
 from fastmcp.server.extensions import ServerExtension
 from pydantic import BaseModel, Field
 
-from chatinho.hooks import HookAnswer, HookCommands, HookInvoke, HookListen, HookLocate, HookPeers
-from chatinho.hooks import HookSay
+from chatinho.hooks import HookAnswer, HookCommands, HookContext, HookInvoke, HookListen, HookLocate
+from chatinho.hooks import HookPeers, HookSay
 from chatinho.hooks import Commands, Invoke, Locate, Peers, Say
+# FastMCP has a Context of its own, which the tools take as ``ctx``.
+from chatinho.hooks import Context as ChatContext
 from chatinho.hooks import declares, frontend, name_of, require
 from chatinho.keys import KeyLike, to_source
 from chatinho.message import LOCAL, Attachment, ChatMessage, MessageID, ReplyStatus, Secret
@@ -87,6 +89,7 @@ class ToolInfo(BaseModel):
 @require(HookCommands)
 @require(HookInvoke)
 @require(HookLocate)
+@require(HookContext)
 class McpFrontend:
     """Bridges MCP clients into a session, in place of a terminal.
 
@@ -110,6 +113,7 @@ class McpFrontend:
     commands : Commands
     invoke   : Invoke
     locate   : Locate
+    context  : ChatContext
 
     def __init__(
         self,
@@ -144,12 +148,22 @@ class McpFrontend:
     # === Being peer zero ============================================================
 
     async def listen(self, msg: ChatMessage) -> None:
-        """Hands the first reply to a client's message back to that client."""
+        """Hands the asked peer's reply to a client's message back to that client.
+
+        Who was asked is the question's ``asked_of``, read from the conversation
+        rather than kept again here. Anyone else's reply is only overheard. A
+        question no longer in the conversation (forgotten while open) takes
+        the first reply, so no call waits forever.
+        """
         if msg.reply_to is None:
             return
         open_ = self._open.get(msg.reply_to)
-        if open_ is not None and not open_.reply.done():
-            open_.reply.set_result(msg)
+        if open_ is None or open_.reply.done():
+            return
+        question = next((m for m in self.context() if m.id == msg.reply_to), None)
+        if question is not None and msg.frm != question.asked_of:
+            return
+        open_.reply.set_result(msg)
 
     async def serve(self) -> None:
         """Serves MCP over HTTP with FastMCP until it is shut down, which ends the chat."""

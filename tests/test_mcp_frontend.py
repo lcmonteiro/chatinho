@@ -4,7 +4,8 @@ import asyncio
 
 import pytest
 
-from chatinho import LOCAL, Attachment, HookAnswer, HookExecute, Reply, connector, declares, require, tool
+from chatinho import LOCAL, Attachment, HookAnswer, HookExecute, HookListen, HookSay, Reply, Say
+from chatinho import connector, declares, require, tool
 from chatinho.frontends.mcp import McpFrontend
 from chatinho.helpers.mcp import CREDENTIALS_KEY, decode
 from fakes.mcp import Agent, Files, Weather, ask, call, client, remote
@@ -107,6 +108,41 @@ async def test_two_clients_at_once():
         first, second = await asyncio.gather(ask(one, "echo", "from lab"), ask(two, "echo", "from home"))
     assert (first["text"], second["text"]) == ("echo: from lab", "echo: from home")
     assert set(session._peers()) == before
+    await session.close()
+
+
+@connector("bystander")
+@require(HookListen)
+@require(HookSay)
+class _Bystander:
+    """Replies to every question it overhears, before the peer asked can."""
+
+    say : Say
+
+    async def listen(self, msg) -> None:
+        if msg.to is not None and msg.reply_to is None:
+            await self.say("not my question", reply_to=msg.id)
+
+
+async def test_another_peers_reply_does_not_end_the_call():
+    """Only the asked peer's reply ends the call: the bystander's is overheard."""
+    session, front = await remote(Weather("sunny", delay=0.2), _Bystander())
+    async with client(front) as c:
+        got = await ask(c, "weather", "will it rain?")
+    assert got["text"] == "sunny"
+    assert "not my question" in [m.text for m in session._context()]
+    await session.close()
+
+
+async def test_a_forgotten_question_still_takes_the_first_reply():
+    """With the question gone from the conversation there is no asked_of to check; the call must not hang."""
+    session, front = await remote(Weather("sunny", delay=0.2))
+    async with client(front) as c:
+        asking = asyncio.create_task(ask(c, "weather", "will it rain?"))
+        await asyncio.sleep(0.05)
+        await session.forget()                       # the open question is dropped
+        got = await asyncio.wait_for(asking, timeout=2)
+    assert got["text"] == "sunny"
     await session.close()
 
 
