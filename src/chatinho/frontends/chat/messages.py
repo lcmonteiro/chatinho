@@ -21,6 +21,7 @@ from textual.widgets import Markdown, Static
 
 from ...hooks import name_of
 from ...message import TOOL, ChatMessage, MessageID
+from ...query import Query
 from . import clipboard
 from .style import ChatStyle
 
@@ -344,7 +345,7 @@ class ChatLog(TouchScrollableContainer):
         # lose their reading position)
         was_at_bottom = self.scroll_offset.y >= (self.max_scroll_y - 1)
 
-        desired_ids = [m.id for m in self._read_context(limit=self.max_displayed)]
+        desired_ids = [m.id for m in self._read_context(Query().last(self.max_displayed))]
         current = set(self._rendered_msg_ids)
         desired = set(desired_ids)
 

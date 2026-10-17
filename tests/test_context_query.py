@@ -91,5 +91,13 @@ async def test_unchanged_without_a_query(chat):
     session, view = chat
     for n in range(7):
         await view.say("m%d" % n)
-    assert texts(view.context(limit=5)) == ["m2", "m3", "m4", "m5", "m6"]
     assert texts(view.context()) == ["m%d" % n for n in range(7)]
+    assert texts(view.context(Query().last(5))) == ["m2", "m3", "m4", "m5", "m6"]
+
+
+async def test_a_keyword_is_refused(chat):
+    """A Query is the one way to narrow, so each filter has one spelling."""
+    session, view = chat
+    await view.say("m0")
+    with pytest.raises(TypeError):
+        view.context(limit=5)

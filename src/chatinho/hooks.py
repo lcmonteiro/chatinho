@@ -35,7 +35,6 @@ Nothing here is inherited: no base class, no ``isinstance``.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
 
 from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, Secret
@@ -142,18 +141,12 @@ class Context(Protocol):
     asks never learns which tier a message came from — that is the point.
 
     A :class:`~chatinho.query.Query` says which part — a thread, what passed
-    with one peer, nothing that failed — and narrows before the keywords.
+    with one peer, nothing that failed, the newest few — and is the one way
+    to narrow it.
     """
 
-    def __call__(
-        self,
-        query : Optional[Query] = None,
-        *,
-        since : Optional[datetime] = None,
-        start : Optional[int] = None,
-        limit : Optional[int] = None,
-    ) -> List[ChatMessage]:
-        """Returns the messages that survive the filters, oldest first."""
+    def __call__(self, query: Optional[Query] = None) -> List[ChatMessage]:
+        """Returns the messages the query selects, or all of them, oldest first."""
         ...
 
 
@@ -273,8 +266,8 @@ HookExecute = Hook(
 HookContext = Hook(
     name="HookContext",
     grants=("context",),
-    # context(since=, start=, limit=) -> the conversation so far, by time or by
-    # index. The only way to read it, and it spans both tiers: what the session
+    # context(query=None) -> the conversation so far, or the part a Query
+    # selects. The only way to read it, and it spans both tiers: what the session
     # holds and what the backend recalled into it.
 )
 

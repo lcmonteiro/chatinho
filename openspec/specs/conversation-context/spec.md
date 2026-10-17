@@ -40,11 +40,19 @@ chatinho SHALL provide `Query`, an immutable value with these fields, all option
 - **THEN** it raises `ValueError`
 
 ### Requirement: context() takes a Query
-The `context` grant SHALL accept an optional `Query` as its first argument. It MUST apply the query's filters before `since`, `start` and `limit` given as keywords. Called with no query, it MUST behave exactly as before.
+The `context` grant SHALL take one optional argument, a `Query`, and return the messages it selects, oldest first; with no query it MUST return the whole conversation in reach. A `Query` MUST be the only way to narrow it: `context` MUST NOT accept `since`, `start` or `limit` as keywords, so each filter has one spelling.
 
 #### Scenario: Unchanged without a query
+- **WHEN** a peer calls `context()` in a conversation of seven messages
+- **THEN** it gets all seven, oldest first
+
+#### Scenario: The newest few
+- **WHEN** a peer calls `context(Query().last(5))` in a conversation of seven messages
+- **THEN** it gets the five newest, oldest first
+
+#### Scenario: A keyword is refused
 - **WHEN** a peer calls `context(limit=5)`
-- **THEN** it gets the five newest messages, as it did before `Query` existed
+- **THEN** it raises `TypeError`
 
 ### Requirement: The archive keeps who a message was asked of
 The database backend SHALL keep each message's `asked_of` and give it back when it loads the message.
