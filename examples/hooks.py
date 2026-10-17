@@ -71,7 +71,7 @@ def note(hook: str, what: str) -> None:
 @require(HookSay)       # say(text, reply_to=None) -> id
 @require(HookAsk)       # await ask(to, text)      -> the answer
 @require(HookInvoke)    # await invoke(name, args) -> what the command answered
-@require(HookContext)   # context(since=, start=, limit=) -> the conversation
+@require(HookContext)   # context(query=None)      -> the conversation
 @require(HookPeers)     # peers() -> {id: peer}
 @require(HookCommands)  # commands() -> {name: command}
 @require(HookLocate)    # await locate(msg_id, name) -> a link, or None

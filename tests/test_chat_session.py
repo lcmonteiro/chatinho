@@ -26,6 +26,7 @@ from chatinho import (
     HookExecute,
     HookListen,
     HookSay,
+    Query,
     Reply,
     Say,
     backend,
@@ -343,15 +344,14 @@ async def test_nobody_can_speak_in_another_name():
 # === History ====================================================================
 
 
-async def test_context_narrows_by_index_and_by_time():
+async def test_context_narrows_by_time_and_count():
     session, view = await driven()
     for n in range(5):
         await view.say("m%d" % n)
-    assert [m.text for m in view.context(limit=2)] == ["m3", "m4"]
-    assert [m.text for m in view.context(start=3)] == ["m3", "m4"]
+    assert [m.text for m in view.context(Query(limit=2))] == ["m3", "m4"]
     cut = view.context()[3].timestamp
-    assert [m.text for m in view.context(since=cut)] == ["m3", "m4"]
-    assert view.context(limit=0) == []
+    assert [m.text for m in view.context(Query(since=cut))] == ["m3", "m4"]
+    assert view.context(Query(limit=0)) == []
     await session.close()
 
 

@@ -237,9 +237,15 @@ What follows, before it surprises you:
 
 ## Context has two tiers and one interface
 
-A peer declares `HookContext` and calls `context(since=, start=, limit=)`. It never learns
+A peer declares `HookContext` and calls `context(query=None)`. It never learns
 which tier a message came from — the recent turns were said this session, the older ones were
 loaded at `start()`.
+
+**A `Query` is the one way to narrow it.** `context` used to take `since`, `start` and `limit` as
+keywords beside the query, which gave "since" and "how many" two spellings and needed a rule for
+which applied first; `start` was an index into a list that shifts whenever a message is posted or
+forgotten, so it named no message at all. `context(Query(since=t).last(20))` says the same thing
+once, and a keyword is a `TypeError`.
 
 The backend is not a key-value store, and nothing pushes at it. **It is a peer that
 listens**: `HookListen` to hear the whole conversation, `HookLoad`/`load(since=, limit=)`
