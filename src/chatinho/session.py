@@ -231,7 +231,7 @@ class ChatSession:
                 return None
             asked = ChatMessage(
                 id=self._store.new_id(),
-                text="/%s %s" % (name, args) if args else "/%s" % name,
+                text=f"/{name} {args}".rstrip(),
                 frm=frm, to=TOOL,
             )
             await self._post(asked)
