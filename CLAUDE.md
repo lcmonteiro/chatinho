@@ -367,8 +367,8 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  builder.py       build_chat_session, build_mcp_session by their old address; each is defined
-                   beside its frontend and resolved lazily, so this module needs no extra
+  builder.py       build_chat_session, build_mcp_session — a ChatSession with its frontend; each
+                   imports its own frontend when called, so it needs only that frontend's extra
   session.py       ChatSession: run, peers, commands, delivery, routing, context
   hooks.py         Hook, the fourteen constants, @require, the grant protocols
   query.py         Query (peer/thread/errors/since/limit) and SELF: which part of the conversation
@@ -839,7 +839,8 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 `dependencies = []`. `ChatSession`, the fourteen hooks, `HelpCommand` and `TestCommand` import nothing
 but the standard library — which the fitness tests already enforced, so the packaging now says it
-too. Nine names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
+too. Seven names live behind an extra and are resolved on first use with PEP 562 `__getattr__`;
+the two builders import nothing until called, and then need their own frontend's:
 
 | name | extra | brings |
 |---|---|---|
@@ -878,12 +879,13 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 **Both frontends are public, and both have a builder.** `ChatFrontend` (in `chatinho.frontends.chat`)
 and `McpFrontend` (in `chatinho.frontends.mcp`) take no session: either can be passed to
 `ChatSession(frontend=...)` by hand, and `build_chat_session` / `build_mcp_session` do exactly that,
-more conveniently. **Each builder lives beside its frontend** — in `frontends/chat` and
-`frontends/mcp` — so each needs only its own extra. They used to share `builder.py`, which imported
-both frontends at the top, so opening a terminal needed `chatinho[mcp]` (the heaviest extra) for
-nothing. `builder.py` still answers to both names, through a PEP 562 `__getattr__` that resolves
-them as the package root does, so a missing extra names itself there too. The lazy table lists
-every `(extra, library)` pair a name needs, and a missing one names them all.
+more conveniently. **Both live in `builder.py`, and each imports its own frontend only when it is
+called**, so each needs only its own extra. `builder.py` used to import both frontends at the top,
+so opening a terminal needed `chatinho[mcp]` (the heaviest extra) for nothing. The cost of the
+fix, stated plainly: a missing extra is named when the builder is *called*, not when its name is
+read — it comes from the frontend's own lazy name, through the package root, so it still says
+which extra to install. The lazy table lists every `(extra, library)` pair a name needs, and a
+missing one names them all.
 
 `build_chat_session` returns a `ChatSession`, so a consumer's mypy sees the whole surface `ChatSession`
 promises — which is also why the `TYPE_CHECKING` block in `__init__.py` matters: without it the

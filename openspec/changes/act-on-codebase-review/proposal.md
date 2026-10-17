@@ -24,7 +24,7 @@ The review also found duplicated code, stale documentation and workflow overhead
 - `add_connector` never hands out an id that is already taken. Automatic numbering skips ids pinned with `@connector(name, id=…)`.
 - **BREAKING**: `ask()` raises `PeerError` when the answer's status is `error`. This includes the "too many nested asks" reply. `PeerError` is a new public exception carrying the reply's text. Answers with status `answered` or `asked` still return their text.
 - The database backend keeps each message's `status` and gives it back on load, so `Query(errors=False)` still leaves failed replies out after a restart. An existing archive gains the column on `initialize()`, with every old row counted as `answered`.
-- `build_chat_session` needs only `chatinho[tui]`, and `build_mcp_session` needs only `chatinho[mcp]`. Each builder imports its own frontend when it is called.
+- `build_chat_session` needs only `chatinho[tui]`, and `build_mcp_session` needs only `chatinho[mcp]`. Both stay in `builder.py`, and each imports its own frontend when it is called.
 - **BREAKING**: `DatabaseBackend` refuses keyword arguments it does not know (`TypeError`) instead of silently swallowing them.
 - `copy_key` validation errors name `copy_key`, not `quit_key`.
 

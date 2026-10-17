@@ -75,12 +75,11 @@ An `ArchivedMessage.status` column: `String`, not null, default `'answered'`. In
   - `test_the_welcome_message_is_the_app_saying_it` and the two "Unknown command" assertions are rewritten to check the banner, the toast (with notifications enabled, as the existing toast test does) and an empty conversation.
   - A regression test with one answering peer asserts it is never asked.
 
-### 6. Each builder beside its own frontend
+### 6. Each builder imports its own frontend when called (revised during apply)
 
-- `build_chat_session` moves to `chatinho.frontends.chat`, and `build_mcp_session` to `chatinho.frontends.mcp`.
-- `chatinho.builder` keeps both names through a module `__getattr__` (PEP 562) that delegates to `chatinho.__getattr__`. Reading a builder off either module therefore raises the same named `ImportError`, and `import chatinho.builder` needs nothing.
-- The root's lazy table points each builder at its frontend's module, with one extra each. The `TYPE_CHECKING` imports follow, which `test_architecture` already enforces.
-- **Alternative rejected:** importing inside each function body. Reading the name would then succeed and calling it would fail with a bare `ModuleNotFoundError`, which breaks the package's rule that a missing extra names itself where it is read.
+- Both builders stay in `chatinho.builder`. Each imports its frontend inside the function, through the package root's lazy name (`chatinho.ChatFrontend` / `chatinho.McpFrontend`), so a missing extra raises the root's named `ImportError` at call time.
+- `builder.py` imports only the core, so `chatinho` imports it directly and the builders leave the lazy table (nine names behind an extra become seven). `ChatStyle` is named under `TYPE_CHECKING`, and the newline-escape default is written out, with a test holding it equal to `composer.NEWLINE_ESCAPE`.
+- **First implemented the other way:** each builder moved beside its frontend, with `builder.py` reduced to a PEP 562 forwarder, so that *reading* a builder named the missing extra. The user chose to keep the builders in `builder.py`. The cost is that the extra is named when the builder is called rather than when it is read; it is still named.
 
 ### 7. One memory helper for both LLM connectors
 

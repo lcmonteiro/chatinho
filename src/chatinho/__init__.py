@@ -39,10 +39,8 @@ Served over MCP, which needs ``pip install chatinho[mcp]``::
 Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both in
 :mod:`chatinho.frontends` — and either can be passed to ``ChatSession`` by hand.
 
-Nine names need an extra, and say so if it is missing:
+Seven names need an extra, and say so if it is missing:
 
-    build_chat_session  chatinho[tui]        textual
-    build_mcp_session   chatinho[mcp]        fastmcp
     ChatFrontend        chatinho[tui]        textual
     ChatStyle           chatinho[tui]        textual
     McpFrontend         chatinho[mcp]        fastmcp
@@ -50,6 +48,10 @@ Nine names need an extra, and say so if it is missing:
     OpenAIConnector     chatinho[openai]     openai
     AgentConnector      chatinho[langchain]  langchain
     DatabaseBackend     chatinho[sql]        sqlalchemy
+
+The two builders import nothing until called, and each then needs its own
+frontend's extra: ``build_chat_session`` ``chatinho[tui]``, ``build_mcp_session``
+``chatinho[mcp]``.
 
 Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand`` —
 imports nothing but the standard library.
@@ -65,11 +67,12 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .connectors.agent import AgentConnector
     from .connectors.mcp import McpConnector
     from .connectors.openai import OpenAIConnector
-    from .frontends.chat import ChatFrontend, build_chat_session
+    from .frontends.chat import ChatFrontend
     from .frontends.chat.style import ChatStyle
-    from .frontends.mcp import McpFrontend, build_mcp_session
+    from .frontends.mcp import McpFrontend
 
 from .session import ChatSession
+from .builder import build_chat_session, build_mcp_session
 from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, PeerError, Reply, ReplyStatus, Secret
 from .query import SELF, Query
 from .keys import KeySource, KeyUnavailable, Env, DotEnv, File, Keyring, Command, Literal, Chain, key
@@ -87,8 +90,6 @@ __version__ = "0.1.0"
 _TUI = ("tui", "textual")
 _MCP = ("mcp", "fastmcp")
 _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
-    "build_chat_session" : (".frontends.chat",       (_TUI,)),
-    "build_mcp_session"  : (".frontends.mcp",        (_MCP,)),
     "ChatFrontend"       : (".frontends.chat",       (_TUI,)),
     "ChatStyle"          : (".frontends.chat.style", (_TUI,)),
     "McpFrontend"        : (".frontends.mcp",        (_MCP,)),

@@ -36,7 +36,6 @@ from chatinho.hooks import Commands, Invoke, Locate, Peers, Say
 from chatinho.hooks import declares, frontend, name_of, require
 from chatinho.keys import KeyLike, to_source
 from chatinho.message import LOCAL, Attachment, ChatMessage, MessageID, ReplyStatus, Secret
-from chatinho.session import ChatSession
 from chatinho.helpers.mcp import CREDENTIALS_KEY, encode, media_type_of
 
 logger = logging.getLogger(__name__)
@@ -333,55 +332,3 @@ class _Credentials(ServerExtension):
 
     def settings(self) -> Dict[str, Any]:
         return dict(self.declared)
-
-
-# === Building a chat served over MCP ============================================
-
-def build_mcp_session(
-    connectors  : Optional[List[Any]] = None,
-    commands    : Optional[List[Any]] = None,
-    backend     : Optional[Any] = None,
-    name        : str = "master",
-    *,
-    token       : KeyLike,
-    host        : str = "127.0.0.1",
-    port        : int = 8000,
-    credentials : Optional[Dict[str, str]] = None,
-) -> ChatSession:
-    """Builds a chat served over MCP from peers and a backend.
-
-    The same session :func:`build_chat_session` builds, with an
-    :class:`~chatinho.frontends.mcp.McpFrontend` as peer zero in place of the
-    terminal: MCP clients put the questions, and the peers answer them.
-
-    Args:
-        connectors: Links to agents or APIs; peers, numbered from one.
-        commands: Things a client runs with the ``invoke`` tool; not peers.
-        backend: The peer that keeps the conversation and gives it back at start.
-        name: The frontend's name in the session, and the server's name.
-        token: The bearer token every request must carry: the token itself, or a
-            key source (:mod:`chatinho.keys`) read once, at startup.
-        host: Where the server listens.
-        port: The port it listens on.
-        credentials: Lent with every message to the peers that answer it.
-
-    Returns:
-        ChatSession: The session, with the MCP server as its ``frontend``.
-        Call ``run()`` on it: it serves until the frontend stops.
-
-    Raises:
-        ValueError: ``token`` is empty.
-    """
-    presentation = McpFrontend(
-        name,
-        token       = token,
-        host        = host,
-        port        = port,
-        credentials = credentials,
-    )
-    return ChatSession(
-        connectors = connectors,
-        commands   = commands,
-        frontend   = presentation,
-        backend    = backend,
-    )

@@ -79,8 +79,9 @@ ImportError: build_chat_session needs 'textual', which chatinho does not install
              Install it with:  pip install 'chatinho[tui]'
 ```
 
-Each builder lives beside its frontend, so it needs only that frontend's extra: the terminal does
-not install the MCP server, nor the other way round. Passing a frontend to
+Each builder imports its own frontend only when it is called, so it needs only that frontend's
+extra: the terminal does not install the MCP server, nor the other way round. With the extra
+missing, calling the builder says which one to install. Passing a frontend to
 `ChatSession(frontend=...)` yourself is what the builder does, if you would rather.
 
 The package ships `py.typed`, so a consumer's mypy sees the annotations.

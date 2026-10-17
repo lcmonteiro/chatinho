@@ -152,25 +152,32 @@ def test_the_mcp_builder_needs_only_mcp():
     assert built == "McpFrontend"
 
 
-@pytest.mark.parametrize("library, builder, extra", [
-    ("textual", "build_chat_session", "chatinho[tui]"),
-    ("fastmcp", "build_mcp_session", "chatinho[mcp]"),
+@pytest.mark.parametrize("library, call, extra", [
+    ("textual", "build_chat_session()", "chatinho[tui]"),
+    ("fastmcp", "build_mcp_session(token='t')", "chatinho[mcp]"),
 ])
-def test_a_builder_without_its_library_names_its_own_extra(library, builder, extra):
-    status, message = _read_without(library)[builder]
-    assert status == "missing"
-    assert extra in message and "tui,mcp" not in message
+def test_a_builder_without_its_library_names_its_own_extra(library, call, extra):
+    """Reading it is fine; calling it imports its frontend, and that is where the extra is named."""
+    said = _run_without(library, "import chatinho\n"
+                        "try:\n"
+                        "    chatinho.%s\n"
+                        "except ImportError as exc:\n"
+                        "    print(exc)\n" % call)
+    assert extra in said and "tui,mcp" not in said
 
 
 def test_the_builder_module_needs_neither_extra():
-    """Reading a builder off it is resolved the way reading it off chatinho is."""
-    said = _run_without("textual,fastmcp", "import chatinho.builder\n"
-                        "try:\n"
-                        "    chatinho.builder.build_chat_session\n"
-                        "except ImportError as exc:\n"
-                        "    print(exc)\n")
-    assert "chatinho[tui]" in said
+    said = _run_without("textual,fastmcp", "import chatinho.builder as b\n"
+                        "print(callable(b.build_chat_session) and callable(b.build_mcp_session))")
+    assert said == "True"
     assert chatinho.builder.build_chat_session is chatinho.build_chat_session
+
+
+def test_the_builders_newline_escape_is_the_terminals():
+    """Written out in builder.py so it need not import the terminal; this keeps the two equal."""
+    from chatinho.builder import NEWLINE_ESCAPE as builders
+    from chatinho.frontends.chat.composer import NEWLINE_ESCAPE as terminals
+    assert builders == terminals
 
 
 def test_each_frontend_needs_only_its_own_extra():
