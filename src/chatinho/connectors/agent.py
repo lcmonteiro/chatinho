@@ -1,4 +1,5 @@
-"""A LangChain agent as a chat peer, with the chat itself as its tools.
+"""
+A LangChain agent as a chat peer, with the chat itself as its tools.
 
 :class:`AgentConnector` takes what LangChain's ``create_agent`` takes and builds
 the agent itself, adding the chat to its tools: one ``ask_<peer>`` per other
@@ -66,7 +67,8 @@ class AgentOutput(TypedDict):
 
 
 class AgentState(AgentInput, AgentOutput, total=False):
-    """The whole state; everything but the output stays in the graph.
+    """
+    The whole state; everything but the output stays in the graph.
 
     Attributes:
         messages: The run's working messages: memory, the question, then the
@@ -96,7 +98,8 @@ def _named(tool: Any) -> Optional[str]:
 
 
 def chat_model(model: Any) -> Any:
-    """What ``create_agent`` is given: the model as is, or an Endpoint made a chat model.
+    """
+    What ``create_agent`` is given: the model as is, or an Endpoint made a chat model.
 
     An Endpoint becomes ``ChatOpenAI`` whose key is a function reading the
     endpoint's key source when the model is called: never at creation, and
@@ -126,7 +129,8 @@ def chat_model(model: Any) -> Any:
 @require(HookCommands)
 @require(HookInvoke)
 class AgentConnector:
-    """A LangChain agent that answers in the chat, with the chat as its tools.
+    """
+    A LangChain agent that answers in the chat, with the chat as its tools.
 
     Args:
         name: Its name in the chat; also the agent's ``name`` unless one is given.
@@ -205,7 +209,8 @@ class AgentConnector:
         return Reply(text, tuple(files))
 
     async def listen(self, msg: ChatMessage) -> None:
-        """Responds to what the user says to everyone with a say; ignores everyone else.
+        """
+        Responds to what the user says to everyone with a say; ignores everyone else.
 
         A say the session asked of this agent is answered through ``answer``, so
         it is not also responded to here — or the agent would answer it twice.
@@ -371,7 +376,8 @@ class AgentConnector:
 
 
     def _parents(self, earlier: List[ChatMessage], me: Optional[int]) -> Dict[Any, ChatMessage]:
-        """For each of its own messages whose parent ``memory`` left out, that parent.
+        """
+        For each of its own messages whose parent ``memory`` left out, that parent.
 
         A say of the user it responded to went to everyone, so a query for what
         passed with it does not select it; the response alone would read as

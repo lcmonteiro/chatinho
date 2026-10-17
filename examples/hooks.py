@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The fourteen hooks, one example each, in a chat with no terminal.
+"""
+The fourteen hooks, one example each, in a chat with no terminal.
 
 Every other example shows a chat. This one shows the *declarations* — what each
 hook demands, what it grants, and what actually arrives at each door — by
@@ -76,7 +77,8 @@ def note(hook: str, what: str) -> None:
 @require(HookCommands)  # commands() -> {name: command}
 @require(HookLocate)    # await locate(msg_id, name) -> a link, or None
 class Screen:
-    """The presentation: peer zero, and nothing special.
+    """
+    The presentation: peer zero, and nothing special.
 
     ``@frontend`` is the whole of what makes it peer zero — it is
     ``@connector(name, id=LOCAL)`` with the invariant spelled once, here,
@@ -102,7 +104,8 @@ class Screen:
 @require(HookListen)
 @require(HookSay)
 class EchoConnector:
-    """``HookListen`` demands ``listen(msg)``: every message that crosses.
+    """
+    ``HookListen`` demands ``listen(msg)``: every message that crosses.
 
     Every one — a say, an ask, the answer to it, a command being run and what it
     answered, whoever it was for. A peer that only wants what was said to the
@@ -125,7 +128,8 @@ class EchoConnector:
 @connector("weather")
 @require(HookAnswer)
 class WeatherConnector:
-    """``HookAnswer`` demands ``answer(msg)``: someone asked *you*.
+    """
+    ``HookAnswer`` demands ``answer(msg)``: someone asked *you*.
 
     What it returns is the reply, posted by the session in this peer's name.
     Returning ``None`` is not a failure — the ask stays waiting, and whatever
@@ -142,7 +146,8 @@ class WeatherConnector:
 @connector("clock")
 @require(HookAnswer)
 class ClockConnector:
-    """A second peer that answers, which keeps a say to the room a broadcast.
+    """
+    A second peer that answers, which keeps a say to the room a broadcast.
 
     With exactly one answering peer in the chat, the session asks it whatever
     is said to the room — the lone-answerer rule, so a chat with one model just
@@ -158,7 +163,8 @@ class ClockConnector:
 @tool("upper", "Upper-case the rest of the line")
 @require(HookExecute)
 class UpperCommand:
-    """``HookExecute`` demands ``execute(args, by)``: what a command *is*.
+    """
+    ``HookExecute`` demands ``execute(args, by)``: what a command *is*.
 
     A command is not a peer — no id, nothing addressed to it. What it
     returns is the answer: the session posts it in ``TOOL``'s name, replying to
@@ -168,7 +174,8 @@ class UpperCommand:
     """
 
     async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> Reply:
-        """Answers with *args* in upper case.
+        """
+        Answers with *args* in upper case.
 
         Args:
             args: The rest of the line.
@@ -191,7 +198,8 @@ class UpperCommand:
 @require(HookKeep)      # to hold what a message carries
 @require(HookLink)      # to say where it can be opened
 class ListArchive:
-    """The five hooks a backend declares, over a list instead of a database.
+    """
+    The five hooks a backend declares, over a list instead of a database.
 
     The backend is not a key-value store and nothing pushes at it: it is a peer
     that listens. ``DatabaseBackend`` is this, with SQLAlchemy in an executor.
@@ -208,7 +216,8 @@ class ListArchive:
 
     async def load(self, since: Optional[datetime] = None,
                    limit: Optional[int] = None) -> List[ChatMessage]:
-        """Gives the older context back. Called once, by ``start()``.
+        """
+        Gives the older context back. Called once, by ``start()``.
 
         Args:
             since: Only messages at or after this moment, when given.
@@ -222,7 +231,8 @@ class ListArchive:
         return list(self.kept)
 
     async def forget(self, before: Optional[datetime] = None) -> int:
-        """Drops what was held.
+        """
+        Drops what was held.
 
         Args:
             before: Only messages older than this, when given.
@@ -236,7 +246,8 @@ class ListArchive:
         return dropped
 
     async def keep(self, msg_id: MessageID, attachments: Sequence[Attachment]) -> None:
-        """Holds what a message carries, before the message is posted.
+        """
+        Holds what a message carries, before the message is posted.
 
         Args:
             msg_id: The message the attachments belong to; the key.
@@ -247,7 +258,8 @@ class ListArchive:
             note("HookKeep", "kept %s (%d bytes) for %s" % (item.name, len(item.data), msg_id))
 
     async def link(self, msg_id: MessageID, name: str) -> Optional[str]:
-        """Where an attachment can be opened, or None when nothing by that name was kept.
+        """
+        Where an attachment can be opened, or None when nothing by that name was kept.
 
         Args:
             msg_id: The message it was attached to.

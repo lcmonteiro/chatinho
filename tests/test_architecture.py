@@ -1,4 +1,5 @@
-"""Architectural fitness tests.
+"""
+Architectural fitness tests.
 
 The Dependency Rule is only worth anything if something enforces it. These
 parse the core modules and fail if a UI import creeps back in — cheaper than
@@ -110,7 +111,8 @@ def _assigned_attributes(path: str, class_name: str) -> set:
     ],
 )
 def test_a_grant_never_shadows_a_textual_method(module, class_name, base):
-    """A grant arrives by setattr, so the assignment check above cannot see it.
+    """
+    A grant arrives by setattr, so the assignment check above cannot see it.
 
     This is not hypothetical: `ChatFrontend` was granted `run`, which is Textual's own
     `App.run()` — the documented way to start the app. mypy caught that one
@@ -147,7 +149,8 @@ def _declared_hooks(path: str, class_name: str) -> set:
     ],
 )
 def test_we_never_shadow_a_textual_method(module, class_name, base):
-    """Replacing one of Textual's own methods with data breaks it in silence.
+    """
+    Replacing one of Textual's own methods with data breaks it in silence.
 
     Setting a Textual *property* is ordinary use — ``self.title``, ``self.value``
     — so only methods are checked. The one that bit was ``_context``:
@@ -182,7 +185,8 @@ def _spec_table():
 
 
 def test_the_spec_lists_every_hook_and_gets_each_one_right():
-    """A spec nothing checks is a spec that rots.
+    """
+    A spec nothing checks is a spec that rots.
 
     docs/SPEC.md is the reference for the hooks, so its summary table has to say
     what the constants actually say: same set, same demanded method, same
@@ -228,7 +232,8 @@ for name in sorted(chatinho._BEHIND_AN_EXTRA):
 
 
 def test_the_core_imports_with_none_of_the_batteries_installed():
-    """``import chatinho`` must not need a terminal, an HTTP client and an ORM.
+    """
+    ``import chatinho`` must not need a terminal, an HTTP client and an ORM.
 
     A project that embeds the session in a service installs the package and
     nothing else; the names that need an extra are resolved on first use
@@ -265,7 +270,8 @@ def test_the_declared_extras_are_the_ones_the_package_asks_for():
 
 
 def test_the_lazy_names_are_visible_to_a_type_checker():
-    """PEP 562 hands a type checker ``Any``; the TYPE_CHECKING block undoes it.
+    """
+    PEP 562 hands a type checker ``Any``; the TYPE_CHECKING block undoes it.
 
     The package ships ``py.typed``, so a consumer's mypy is meant to see real
     signatures. Resolving the four battery names through ``__getattr__`` erased

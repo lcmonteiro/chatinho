@@ -1,4 +1,5 @@
-"""A model served over MCP, with no key of its own: whoever asks lends theirs.
+"""
+A model served over MCP, with no key of its own: whoever asks lends theirs.
 
 ``build_mcp_session`` serves one ``OpenAIConnector``, ``lab``, over Streamable
 HTTP behind a bearer token. The server holds no API key. It declares the ``llm``

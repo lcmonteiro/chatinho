@@ -1,4 +1,5 @@
-"""Tests for the command-suggestion (autocomplete) popup.
+"""
+Tests for the command-suggestion (autocomplete) popup.
 
 The popup lists the registered commands. They are registered via
 ``chat_frontend(commands=[...])``; the popup shows
@@ -15,7 +16,8 @@ from chatinho.frontends.chat.composer import CommandInput
 
 
 async def chat_frontend(connectors=None, commands=None, backend=None, **kwargs):
-    """The terminal peer, built and attached the way build_chat_session does it.
+    """
+    The terminal peer, built and attached the way build_chat_session does it.
 
     ``build_chat_session`` returns the *session* — the terminal is one of its
     peers, not its owner — so a test that drives the app builds it the same way

@@ -1,4 +1,5 @@
-"""Tests for ChatSession — the hub, driven without a terminal.
+"""
+Tests for ChatSession — the hub, driven without a terminal.
 
 Everyone is a peer with an id, LOCAL is the user, and there are three
 verbs. Every test here reaches the conversation the way the TUI does: through
@@ -169,7 +170,8 @@ async def test_ask_returns_the_answer():
 
 
 async def test_running_a_command_answers_the_peer_that_ran_it():
-    """The answer goes back to whoever ran it, and the whole of it is recorded.
+    """
+    The answer goes back to whoever ran it, and the whole of it is recorded.
 
     A command is still not a peer — it has no id and nothing is addressed to it — but there is
     one conversation, so the invocation and what it answered cross the session
@@ -282,7 +284,8 @@ async def test_a_peer_can_ask_the_user():
 
 
 async def test_an_answer_given_later_still_resolves_the_ask():
-    """answer may return None; what is said later with reply_to resolves the ask.
+    """
+    answer may return None; what is said later with reply_to resolves the ask.
 
     There is no separate grant for answering late. A peer that cannot answer
     inline — a terminal waiting on a person, a connector waiting on a server —
@@ -367,7 +370,8 @@ async def test_context_returns_a_copy():
 
 
 async def test_what_is_said_reaches_the_one_that_listens():
-    """Listening runs on its own task, and close() waits for it.
+    """
+    Listening runs on its own task, and close() waits for it.
 
     Asserting straight after ``say`` would be asserting on timing; asserting
     after ``close`` is the guarantee that matters — nothing said is lost.
@@ -461,7 +465,8 @@ async def test_forget_reaches_the_one_that_holds():
 
 
 async def test_a_connector_can_pin_the_id_it_answers_to():
-    """Being peer zero is what the terminal *is*, not a favour at add_connector.
+    """
+    Being peer zero is what the terminal *is*, not a favour at add_connector.
 
     @connector(name, id=…) is for a connector that can only be one peer. The
     session numbers everything else from one, in attachment order.
@@ -494,7 +499,8 @@ async def test_the_frontend_is_the_peer_that_speaks_for_the_person():
 
 
 async def test_the_frontend_parameter_pins_peer_zero_on_its_own():
-    """Which is the one place ``frontend`` and ``backend`` differ.
+    """
+    Which is the one place ``frontend`` and ``backend`` differ.
 
     A backend has no id of its own, so that parameter is pure sugar for the
     role. A frontend *is* an id — something that never declared ``@frontend``
@@ -527,7 +533,8 @@ def test_a_chat_has_one_frontend():
 
 
 async def test_the_frontend_is_registered_before_everyone_it_talks_to():
-    """Attachment order is hook order, and the roster reports it.
+    """
+    Attachment order is hook order, and the roster reports it.
 
     It is not cosmetic: hooks fire in registration order and a connector may
     answer re-entrantly, so the presentation hearing first is what keeps a
@@ -566,7 +573,8 @@ def test_a_declared_id_may_not_be_TOOL_or_anything_but_an_int():
 
 
 async def test_the_first_peer_to_finish_serving_ends_the_chat():
-    """serve() is lifecycle, not a hook: it runs until it is finished.
+    """
+    serve() is lifecycle, not a hook: it runs until it is finished.
 
     Quitting the terminal is the end of the chat even when a server is still
     listening, so the session waits for the first and cancels the rest.
@@ -625,7 +633,8 @@ async def test_a_peer_that_fails_while_serving_is_not_swallowed():
 
 
 async def test_an_async_initialize_is_awaited_by_start():
-    """initialize() runs from start(), where a loop exists — so it may be async.
+    """
+    initialize() runs from start(), where a loop exists — so it may be async.
 
     It used to run synchronously at add_connector(), before there was
     necessarily a loop to await one; now that it runs from start(), that

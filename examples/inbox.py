@@ -1,4 +1,5 @@
-"""Let a script ask you a question in the chat and wait for your answer.
+"""
+Let a script ask you a question in the chat and wait for your answer.
 
 The inbox is a connector with its own HTTP listener (the standard library's
 ``http.server``, on a background thread). ``POST /ask`` puts the question to you
@@ -36,7 +37,8 @@ PORT = 8765
 @connector("inbox")
 @require(HookAsk)
 class InboxConnector:
-    """Turns ``POST /ask`` into a question for the user, and answers with their reply.
+    """
+    Turns ``POST /ask`` into a question for the user, and answers with their reply.
 
     The handler runs on the server's thread, not the event loop, so it hands
     the ask over with ``run_coroutine_threadsafe`` and blocks only its own

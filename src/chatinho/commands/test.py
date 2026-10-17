@@ -12,7 +12,8 @@ from ..message import LOCAL, Reply
 @require(HookContext)
 @require(HookPeers)
 class TestCommand:
-    """Reports each check as it happens instead of one block at the end.
+    """
+    Reports each check as it happens instead of one block at the end.
 
     ``HookSay`` is what makes that possible: a command writes into the
     conversation only if it declared it. What it reports on is what it was
@@ -24,7 +25,8 @@ class TestCommand:
     peers   : Peers
 
     async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> Optional[Reply]:
-        """Runs the checks, saying each one, and answers with the verdict.
+        """
+        Runs the checks, saying each one, and answers with the verdict.
 
         Args:
             args: Ignored.

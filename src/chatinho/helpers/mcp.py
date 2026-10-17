@@ -1,4 +1,5 @@
-"""What ``McpFrontend`` and ``McpConnector`` agree on: the credentials key and attachments.
+"""
+What ``McpFrontend`` and ``McpConnector`` agree on: the credentials key and attachments.
 
 Standard library only, so either end can import it without the other.
 """

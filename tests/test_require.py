@@ -1,4 +1,5 @@
-"""Tests for @require, @connector, @frontend, @tool and @backend.
+"""
+Tests for @require, @connector, @frontend, @tool and @backend.
 
 A peer is a plain class. ``require`` checks at class-definition time
 that it implements what it declared, so a missing or misspelled method is an
@@ -194,7 +195,8 @@ def test_connector_names_the_class_and_an_instance_may_override_it():
 
 
 def test_frontend_is_a_connector_that_already_knows_it_is_peer_zero():
-    """Which is the whole of what it adds: ``@connector(name, id=LOCAL)``,
+    """
+    Which is the whole of what it adds: ``@connector(name, id=LOCAL)``,
     with the invariant spelled once here instead of by every presentation."""
 
     @frontend("terminal")
@@ -215,7 +217,8 @@ def test_a_frontend_that_does_not_name_itself_is_called_chat():
 
 
 def test_frontend_without_its_parentheses_is_refused():
-    """The class arrives where the name belongs, and nothing is decorated —
+    """
+    The class arrives where the name belongs, and nothing is decorated —
     which is worth an error, since the class would otherwise be handed back
     undecorated and land at the next free id instead of at zero."""
     with pytest.raises(ValueError, match="frontend name"):

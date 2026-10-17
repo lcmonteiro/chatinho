@@ -1,4 +1,5 @@
-"""Builds a session with its frontend attached like any peer.
+"""
+Builds a session with its frontend attached like any peer.
 
 Each builder does what a caller would do by hand — build a
 :class:`~chatinho.session.ChatSession`, build a frontend, and hand it over as
@@ -35,7 +36,8 @@ def build_chat_session(
     newline_escape  : Optional[str] = NEWLINE_ESCAPE,
     name            : Optional[str] = None,
 ) -> ChatSession:
-    """Builds a chat with a terminal from peers and a backend.
+    """
+    Builds a chat with a terminal from peers and a backend.
 
     A **connector** is a peer: it has an id, and the conversation reaches
     it. A **command** is not: it has no id, and it runs only when
@@ -108,7 +110,8 @@ def build_mcp_session(
     port        : int = 8000,
     credentials : Optional[Dict[str, str]] = None,
 ) -> ChatSession:
-    """Builds a chat served over MCP from peers and a backend.
+    """
+    Builds a chat served over MCP from peers and a backend.
 
     The same session :func:`build_chat_session` builds, with an
     :class:`~chatinho.frontends.mcp.McpFrontend` as peer zero in place of the

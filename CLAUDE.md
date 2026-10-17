@@ -964,7 +964,8 @@ Inherited from the monorepo's `python/CONTEXT.md`:
 - No `from __future__ import annotations`.
 - `%`-style logging args, never f-strings: `logger.warning("Skipping %r: %s", record, exc)`.
 - Align `:` and `=` in blocks of related assignments, dataclass fields, and kwargs.
-- Google-style docstrings (`Args`, `Returns`, `Raises`).
+- Google-style docstrings (`Args`, `Returns`, `Raises`). One that spans more than one line opens
+  with `"""` alone on its line and starts the text on the next; a one-line docstring stays on one.
 - Catch specific exceptions, never bare `except:`.
 
 Chatinho's deliberate divergences, set in `pyproject.toml` — **don't "fix" these**:

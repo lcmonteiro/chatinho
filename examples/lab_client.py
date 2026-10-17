@@ -1,4 +1,5 @@
-"""Your chat, asking the lab on another server and lending it your key.
+"""
+Your chat, asking the lab on another server and lending it your key.
 
 The lab (``lab_server.py``) appears here as one peer, ``lab``, through an
 ``McpConnector``. Every question you send it carries your key (your profile's,
@@ -23,7 +24,8 @@ WELCOME = "Everything you write goes to the lab on %s, with your key lent for th
 
 
 def parts(**where) -> dict:
-    """The lab as a peer, reached at *where* (``url`` and ``token`` from the environment by default).
+    """
+    The lab as a peer, reached at *where* (``url`` and ``token`` from the environment by default).
 
     The key lent is the one your profile names, else ``OPENAI_API_KEY``; it is
     read again for each question, so a rotated key is lent without a restart.

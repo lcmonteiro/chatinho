@@ -1,4 +1,5 @@
-"""Tests for the clipboard helper — no terminal, because it needs none.
+"""
+Tests for the clipboard helper — no terminal, because it needs none.
 
 Textual copies with OSC 52, which a terminal is free to ignore; Termux does.
 These cover the second route: a helper program the system already has.
@@ -59,7 +60,8 @@ def test_the_text_is_fed_to_the_helper_on_stdin(monkeypatch):
     subprocess.CalledProcessError(1, "termux-clipboard-set"),
 ])
 def test_a_helper_that_fails_is_logged_and_not_raised(monkeypatch, blow_up):
-    """The chat has already copied by the other route; a clipboard is not
+    """
+    The chat has already copied by the other route; a clipboard is not
     worth interrupting a conversation for."""
     def fake_run(command, **kwargs):
         raise blow_up
@@ -96,7 +98,8 @@ def test_put_really_runs_the_helper(a_helper_on_path):
 
 
 async def test_the_app_really_reaches_the_clipboard(a_helper_on_path):
-    """End to end with nothing stubbed: the log's copy, and the clipboard.
+    """
+    End to end with nothing stubbed: the log's copy, and the clipboard.
 
     `ChatLog.copy_message` hands the text to a worker, which hands it to an
     executor, which runs a subprocess. Every other test of that path replaces

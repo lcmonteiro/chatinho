@@ -1,4 +1,5 @@
-"""A terminal assistant that remembers: ask a model, close the chat, come back tomorrow.
+"""
+A terminal assistant that remembers: ask a model, close the chat, come back tomorrow.
 
 One ``OpenAIConnector`` answers everything you type. The conversation is kept in
 a SQLite file, so the next run reopens it and the model still has it as history.

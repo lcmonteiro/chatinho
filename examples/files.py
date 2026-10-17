@@ -1,4 +1,5 @@
-"""Ask a model about a file on your disk: ``/read notes.md what are the open questions?``.
+"""
+Ask a model about a file on your disk: ``/read notes.md what are the open questions?``.
 
 The assistant from ``assistant.py``, plus a ``/read`` command. The command reads
 a local text file, checks it is small UTF-8 text, and addresses the question and
@@ -53,7 +54,8 @@ def refused(text: str) -> Reply:
 @require(HookSay)
 @require(HookPeers)
 class ReadCommand:
-    """Reads a file and addresses it, with the question, to the assistant.
+    """
+    Reads a file and addresses it, with the question, to the assistant.
 
     It says rather than asks: an addressed say does not wait, so the terminal
     stays free while the model thinks, and the answer comes back as a reply.

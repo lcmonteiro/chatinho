@@ -1,4 +1,5 @@
-"""The chat core: peers, messages and the three verbs.
+"""
+The chat core: peers, messages and the three verbs.
 
 :class:`ChatSession` holds every use case the chat offers and imports no UI
 framework, so it can be driven from a TUI, a script or a test without a
@@ -49,7 +50,8 @@ def _checked(reply: Any, what: str) -> Optional[Reply]:
 
 
 class ChatSession:
-    """Routes messages between peers, and keeps the history.
+    """
+    Routes messages between peers, and keeps the history.
 
     The conversation is reached only by declaring a hook. The five most used
     are below; ``docs/SPEC.md`` has all fourteen:
@@ -174,7 +176,8 @@ class ChatSession:
         return at
 
     def _free_id(self) -> int:
-        """Takes the next id no peer holds.
+        """
+        Takes the next id no peer holds.
 
         Past any id already taken: a peer pinned at one was otherwise silently
         replaced by the next one numbered.
@@ -186,7 +189,8 @@ class ChatSession:
         return at
 
     def add_command(self, cmd: Any) -> str:
-        """Registers a command under its declared name and returns it.
+        """
+        Registers a command under its declared name and returns it.
 
         A command is not a peer. It has no id, nothing is
         addressed to it, and it hears nothing — it runs when someone runs it.
@@ -215,7 +219,8 @@ class ChatSession:
         return name
 
     def _invoke_for(self, frm: int):
-        """Builds the ``invoke`` granted to a peer, bound to that peer.
+        """
+        Builds the ``invoke`` granted to a peer, bound to that peer.
 
         A command is not a peer, so it has no id: the invocation is addressed
         to ``TOOL`` and what the command answered comes back from ``TOOL``,
@@ -276,7 +281,8 @@ class ChatSession:
         return dict(self.commands)
 
     def _grant(self, who: Any, at: int) -> None:
-        """Sets the attributes *who*'s declared hooks ask for.
+        """
+        Sets the attributes *who*'s declared hooks ask for.
 
         Each grant is bound to the peer's own id, so nobody can speak in
         another's name: the ``frm`` of a message is not an argument.
@@ -340,7 +346,8 @@ class ChatSession:
         return say
 
     def _answerer_of(self, frm: int, reply_to: Optional[MessageID]) -> Optional[int]:
-        """The peer a say with no ``to`` is asked of, or None for a broadcast.
+        """
+        The peer a say with no ``to`` is asked of, or None for a broadcast.
 
         A reply goes back to whoever said what it replies to; any other say,
         to the only peer that answers. Either way the speaker and the frontend
@@ -383,7 +390,8 @@ class ChatSession:
         return ask
 
     async def _kept(self, msg: ChatMessage, attachments: Sequence[Attachment]) -> None:
-        """Hands what *msg* carries to the backend, before *msg* is posted.
+        """
+        Hands what *msg* carries to the backend, before *msg* is posted.
 
         The message itself stays text. With no backend declaring ``HookKeep``
         the attachments have nowhere to go and are dropped; one that raises is
@@ -697,7 +705,8 @@ class ChatSession:
         await self._shutdown()
 
     async def _shutdown(self) -> None:
-        """Calls every ``shutdown()``, then awaits the ones that are coroutines.
+        """
+        Calls every ``shutdown()``, then awaits the ones that are coroutines.
 
         Synchronous ones run in order, as they always did. The asynchronous
         ones run together, within :attr:`CLOSE_TIMEOUT`: one that will not

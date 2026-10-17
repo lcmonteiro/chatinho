@@ -1,4 +1,5 @@
-"""A chatinho session served over MCP, in place of a terminal.
+"""
+A chatinho session served over MCP, in place of a terminal.
 
 :class:`McpFrontend` is the session's peer zero, as a terminal would be, but
 nobody types into it. Its tools are what a person at the terminal can do:
@@ -91,7 +92,8 @@ class ToolInfo(BaseModel):
 @require(HookLocate)
 @require(HookContext)
 class McpFrontend:
-    """Bridges MCP clients into a session, in place of a terminal.
+    """
+    Bridges MCP clients into a session, in place of a terminal.
 
     Args:
         name: Its name in the session, and the server's name; ``master`` by default.
@@ -148,7 +150,8 @@ class McpFrontend:
     # === Being peer zero ============================================================
 
     async def listen(self, msg: ChatMessage) -> None:
-        """Hands the asked peer's reply to a client's message back to that client.
+        """
+        Hands the asked peer's reply to a client's message back to that client.
 
         Who was asked is the question's ``asked_of``, read from the conversation
         rather than kept again here. Anyone else's reply is only overheard. A
@@ -191,7 +194,8 @@ class McpFrontend:
         text        : _Text,
         ctx         : Context,
     ) -> Answer:
-        """Ask one peer of this session, by name (see peers), and get its answer.
+        """
+        Ask one peer of this session, by name (see peers), and get its answer.
 
         The answer is answered or asked (a question back to you); a failure is a
         tool error.
@@ -288,7 +292,8 @@ def _meta(ctx: Context) -> Dict[str, Any]:
 
 
 def _linked_names(text: str) -> List[str]:
-    """The relative link targets in a Markdown *text*, in order, each once.
+    """
+    The relative link targets in a Markdown *text*, in order, each once.
 
     In chatinho a message links its attachments by name — ``[chart](chart.svg)``
     — and that is the only list of them there is. Absolute URLs, paths and

@@ -1,4 +1,5 @@
-"""A headless peer, shared by the tests that drive a session directly.
+"""
+A headless peer, shared by the tests that drive a session directly.
 
 The conversation is protected: nothing calls ``session._say``. A peer
 declares the hooks it needs and the session hands the capabilities over at
@@ -81,7 +82,8 @@ class Driver:
 
 
 async def driven(**kwargs) -> tuple:
-    """Builds a started session with a :class:`Driver` at :data:`LOCAL`.
+    """
+    Builds a started session with a :class:`Driver` at :data:`LOCAL`.
 
     Args:
         **kwargs: Passed straight to :class:`~chatinho.session.ChatSession`.

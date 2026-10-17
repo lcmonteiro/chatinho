@@ -1,4 +1,5 @@
-"""How the session hands messages to peers: each delivery on its own task.
+"""
+How the session hands messages to peers: each delivery on its own task.
 
 A peer may be inside ``answer`` for several questions at once, an ask may come
 back to a peer that is still asking, and nested asks stop at ``max_depth``.
@@ -240,7 +241,8 @@ async def test_unrelated_questions_are_not_nested():
 
 
 async def test_listening_is_not_nesting():
-    """A peer that asks from listen() asks at depth 1, even hearing an answer.
+    """
+    A peer that asks from listen() asks at depth 1, even hearing an answer.
 
     The answer is posted from inside the answering task, whose depth a task
     started there inherits; listening must start from zero again.
@@ -266,7 +268,8 @@ async def test_listening_is_not_nesting():
 
 
 async def test_replies_traded_past_the_limit_are_dropped():
-    """Two peers that answer by saying a reply stop at the limit, without trading errors.
+    """
+    Two peers that answer by saying a reply stop at the limit, without trading errors.
 
     What ``answer`` returns is never asked of anyone, so the only chain left is
     one a peer builds by *saying* its reply from inside ``answer``.

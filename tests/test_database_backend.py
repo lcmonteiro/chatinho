@@ -1,4 +1,5 @@
-"""Tests for the message archive — the older tier of the conversation.
+"""
+Tests for the message archive — the older tier of the conversation.
 
 The backend is not a key-value store. It keeps messages, the session recalls a
 window at startup, and every method is a coroutine that does its SQLAlchemy

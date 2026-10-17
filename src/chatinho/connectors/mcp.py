@@ -1,4 +1,5 @@
-"""A peer that puts questions to another chatinho session over MCP.
+"""
+A peer that puts questions to another chatinho session over MCP.
 
 :class:`McpConnector` is an ordinary connector: it appears in the chat under a
 name it chooses (``lab``) and answers what it is asked. Each question is asked
@@ -31,7 +32,8 @@ logger = logging.getLogger(__name__)
 # === What comes back from the server ==============================================
 
 def _reply_from(res: types.CallToolResult, name: str) -> Reply:
-    """The local reply for what came back from the remote session.
+    """
+    The local reply for what came back from the remote session.
 
     A tool error is an ``ERROR`` reply naming the remote session. Otherwise the
     status is the remote reply's own ``ReplyStatus``: ``ANSWERED`` keeps the text
@@ -51,7 +53,8 @@ def _reply_from(res: types.CallToolResult, name: str) -> Reply:
 @connector("mcp")
 @require(HookAnswer)
 class McpConnector:
-    """Puts questions to a remote chatinho session.
+    """
+    Puts questions to a remote chatinho session.
 
     Give it exactly one server: an HTTP ``url`` with its bearer ``token``, or
     a ``server`` object (an in-process ``FastMCP`` server, such as an
@@ -104,7 +107,8 @@ class McpConnector:
     # === Lifecycle ==================================================================
 
     async def initialize(self) -> None:
-        """Takes the server's name when none was given.
+        """
+        Takes the server's name when none was given.
 
         A server that cannot be reached is not fatal: the chat goes on, and the
         next question tries again and answers that it could not.
@@ -160,7 +164,8 @@ class McpConnector:
     # === Lending ====================================================================
 
     async def _lending(self, client: Any) -> Optional[Dict[str, Any]]:
-        """The ``_meta`` for one question: the configured credentials the server declared.
+        """
+        The ``_meta`` for one question: the configured credentials the server declared.
 
         Raises:
             KeyUnavailable: A declared credential's source could not yield it.

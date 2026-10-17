@@ -1,4 +1,5 @@
-"""The command input line and its autocomplete popup.
+"""
+The command input line and its autocomplete popup.
 
 :class:`CommandSuggestions` owns the popup's options and visibility;
 :class:`CommandInput` drives it through the sibling widget rather than
@@ -49,7 +50,8 @@ NEWLINE_ESCAPE : str = " "
 
 
 def validate_escape(char: Optional[str]) -> Optional[str]:
-    """Checks the escape character, or None for no escape at all.
+    """
+    Checks the escape character, or None for no escape at all.
 
     Args:
         char: One character, or None to disable the escape.
@@ -89,7 +91,8 @@ class CommandSuggestions(OptionList):
         return self.option_count > 0
 
     def update_for(self, text: str) -> None:
-        """Shows the commands matching *text*, or hides the popup if none do.
+        """
+        Shows the commands matching *text*, or hides the popup if none do.
 
         Args:
             text: The current content of the input line.
@@ -120,7 +123,8 @@ class CommandSuggestions(OptionList):
             self.action_cursor_up()
 
     def take_highlighted(self) -> Optional[str]:
-        """Returns the highlighted command name and hides the popup.
+        """
+        Returns the highlighted command name and hides the popup.
 
         Returns:
             Optional[str]: The command name, or None if nothing is highlighted.
@@ -149,7 +153,8 @@ class CommandSuggestions(OptionList):
 
 
 class CommandInput(TextArea):
-    """Multi-line input that drives the sibling :class:`CommandSuggestions` popup.
+    """
+    Multi-line input that drives the sibling :class:`CommandSuggestions` popup.
 
     Enter sends what was typed as :class:`CommandInput.Submitted`; the keys in
     :data:`NEWLINE_KEYS`, and :attr:`newline_escape` typed just before it, open
@@ -161,7 +166,8 @@ class CommandInput(TextArea):
     """
 
     class Submitted(Message):
-        """Posted when Enter sends the line.
+        """
+        Posted when Enter sends the line.
 
         Attributes:
             input: The input that sent it.
@@ -211,7 +217,8 @@ class CommandInput(TextArea):
         return suggestions is not None and suggestions.has_suggestions
 
     def accept_suggestion(self) -> bool:
-        """Completes the input with the highlighted suggestion, if any.
+        """
+        Completes the input with the highlighted suggestion, if any.
 
         Returns:
             bool: True if a suggestion was accepted.
@@ -227,7 +234,8 @@ class CommandInput(TextArea):
         return True
 
     def submit(self) -> bool:
-        """Sends what was typed, or accepts a suggestion if the popup is open.
+        """
+        Sends what was typed, or accepts a suggestion if the popup is open.
 
         Returns:
             bool: True if a suggestion was accepted instead of sending.
@@ -240,7 +248,8 @@ class CommandInput(TextArea):
         return False
 
     def _open_line_at_the_escape(self) -> bool:
-        """Turns :attr:`newline_escape` immediately before the cursor into a line.
+        """
+        Turns :attr:`newline_escape` immediately before the cursor into a line.
 
         The second way in, and the only one needing no key a terminal might not
         report: the escape is a *character*, and Enter is the key everyone has.
@@ -271,7 +280,8 @@ class CommandInput(TextArea):
         return True
 
     async def _on_key(self, event: events.Key) -> None:
-        """Claims Enter for sending, and the newline keys for a second line.
+        """
+        Claims Enter for sending, and the newline keys for a second line.
 
         Enter only sends when the escape character does not precede the cursor;
         that is the second way to open a line, and the only one no terminal can

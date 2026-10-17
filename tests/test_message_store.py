@@ -1,4 +1,5 @@
-"""Tests for MessageStore and MessageID.
+"""
+Tests for MessageStore and MessageID.
 
 The store holds no UI state, so unlike the application tests these need no
 ``run_test()`` and no event loop.

@@ -1,4 +1,5 @@
-"""Putting text on the clipboard, by whatever route the terminal allows.
+"""
+Putting text on the clipboard, by whatever route the terminal allows.
 
 Textual copies with **OSC 52**, an escape sequence the terminal is free to
 ignore — and several do, Termux among the ones reported here. So this tries a
@@ -38,7 +39,8 @@ TIMEOUT : float = 5.0
 
 
 def helper() -> Optional[List[str]]:
-    """The first clipboard helper this system actually has.
+    """
+    The first clipboard helper this system actually has.
 
     Returns:
         Optional[List[str]]: The command to run, or None when none is
@@ -51,7 +53,8 @@ def helper() -> Optional[List[str]]:
 
 
 def put(text: str) -> Optional[str]:
-    """Writes *text* to the clipboard with a helper, if there is one.
+    """
+    Writes *text* to the clipboard with a helper, if there is one.
 
     This is the blocking half — a helper is a subprocess, and an Android one
     can take a moment — so callers run it off the event loop.

@@ -1,4 +1,5 @@
-"""A plain FastMCP client asking the lab — no chatinho needed on this side.
+"""
+A plain FastMCP client asking the lab — no chatinho needed on this side.
 
 It lists the lab's peers, then asks one question, lending ``OPENAI_API_KEY`` in
 the request's ``_meta`` the way an ``McpConnector`` does.

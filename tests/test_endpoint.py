@@ -1,4 +1,5 @@
-"""Endpoint: URL, model and key as one named profile.
+"""
+Endpoint: URL, model and key as one named profile.
 
 See openspec/specs/endpoint-profiles.
 """

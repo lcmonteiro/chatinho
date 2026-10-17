@@ -1,4 +1,5 @@
-"""OpenAIConnector against a stubbed AsyncOpenAI: memory, keys, failures, no blocking.
+"""
+OpenAIConnector against a stubbed AsyncOpenAI: memory, keys, failures, no blocking.
 
 See openspec/specs/openai-connector.
 """
