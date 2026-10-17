@@ -54,9 +54,9 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 
 ## 7. Each builder needs only its own extra
 
-- [ ] 7.1 Move `build_chat_session` into `chatinho.frontends.chat` and `build_mcp_session` into `chatinho.frontends.mcp`. Turn `chatinho/builder.py` into a module `__getattr__` that delegates to `chatinho.__getattr__`, with `TYPE_CHECKING` imports. Point the root's lazy table at each frontend's module with one extra each (design Decision 6). Verify with `python -c "import chatinho.builder"` succeeding in a subprocess with `textual` and `fastmcp` blocked.
-- [ ] 7.2 Replace `test_either_builder_needs_both_extras` in `tests/test_package_layout.py` with the spec's scenarios: each builder works without the other extra, and names its own extra when its library is missing. Verify that `test_architecture.py`'s `TYPE_CHECKING` check still passes.
-- [ ] 7.3 Update CLAUDE.md (the packaging table, "builder.py imports both frontends", Layout) and README.md's install notes. Verify with `grep -rn "tui,mcp" CLAUDE.md README.md src` showing only intended mentions.
+- [x] 7.1 Move `build_chat_session` into `chatinho.frontends.chat` and `build_mcp_session` into `chatinho.frontends.mcp`. Turn `chatinho/builder.py` into a module `__getattr__` that delegates to `chatinho.__getattr__`, with `TYPE_CHECKING` imports. Point the root's lazy table at each frontend's module with one extra each (design Decision 6). Verify with `python -c "import chatinho.builder"` succeeding in a subprocess with `textual` and `fastmcp` blocked.
+- [x] 7.2 Replace `test_either_builder_needs_both_extras` in `tests/test_package_layout.py` with the spec's scenarios: each builder works without the other extra, and names its own extra when its library is missing. Verify that `test_architecture.py`'s `TYPE_CHECKING` check still passes.
+- [x] 7.3 Update CLAUDE.md (the packaging table, "builder.py imports both frontends", Layout) and README.md's install notes. Verify with `grep -rn "tui,mcp" CLAUDE.md README.md src` showing only intended mentions.
 
 ## 8. Workflow
 

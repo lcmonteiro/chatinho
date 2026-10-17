@@ -1,147 +1,24 @@
-"""Builds a session with its frontend attached like any peer.
+"""The two builders, by the name they have always had.
 
-Each builder does what a caller would do by hand — build a
-:class:`~chatinho.session.ChatSession`, build a frontend, and hand it over as
-the session's ``frontend`` — because a frontend is a normal peer, one of the
-four roles a session takes, not something the session's constructor wires up.
-
-- :func:`build_chat_session` attaches the terminal.
-- :func:`build_mcp_session` attaches an MCP server.
-
-This module imports both frontends, so it needs both extras: ``chatinho[tui,mcp]``.
-A caller with only one of them builds a ``ChatSession`` with that frontend by hand.
+Each builder lives beside its frontend — :func:`build_chat_session` in
+:mod:`chatinho.frontends.chat`, :func:`build_mcp_session` in
+:mod:`chatinho.frontends.mcp` — so each needs only its own extra. This module
+imports neither: reading a builder off it is resolved the way reading it off
+``chatinho`` is, and a missing extra names itself there too.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
-from .frontends.chat import ChatFrontend
-from .frontends.chat.composer import NEWLINE_ESCAPE
-from .frontends.chat.style import ChatStyle
-from .frontends.mcp import McpFrontend
-from .keys import KeyLike
-from .session import ChatSession
+if TYPE_CHECKING:                       # never executed; read by type checkers
+    from .frontends.chat import build_chat_session
+    from .frontends.mcp import build_mcp_session
 
-
-def build_chat_session(
-    connectors      : Optional[List[Any]] = None,
-    commands        : Optional[List[Any]] = None,
-    backend         : Optional[Any] = None,
-    title           : str = "Chatinho",
-    welcome_message : str = "",
-    max_displayed   : int = 100,
-    style           : Optional[ChatStyle] = None,
-    quit_key        : str = "ctrl+q",
-    copy_key        : str = "ctrl+y",
-    newline_escape  : Optional[str] = NEWLINE_ESCAPE,
-    name            : Optional[str] = None,
-) -> ChatSession:
-    """Builds a chat with a terminal from peers and a backend.
-
-    A **connector** is a peer: it has an id, and the conversation reaches
-    it. A **command** is not: it has no id, and it runs only when
-    someone runs it. They are separate parameters because they are separate
-    things.
-
-    For a chat without a terminal — a script, a bot, a test — build a
-    :class:`~chatinho.session.ChatSession` directly and attach your own
-    presentation.
-
-    Args:
-        connectors: Links to agents or APIs; peers, numbered from one.
-        commands: Things the user runs as ``/name``; not peers.
-        backend: The peer that keeps the conversation and gives it back at start.
-        title: Title of the chat application.
-        welcome_message: Message displayed on mount; empty means none.
-        max_displayed: How many messages are rendered at once (sliding window).
-        style: Colour scheme; defaults to :class:`~chatinho.frontends.chat.style.ChatStyle`.
-        newline_escape: Typed just before Enter, opens a line instead of
-            sending, and is consumed doing it. A space by default — ending a
-            line with one and carrying on is what continuing already feels
-            like. One character, or None for no escape at all. It is the only
-            way to a second line that no terminal can swallow, which is why it
-            is not simply a key.
-        copy_key: Copies the message selected as the reply target. Tap a
-            message, then press it — the keyboard way in, for a terminal that
-            takes the long press for its own menu before the chat sees it.
-        name: What the terminal is called in the log, shown as ``@name`` on
-            every message the user sends. Defaults to the ``chat`` the class
-            declares; ``"me"`` reads better in a chat you are in.
-        quit_key: The key that quits, as Textual writes them — ``"ctrl+g"``,
-            ``"f10"``, ``"escape"``. Defaults to Textual's own ``"ctrl+q"``,
-            which stops quitting when another key is given. ``ctrl+c`` is a
-            separate binding and is left alone.
-
-    Returns:
-        ChatSession: The session, with the terminal as its ``frontend`` and so
-        attached at ``LOCAL``. Call ``run()`` on it: the session owns the loop,
-        and the terminal is one of the peers it serves.
-
-    Raises:
-        ValueError: ``quit_key`` is not a key Textual could receive.
-    """
-    presentation = ChatFrontend(
-        title           = title,
-        welcome_message = welcome_message,
-        max_displayed   = max_displayed,
-        style           = style,
-        quit_key        = quit_key,
-        copy_key        = copy_key,
-        newline_escape  = newline_escape,
-        name            = name,
-    )
-    return ChatSession(
-        connectors = connectors,
-        commands   = commands,
-        frontend   = presentation,
-        backend    = backend,
-    )
+__all__ = ["build_chat_session", "build_mcp_session"]
 
 
-def build_mcp_session(
-    connectors  : Optional[List[Any]] = None,
-    commands    : Optional[List[Any]] = None,
-    backend     : Optional[Any] = None,
-    name        : str = "master",
-    *,
-    token       : KeyLike,
-    host        : str = "127.0.0.1",
-    port        : int = 8000,
-    credentials : Optional[Dict[str, str]] = None,
-) -> ChatSession:
-    """Builds a chat served over MCP from peers and a backend.
-
-    The same session :func:`build_chat_session` builds, with an
-    :class:`~chatinho.frontends.mcp.McpFrontend` as peer zero in place of the
-    terminal: MCP clients put the questions, and the peers answer them.
-
-    Args:
-        connectors: Links to agents or APIs; peers, numbered from one.
-        commands: Things a client runs with the ``invoke`` tool; not peers.
-        backend: The peer that keeps the conversation and gives it back at start.
-        name: The frontend's name in the session, and the server's name.
-        token: The bearer token every request must carry: the token itself, or a
-            key source (:mod:`chatinho.keys`) read once, at startup.
-        host: Where the server listens.
-        port: The port it listens on.
-        credentials: Lent with every message to the peers that answer it.
-
-    Returns:
-        ChatSession: The session, with the MCP server as its ``frontend``.
-        Call ``run()`` on it: it serves until the frontend stops.
-
-    Raises:
-        ValueError: ``token`` is empty.
-    """
-    presentation = McpFrontend(
-        name,
-        token       = token,
-        host        = host,
-        port        = port,
-        credentials = credentials,
-    )
-    return ChatSession(
-        connectors = connectors,
-        commands   = commands,
-        frontend   = presentation,
-        backend    = backend,
-    )
+def __getattr__(name: str) -> Any:
+    """Resolves a builder on first use, as :mod:`chatinho` does (PEP 562)."""
+    if name not in __all__:
+        raise AttributeError("module %r has no attribute %r" % (__name__, name))
+    import chatinho
+    return getattr(chatinho, name)

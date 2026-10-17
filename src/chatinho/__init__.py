@@ -41,8 +41,8 @@ Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both i
 
 Nine names need an extra, and say so if it is missing:
 
-    build_chat_session  chatinho[tui,mcp]    textual, fastmcp
-    build_mcp_session   chatinho[tui,mcp]    textual, fastmcp
+    build_chat_session  chatinho[tui]        textual
+    build_mcp_session   chatinho[mcp]        fastmcp
     ChatFrontend        chatinho[tui]        textual
     ChatStyle           chatinho[tui]        textual
     McpFrontend         chatinho[mcp]        fastmcp
@@ -62,13 +62,12 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     # checker ``Any`` and quietly undoes the ``py.typed`` this package ships.
     # Importing them here restores that without importing anything at run time.
     from .backends import DatabaseBackend
-    from .builder import build_chat_session, build_mcp_session
     from .connectors.agent import AgentConnector
     from .connectors.mcp import McpConnector
     from .connectors.openai import OpenAIConnector
-    from .frontends.chat import ChatFrontend
+    from .frontends.chat import ChatFrontend, build_chat_session
     from .frontends.chat.style import ChatStyle
-    from .frontends.mcp import McpFrontend
+    from .frontends.mcp import McpFrontend, build_mcp_session
 
 from .session import ChatSession
 from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, PeerError, Reply, ReplyStatus, Secret
@@ -88,8 +87,8 @@ __version__ = "0.1.0"
 _TUI = ("tui", "textual")
 _MCP = ("mcp", "fastmcp")
 _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
-    "build_chat_session" : (".builder",              (_TUI, _MCP)),
-    "build_mcp_session"  : (".builder",              (_TUI, _MCP)),
+    "build_chat_session" : (".frontends.chat",       (_TUI,)),
+    "build_mcp_session"  : (".frontends.mcp",        (_MCP,)),
     "ChatFrontend"       : (".frontends.chat",       (_TUI,)),
     "ChatStyle"          : (".frontends.chat.style", (_TUI,)),
     "McpFrontend"        : (".frontends.mcp",        (_MCP,)),

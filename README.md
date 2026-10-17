@@ -63,7 +63,8 @@ true. These names live behind an extra:
 |---|---|---|
 | `ChatFrontend`, `ChatStyle` — the terminal | `chatinho[tui]` | `textual` |
 | `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` |
-| `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
+| `build_chat_session` | `chatinho[tui]` | `textual` |
+| `build_mcp_session` | `chatinho[mcp]` | `fastmcp` |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `AgentConnector` — a LangChain agent | `chatinho[langchain]` | `langchain`, `langchain-openai` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
@@ -78,8 +79,9 @@ ImportError: build_chat_session needs 'textual', which chatinho does not install
              Install it with:  pip install 'chatinho[tui]'
 ```
 
-The builders live in one module that imports both frontends, so they need both extras. With only
-one, pass that frontend to `ChatSession(frontend=...)` yourself — it is what the builder does.
+Each builder lives beside its frontend, so it needs only that frontend's extra: the terminal does
+not install the MCP server, nor the other way round. Passing a frontend to
+`ChatSession(frontend=...)` yourself is what the builder does, if you would rather.
 
 The package ships `py.typed`, so a consumer's mypy sees the annotations.
 
