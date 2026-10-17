@@ -9,7 +9,7 @@ An `ask` that is waiting SHALL be resolved only by a reply to its question from 
 
 #### Scenario: The user answers a question put to them
 - **WHEN** a peer asks the user and the user says a reply to that question
-- **THEN** the `ask` returns the user's text
+- **THEN** the `ask` returns a `Reply` holding the user's text
 
 ### Requirement: The terminal does not say its own notices
 The terminal SHALL show its welcome text and its own notices to the person without posting them to the conversation. The welcome text MUST appear at the top of the log, but MUST NOT be a message: no peer hears it, no peer is asked it, and the archive does not keep it. Running a command that does not exist, and a command that fails, MUST be reported to the person as notifications and MUST NOT be messages. The invocation of a command that does exist, and what it answers, stay messages.

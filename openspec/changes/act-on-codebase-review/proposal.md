@@ -23,6 +23,7 @@ The review also found duplicated code, stale documentation and workflow overhead
 - An ask is resolved only by a reply from the peer it was asked of. A reply from anyone else is heard like any other message and leaves the ask waiting.
 - `add_connector` never hands out an id that is already taken. Automatic numbering skips ids pinned with `@connector(name, id=…)`.
 - **BREAKING**: `ask()` returns a `Reply` holding the answer's text and its status (`answered`, `asked` or `error`, the "too many nested asks" reply included) instead of the text alone, so the asker can tell a failure from an answer. (First implemented as raising `PeerError`; changed at review in [lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42).)
+- The agent's `ask_<peer>` tool hands the model the peer's `Reply` itself, status included, rather than folding an error into prose; an exception becomes an `error` `Reply` naming its type. LangChain passes a non-text tool result as `str()`, so the model reads the `Reply`'s repr.
 - The database backend keeps each message's `status` and gives it back on load, so `Query(errors=False)` still leaves failed replies out after a restart.
 - ~~Each builder needs only its own extra.~~ Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)): `builder.py` keeps importing both frontends, so each builder still needs `chatinho[tui,mcp]`.
 - **BREAKING**: `DatabaseBackend` refuses keyword arguments it does not know (`TypeError`) instead of silently swallowing them.
@@ -68,11 +69,11 @@ None.
   - `src/chatinho/builder.py`: docstrings only.
   - `src/chatinho/backends/database.py`
   - `src/chatinho/frontends/chat/`: `__init__.py`, `messages.py`, `composer.py`.
-  - `src/chatinho/connectors/`: `openai.py`, `agent.py`, plus a shared helper.
+  - `src/chatinho/connectors/`: `openai.py`, `agent.py`, sharing the new `src/chatinho/helpers/memory.py`.
   - `src/chatinho/commands/help.py`
   - `src/chatinho/hooks.py`
 - **Tests:**
-  - `test_package_layout.py` and `test_chat_frontend.py` change what they assert.
+  - `test_chat_frontend.py` and `test_command_suggestions.py` change what they assert, and tests that compared `ask()` to a string read `.text`.
   - New regression tests cover each reproduced defect.
 - **API:**
   - `ask()` callers read `.text` (and `.status`) from the returned `Reply`.
