@@ -14,7 +14,7 @@ each is a pair: the word you call, and the word the other side writes.
 
 Everything is a coroutine and every delivery is its own task, so a slow subsystem
 holds up nobody, and a peer may ask one that is asking it. ``docs/SPEC.md`` is the
-reference for all fourteen hooks, and ``examples/hooks.py`` is that document executable.
+reference for all fifteen hooks, and ``examples/hooks.py`` is that document executable.
 
 Headless — no terminal, and nothing to install beyond this package::
 
@@ -80,8 +80,10 @@ from .hooks import connector, tool, frontend, backend, require
 from .hooks import hooks_of, options_of, declares, declared_id, name_of
 from .hooks import Hook, HookSay, HookAsk, HookAnswer, HookInvoke, HookExecute, HookContext
 from .hooks import HookPeers, HookCommands, HookListen, HookLoad, HookForget, HookKeep, HookLink, HookLocate
+from .hooks import HookRoute
 from .hooks import Say, Ask, Invoke, Context, Peers, Commands, Locate
 from .commands import HelpCommand, TestCommand
+from .routers import SimpleRouter
 
 __version__ = "0.1.0"
 
@@ -188,6 +190,8 @@ __all__ = [
     "HookContext",
     "HookPeers",
     "HookCommands",
+    # who answers a say that named nobody
+    "HookRoute",
     # the older tier
     "HookLoad",
     "HookForget",
@@ -213,4 +217,5 @@ __all__ = [
     "McpConnector",
     "HelpCommand",
     "TestCommand",
+    "SimpleRouter",
 ]

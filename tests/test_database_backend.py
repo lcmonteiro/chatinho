@@ -329,7 +329,7 @@ class _Bot:
 
 
 async def test_asked_closed_and_reopened(tmp_path):
-    """A say routed to the lone answering peer keeps asked_of in the archive, and in its memory."""
+    """A say routed to the lone answering peer keeps its `to` in the archive, and in its memory."""
     url = "sqlite:///%s" % (tmp_path / "chat.db")
 
     first, view = ChatSession(connectors=[_Bot()], backend=DatabaseBackend(url)), Driver()
@@ -343,7 +343,7 @@ async def test_asked_closed_and_reopened(tmp_path):
     second.add_connector(again, at=LOCAL)
     await second.start()
     reloaded = [m for m in again.context() if m.id == said][0]
-    assert (reloaded.to, reloaded.asked_of) == (None, bot.peer_id)
+    assert reloaded.to == bot.peer_id
     assert said in [m.id for m in Query(peer=bot.peer_id).select(again.context())]
     await second.close()
 
@@ -399,3 +399,23 @@ def test_an_unknown_keyword_is_refused():
     """It used to be swallowed, so a typo was a setting that silently did nothing."""
     with pytest.raises(TypeError):
         DatabaseBackend("sqlite://", ecoh=True)            # type: ignore[call-arg]
+
+
+async def test_an_archive_with_the_old_asked_of_column_still_loads_and_saves(tmp_path):
+    """Nothing is migrated: a table that still has asked_of is read and written as it is."""
+    import sqlite3
+    path = tmp_path / "old.db"
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE messages (id VARCHAR PRIMARY KEY, text TEXT NOT NULL, frm INTEGER NOT NULL,"
+                   " \"to\" INTEGER, reply_to VARCHAR, asked_of INTEGER, timestamp DATETIME NOT NULL,"
+                   " status VARCHAR NOT NULL)")
+        db.execute("INSERT INTO messages VALUES ('msg-00000000000000aa', 'old', 0, NULL, NULL, 1,"
+                   " '2026-01-01 00:00:00.000000', 'answered')")
+    session, view = ChatSession(backend=DatabaseBackend("sqlite:///%s" % path)), Driver()
+    session.add_connector(view, at=LOCAL)
+    await session.start()
+    assert view.texts() == ["old"]
+    await view.say("new")
+    await session.close()
+    with sqlite3.connect(path) as db:
+        assert [r[0] for r in db.execute("SELECT text FROM messages ORDER BY timestamp")] == ["old", "new"]

@@ -7,14 +7,13 @@ subsystem and carries both an ``id``, which is how messages are addressed, and
 a ``name``, which is what the chat displays. Keeping them apart is what lets a
 connector be renamed without breaking the replies already in flight.
 
-A message says where it came from, where its speaker sent it, and who was
-asked to answer it:
+A message says where it came from and who answers it:
 
-    to is None   → said to everyone           (say)
-    to is an id  → addressed to one peer      (ask)
-    reply_to set → it answers that message    (answer)
-    asked_of     → whose ``answer`` the session calls: ``to``, or the peer
-                   :class:`~chatinho.session.ChatSession` routed a say to
+    to is None   → owed by nobody: heard by all, answered by none
+    to is an id  → that peer answers it: addressed by its speaker, or by the
+                   router for a say that named nobody
+    to is TOOL   → a command was run
+    reply_to set → it replies to that message; an answer has ``to`` unset
 
 Neither class touches Textual, so both can be exercised without mounting an
 application.
@@ -211,12 +210,10 @@ class ChatMessage:
             store. The terminal shows its :attr:`MessageID.short`.
         text: What was said, as Markdown.
         frm: The id of whoever said it; :data:`LOCAL` for the user.
-        to: The id the speaker addressed it to, or None when it was said to
-            everyone. The session never changes it.
-        asked_of: The id of the peer whose ``answer`` the session calls for it,
-            or None: ``to`` when it was addressed, or the peer the session
-            routed a say to. An answer, an error reply and a command's run and
-            result are asked of nobody.
+        to: The id of the peer whose ``answer`` the session calls for it, or
+            None for nobody: what the speaker addressed it to, or what the
+            router chose for a say that named nobody. An answer, an error reply
+            and a command's result are addressed to nobody.
         reply_to: The id of the message this answers, when it answers one.
         timestamp: When it entered the history.
         status: What an answer said about itself, from the ``Reply`` that
@@ -236,13 +233,6 @@ class ChatMessage:
     timestamp : datetime = field(default_factory=datetime.now)
     status    : ReplyStatus = ReplyStatus.ANSWERED
     credentials : Dict[str, "Secret"] = field(default_factory=dict, repr=False, compare=False)
-    #: Last, so a message built positionally keeps every older field where it was.
-    asked_of    : Optional[int] = None
-
-    @property
-    def is_broadcast(self) -> bool:
-        """Whether it went to everyone rather than to one peer."""
-        return self.to is None
 
     @property
     def is_local(self) -> bool:

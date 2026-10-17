@@ -57,7 +57,6 @@ class ArchivedMessage(Base):
     frm       = Column(Integer, nullable=False)
     to        = Column(Integer, nullable=True)
     reply_to  = Column(String, nullable=True)
-    asked_of  = Column(Integer, nullable=True)
     timestamp = Column(DateTime(timezone=False), nullable=False, index=True)
     #: What an answer said about itself; kept so errors stay errors after a reopen.
     status    = Column(String, nullable=False, default=ReplyStatus.ANSWERED.value)
@@ -259,7 +258,7 @@ class DatabaseBackend:
                 session.merge(ArchivedMessage(
                     id=str(msg.id), text=msg.text, frm=msg.frm, to=msg.to,
                     reply_to=None if msg.reply_to is None else str(msg.reply_to),
-                    asked_of=msg.asked_of, timestamp=msg.timestamp, status=ReplyStatus(msg.status).value,
+                    timestamp=msg.timestamp, status=ReplyStatus(msg.status).value,
                 ))
             session.commit()
 
@@ -276,7 +275,7 @@ class DatabaseBackend:
             return [
                 ChatMessage(id=MessageID.parse(r.id), text=r.text, frm=r.frm, to=r.to,
                             reply_to=None if r.reply_to is None else MessageID.parse(r.reply_to),
-                            asked_of=r.asked_of, timestamp=r.timestamp, status=ReplyStatus(r.status))
+                            timestamp=r.timestamp, status=ReplyStatus(r.status))
                 for r in rows
             ]
 

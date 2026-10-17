@@ -360,9 +360,9 @@ class ChatFrontend(App):
         The text arrives on the message already stripped, and a blank input
         sends nothing at all, so there is nothing to check here.
 
-        Nothing here waits on anyone else. Text is posted and the answers come
-        back as messages; a command runs in a worker, so a slow one leaves the
-        input free.
+        Nothing here waits on anyone else. Both a command and text run in a
+        worker: a slow command, or a router deciding who a say is for before it
+        is posted, leaves the input free, and the answers come back as messages.
         """
         text = message.text
         message.input.clear()
@@ -373,7 +373,7 @@ class ChatFrontend(App):
             target   = self._reply_target
             self._clear_reply_target()
             to, text = self._addressed(text)
-            await self.say(text, to=to, reply_to=target)
+            self.run_worker(self.say(text, to=to, reply_to=target), exclusive=False, exit_on_error=False)
 
     def _addressed(self, text: str) -> Tuple[Optional[int], str]:
         """

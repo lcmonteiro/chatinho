@@ -96,7 +96,7 @@ class Agent:
     async def listen(self, msg):
         """Replies to a question the frontend said to the room for a client."""
         self.heard.append(msg)
-        if not self.replies or not msg.is_broadcast:
+        if not self.replies or msg.to is not None:
             return
         if msg.frm != LOCAL:                     # only what the frontend forwarded
             return

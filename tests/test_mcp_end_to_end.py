@@ -74,7 +74,7 @@ async def test_with_two_remote_peers_the_connector_names_one():
 
     assert reply.text == "agent: who can draw?"
     asked = [m for m in there._context() if m.text == "who can draw?"][0]
-    assert asked.frm == LOCAL and not asked.is_broadcast
+    assert asked.frm == LOCAL and asked.to is not None
 
     await here.close()
     await there.close()

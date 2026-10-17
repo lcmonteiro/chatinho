@@ -16,7 +16,7 @@ class Echo:
     say : Say
 
     async def listen(self, msg):
-        if msg.is_broadcast and msg.is_local:
+        if msg.to is None and msg.is_local:
             await self.say("echo: %s" % msg.text, reply_to=msg.id)
 
 session = ChatSession(connectors=[Echo()], commands=[HelpCommand()])
@@ -125,7 +125,7 @@ own task, so a peer can answer several questions at once and asks may recurse, u
 said; and **everything that crosses is in the context**. Connectors keep no state of the
 conversation: they read it with `context()`, and the backend alone stores it.
 
-[`docs/SPEC.md`](docs/SPEC.md) is the reference for all fourteen hooks — what each demands, what it
+[`docs/SPEC.md`](docs/SPEC.md) is the reference for all fifteen hooks — what each demands, what it
 grants, an example, and what it costs. [`examples/hooks.py`](examples/hooks.py) is that document
 executable.
 
@@ -362,8 +362,8 @@ async with client:
   `ask` (one peer, by name), `peers`, `tools` (the slash commands) and `invoke` (one of them).
 - **A question names its peer.** A question asked of `lab` goes to one remote peer: the
   `McpConnector(peer=...)` given, or else the remote session's only answering peer. With several and
-  no `peer=`, the connector answers with an error — a peer router is the planned fix. In any
-  chatinho session, a say in a room where exactly one peer answers is asked of that peer.
+  no `peer=`, the connector answers with an error. In any chatinho session, a say that names
+  nobody is given a `to` by the router: by default, the one peer that answers, when there is one.
 - **One reply, always.** Every question ends in exactly one of `answered`, `asked` (a question back)
   or `error`. There is no deadline: a client that stops waiting just ends its call.
   Attachments come back with the answer and the local backend keeps them.
@@ -450,7 +450,7 @@ content: an HTML attachment runs its scripts when your browser opens it.
 | [`examples/lab_client.py`](examples/lab_client.py) | a chat asking that lab, lending it your key |
 | [`examples/lab_fastmcp_client.py`](examples/lab_fastmcp_client.py) | a plain FastMCP client asking the lab |
 | [`examples/inbox.py`](examples/inbox.py) | `POST /ask` from a script blocks until you answer in the chat |
-| [`examples/hooks.py`](examples/hooks.py) | one peer for each of the fourteen hooks, no terminal and no key |
+| [`examples/hooks.py`](examples/hooks.py) | one peer for each of the fifteen hooks, no terminal and no key |
 
 The LLM demos need `OPENAI_API_KEY`; see [`examples/README.md`](examples/README.md).
 

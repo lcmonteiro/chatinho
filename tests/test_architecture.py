@@ -27,6 +27,7 @@ CORE_MODULES = [
     "message.py",
     "hooks.py",
     "query.py",
+    "routers/simple.py",
 ]
 
 # The package that is allowed to know about Textual: the terminal frontend.
@@ -221,7 +222,7 @@ def blocked(name, *a, **k):
 builtins.__import__ = blocked
 
 import chatinho
-from chatinho import ChatSession, HelpCommand, TestCommand, ChatMessage, require, HookListen
+from chatinho import ChatSession, HelpCommand, TestCommand, SimpleRouter, ChatMessage, require, HookListen
 print("core-ok")
 for name in sorted(chatinho._BEHIND_AN_EXTRA):
     try:

@@ -153,7 +153,7 @@ class McpFrontend:
         """
         Hands the asked peer's reply to a client's message back to that client.
 
-        Who was asked is the question's ``asked_of``, read from the conversation
+        Who was asked is the question's ``to``, read from the conversation
         rather than kept again here. Anyone else's reply is only overheard. A
         question no longer in the conversation (forgotten while open) takes
         the first reply, so no call waits forever.
@@ -164,7 +164,7 @@ class McpFrontend:
         if open_ is None or open_.reply.done():
             return
         question = next((m for m in self.context() if m.id == msg.reply_to), None)
-        if question is not None and msg.frm != question.asked_of:
+        if question is not None and msg.frm != question.to:
             return
         open_.reply.set_result(msg)
 

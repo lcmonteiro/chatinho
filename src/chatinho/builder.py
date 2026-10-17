@@ -35,6 +35,7 @@ def build_chat_session(
     copy_key        : str = "ctrl+y",
     newline_escape  : Optional[str] = NEWLINE_ESCAPE,
     name            : Optional[str] = None,
+    router          : Optional[Any] = None,
 ) -> ChatSession:
     """
     Builds a chat with a terminal from peers and a backend.
@@ -72,6 +73,8 @@ def build_chat_session(
             ``"f10"``, ``"escape"``. Defaults to Textual's own ``"ctrl+q"``,
             which stops quitting when another key is given. ``ctrl+c`` is a
             separate binding and is left alone.
+        router: The peer that decides who answers a say that names nobody;
+            without one, the session's default router does.
 
     Returns:
         ChatSession: The session, with the terminal as its ``frontend`` and so
@@ -96,6 +99,7 @@ def build_chat_session(
         commands   = commands,
         frontend   = presentation,
         backend    = backend,
+        router     = router,
     )
 
 
@@ -109,6 +113,7 @@ def build_mcp_session(
     host        : str = "127.0.0.1",
     port        : int = 8000,
     credentials : Optional[Dict[str, str]] = None,
+    router      : Optional[Any] = None,
 ) -> ChatSession:
     """
     Builds a chat served over MCP from peers and a backend.
@@ -127,6 +132,8 @@ def build_mcp_session(
         host: Where the server listens.
         port: The port it listens on.
         credentials: Lent with every message to the peers that answer it.
+        router: The peer that decides who answers a say that names nobody;
+            without one, the session's default router does.
 
     Returns:
         ChatSession: The session, with the MCP server as its ``frontend``.
@@ -147,4 +154,5 @@ def build_mcp_session(
         commands   = commands,
         frontend   = presentation,
         backend    = backend,
+        router     = router,
     )
