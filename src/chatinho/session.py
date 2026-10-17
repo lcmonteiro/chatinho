@@ -161,12 +161,7 @@ class ChatSession:
         if at is None:
             at = declared_id(connector)
         if at is None:
-            # Past any id already taken: a peer pinned at one was otherwise
-            # silently replaced by the next one numbered.
-            while self._next_id in self._connectors:
-                self._next_id += 1
-            at = self._next_id
-            self._next_id += 1
+            at = self._free_id()
         elif at in self._connectors:
             raise ValueError("Id %d is already taken by %r" % (at, name_of(self._connectors[at])))
 
@@ -176,6 +171,18 @@ class ChatSession:
         connector.peer_id = at
         self._connectors[at] = connector
         self._grant(connector, at)
+        return at
+
+    def _free_id(self) -> int:
+        """Takes the next id no peer holds.
+
+        Past any id already taken: a peer pinned at one was otherwise silently
+        replaced by the next one numbered.
+        """
+        while self._next_id in self._connectors:
+            self._next_id += 1
+        at = self._next_id
+        self._next_id += 1
         return at
 
     def add_command(self, cmd: Any) -> str:
