@@ -313,10 +313,12 @@ async def test_a_slow_command_does_not_freeze_the_input():
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", CommandInput)
         inp.text = "/lento"
-        started = asyncio.get_running_loop().time()
         await pilot.press("enter")
-        # Well under the command's 0.5 s; the press includes painting "/lento".
-        assert asyncio.get_running_loop().time() - started < 0.3
+        # The press came back before the command finished: had it waited, the
+        # answer would be here already. A wall-clock bound measured the paint
+        # inside the press too, and a loaded runner took 0.327 s of a 0.3 s cap.
+        assert "/lento" in [m.text for m in app.messages]
+        assert "lento: done" not in [m.text for m in app.messages]
         inp.text = "meanwhile"
         await pilot.press("enter")
         await _wait_for(app, pilot, "meanwhile")
