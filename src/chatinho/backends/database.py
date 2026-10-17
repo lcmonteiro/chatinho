@@ -26,12 +26,13 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence
 from urllib.parse import quote
 
-from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, create_engine
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, create_engine, inspect
+from sqlalchemy import text as sql
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from ..hooks import HookForget, HookKeep, HookLink, HookListen, HookLoad, backend, require
-from ..message import Attachment, ChatMessage, MessageID
+from ..message import Attachment, ChatMessage, MessageID, ReplyStatus
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,9 @@ class ArchivedMessage(Base):
     reply_to  = Column(String, nullable=True)
     asked_of  = Column(Integer, nullable=True)
     timestamp = Column(DateTime(timezone=False), nullable=False, index=True)
+    #: What an answer said about itself; kept so errors stay errors after a reopen.
+    status    = Column(String, nullable=False, default=ReplyStatus.ANSWERED.value,
+                       server_default=ReplyStatus.ANSWERED.value)
 
 
 class ArchivedAttachment(Base):
@@ -90,15 +94,17 @@ class DatabaseBackend:
     gives back what it held when the next session starts.
     """
 
-    def __init__(self, database_url: str, echo: bool = False, **kwargs: Any) -> None:
+    def __init__(self, database_url: str, echo: bool = False) -> None:
         """Prepares the backend; the connection opens in :meth:`initialize`.
 
         Args:
             database_url: Any URL SQLAlchemy accepts.
             echo: Whether SQLAlchemy logs the statements it runs.
-            **kwargs: Kept for callers that pass extra configuration.
+
+        Raises:
+            TypeError: Any other keyword — a typo such as ``ecoh=True`` is an
+                error rather than a setting that silently does nothing.
         """
-        self.config       = kwargs
         self.database_url = database_url
         self.echo         = echo
         self.engine       : Optional[Any] = None
@@ -129,7 +135,26 @@ class DatabaseBackend:
         if self._worker is None:
             self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chatinho-db")
         Base.metadata.create_all(self.engine)
+        self._add_status_column()
         self.SessionLocal = sessionmaker(bind=self.engine, future=True)
+
+    def _add_status_column(self) -> None:
+        """Adds ``status`` to an archive written before it was kept.
+
+        ``create_all`` never alters a table that exists, so without this an
+        older archive would fail every read. A column with a safe default is
+        the one kind of change made in place: its old rows are ``answered``,
+        which is what they were taken for when they were written.
+        """
+        assert self.engine is not None
+        columns = {column["name"] for column in inspect(self.engine).get_columns("messages")}
+        if "status" in columns:
+            return
+        logger.info("Adding the status column to the message archive")
+        with self.engine.begin() as connection:
+            connection.execute(sql(
+                "ALTER TABLE messages ADD COLUMN status VARCHAR NOT NULL DEFAULT '%s'"
+                % ReplyStatus.ANSWERED.value))
 
     def shutdown(self) -> None:
         """Disposes of the engine, so its pool does not outlive the chat."""
@@ -242,7 +267,7 @@ class DatabaseBackend:
                 session.merge(ArchivedMessage(
                     id=str(msg.id), text=msg.text, frm=msg.frm, to=msg.to,
                     reply_to=None if msg.reply_to is None else str(msg.reply_to),
-                    asked_of=msg.asked_of, timestamp=msg.timestamp,
+                    asked_of=msg.asked_of, timestamp=msg.timestamp, status=ReplyStatus(msg.status).value,
                 ))
             session.commit()
 
@@ -259,7 +284,7 @@ class DatabaseBackend:
             return [
                 ChatMessage(id=MessageID.parse(r.id), text=r.text, frm=r.frm, to=r.to,
                             reply_to=None if r.reply_to is None else MessageID.parse(r.reply_to),
-                            asked_of=r.asked_of, timestamp=r.timestamp)
+                            asked_of=r.asked_of, timestamp=r.timestamp, status=ReplyStatus(r.status))
                 for r in rows
             ]
 

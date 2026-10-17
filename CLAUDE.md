@@ -62,6 +62,15 @@ nor the frontend. **What `answer` returns is asked of nobody**, so it is heard b
 and never put to anyone's `answer`. `Query(peer=)` matches `asked_of`, and `DatabaseBackend`
 archives it. That schema is the baseline: an archive from before `asked_of` existed is not upgraded.
 
+**The archive keeps `status` too, and that column *is* added in place.** Without it a failed reply
+came back from a reopened archive as an answer, and `Query(errors=False)` — what both LLM
+connectors remember by default — let it into the model's memory on every restart. The policy is
+one line: **a column with a safe default is added in place, and nothing else is migrated.**
+`status` has one (`answered`, which is what an old row was taken for when it was written), so
+`initialize()` adds it to an older table rather than leaving every existing `assistant.db` to fail
+its first read; `asked_of` had none, so it was not. `DatabaseBackend` also refuses a keyword it
+does not know — `ecoh=True` used to be swallowed into a `config` nothing read.
+
 **The presentation is peer zero, and says so itself.** `ChatFrontend` is `@frontend("chat")` — being
 the person is what it *is*, not a favour whoever attaches it does — and it declares the same hooks
 a connector does. There is no privileged path: a terminal reaches the conversation through exactly
