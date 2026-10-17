@@ -374,7 +374,8 @@ async def test_asking_another_peer():
     model = fake(calls("ask_coder", question="Write a test"))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent, _Echo("coder")])
-    assert (await view.ask(agent.peer_id, "go")).text == "coder: Write a test"
+    # The tool hands the model the Reply itself.
+    assert (await view.ask(agent.peer_id, "go")).text == str(Reply("coder: Write a test"))
     asked = [m for m in view.context() if m.frm == agent.peer_id and m.reply_to is None]
     assert [m.text for m in asked] == ["Write a test"]
     await session.close()
@@ -402,7 +403,7 @@ async def test_ask_user_when_asked_for():
     agent = AgentConnector("agent", model, ask_user=True)
     session, view = await driven(connectors=[agent])
     view.answers.append("Porto")
-    assert (await view.ask(agent.peer_id, "Weather?")).text == "In Porto"
+    assert (await view.ask(agent.peer_id, "Weather?")).text == "In %s" % Reply("Porto")
     assert "ask_user" in model.tools[-1]
     await session.close()
 
@@ -464,7 +465,8 @@ async def test_a_peers_error_reply_reaches_the_model_as_a_failure():
     model = fake(calls("ask_quota", question="x", then=lambda result: "It said: " + result))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent, _OutOfQuota()])
-    assert (await view.ask(agent.peer_id, "go")).text == "It said: quota failed: quota exceeded"
+    told = Reply("quota exceeded", status=ReplyStatus.ERROR)
+    assert (await view.ask(agent.peer_id, "go")).text == "It said: %s" % told
     await session.close()
 
 
@@ -472,7 +474,8 @@ async def test_a_failing_peer():
     model = fake(calls("ask_broken", question="x", then=lambda result: "It said: " + result))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent, _Broken()])
-    assert (await view.ask(agent.peer_id, "go")).text == "It said: broken failed: RuntimeError"
+    told = Reply("broken failed: RuntimeError", status=ReplyStatus.ERROR)
+    assert (await view.ask(agent.peer_id, "go")).text == "It said: %s" % told
     await session.close()
 
 
@@ -514,7 +517,7 @@ async def test_asked_back():
     session, view = await driven(connectors=[agent, Coder()])
     assert agent.peer_id == 1
     answer = await asyncio.wait_for(view.ask(agent.peer_id, "go"), timeout=5)
-    assert answer.text == "coder<agent again>"
+    assert answer.text == str(Reply("coder<agent again>"))
     await session.close()
 
 
@@ -523,7 +526,8 @@ async def test_a_loop_of_agents_stops_at_max_depth():
     pong = AgentConnector("pong", fake(calls("ask_ping", question="again")), peers=["ping"])
     session, view = await driven(connectors=[ping, pong], max_depth=4)
     answer = await asyncio.wait_for(view.ask(ping.peer_id, "go"), timeout=5)
-    assert answer.text == "ping failed: too many nested asks (limit 4)"   # the tool reports the failure
+    # The innermost tool got the limit's ERROR reply; each agent above echoes its tool's Reply.
+    assert "too many nested asks (limit 4)" in answer.text and "ReplyStatus.ERROR" in answer.text
     await session.close()
 
 
@@ -553,7 +557,7 @@ async def test_its_tool_calls_are_not_memory():
     await view.ask(agent.peer_id, "first")
     await view.ask(agent.peer_id, "second")
     texts = [m.content for m in model.sent[-1]]
-    assert texts == ["first", "coder: help me", "second"]
+    assert texts == ["first", str(Reply("coder: help me")), "second"]
     await session.close()
 
 

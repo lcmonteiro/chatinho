@@ -330,16 +330,12 @@ class AgentConnector:
         return found
 
     def _asking(self, at: int, name: str) -> Callable[..., Any]:
-        async def ask(question: str) -> str:
+        async def ask(question: str) -> Reply:
             try:
-                reply = await self.ask(at, question)
+                return await self.ask(at, question)
             except Exception as exc:
                 # Only the type: an exception may echo a prompt.
-                return "%s failed: %s" % (name, type(exc).__name__)
-            if reply.status == ReplyStatus.ERROR:
-                # The peer's own error reply, already in the conversation.
-                return "%s failed: %s" % (name, reply.text)
-            return reply.text
+                return Reply("%s failed: %s" % (name, type(exc).__name__), status=ReplyStatus.ERROR)
         return ask
 
     def _running(self, name: str) -> Callable[..., Any]:

@@ -49,7 +49,7 @@ In `_post`, a reply resolves the waiting ask only when `msg.frm` equals the ques
 
 The future resolves with the answering `ChatMessage`, and `ask` returns `Reply(msg.text, status=msg.status)`. The asker reads the status itself: `answered`, `asked` back, or `error`, the session's "too many nested asks" reply included. An `answer` that *raises* still makes a waiting `ask` raise, as on `main`. The returned `Reply` carries no attachments, because they are with the backend, where `locate` finds them.
 
-- **The agent's tools:** `AgentConnector._asking` returns `"<name> failed: <text>"` for an `error` reply (the peer's own words, already in the conversation) and the text otherwise. An exception is still reported by its type alone.
+- **The agent's tools:** `AgentConnector`'s `ask_<peer>` tool returns the `Reply` itself, status included, and an exception as `Reply("<name> failed: <type>", status=error)` (by type alone, since an exception may echo a prompt). LangChain hands the model a non-text tool result as `str()`, so the model reads the `Reply`'s repr. Chosen at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)) over folding the status into prose.
 - **First implemented as raising `PeerError`** for an `error` reply. Changed at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)): the reply already carries its status, so the caller should read it rather than catch an exception for it.
 
 ### 4. Status in the archive
