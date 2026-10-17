@@ -13,6 +13,7 @@ from typing import Awaitable, Callable, Dict, List, Optional
 
 from markdown_it import MarkdownIt
 from textual import events
+from textual.app import ComposeResult
 from textual.containers import ScrollableContainer, Vertical
 from textual.widget import Widget
 from textual.widgets import Markdown, Static
@@ -297,9 +298,13 @@ class ChatLog(TouchScrollableContainer):
         style : Optional[ChatStyle] = None,
         on_reply_target_change : Optional[Callable[[Optional[MessageID]], None]] = None,
         locate : Optional[Callable[[MessageID, str], Awaitable[Optional[str]]]] = None,
+        banner : str = "",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
+        # Shown above the messages and never one of them: it is the terminal's
+        # to show, so no peer hears it, is asked it, or archives it.
+        self._banner = banner
         # Granted by HookLocate: asks the backend where a message's attachment
         # can be opened. The log never learns where attachments live.
         self._locate = locate
@@ -322,6 +327,11 @@ class ChatLog(TouchScrollableContainer):
         self.reply_target : Optional[MessageID] = None
 
     # === Rendering ==================================================================
+
+    def compose(self) -> ComposeResult:
+        """The banner, when there is one; the messages are mounted by :meth:`sync`."""
+        if self._banner:
+            yield Static(self._banner, classes="chat-banner")
 
     def sync(self) -> None:
         """Brings the rendered widgets in line with the store's window.

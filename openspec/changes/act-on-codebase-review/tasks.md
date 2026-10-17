@@ -4,10 +4,10 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 
 ## 1. The terminal's notices leave the conversation
 
-- [ ] 1.1 Add a regression test to `tests/test_chat_frontend.py`: a chat with one answering peer and `welcome_message="Welcome"`, where the user runs `/nope`. The peer's `answer` must never be called and the conversation must be empty. Verify that it **fails** on the current code.
-- [ ] 1.2 Give `ChatLog` an optional `banner` (a muted `Static`, class `chat-banner`, mounted once above the messages and outside `sync()`'s window), styled in `ChatStyle.to_css()`. `ChatFrontend.on_mount` passes `welcome_message` to it instead of saying it. Verify with 1.1, and with `test_the_welcome_message_is_the_app_saying_it` rewritten to assert the banner shows the text and `app.messages == []`.
-- [ ] 1.3 Report an unknown command with `self.notify(..., severity="warning")` and a failed command with `self.notify(..., severity="error")`, instead of `say`. Verify by rewriting the two "Unknown command" assertions (`test_chat_frontend.py:349`, `test_command_suggestions.py:171`) to check the notification with notifications enabled, and the failed-command test likewise. Run 1.1 again; it now passes.
-- [ ] 1.4 In CLAUDE.md, state that the welcome is a banner and that notices are toasts, never messages. Verify the checks pass.
+- [x] 1.1 Add a regression test to `tests/test_chat_frontend.py`: a chat with one answering peer and `welcome_message="Welcome"`, where the user runs `/nope`. The peer's `answer` must never be called and the conversation must be empty. Verify that it **fails** on the current code.
+- [x] 1.2 Give `ChatLog` an optional `banner` (a muted `Static`, class `chat-banner`, mounted once above the messages and outside `sync()`'s window), styled in `ChatStyle.to_css()`. `ChatFrontend.on_mount` passes `welcome_message` to it instead of saying it. Verify with 1.1, and with `test_the_welcome_message_is_the_app_saying_it` rewritten to assert the banner shows the text and `app.messages == []`.
+- [x] 1.3 Report an unknown command with `self.notify(..., severity="warning")` and a failed command with `self.notify(..., severity="error")`, instead of `say`. Verify by rewriting the two "Unknown command" assertions (`test_chat_frontend.py:349`, `test_command_suggestions.py:171`) to check the notification with notifications enabled, and the failed-command test likewise. Run 1.1 again; it now passes.
+- [x] 1.4 In CLAUDE.md, state that the welcome is a banner and that notices are toasts, never messages. Verify the checks pass.
 
 ## 2. Asks are resolved by the asked peer, and ids are unique
 

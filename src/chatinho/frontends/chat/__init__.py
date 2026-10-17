@@ -318,6 +318,7 @@ class ChatFrontend(App):
                 max_displayed=self.max_displayed,
                 style=self._style,
                 on_reply_target_change=self._on_reply_target_change,
+                banner=self.welcome_message,
                 id=CHAT_LOG_ID,
             ),
             Vertical(
@@ -334,7 +335,10 @@ class ChatFrontend(App):
 
     async def on_mount(self) -> None:
         """
-        Focus the input, and show the history and welcome message.
+        Focus the input, and show the history.
+
+        The welcome is the log's banner, not a message: said as the user, it
+        was asked of the room's lone answering peer on every launch.
 
         Whoever starts the session — ``run()``, or a test that mounts this app
         directly — starts it before anything can be delivered here.
@@ -344,8 +348,6 @@ class ChatFrontend(App):
         if self.context():
             self._chat_log.sync()
             self._chat_log.scroll_to_bottom()
-        if self.welcome_message:
-            await self.say(self.welcome_message)
 
     async def on_command_input_submitted(self, message: CommandInput.Submitted) -> None:
         """Handle the user sending what they typed.
@@ -410,12 +412,14 @@ class ChatFrontend(App):
             Optional[str]: What the command answered, if anything.
         """
         if name not in self.commands():
-            await self.say("Unknown command: %s%s" % (COMMAND_PREFIX, name))
+            # A notice, not a message: said as the user, it was asked of the
+            # room's lone answering peer.
+            self.notify("Unknown command: %s%s" % (COMMAND_PREFIX, name), severity="warning")
             return None
         return await self.invoke(name, args)
 
     async def _typed_command(self, name: str, args: str) -> None:
-        """Runs a command the user typed, in a worker, and says so when it fails.
+        """Runs a command the user typed, in a worker, and tells the person when it fails.
 
         What the command answers needs no handling here: the session has
         already put it in the log, replying to the invocation, and the user
@@ -424,6 +428,8 @@ class ChatFrontend(App):
 
         Only a failure would otherwise go unseen, since the session logs it and
         raises it to whoever ran the command, and nobody waits on this worker.
+        It is a notification rather than a message, for the reason an unknown
+        command is.
         """
         running = asyncio.ensure_future(self.command(name, args))
         try:
@@ -436,7 +442,7 @@ class ChatFrontend(App):
             running.cancel()
             raise
         except Exception as exc:
-            await self.say("%s%s failed: %s" % (COMMAND_PREFIX, name, type(exc).__name__))
+            self.notify("%s%s failed: %s" % (COMMAND_PREFIX, name, type(exc).__name__), severity="error")
 
     async def listen(self, msg: ChatMessage, **kwargs) -> None:
         """Someone spoke to everyone: repaint."""

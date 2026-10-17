@@ -163,9 +163,12 @@ async def test_tab_falls_through_to_focus_next_without_suggestions():
 async def test_an_unknown_command_says_so_instead_of_vanishing():
     """There is no dispatch to fall through: an unknown name has no id."""
     app = await chat_frontend(commands=COMMANDS)
+    told = []
     async with app.run_test() as pilot:
+        app.notify = lambda message, **kw: told.append((message, kw.get("severity")))
         inp = app.query_one("#input-line", CommandInput)
         inp.text = "/nao-existe"
         await pilot.press("enter")
         await pilot.pause()
-    assert app.messages[-1].text == "Unknown command: /nao-existe"
+    assert told == [("Unknown command: /nao-existe", "warning")]
+    assert app.messages == []

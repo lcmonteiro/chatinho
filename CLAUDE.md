@@ -68,6 +68,13 @@ longer attaches itself, either: it takes no session in its constructor, and
 `builder.build_chat_session` hands it over as the session's `frontend` the same way it would hand
 over any other peer.
 
+**What the terminal says is what the person says, so it says nothing of its own.** The welcome
+is a banner at the top of the log, and an unknown `/command` or one that fails is a toast — none
+of them a message. They used to be `say`s, and a say of the person's in a room with one answering
+peer is asked of it: every demo opened by sending its welcome to the model, and an unknown
+`/nope` was put to it too. A banner and a toast are the terminal's to show; the conversation is
+not, and nothing in it is archived that the person never wrote.
+
 **`@frontend(name)` is `@connector(name, id=LOCAL)`, and exists because writing that out is an
 invitation to get it wrong.** Three presentations in this repository wrote it by hand, and a
 fourth — `examples/hooks.py` — pinned the id at the call site instead, which is a second way of
