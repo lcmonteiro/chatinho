@@ -62,7 +62,7 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 
 - [x] 8.1 Add a `python-version: ["3.12", "3.13"]` matrix to the `test` job in `.github/workflows/tests.yml`. Verify the workflow YAML parses (`python -c "import yaml; yaml.safe_load(open('.github/workflows/tests.yml'))"`, or by eye if PyYAML is absent) and that the existing steps use `${{ matrix.python-version }}`.
 - [x] 8.2 Fill `openspec/config.yaml` `context:` with the project conventions (design Decision 9). Verify with `openspec validate --all --strict --no-interactive`.
-- [ ] 8.3 Find the pinned OpenSpec 1.13 CLI option that installs skills only (`openspec init --help`, `openspec update --help`). If one exists, regenerate and confirm `.claude/commands/opsx/` is gone and every `openspec-*` skill remains. If none exists, record that in this task's line and change nothing. Verify with `ls .claude/commands .claude/skills`.
+- [x] 8.3 Find the pinned OpenSpec 1.13 CLI option that installs skills only. **Found, and not applied by decision: both delivery modes stay.** It is the global, per-machine `openspec config` key `delivery` (default `both`), not an `init`/`update` flag. Applying it would rename `/opsx:*` to `/openspec-*`, would need a custom profile listing all twelve workflows (the `core` profile deletes six the repo uses), would rewrite all twelve skills from 1.13.1 to 1.13.2, and would be undone by the next `openspec update` on any machine left at the default. Trialled on a scratch copy only; `.claude/` is unchanged (`ls .claude/commands .claude/skills`).
 
 ## 9. Integration
 

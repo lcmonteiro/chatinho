@@ -44,7 +44,7 @@ The review also found duplicated code, stale documentation and workflow overhead
 
 - CI runs the tests on Python 3.13 as well as 3.12.
 - `openspec/config.yaml` carries the project's conventions as context for generated artifacts.
-- The OpenSpec integration is regenerated with one delivery mode, so each operation is installed once instead of as both a skill and a command.
+- The OpenSpec integration's duplicate delivery (each operation as both a skill and a command) was investigated. Both are kept by decision, because the skills-only setting is per machine and renames the `/opsx:*` commands; see task 8.3.
 
 ## Capabilities
 
