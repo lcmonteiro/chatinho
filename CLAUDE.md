@@ -113,7 +113,10 @@ method it shares a name with.
 caller — the agent's `ask_<peer>` tools among them — could not tell "quota exceeded" from an
 answer: the status was on the message in the conversation, and nowhere the asker looked. The
 status is the answer's own word on what it is, so the caller reads it there — `answered`, `asked`
-back, or `error` — rather than the session turning one of them into an exception. What the answer
+back, or `error` — rather than the session turning one of them into an exception. As text a
+`Reply` reads as what it says — the text alone when it answered, `error: quota exceeded` when it
+did not — because that is what an agent's `ask_<peer>` tool hands its model, which used to read
+the dataclass's repr. What the answer
 attached is with the backend, so the returned `Reply` carries none of it; `locate` finds it.
 
 A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:

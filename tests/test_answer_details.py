@@ -69,6 +69,18 @@ def test_an_unknown_status_is_refused():
         Reply("x", status="maybe")
 
 
+def test_a_reply_reads_as_what_it_says():
+    """An answer reads as its text; anything else says what it is first."""
+    assert str(Reply("sunny")) == "sunny"
+    assert str(Reply("which city?", status="asked")) == "asked: which city?"
+    assert str(Reply("quota exceeded", status="error")) == "error: quota exceeded"
+
+
+def test_its_repr_is_still_the_dataclasss():
+    told = repr(Reply("sunny"))
+    assert "text=" in told and "attachments=" in told and "status=" in told
+
+
 @pytest.mark.parametrize("reply, status", [
     ("sunny", "answered"),
     (Reply("Which login flow?", status="asked"), "asked"),

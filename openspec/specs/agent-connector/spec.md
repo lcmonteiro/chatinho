@@ -34,14 +34,14 @@ Each question the connector is asked, and each say of the user it responds to, S
 
 ### Requirement: The chat as tools
 On a question, the agent SHALL have, besides its own tools:
-- one tool per other peer that answers questions, named `ask_` followed by the peer's name, which asks that peer the text it is given and returns its answer as the peer's `Reply`, with its text and its status (`answered`, `asked` or `error`);
+- one tool per other peer that answers questions, named `ask_` followed by the peer's name, which asks that peer the text it is given and returns its answer as the peer's `Reply`, with its text and its status (`answered`, `asked` or `error`), which the model reads as that `Reply` reads as text;
 - one tool per command, named `run_` followed by the command's name and described by the command's description, which runs it with the arguments it is given and returns what it answered.
 
 Characters a model API does not accept in a tool name MUST be replaced with `_`. The connector itself and the user MUST NOT be among the peers. With `ask_user=True`, a tool `ask_user` SHALL ask the user, wait for the answer and return it as the user's `Reply`. With `peers=` or `commands=`, only the names listed SHALL become tools. The tools SHALL reflect who is in the chat when the question is asked. A tool whose peer or command fails MUST NOT end the run: an `ask_` tool whose peer raises MUST return a `Reply` with status `error` naming the peer and the kind of failure, never the exception's message; a peer's own `error` reply MUST reach the agent as that `Reply`; and a `run_` tool whose command fails MUST return the failure as text. A peer asked through a tool MAY ask the connector back; how deep that goes is bounded by the session's `max_depth`.
 
 #### Scenario: Asking another peer
 - **WHEN** the chat has a peer `coder`, and the agent calls `ask_coder` with "Write a test"
-- **THEN** `coder` is asked "Write a test", and its answer is the tool's result, as `coder`'s `Reply` with status `answered`
+- **THEN** `coder` is asked "Write a test", and its answer is the tool's result, as `coder`'s `Reply` with status `answered`, which the model reads as the answer's text alone
 
 #### Scenario: Running a command
 - **WHEN** the chat has a command `help`, and the agent calls `run_help`
@@ -65,7 +65,7 @@ Characters a model API does not accept in a tool name MUST be replaced with `_`.
 
 #### Scenario: A peer's error reply
 - **WHEN** the agent calls `ask_quota` and `quota` answers `Reply("quota exceeded", status="error")`
-- **THEN** the tool returns that `Reply`, with text `quota exceeded` and status `error`, and the agent still answers
+- **THEN** the tool returns that `Reply`, with text `quota exceeded` and status `error`, the model reads `error: quota exceeded`, and the agent still answers
 
 #### Scenario: Asked back
 - **WHEN** the agent asks `coder`, and `coder` asks the agent before answering
