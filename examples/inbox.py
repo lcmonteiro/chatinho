@@ -95,7 +95,7 @@ class InboxConnector:
             return 503, {"error": "not started"}
         future = asyncio.run_coroutine_threadsafe(self.ask(LOCAL, text), self._loop)
         try:
-            return 200, {"answer": future.result(self.timeout)}
+            return 200, {"answer": future.result(self.timeout).text}
         except concurrent.futures.TimeoutError:
             future.cancel()
             return 504, {"error": "no answer within %g s" % self.timeout}

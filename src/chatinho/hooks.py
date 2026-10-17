@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
 
-from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Secret
+from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, Secret
 from .query import Query
 
 logger = logging.getLogger(__name__)
@@ -73,15 +73,18 @@ class Say(Protocol):
 class Ask(Protocol):
     """Granted by ``HookAsk``: a message for one peer, and its reply."""
 
-    async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
-        """Asks peer *to* and waits for the text of the answer it sends back.
+    async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> Reply:
+        """Asks peer *to* and waits for the answer it sends back.
 
         Only *to*'s reply resolves it; anyone else's is heard, not taken for it.
         *attachments* go to the backend, as with ``say``.
 
+        Returns:
+            Reply: The answer's text and its status — ``answered``, ``asked``
+            back, or ``error`` when the peer could not answer. What the answer
+            attached is with the backend, where ``locate`` finds it.
+
         Raises:
-            PeerError: The answer's status is ``error``; its message is the
-                answer's text, and the answer stays in the conversation.
             Exception: Whatever the peer's ``answer`` raised, when it failed.
         """
         ...

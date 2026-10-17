@@ -21,7 +21,6 @@ from chatinho import (
     HookListen,
     HookSay,
     Reply,
-    PeerError,
     ReplyStatus,
     Say,
     connector,
@@ -70,7 +69,7 @@ class _Relay:
 
     async def answer(self, msg: ChatMessage) -> Reply:
         self.asked += 1
-        return Reply("%s<%s>" % (self.name, await self.ask(self.to, "again")))
+        return Reply("%s<%s>" % (self.name, (await self.ask(self.to, "again")).text))
 
 
 def _relays(session: ChatSession, *names: str) -> List[_Relay]:
@@ -89,7 +88,7 @@ async def test_a_peer_answers_two_questions_at_once():
     started = time.perf_counter()
     answers = await asyncio.gather(view.ask(1, "a"), view.ask(1, "b"))
     elapsed = time.perf_counter() - started
-    assert sorted(answers) == ["slow: a", "slow: b"]
+    assert sorted(a.text for a in answers) == ["slow: a", "slow: b"]
     assert elapsed < 0.45, "the two questions took turns: %.2fs" % elapsed
     await session.close()
 
@@ -181,7 +180,7 @@ async def test_a_asks_b_and_b_asks_a_back():
 
         async def answer(self, msg: ChatMessage) -> Reply:
             if msg.frm == LOCAL:
-                return Reply("A<%s>" % await self.ask(2, "what do you think?"))
+                return Reply("A<%s>" % (await self.ask(2, "what do you think?")).text)
             return Reply("A again")
 
     @connector("b")
@@ -191,11 +190,11 @@ async def test_a_asks_b_and_b_asks_a_back():
         ask : Ask
 
         async def answer(self, msg: ChatMessage) -> Reply:
-            return Reply("B<%s>" % await self.ask(1, "and you?"))
+            return Reply("B<%s>" % (await self.ask(1, "and you?")).text)
 
     session, view = await driven(connectors=[A(), B()])
     answer = await asyncio.wait_for(view.ask(1, "hello"), timeout=2)
-    assert answer == "A<B<A again>>"
+    assert answer.text == "A<B<A again>>"
     await session.close()
     assert session._pending == {}
 
@@ -206,10 +205,8 @@ async def test_a_loop_stops_at_the_limit():
     session, view = await driven()
     ping, pong = _relays(session, "ping", "pong")
     await session.start()
-    # The limit's ERROR reply raises in the relay that asked; none catches it,
-    # so each relay's answer fails in turn and the user's ask raises it too.
-    with pytest.raises(PeerError, match=r"too many nested asks \(limit 8\)"):
-        await asyncio.wait_for(view.ask(ping.peer_id, "go"), timeout=2)
+    answer = await asyncio.wait_for(view.ask(ping.peer_id, "go"), timeout=2)
+    assert answer.text == "ping<pong<" * 4 + "too many nested asks (limit 8)" + ">>" * 4
     assert ping.asked + pong.asked == 8
     errors = [m for m in view.context() if m.status == ReplyStatus.ERROR]
     assert [m.text for m in errors] == ["too many nested asks (limit 8)"]
@@ -220,25 +217,25 @@ async def test_the_limit_is_configurable():
     session, view = await driven(max_depth=2)
     a, b, c = _relays(session, "a", "b", "c")
     await session.start()
-    with pytest.raises(PeerError, match=r"too many nested asks \(limit 2\)"):
-        await asyncio.wait_for(view.ask(a.peer_id, "go"), timeout=2)
+    answer = await asyncio.wait_for(view.ask(a.peer_id, "go"), timeout=2)
+    assert answer.text == "a<b<too many nested asks (limit 2)>>"
     assert (a.asked, b.asked, c.asked) == (1, 1, 0)
     await session.close()
 
 
-async def test_the_asker_of_a_question_past_the_limit_gets_a_peer_error():
-    session, view = await driven(max_depth=1)
+async def test_the_asker_of_a_question_past_the_limit_gets_an_error_reply():
+    session, view = await driven(max_depth=0)
     a, b = _relays(session, "a", "b")
     await session.start()
-    with pytest.raises(PeerError, match="too many nested asks"):
-        await asyncio.wait_for(a.ask(b.peer_id, "go"), timeout=2)
+    reply = await asyncio.wait_for(a.ask(b.peer_id, "go"), timeout=2)     # depth 1, past 0
+    assert reply.status == ReplyStatus.ERROR and "too many nested asks" in reply.text
     await session.close()
 
 
 async def test_unrelated_questions_are_not_nested():
     session, view = await driven(connectors=[_Slow()], max_depth=1)
-    assert await view.ask(1, "one") == "slow: one"
-    assert await view.ask(1, "two") == "slow: two"
+    assert (await view.ask(1, "one")).text == "slow: one"
+    assert (await view.ask(1, "two")).text == "slow: two"
     await session.close()
 
 
@@ -259,7 +256,7 @@ async def test_listening_is_not_nesting():
 
         async def listen(self, msg: ChatMessage) -> None:
             if msg.text == "slow: go":
-                self.answers.append(await self.ask(1, "from listen"))
+                self.answers.append((await self.ask(1, "from listen")).text)
 
     curious = Curious()
     session, view = await driven(connectors=[_Slow(), curious], max_depth=1)
@@ -389,11 +386,11 @@ async def test_a_reply_to_ones_own_ask_is_heard_not_answered():
 
         async def answer(self, msg: ChatMessage) -> Reply:
             self.answered.append(msg.text)
-            return Reply("curious<%s>" % await self.ask(2, "and you?"))
+            return Reply("curious<%s>" % (await self.ask(2, "and you?")).text)
 
     curious = Curious()
     session, view = await driven(connectors=[curious, _Slow()])
-    assert await asyncio.wait_for(view.ask(1, "go"), timeout=2) == "curious<slow: and you?>"
+    assert (await asyncio.wait_for(view.ask(1, "go"), timeout=2)).text == "curious<slow: and you?>"
     await session.close()
     assert curious.answered == ["go"]
     assert "slow: and you?" in curious.heard

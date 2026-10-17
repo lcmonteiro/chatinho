@@ -10,7 +10,6 @@ from chatinho import (
     HookExecute,
     HookListen,
     HookSay,
-    PeerError,
     Reply,
     ReplyStatus,
     connector,
@@ -77,17 +76,14 @@ def test_an_unknown_status_is_refused():
 ])
 async def test_the_answer_message_carries_the_status(reply, status):
     session, view = await driven(connectors=[_Eco(reply)])
-    try:
-        await view.ask(view.id_of("eco"), "q")
-    except PeerError:
-        assert status == "error"            # an error answer raises; its message still carries it
+    assert (await view.ask(view.id_of("eco"), "q")).status == status
     assert view.context()[-1].status == status
     await session.close()
 
 
 async def test_ask_still_returns_the_text():
     session, view = await driven(connectors=[_Eco("sunny")])
-    assert await view.ask(view.id_of("eco"), "weather?") == "sunny"
+    assert (await view.ask(view.id_of("eco"), "weather?")).text == "sunny"
     await session.close()
 
 
@@ -355,20 +351,18 @@ async def test_a_command_is_asked_of_nobody():
 # === What ask returns ===========================================================
 
 
-async def test_ask_returns_a_question_back_as_text():
+async def test_ask_returns_a_question_back_with_its_status():
     eco = _Eco(Reply("which city?", status="asked"))
     session, view = await driven(connectors=[eco])
-    assert await view.ask(eco.peer_id, "weather?") == "which city?"
+    assert await view.ask(eco.peer_id, "weather?") == Reply("which city?", status=ReplyStatus.ASKED)
     await session.close()
 
 
-async def test_ask_raises_on_an_error_answer():
-    """An error is a failure, not an answer: the asker can no longer take one for the other."""
+async def test_ask_returns_an_error_answer_with_its_status():
+    """The status tells the asker a failure from an answer; the text alone could not."""
     eco = _Eco(Reply("quota exceeded", status="error"))
     session, view = await driven(connectors=[eco])
-    with pytest.raises(PeerError) as failed:
-        await view.ask(eco.peer_id, "weather?")
-    assert str(failed.value) == "quota exceeded"
+    assert await view.ask(eco.peer_id, "weather?") == Reply("quota exceeded", status=ReplyStatus.ERROR)
     errors = [m for m in view.context() if m.status == ReplyStatus.ERROR]
     assert [m.text for m in errors] == ["quota exceeded"]
     await session.close()

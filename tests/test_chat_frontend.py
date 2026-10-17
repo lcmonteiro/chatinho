@@ -420,7 +420,7 @@ async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
         assert (asked.frm, asked.to, asked.text) == (1, LOCAL, "Autorizas?")
 
         await app.say("sim", reply_to=asked.id)
-        assert await question == "sim"
+        assert (await question).text == "sim"
         await pilot.pause()
     assert [m.text for m in app.messages] == ["Autorizas?", "sim"]
 

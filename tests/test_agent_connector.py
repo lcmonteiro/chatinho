@@ -4,7 +4,6 @@ Every agent here runs on a scripted model (``fakes.agent``), so no key and no
 network: the script decides each call from the messages of that run alone.
 """
 
-import contextlib
 import asyncio
 import json
 from typing import Any, Dict, List, Optional
@@ -26,7 +25,6 @@ from chatinho import (
     HookKeep,
     HookSay,
     LOCAL,
-    PeerError,
     Reply,
     ReplyStatus,
     Say,
@@ -62,8 +60,7 @@ class _Broken:
 
 async def _asked(view, agent, text: str) -> ChatMessage:
     """Asks the agent and returns its reply message, status included."""
-    with contextlib.suppress(PeerError):            # an error reply raises; its message is kept
-        await view.ask(agent.peer_id, text)
+    await view.ask(agent.peer_id, text)
     return next(m for m in reversed(view.context()) if m.frm == agent.peer_id)
 
 
@@ -79,7 +76,7 @@ async def test_options_reach_create_agent():
     agent = AgentConnector("agent", model, system_prompt="Be brief.")
     assert model.sent == [], "creating it called the model"
     session, view = await driven(connectors=[agent])
-    assert await view.ask(agent.peer_id, "hello") == "Hi."
+    assert (await view.ask(agent.peer_id, "hello")).text == "Hi."
     first = model.sent[0][0]
     assert isinstance(first, SystemMessage) and first.content == "Be brief."
     await session.close()
@@ -101,7 +98,7 @@ async def test_the_last_message_is_the_answer():
     model = fake(calls("weather", city="Porto", then=lambda result: "It is %s." % result))
     agent = AgentConnector("agent", model, tools=[weather])
     session, view = await driven(connectors=[agent])
-    assert await view.ask(agent.peer_id, "Weather?") == "It is sunny in Porto."
+    assert (await view.ask(agent.peer_id, "Weather?")).text == "It is sunny in Porto."
     await session.close()
 
 
@@ -109,7 +106,7 @@ async def test_text_blocks_are_joined():
     blocks = [{"type": "text", "text": "Hello, "}, {"type": "text", "text": "Ana."}]
     agent = AgentConnector("agent", fake(lambda messages: AIMessage(content=blocks)))
     session, view = await driven(connectors=[agent])
-    assert await view.ask(agent.peer_id, "hi") == "Hello, Ana."
+    assert (await view.ask(agent.peer_id, "hi")).text == "Hello, Ana."
     await session.close()
 
 
@@ -121,7 +118,7 @@ async def test_a_structured_answer():
     model = fake(calls("Forecast", city="Porto", sky="sunny"))
     agent = AgentConnector("agent", model, response_format=ToolStrategy(Forecast))
     session, view = await driven(connectors=[agent])
-    assert json.loads(await view.ask(agent.peer_id, "Weather?")) == {"city": "Porto", "sky": "sunny"}
+    assert json.loads((await view.ask(agent.peer_id, "Weather?")).text) == {"city": "Porto", "sky": "sunny"}
     await session.close()
 
 
@@ -140,7 +137,7 @@ async def test_two_questions_at_once():
     agent = AgentConnector("agent", fake(lambda messages: AIMessage(content="re: " + question(messages))))
     session, view = await driven(connectors=[agent])
     answers = await asyncio.gather(view.ask(agent.peer_id, "one"), view.ask(agent.peer_id, "two"))
-    assert sorted(answers) == ["re: one", "re: two"]
+    assert sorted(a.text for a in answers) == ["re: one", "re: two"]
     await session.close()
 
 
@@ -249,7 +246,7 @@ async def test_the_files_reach_the_backend():
     keeper = _Keeper()
     agent  = AgentConnector("agent", fake(makes("flow.svg", answers=["[Flow](flow.svg)"])), tools=[maker()])
     session, view = await driven(connectors=[agent], backend=keeper)
-    assert await view.ask(agent.peer_id, "draw") == "[Flow](flow.svg)"
+    assert (await view.ask(agent.peer_id, "draw")).text == "[Flow](flow.svg)"
     reply = next(m for m in view.context() if m.frm == agent.peer_id)
     assert keeper.kept[reply.id] == ["flow.svg"]
     await session.close()
@@ -342,7 +339,7 @@ async def test_asked_directly():
     model = fake(says("once"))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent, _Echo("coder")])
-    assert await view.ask(agent.peer_id, "hi") == "once"
+    assert (await view.ask(agent.peer_id, "hi")).text == "once"
     await session.close()
     assert len(model.sent) == 1
     assert [m.text for m in view.context() if m.frm == agent.peer_id] == ["once"]
@@ -377,7 +374,7 @@ async def test_asking_another_peer():
     model = fake(calls("ask_coder", question="Write a test"))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent, _Echo("coder")])
-    assert await view.ask(agent.peer_id, "go") == "coder: Write a test"
+    assert (await view.ask(agent.peer_id, "go")).text == "coder: Write a test"
     asked = [m for m in view.context() if m.frm == agent.peer_id and m.reply_to is None]
     assert [m.text for m in asked] == ["Write a test"]
     await session.close()
@@ -387,7 +384,7 @@ async def test_running_a_command():
     model = fake(calls("run_help"))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent], commands=[HelpCommand()])
-    assert "/help" in await view.ask(agent.peer_id, "what can you do?")
+    assert "/help" in (await view.ask(agent.peer_id, "what can you do?")).text
     await session.close()
 
 
@@ -405,7 +402,7 @@ async def test_ask_user_when_asked_for():
     agent = AgentConnector("agent", model, ask_user=True)
     session, view = await driven(connectors=[agent])
     view.answers.append("Porto")
-    assert await view.ask(agent.peer_id, "Weather?") == "In Porto"
+    assert (await view.ask(agent.peer_id, "Weather?")).text == "In Porto"
     assert "ask_user" in model.tools[-1]
     await session.close()
 
@@ -449,7 +446,7 @@ async def test_the_callers_tool_wins(caplog):
     model = fake(calls("ask_coder", question="x"))
     agent = AgentConnector("agent", model, tools=[ask_coder])
     session, view = await driven(connectors=[agent, _Echo("coder")])
-    assert await view.ask(agent.peer_id, "go") == "mine"
+    assert (await view.ask(agent.peer_id, "go")).text == "mine"
     assert model.tools[-1] == ["ask_coder"]
     assert "hides the chat's" in caplog.text
     await session.close()
@@ -467,7 +464,7 @@ async def test_a_peers_error_reply_reaches_the_model_as_a_failure():
     model = fake(calls("ask_quota", question="x", then=lambda result: "It said: " + result))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent, _OutOfQuota()])
-    assert await view.ask(agent.peer_id, "go") == "It said: quota failed: quota exceeded"
+    assert (await view.ask(agent.peer_id, "go")).text == "It said: quota failed: quota exceeded"
     await session.close()
 
 
@@ -475,7 +472,7 @@ async def test_a_failing_peer():
     model = fake(calls("ask_broken", question="x", then=lambda result: "It said: " + result))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent, _Broken()])
-    assert await view.ask(agent.peer_id, "go") == "It said: broken failed: RuntimeError"
+    assert (await view.ask(agent.peer_id, "go")).text == "It said: broken failed: RuntimeError"
     await session.close()
 
 
@@ -506,7 +503,7 @@ async def test_asked_back():
         ask : Ask
 
         async def answer(self, msg: ChatMessage) -> Reply:
-            return Reply("coder<%s>" % await self.ask(1, "and you?"))
+            return Reply("coder<%s>" % (await self.ask(1, "and you?")).text)
 
     def script(messages):
         if question(messages) == "and you?":
@@ -517,7 +514,7 @@ async def test_asked_back():
     session, view = await driven(connectors=[agent, Coder()])
     assert agent.peer_id == 1
     answer = await asyncio.wait_for(view.ask(agent.peer_id, "go"), timeout=5)
-    assert answer == "coder<agent again>"
+    assert answer.text == "coder<agent again>"
     await session.close()
 
 
@@ -526,7 +523,7 @@ async def test_a_loop_of_agents_stops_at_max_depth():
     pong = AgentConnector("pong", fake(calls("ask_ping", question="again")), peers=["ping"])
     session, view = await driven(connectors=[ping, pong], max_depth=4)
     answer = await asyncio.wait_for(view.ask(ping.peer_id, "go"), timeout=5)
-    assert answer == "ping failed: too many nested asks (limit 4)"   # the tool reports the failure
+    assert answer.text == "ping failed: too many nested asks (limit 4)"   # the tool reports the failure
     await session.close()
 
 

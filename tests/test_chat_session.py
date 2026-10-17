@@ -133,7 +133,7 @@ async def test_renaming_does_not_change_the_address():
     session, view = await driven(connectors=[_Rapido()])
     peer = view.peers()[1]
     peer.name = "outro-nome"
-    assert await view.ask(1, "ola") == "eco: ola"
+    assert (await view.ask(1, "ola")).text == "eco: ola"
     assert session.id_of("outro-nome") == 1
     await session.close()
 
@@ -163,7 +163,7 @@ async def test_a_reply_to_a_say_is_another_say():
 
 async def test_ask_returns_the_answer():
     session, view = await driven(connectors=[_Rapido()])
-    assert await view.ask(1, "ola") == "eco: ola"
+    assert (await view.ask(1, "ola")).text == "eco: ola"
     await session.close()
 
 
@@ -247,7 +247,7 @@ async def test_a_slow_peer_holds_up_only_itself():
     started = time.perf_counter()
     slow, quick = await asyncio.gather(view.ask(1, "?"), view.ask(2, "ola"))
     elapsed = time.perf_counter() - started
-    assert (slow, quick) == ("finalmente", "eco: ola")
+    assert (slow.text, quick.text) == ("finalmente", "eco: ola")
     assert elapsed < 0.45, "as duas perguntas serializaram: %.2fs" % elapsed
     await session.close()
 
@@ -256,7 +256,7 @@ async def test_a_peer_that_raises_does_not_take_the_chat_down():
     session, view = await driven(connectors=[_Rebenta(), _Rapido()])
     failing = asyncio.create_task(view.ask(1, "?"))     # raises in the asker
     await asyncio.sleep(0.05)
-    assert await view.ask(2, "ola") == "eco: ola"
+    assert (await view.ask(2, "ola")).text == "eco: ola"
     with pytest.raises(RuntimeError, match="kaboom"):
         await failing
     await session.close()
@@ -275,7 +275,7 @@ async def test_a_peer_can_ask_the_user():
     agente = Agente()
     session.add_connector(agente)
     await session.start()
-    assert await agente.ask(LOCAL, "Autorizas?") == "sim, autorizo"
+    assert (await agente.ask(LOCAL, "Autorizas?")).text == "sim, autorizo"
     assert [m.text for m in view.asked] == ["Autorizas?"]
     await session.close()
 
@@ -310,7 +310,7 @@ async def test_an_answer_given_later_still_resolves_the_ask():
     pergunta = asyncio.create_task(view.ask(at, "e depois?"))
     await asyncio.sleep(0.02)
     await adiado.say("agora sim", reply_to=adiado.pendente.id)
-    assert await pergunta == "agora sim"
+    assert (await pergunta).text == "agora sim"
     await session.close()
 
 
@@ -774,7 +774,7 @@ async def test_only_the_asked_peer_resolves_an_ask():
     asker, slow = _Asker(), _Slow()
     session = ChatSession(connectors=[asker, slow, _Bystander()])
     await session.start()
-    assert await asker.ask(slow.peer_id, "q") == "the real answer"
+    assert (await asker.ask(slow.peer_id, "q")).text == "the real answer"
     await session.close()
     # The bystander's reply was not lost, only not taken for the answer.
     assert "not my question" in [m.text for m in session._context()]

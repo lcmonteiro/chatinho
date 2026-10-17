@@ -45,18 +45,12 @@ In `_post`, a reply resolves the waiting ask only when `msg.frm` equals the ques
 
 `add_connector` advances `_next_id` past every id already in `_connectors` before using it. A pinned id that collides still raises, as today. This was checked alongside Decision 1 (595 tests passed). Rejected: a separate set of reserved ids, which the dict of connectors already is.
 
-### 3. `PeerError` for an `error` answer
+### 3. `ask` returns the answer's `Reply`
 
-The future resolves with the answering `ChatMessage` instead of its text, and `ask` unwraps it:
+The future resolves with the answering `ChatMessage`, and `ask` returns `Reply(msg.text, status=msg.status)`. The asker reads the status itself: `answered`, `asked` back, or `error`, the session's "too many nested asks" reply included. An `answer` that *raises* still makes a waiting `ask` raise, as on `main`. The returned `Reply` carries no attachments, because they are with the backend, where `locate` finds them.
 
-- an `error` status raises `PeerError(msg.text)`;
-- any other status returns the text.
-
-The failure path that already raises keeps calling `set_exception` unchanged.
-
-- **Where it lives:** `PeerError` is defined in `message.py` beside `ReplyStatus` and exported from `chatinho` (66 public names).
-- **The agent's tools:** `AgentConnector._asking` already turns an exception into text for the model. It formats a `PeerError` with its text (the peer's own reply, already in the conversation) and keeps formatting other exceptions by type name only, as today, because those may echo a prompt.
-- **Alternative rejected:** returning a `Reply` from `ask`. It changes the return type for every caller, including the ones that only want the text. Raising follows the existing contract ("an ask waiting on it raises"), just extended to the reply a peer *returned* rather than *raised*.
+- **The agent's tools:** `AgentConnector._asking` returns `"<name> failed: <text>"` for an `error` reply (the peer's own words, already in the conversation) and the text otherwise. An exception is still reported by its type alone.
+- **First implemented as raising `PeerError`** for an `error` reply. Changed at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)): the reply already carries its status, so the caller should read it rather than catch an exception for it.
 
 ### 4. Status in the archive
 
@@ -107,13 +101,13 @@ Two designs were implemented in turn: each builder beside its frontend, then bot
 
 ## Risks / Trade-offs
 
-- [`ask` callers that relied on receiving error text now get an exception] → Marked **BREAKING** in the proposal. In-repo callers are `AgentConnector` (handled in Decision 3) and the examples. A grep for `.ask(` across `src`, `examples` and `tests` is a task.
+- [`ask` callers that compared its result to a string] → Marked **BREAKING** in the proposal. In-repo callers are `AgentConnector` (Decision 3), `examples/inbox.py`, `examples/hooks.py` and the tests.
 - [The welcome is no longer in the archive, so a reopened chat starts without it] → It is shown again by the banner on every launch, which is the point of a welcome.
 - [Stricter resolution could leave an ask waiting forever if the asked peer replies under a different id] → No path posts a peer's reply under another id. `close()` still fails every waiting ask, so nothing hangs past shutdown.
 - [Credentials remain readable by every listener] → Out of scope (see Non-Goals). The proposal's wording is not changed, and CLAUDE.md gets one sentence saying the scoping is by convention.
 
 ## Migration Plan
 
-- **`ask()` callers** must catch `PeerError` where they relied on error text. The CLAUDE.md "Three verbs" section and `docs/SPEC.md`'s `HookAsk` section state this.
+- **`ask()` callers** read `.text` from the returned `Reply`, and `.status` where it matters. The CLAUDE.md "Three verbs" section and `docs/SPEC.md`'s `HookAsk` section state this.
 - **Archives** are not migrated: one written before `status` existed must be recreated.
 - **`DatabaseBackend(..., unknown=…)` callers** remove the unknown keyword.

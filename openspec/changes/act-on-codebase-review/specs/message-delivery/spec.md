@@ -29,11 +29,11 @@ The terminal SHALL show its welcome text and its own notices to the person witho
 ## MODIFIED Requirements
 
 ### Requirement: Nested asks are bounded
-The session SHALL track how deeply each question is nested: a question asked, or addressed with `say(to=...)` or `say(reply_to=...)`, by a peer while it answers a question of depth N has depth N + 1; any other question has depth 1. The limit SHALL be configurable on the session and default to 8. A question deeper than the limit MUST NOT reach its peer. Instead it SHALL get a reply with status `ERROR` saying there are too many nested asks, and whoever asked it receives that reply as it would any `ERROR` answer: an `ask` waiting on it raises `PeerError`. A say that replies to another message and is past the limit MUST be dropped rather than answered, so error replies are never traded back and forth.
+The session SHALL track how deeply each question is nested: a question asked, or addressed with `say(to=...)` or `say(reply_to=...)`, by a peer while it answers a question of depth N has depth N + 1; any other question has depth 1. The limit SHALL be configurable on the session and default to 8. A question deeper than the limit MUST NOT reach its peer. Instead it SHALL get a reply with status `ERROR` saying there are too many nested asks, and whoever asked it receives that reply as it would any answer: an `ask` waiting on it returns it, with status `ERROR`. A say that replies to another message and is past the limit MUST be dropped rather than answered, so error replies are never traded back and forth.
 
 #### Scenario: A loop stops at the limit
 - **WHEN** two peers answer every question by asking the other, and the user asks one of them in a session with the default limit
-- **THEN** the ninth nested question gets an `ERROR` reply saying there are too many nested asks, the peer that asked it gets `PeerError`, and since neither peer catches it, each `answer` above it fails in turn and the user's `ask` raises `PeerError` with the same text
+- **THEN** the ninth nested question gets an `ERROR` reply saying there are too many nested asks, each peer above it receives an answer, and the user's question is answered
 
 #### Scenario: The limit is configurable
 - **WHEN** the session is created with a limit of 2 and a question is nested three deep
@@ -41,7 +41,7 @@ The session SHALL track how deeply each question is nested: a question asked, or
 
 #### Scenario: The asker of a question past the limit
 - **WHEN** a peer asks with `ask()` a question that is past the limit
-- **THEN** `ask` raises `PeerError` whose text says there are too many nested asks
+- **THEN** `ask` returns a `Reply` with status `error` whose text says there are too many nested asks
 
 #### Scenario: Unrelated questions are not nested
 - **WHEN** the user asks a peer twice in a row

@@ -74,15 +74,6 @@ class ReplyStatus(str, Enum):
     ERROR    = "error"
 
 
-class PeerError(Exception):
-    """An ``ask`` answered with a reply whose status is ``error``.
-
-    The peer could not answer, and said so: its reply is in the conversation,
-    and its text is this exception's message. An ``answer`` that raises makes
-    ``ask`` raise too; this is the same failure for a peer that *returned* it.
-    """
-
-
 @dataclass(frozen=True)
 class Reply:
     """What ``answer`` or a command's ``execute`` returns when it says more than text.

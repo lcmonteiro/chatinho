@@ -71,7 +71,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .frontends.mcp import McpFrontend
 
 from .session import ChatSession
-from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, PeerError, Reply, ReplyStatus, Secret
+from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
 from .query import SELF, Query
 from .keys import KeySource, KeyUnavailable, Env, DotEnv, File, Keyring, Command, Literal, Chain, key
 from .endpoint import Endpoint
@@ -148,7 +148,6 @@ __all__ = [
     "Attachment",
     "Reply",
     "ReplyStatus",
-    "PeerError",
     "Secret",
     "LOCAL",
     "TOOL",

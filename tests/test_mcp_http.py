@@ -70,7 +70,7 @@ async def test_tokens_from_key_sources(monkeypatch):
         lab = McpConnector(url=url, token=Env("CHATINHO_MCP_TOKEN"), name="lab")
         here, view = await driven(connectors=[lab])
         try:
-            assert await view.ask(lab.peer_id, "rain?") == "sunny"
+            assert (await view.ask(lab.peer_id, "rain?")).text == "sunny"
         finally:
             await here.close()
     finally:

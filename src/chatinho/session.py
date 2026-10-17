@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from .hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, HookListen, HookLoad
 from .hooks import declared_id, declares, hooks_of, name_of
 from .message import LOCAL, TOOL
-from .message import Attachment, ChatMessage, MessageID, MessageStore, PeerError, Reply, ReplyStatus, Secret
+from .message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
 from .query import Query
 
 #: How deeply the question being answered in this task is nested; 0 when none is.
@@ -358,7 +358,7 @@ class ChatSession:
             text        : str,
             *,
             attachments : Sequence[Attachment] = (),
-        ) -> str:
+        ) -> Reply:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, asked_of=to)
@@ -370,10 +370,9 @@ class ChatSession:
                 answered = await future
             finally:
                 self._pending.pop(msg.id, None)
-            if answered.status == ReplyStatus.ERROR:
-                # A failure, not an answer: the reply stays in the conversation.
-                raise PeerError(answered.text)
-            return answered.text
+            # The status says whether it answered, asked back or failed; what
+            # the answer attached is with the backend, under its id.
+            return Reply(answered.text, status=answered.status)
         return ask
 
     async def _kept(self, msg: ChatMessage, attachments: Sequence[Attachment]) -> None:

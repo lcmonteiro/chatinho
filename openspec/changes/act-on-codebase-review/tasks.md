@@ -17,13 +17,13 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 - [x] 2.4 ~~Hold `McpFrontend`'s open questions to the asked peer.~~ Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)); the field, its test and the `mcp-server` delta were removed.
 - [x] 2.5 Add both rules to CLAUDE.md ("Everyone is a peer" and "Three verbs"), and fix the stale `_drain` comment in `session.py`. Verify the checks pass.
 
-## 3. `ask` raises `PeerError` on an error answer
+## 3. `ask` returns the answer's `Reply`, status included
 
-- [x] 3.1 Add tests to `tests/test_answer_details.py`. `ask` of a peer returning `Reply("quota exceeded", status="error")` raises `PeerError("quota exceeded")`, and the reply is still in the conversation. A `status="asked"` answer returns its text. In `tests/test_message_delivery.py`, `ask` past `max_depth` raises `PeerError`. Verify they fail on the current code.
-- [x] 3.2 Define `PeerError` in `message.py` and export it from `chatinho` (66 names; update `__all__` and the export-count test if one exists). Resolve pending asks with the answering `ChatMessage`, and unwrap it in `ask` (design Decision 3). Verify that 3.1 passes.
-- [x] 3.3 In `AgentConnector._asking`, format `PeerError` with its text and other exceptions by type name only. Verify with a test in `tests/test_agent_connector.py` where a peer's `error` reply reaches the model as `"<name> failed: quota exceeded"`.
-- [x] 3.4 Check the other two callers, `examples/inbox.py:96` (asks the user, who cannot answer `error`) and `examples/hooks.py:296` (asks a peer that answers `sunny`). Neither needs a change unless the checks say otherwise. Verify that `tests/test_examples.py` passes.
-- [x] 3.5 Update the `Ask` protocol docstring in `hooks.py`, the `HookAsk` section of `docs/SPEC.md`, and the "Three verbs" section and public-API count in CLAUDE.md. Verify that `tests/test_architecture.py` (the SPEC check) and the other checks pass.
+- [x] 3.1 Add tests to `tests/test_answer_details.py`: `ask` of a peer returning `Reply("quota exceeded", status="error")` returns that text with status `error`, the reply is still in the conversation, and a `status="asked"` answer returns its text with status `asked`. In `tests/test_message_delivery.py`, `ask` past `max_depth` returns an `error` reply. Changed at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)) from raising `PeerError`: the tests compare the returned `Reply`.
+- [x] 3.2 Resolve pending asks with the answering `ChatMessage` and return `Reply(text, status=status)` from `ask` (design Decision 3); the `Ask` protocol returns `Reply`. Changed at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)) from raising `PeerError`: `PeerError` is removed and the public names are back to 65.
+- [x] 3.3 In `AgentConnector._asking`, return `"<name> failed: <text>"` for an `error` reply and other exceptions by type name only. Verify with the test where a peer's `error` reply reaches the model as `"quota failed: quota exceeded"`.
+- [x] 3.4 Update the other callers to read `.text`: `examples/inbox.py` and `examples/hooks.py`, and every test that compared `ask()` to a string. Verify that `tests/test_examples.py` and the rest of the suite pass.
+- [x] 3.5 Update the `Ask` protocol docstring in `hooks.py`, the `HookAsk` section of `docs/SPEC.md`, and the "Three verbs" and attachments sections of CLAUDE.md. Verify that `tests/test_architecture.py` and the other checks pass.
 
 ## 4. The archive keeps `status`
 

@@ -109,12 +109,12 @@ Every verb is a pair: the word you call, and the word the other side writes. No 
 `on_` prefix, and no name is both — a grant arrives by `setattr` and would silently clobber a
 method it shares a name with.
 
-**An answer whose status is `error` is a failure, not an answer**: `ask` raises `PeerError` with its
-text, as it raises whatever an `answer` raised. It used to return that text like any other, so a
-caller — the agent's `ask_<peer>` tools among them — could not tell "quota exceeded" from a reply,
-while a peer that *raised* the same failure made `ask` raise. Two kinds of failure, one contract.
-The error reply is still posted, so the conversation shows it either way; an `asked` reply is still
-returned as text.
+**`ask` returns the answer's `Reply`, status and all.** It used to return the text alone, so a
+caller — the agent's `ask_<peer>` tools among them — could not tell "quota exceeded" from an
+answer: the status was on the message in the conversation, and nowhere the asker looked. The
+status is the answer's own word on what it is, so the caller reads it there — `answered`, `asked`
+back, or `error` — rather than the session turning one of them into an exception. What the answer
+attached is with the backend, so the returned `Reply` carries none of it; `locate` finds it.
 
 A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:
 `ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
@@ -248,7 +248,7 @@ log from inside a *synchronous* Textual paint.
 ## Attachments go to the backend, and the message stays text
 
 A peer attaches through every door it speaks through: `say` and `ask` take `attachments`, `answer`
-and a command's `execute` both return a `Reply` (a string raises `TypeError`); `ask` and `invoke` still return text. None of it rides on `ChatMessage`:
+and a command's `execute` both return a `Reply` (a string raises `TypeError`); `ask` returns a `Reply` holding the answer's text and status, and `invoke` still returns text. None of it rides on `ChatMessage`:
 at each door the session hands the attachments to the backend's `keep` (`HookKeep`), under the new
 message's id, **before** `_post` — so the link exists when the text arrives — and posts the text
 alone. No keeper, and they are dropped; a keeper that raises is logged and the text posted anyway.
@@ -861,8 +861,8 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 66 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
-`MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `PeerError`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
+`__init__.py` exports 65 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
 (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
 `declared_id`, `name_of`, `Hook`); the fourteen `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`, `Commands`, `Locate`); and the batteries

@@ -150,7 +150,7 @@ async def test_the_lead_asks_the_coder_and_answers():
     try:
         FakeOpenAI.reply = "def add(a, b): return a + b"
         answer = await view.ask(lead.peer_id, "I need an add function")
-        assert answer == "Here it is:\ndef add(a, b): return a + b"
+        assert answer.text == "Here it is:\ndef add(a, b): return a + b"
         assert sent()[-1] == {"role": "user", "content": "write add"}
         assert lead.model.tools[-1] == ["ask_coder", "run_help"]
     finally:

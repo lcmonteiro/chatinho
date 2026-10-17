@@ -22,7 +22,7 @@ The review also found duplicated code, stale documentation and workflow overhead
   - "Unknown command" and "/x failed" become notifications.
 - An ask is resolved only by a reply from the peer it was asked of. A reply from anyone else is heard like any other message and leaves the ask waiting.
 - `add_connector` never hands out an id that is already taken. Automatic numbering skips ids pinned with `@connector(name, id=…)`.
-- **BREAKING**: `ask()` raises `PeerError` when the answer's status is `error`. This includes the "too many nested asks" reply. `PeerError` is a new public exception carrying the reply's text. Answers with status `answered` or `asked` still return their text.
+- **BREAKING**: `ask()` returns a `Reply` holding the answer's text and its status (`answered`, `asked` or `error`, the "too many nested asks" reply included) instead of the text alone, so the asker can tell a failure from an answer. (First implemented as raising `PeerError`; changed at review in [lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42).)
 - The database backend keeps each message's `status` and gives it back on load, so `Query(errors=False)` still leaves failed replies out after a restart.
 - ~~Each builder needs only its own extra.~~ Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)): `builder.py` keeps importing both frontends, so each builder still needs `chatinho[tui,mcp]`.
 - **BREAKING**: `DatabaseBackend` refuses keyword arguments it does not know (`TypeError`) instead of silently swallowing them.
@@ -55,7 +55,7 @@ None.
 ### Modified Capabilities
 
 - `message-delivery`: an ask is resolved only by the asked peer's reply. The terminal's own notices are not said into the conversation.
-- `answer-details`: `ask` raises `PeerError` on an `error` answer, and the archive keeps `status`. This replaces "`ask` MUST keep returning the answer's text" and "the archive need not keep the status".
+- `answer-details`: `ask` returns the answer's `Reply`, status included, and the archive keeps `status`. This replaces "`ask` MUST keep returning the answer's text" and "the archive need not keep the status".
 - `conversation-context`: the archive keeps `status`, so `Query(errors=False)` holds across a restart.
 - `peer-lifecycle`: ids are unique, and automatic numbering skips pinned ids.
 - ~~`mcp-server`~~: Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)); `McpFrontend` still takes the first reply to a question.
@@ -65,8 +65,6 @@ None.
 
 - **Code:**
   - `src/chatinho/session.py`: `add_connector`, `_post`, `ask`.
-  - `src/chatinho/message.py`: `PeerError`.
-  - `src/chatinho/__init__.py`: the `PeerError` export.
   - `src/chatinho/builder.py`: docstrings only.
   - `src/chatinho/backends/database.py`
   - `src/chatinho/frontends/chat/`: `__init__.py`, `messages.py`, `composer.py`.
@@ -77,8 +75,7 @@ None.
   - `test_package_layout.py` and `test_chat_frontend.py` change what they assert.
   - New regression tests cover each reproduced defect.
 - **API:**
-  - New `PeerError` export, bringing the public names to 66.
-  - `ask()` callers that relied on receiving error text must catch `PeerError`.
+  - `ask()` callers read `.text` (and `.status`) from the returned `Reply`.
   - `DatabaseBackend(**kwargs)` no longer accepts unknown keywords.
 - **Data:** the archive schema gains a `status` column. It is the baseline, like `asked_of`: archives from before it are not migrated.
-- **Docs and tooling:** `CLAUDE.md` (the public-API count and the archive policy), `docs/SPEC.md` (the `HookAsk` section), `README.md`, `.github/workflows/tests.yml`, `openspec/config.yaml` and `.claude/`.
+- **Docs and tooling:** `CLAUDE.md` (the `ask` result and the archive policy), `docs/SPEC.md` (the `HookAsk` section), `README.md`, `.github/workflows/tests.yml`, `openspec/config.yaml` and `.claude/`.
