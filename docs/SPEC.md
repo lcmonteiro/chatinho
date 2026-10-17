@@ -188,7 +188,9 @@ and whatever the peer's `answer` raised if it failed. Only a reply from *to* res
 else's reply to the question is heard, and the ask keeps waiting. What comes back is a `Reply`
 holding the answer's text and its status — `answered`, `asked` (a question back), or `error` when
 the peer could not answer, the session's own "too many nested asks" included. Anything the reply
-attached went to the backend, under the reply's id, where `locate` finds it.
+attached went to the backend, under the reply's id, where `locate` finds it. As text, a `Reply` reads as
+what it says: `str()` is the text alone when it answered, and `asked: …` or `error: …` otherwise,
+which is what an agent's `ask_<peer>` tool hands its model.
 
 ```python
 reply = await self.ask(session.id_of("weather"), "what is the weather?")

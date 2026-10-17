@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 from langchain.agents.structured_output import ToolStrategy
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import BaseModel
 
@@ -374,8 +374,8 @@ async def test_asking_another_peer():
     model = fake(calls("ask_coder", question="Write a test"))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent, _Echo("coder")])
-    # The tool hands the model the Reply itself.
-    assert (await view.ask(agent.peer_id, "go")).text == str(Reply("coder: Write a test"))
+    # The tool hands the model the Reply itself, which reads as its text.
+    assert (await view.ask(agent.peer_id, "go")).text == "coder: Write a test"
     asked = [m for m in view.context() if m.frm == agent.peer_id and m.reply_to is None]
     assert [m.text for m in asked] == ["Write a test"]
     await session.close()
@@ -465,8 +465,30 @@ async def test_a_peers_error_reply_reaches_the_model_as_a_failure():
     model = fake(calls("ask_quota", question="x", then=lambda result: "It said: " + result))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent, _OutOfQuota()])
-    told = Reply("quota exceeded", status=ReplyStatus.ERROR)
-    assert (await view.ask(agent.peer_id, "go")).text == "It said: %s" % told
+    assert (await view.ask(agent.peer_id, "go")).text == "It said: error: quota exceeded"
+    await session.close()
+
+
+def _tool_results(model: Any) -> List[str]:
+    """What the model was handed as tool results in its last call."""
+    return [str(m.content) for m in model.sent[-1] if isinstance(m, ToolMessage)]
+
+
+async def test_the_model_reads_an_answer_as_its_text():
+    model = fake(calls("ask_coder", question="Write a test"))
+    agent = AgentConnector("agent", model)
+    session, view = await driven(connectors=[agent, _Echo("coder")])
+    await view.ask(agent.peer_id, "go")
+    assert _tool_results(model) == ["coder: Write a test"]
+    await session.close()
+
+
+async def test_the_model_reads_an_error_reply_as_one():
+    model = fake(calls("ask_quota", question="x"))
+    agent = AgentConnector("agent", model)
+    session, view = await driven(connectors=[agent, _OutOfQuota()])
+    await view.ask(agent.peer_id, "go")
+    assert _tool_results(model) == ["error: quota exceeded"]
     await session.close()
 
 
@@ -474,8 +496,7 @@ async def test_a_failing_peer():
     model = fake(calls("ask_broken", question="x", then=lambda result: "It said: " + result))
     agent = AgentConnector("agent", model)
     session, view = await driven(connectors=[agent, _Broken()])
-    told = Reply("broken failed: RuntimeError", status=ReplyStatus.ERROR)
-    assert (await view.ask(agent.peer_id, "go")).text == "It said: %s" % told
+    assert (await view.ask(agent.peer_id, "go")).text == "It said: error: broken failed: RuntimeError"
     await session.close()
 
 
@@ -517,7 +538,7 @@ async def test_asked_back():
     session, view = await driven(connectors=[agent, Coder()])
     assert agent.peer_id == 1
     answer = await asyncio.wait_for(view.ask(agent.peer_id, "go"), timeout=5)
-    assert answer.text == str(Reply("coder<agent again>"))
+    assert answer.text == "coder<agent again>"
     await session.close()
 
 
@@ -526,8 +547,8 @@ async def test_a_loop_of_agents_stops_at_max_depth():
     pong = AgentConnector("pong", fake(calls("ask_ping", question="again")), peers=["ping"])
     session, view = await driven(connectors=[ping, pong], max_depth=4)
     answer = await asyncio.wait_for(view.ask(ping.peer_id, "go"), timeout=5)
-    # The innermost tool got the limit's ERROR reply; each agent above echoes its tool's Reply.
-    assert "too many nested asks (limit 4)" in answer.text and "ReplyStatus.ERROR" in answer.text
+    # The innermost tool got the limit's ERROR reply; each agent above echoes what its tool read.
+    assert answer.text == "error: too many nested asks (limit 4)"
     await session.close()
 
 
@@ -557,7 +578,7 @@ async def test_its_tool_calls_are_not_memory():
     await view.ask(agent.peer_id, "first")
     await view.ask(agent.peer_id, "second")
     texts = [m.content for m in model.sent[-1]]
-    assert texts == ["first", str(Reply("coder: help me")), "second"]
+    assert texts == ["first", "coder: help me", "second"]
     await session.close()
 
 

@@ -97,6 +97,17 @@ class Reply:
         # ReplyStatus("maybe") raises ValueError, which is the refusal we want.
         object.__setattr__(self, "status", ReplyStatus(self.status))
 
+    def __str__(self) -> str:
+        """The text, led by the status when it did not answer: ``error: quota exceeded``.
+
+        Whatever reads a Reply as text reads this, an agent's model given a
+        tool's result included, so it is what the reply says rather than how
+        it is built; ``repr`` is still the dataclass's.
+        """
+        if self.status is ReplyStatus.ANSWERED:
+            return self.text
+        return "%s: %s" % (self.status.value, self.text)
+
 
 class Secret:
     """A value that must never be shown: a credential lent for one question.
