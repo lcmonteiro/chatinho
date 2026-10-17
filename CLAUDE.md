@@ -33,39 +33,59 @@ build_chat_session(
 )
 ```
 
-**Four roles, four parameters, and one of them is the terminal.** `ChatSession` takes a
-`frontend` beside its `backend`: the peer that speaks for the person, the peers it talks to, the
-commands it runs, the thing that remembers. Every one of them is still a plain class the session
-tells apart by what it declared, never by which parameter carried it.
+**Five roles, five parameters, and one of them is the terminal.** `ChatSession` takes a
+`frontend` beside its `backend` and its `router`: the peer that speaks for the person, the peers it
+talks to, the commands it runs, the thing that remembers, and the one that decides who answers a
+say that names nobody. Every one of them is still a plain class the session tells apart by what it
+declared, never by which parameter carried it.
 
 A peer carries an **id** *and* a **visible name**, and they are deliberately different
 things: the id routes, the name is what the chat displays and what the user types after `/`. An
 older design routed on the display name, so renaming a connector broke the replies already in
 flight.
 
-A message says where it came from and where its speaker sent it:
+A message says where it came from and who answers it:
 
 ```
-to is None    → everyone heard it          (say)
-to is an id   → one peer was asked         (ask)
-to is TOOL    → a command was run          (invoke)
-reply_to set  → it answers that message    (answer)
+to is None    → owed by nobody: everyone heard it, nobody answers   (say, an answer)
+to is an id   → that peer answers it                                (ask, an addressed or routed say)
+to is TOOL    → a command was run                                   (invoke)
+reply_to set  → it replies to that message
 ```
 
-**`to` is what the speaker chose; `asked_of` is whose `answer` the session calls.** They used to
-be one field, so a say routed to the room's lone answering peer stopped being a broadcast, and a
-listener checking `is_broadcast` went deaf to the user the moment one answering peer joined. The
-session sets `asked_of` where it makes a message and never writes `to`. Two rules decide it beyond
-`to`: **a say with no `to` is asked of the lone answering peer**, and **a say that replies is asked
-of whoever said what it replies to**, when that is a peer that answers and is neither the speaker
-nor the frontend. **What `answer` returns is asked of nobody**, so it is heard by every listener
-and never put to anyone's `answer`. `Query(peer=)` matches `asked_of`, and `DatabaseBackend`
-archives it. That schema is the baseline: an archive from before `asked_of` existed is not upgraded.
+**`to` is the one field that says who answers, and a router fills it in when the speaker did
+not.** It used to be two: `to` for what the speaker chose and `asked_of` for whose `answer` the
+session called, split so a say routed to the room's lone answering peer stayed a broadcast. Every
+reader then had to know which of the two to look at, and the routing rule was fixed inside the
+session. Now a say with no `to` is handed to the **router** — what `ChatSession(router=…)` was
+given — and what it returns *is* the `to`, written before anyone hears the say. **The router is
+not a peer**, as a command is not: no id, in nobody's roster, granted what it declares; and a
+session given none routes nothing. **The builders give `SimpleRouter`**, which keeps the two old
+rules: **a say that replies goes to whoever said what it replies to**, and **any other goes to the
+lone answering peer**, each only when that is a peer that answers and is neither the speaker nor
+the frontend. A router may be a model.
+
+The default lives in the builders and not in the session for the reason the frontend does: a
+`ChatSession` is the bare machinery, and a rule nobody chose has no business inside it. The cost is
+that a session built by hand — a test, a bot — routes nothing until it is given a router, and
+`conftest.driven` gives `SimpleRouter` for exactly that reason. The router was a peer for a while
+too: whoever declared `HookRoute`, `router=` as sugar. That put a `router` in `/help`, in the MCP
+`peers` tool and in every roster of every chat the builders made, for a role nothing addresses.
+
+**An answer is addressed to nobody.** What `answer` returns, the error replies the session posts,
+and a say replying to a message that was addressed to its speaker are all posted with `to` unset.
+Without `asked_of` that is the only thing keeping an answer out of its asker's `answer` — and it is
+what tells a follow-up from an answer: the answer it replies to was addressed to nobody, so the
+follow-up is routed back to whoever gave it. The cost, stated plainly: **a listener that answers
+only what is owed by nobody (`msg.to is None`) stays quiet in a room with one answering peer**,
+because the router gave the user's say to that peer — which is what `AgentConnector` did by hand
+before. An archive from before this keeps its `asked_of` column, unread, and answers with `to` set;
+nothing is migrated.
 
 **The archive keeps `status` too.** Without it a failed reply came back from a reopened archive
 as an answer, and `Query(errors=False)` — what both LLM connectors remember by default — let it
-into the model's memory on every restart. Like `asked_of`, it is part of the baseline schema, and
-nothing is migrated. `DatabaseBackend` also refuses a keyword it does not know — `ecoh=True` used
+into the model's memory on every restart. It is part of the baseline schema, and nothing is
+migrated. `DatabaseBackend` also refuses a keyword it does not know — `ecoh=True` used
 to be swallowed into a `config` nothing read.
 
 **The presentation is peer zero, and says so itself.** `ChatFrontend` is `@frontend("chat")` — being
@@ -121,15 +141,15 @@ attached is with the backend, so the returned `Reply` carries none of it; `locat
 
 A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:
 `ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
-by the message it answers. A broadcast is owed to nobody.
+by the message it answers. A say with no `to` is owed to nobody.
 
 **Answering late is not a fourth thing either.** A peer that cannot answer inline — a terminal
 waiting on a person, a connector waiting on a server — returns `None` from `answer` and says the
 reply when it has it, with `reply_to` set. The session matches it and resolves the ask — **only
-when it comes from the peer the question was asked of** (`asked_of`). Anyone else's reply to it is
+when it comes from the peer the question is addressed to** (`to`). Anyone else's reply to it is
 heard like any message and leaves the ask waiting; before that rule, a listener replying to a
 question it overheard answered somebody else's `ask`. `McpFrontend` holds a client's open question
-to the same rule, and keeps nothing to do it: it reads who was asked — the question's `asked_of` —
+to the same rule, and keeps nothing to do it: it reads who was asked — the question's `to` —
 from the conversation through `HookContext`, and takes the first reply only when the question has
 been forgotten while open, so no call waits forever. All three
 presentations in this repository work exactly that way, which is why the grant that used to exist
@@ -162,7 +182,7 @@ twice, which is what `/help`, `/upper` and the demo's `/code` all used to do.
 
 A command is still **not a peer** — no id, nothing addressed to it — so the invocation is
 addressed to `TOOL`, id −1, and not said to the room. That is what keeps a connector that answers
-what the user says from answering somebody else's `/help`: the invocation is not a broadcast, and
+what the user says from answering somebody else's `/help`: the invocation is addressed, not routed, and
 the answer comes from `TOOL` rather than from the user. Both halves matter, and the demo answered
 its own `/help` before the constant existed.
 
@@ -184,9 +204,9 @@ There is one way to hear, not two. `listen` brings the whole conversation — a 
 answer to it, a command being run and what it answered — because there is one conversation and a
 backend, an audit log and a metrics counter each want all of it.
 
-A peer that only wants what was said to the room checks `msg.is_broadcast`, and it **must**: both
-echo connectors in `examples/` do, and without it they would reply to a `/help` the user typed.
-That check is the price of the second hook this used to be.
+A peer that only wants what is owed by nobody checks `msg.to is None`, and it **must**: both
+echo connectors in `examples/` do, and without it they would reply to a `/help` the user typed, or
+to a say the router gave a peer. That check is the price of the second hook this used to be.
 
 The two are not exclusive: something that listens *and* answers gets both calls for the same
 message, because it declared both.
@@ -270,7 +290,7 @@ Opening one is `locate(msg_id, name)` (`HookLocate`), which the session routes t
 system; the terminal only asks, then opens the answer or says "Not found". `DatabaseBackend` keeps
 them as rows and writes a file on the first `link`, into a temp directory it removes at `shutdown`.
 
-## The fourteen hooks
+## The fifteen hooks
 
 The reference is [`docs/SPEC.md`](docs/SPEC.md) — every hook with an example, what it costs, and
 the rules that hold across all of them. `examples/hooks.py` is that document executable: one peer
@@ -287,6 +307,7 @@ per conversation hook, in a chat with no terminal. This section is the summary.
 | `HookContext` | — | `context` |
 | `HookPeers` | — | `peers` |
 | `HookCommands` | — | `commands` |
+| `HookRoute` | `route` | — |
 | `HookLoad` | `load` | — |
 | `HookForget` | `forget` | — |
 | `HookKeep` | `keep` | — |
@@ -378,7 +399,7 @@ src/chatinho/
   builder.py       build_chat_session, build_mcp_session — a ChatSession with its frontend;
                    imports both frontends, so it needs chatinho[tui,mcp]
   session.py       ChatSession: run, peers, commands, delivery, routing, context
-  hooks.py         Hook, the fourteen constants, @require, the grant protocols
+  hooks.py         Hook, the fifteen constants, @require, the grant protocols
   query.py         Query (peer/thread/errors/since/limit) and SELF: which part of the conversation
                    context() returns; plain data, so a backend could answer it one day
   message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
@@ -387,6 +408,8 @@ src/chatinho/
                    every key or token argument takes one (to_source), read late, always a Secret
   endpoint.py      Endpoint: base_url + model + key source; named profiles in a TOML file
   commands/        help.py, test.py — commands: they run, they are not peers
+  routers/         simple.py (SimpleRouter: the default router, stdlib-only — a reply to its author,
+                   anything else to the lone peer that answers)
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
                    attachments
   connectors/      openai.py (OpenAIConnector: AsyncOpenAI, any compatible base_url; its `memory` is a
@@ -403,7 +426,7 @@ src/chatinho/
       clipboard.py OSC 52's second route: a clipboard helper, if the system has one
       style.py     ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
   helpers/         mcp.py (what McpFrontend and McpConnector share: credentials key, names, attachments)
-docs/              SPEC.md — the fourteen hooks, with an example and a cost for each
+docs/              SPEC.md — the fifteen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          assistant.py, team.py, files.py (LLM demos: parts() + main()), lab_server.py / lab_client.py /
                    lab_fastmcp_client.py (a model over MCP, lent keys), inbox.py (HTTP, inbound), hooks.py (one peer per hook)
@@ -829,7 +852,7 @@ is a boundary that rots. It parses the core modules and fails if:
   `openai`, `sqlalchemy`, `mcp` and `fastmcp` all blocked, and each of the lazy names has to
   report its own extra;
 - **`docs/SPEC.md` disagrees with the hook constants** — its summary table has to name the same
-  fourteen, with the same demanded method and the same grants, and each one has to have its own
+  fifteen, with the same demanded method and the same grants, and each one has to have its own
   section. A spec nothing checks is a spec that rots, so adding a hook without documenting it
   fails the suite. Both halves were proved by breaking them.
 
@@ -845,7 +868,7 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 ## Packaging: the core installs nothing
 
-`dependencies = []`. `ChatSession`, the fourteen hooks, `HelpCommand` and `TestCommand` import nothing
+`dependencies = []`. `ChatSession`, the fifteen hooks, `HelpCommand`, `TestCommand` and `SimpleRouter` import nothing
 but the standard library — which the fitness tests already enforced, so the packaging now says it
 too. Nine names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
@@ -873,13 +896,13 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 65 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`__init__.py` exports 67 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
 `MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
 (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
-`declared_id`, `name_of`, `Hook`); the fourteen `Hook*` constants; the grant protocols (`Say`, `Ask`,
+`declared_id`, `name_of`, `Hook`); the fifteen `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`, `Commands`, `Locate`); and the batteries
 (`OpenAIConnector`, `AgentConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`,
-`McpConnector`, `HelpCommand`, `TestCommand`), with the keys and endpoints (`Endpoint`, `KeySource`,
+`McpConnector`, `HelpCommand`, `TestCommand`, `SimpleRouter`), with the keys and endpoints (`Endpoint`, `KeySource`,
 `KeyUnavailable`, `Env`, `DotEnv`, `File`, `Keyring`, `Command`, `Literal`, `Chain`, `key`).
 
 **Both frontends are public, and both have a builder.** `ChatFrontend` (in `chatinho.frontends.chat`)

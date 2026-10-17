@@ -31,6 +31,7 @@ from chatinho import (
     frontend,
     require,
 )
+from chatinho.routers import SimpleRouter
 from chatinho.session import ChatSession
 
 
@@ -85,6 +86,9 @@ async def driven(**kwargs) -> tuple:
     """
     Builds a started session with a :class:`Driver` at :data:`LOCAL`.
 
+    It routes with :class:`~chatinho.routers.SimpleRouter`, as the builders do,
+    unless the test passes a ``router`` of its own.
+
     Args:
         **kwargs: Passed straight to :class:`~chatinho.session.ChatSession`.
 
@@ -92,6 +96,7 @@ async def driven(**kwargs) -> tuple:
         tuple: The session and its driver.
     """
     view    = Driver()
+    kwargs.setdefault("router", SimpleRouter())
     session = ChatSession(frontend=view, **kwargs)
     await session.start()
     return session, view

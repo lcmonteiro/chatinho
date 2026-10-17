@@ -12,6 +12,7 @@ from textual.widgets import OptionList
 
 from chatinho import ChatSession, HookExecute, require, tool
 from chatinho.frontends.chat import ChatFrontend
+from chatinho.routers import SimpleRouter
 from chatinho.frontends.chat.composer import CommandInput
 
 
@@ -25,7 +26,7 @@ async def chat_frontend(connectors=None, commands=None, backend=None, **kwargs):
     does not hold the session either, so this starts it directly rather than
     relying on the app to reach back for it.
     """
-    session = ChatSession(connectors=connectors, commands=commands, backend=backend)
+    session = ChatSession(connectors=connectors, commands=commands, backend=backend, router=SimpleRouter())
     app = ChatFrontend(**kwargs)
     session.add_connector(app)
     await session.start()

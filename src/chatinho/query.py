@@ -60,7 +60,7 @@ class Query:
             peer  = asker if self.peer == SELF else self.peer
             from_ = {m.id for m in msgs if m.frm == peer}
             msgs  = [m for m in msgs
-                     if m.frm == peer or m.to == peer or m.asked_of == peer or m.reply_to in from_]
+                     if m.frm == peer or m.to == peer or m.reply_to in from_]
         if self.thread is not None:
             chain = _chain(msgs, self.thread)
             msgs  = [m for m in msgs if m.id in chain or m.reply_to in chain]

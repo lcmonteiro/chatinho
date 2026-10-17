@@ -15,7 +15,7 @@ import pytest
 
 from chatinho import (
     LOCAL, Attachment, ChatMessage, ChatSession, DatabaseBackend, HookAnswer, MessageID, Query, Reply,
-    ReplyStatus,
+    ReplyStatus, SimpleRouter,
     connector, require,
 )
 from conftest import Driver
@@ -329,21 +329,23 @@ class _Bot:
 
 
 async def test_asked_closed_and_reopened(tmp_path):
-    """A say routed to the lone answering peer keeps asked_of in the archive, and in its memory."""
+    """A say routed to the lone answering peer keeps its `to` in the archive, and in its memory."""
     url = "sqlite:///%s" % (tmp_path / "chat.db")
 
-    first, view = ChatSession(connectors=[_Bot()], backend=DatabaseBackend(url)), Driver()
+    first = ChatSession(connectors=[_Bot()], backend=DatabaseBackend(url), router=SimpleRouter())
+    view  = Driver()
     first.add_connector(view, at=LOCAL)
     await first.start()
     said = await view.say("hi")
     await first.close()
 
     bot = _Bot()
-    second, again = ChatSession(connectors=[bot], backend=DatabaseBackend(url)), Driver()
+    second = ChatSession(connectors=[bot], backend=DatabaseBackend(url), router=SimpleRouter())
+    again  = Driver()
     second.add_connector(again, at=LOCAL)
     await second.start()
     reloaded = [m for m in again.context() if m.id == said][0]
-    assert (reloaded.to, reloaded.asked_of) == (None, bot.peer_id)
+    assert reloaded.to == bot.peer_id
     assert said in [m.id for m in Query(peer=bot.peer_id).select(again.context())]
     await second.close()
 
@@ -379,14 +381,16 @@ async def test_a_failed_reply_stays_failed_when_reopened(tmp_path):
     """Without its status, a failed reply came back as an answer, into the model's memory."""
     url = "sqlite:///%s" % (tmp_path / "chat.db")
 
-    first, view = ChatSession(connectors=[_Failing()], backend=DatabaseBackend(url)), Driver()
+    first = ChatSession(connectors=[_Failing()], backend=DatabaseBackend(url), router=SimpleRouter())
+    view  = Driver()
     first.add_connector(view, at=LOCAL)
     await first.start()
     await view.say("hi")
     await asyncio.sleep(0.05)
     await first.close()
 
-    second, again = ChatSession(connectors=[_Failing()], backend=DatabaseBackend(url)), Driver()
+    second = ChatSession(connectors=[_Failing()], backend=DatabaseBackend(url), router=SimpleRouter())
+    again  = Driver()
     second.add_connector(again, at=LOCAL)
     await second.start()
     reply = [m for m in again.context() if m.text == "rate limited"][0]
@@ -399,3 +403,23 @@ def test_an_unknown_keyword_is_refused():
     """It used to be swallowed, so a typo was a setting that silently did nothing."""
     with pytest.raises(TypeError):
         DatabaseBackend("sqlite://", ecoh=True)            # type: ignore[call-arg]
+
+
+async def test_an_archive_with_the_old_asked_of_column_still_loads_and_saves(tmp_path):
+    """Nothing is migrated: a table that still has asked_of is read and written as it is."""
+    import sqlite3
+    path = tmp_path / "old.db"
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE messages (id VARCHAR PRIMARY KEY, text TEXT NOT NULL, frm INTEGER NOT NULL,"
+                   " \"to\" INTEGER, reply_to VARCHAR, asked_of INTEGER, timestamp DATETIME NOT NULL,"
+                   " status VARCHAR NOT NULL)")
+        db.execute("INSERT INTO messages VALUES ('msg-00000000000000aa', 'old', 0, NULL, NULL, 1,"
+                   " '2026-01-01 00:00:00.000000', 'answered')")
+    session, view = ChatSession(backend=DatabaseBackend("sqlite:///%s" % path)), Driver()
+    session.add_connector(view, at=LOCAL)
+    await session.start()
+    assert view.texts() == ["old"]
+    await view.say("new")
+    await session.close()
+    with sqlite3.connect(path) as db:
+        assert [r[0] for r in db.execute("SELECT text FROM messages ORDER BY timestamp")] == ["old", "new"]

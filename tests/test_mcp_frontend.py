@@ -135,7 +135,7 @@ async def test_another_peers_reply_does_not_end_the_call():
 
 
 async def test_a_forgotten_question_still_takes_the_first_reply():
-    """With the question gone from the conversation there is no asked_of to check; the call must not hang."""
+    """With the question gone from the conversation, nobody is known to be asked; the call must not hang."""
     session, front = await remote(Weather("sunny", delay=0.2))
     async with client(front) as c:
         asking = asyncio.create_task(ask(c, "weather", "will it rain?"))

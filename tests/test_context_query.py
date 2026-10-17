@@ -50,11 +50,18 @@ def test_a_peer_and_the_replies_to_it():
 
 
 def test_what_a_peer_was_asked_is_its_own():
-    """A say routed to peer 1 is not addressed to it, and still in its memory."""
-    asked = msg(1)
-    asked.asked_of = 1
+    """A say the router addressed to peer 1 is in its memory."""
+    asked = msg(1, to=1)
     other = msg(2)
     assert texts(Query(peer=1).select([asked, other])) == ["m1"]
+
+
+def test_an_answer_to_a_peer_is_its_own():
+    """An answer goes to nobody, and is still in the asker's memory: it replies to its question."""
+    asked  = msg(1, frm=2, to=3)
+    answer = msg(2, frm=3, reply_to=1)
+    other  = msg(3, frm=3)
+    assert texts(Query(peer=2).select([asked, answer, other])) == ["m1", "m2"]
 
 
 def test_self_is_whoever_asks():

@@ -7,14 +7,13 @@ subsystem and carries both an ``id``, which is how messages are addressed, and
 a ``name``, which is what the chat displays. Keeping them apart is what lets a
 connector be renamed without breaking the replies already in flight.
 
-A message says where it came from, where its speaker sent it, and who was
-asked to answer it:
+A message says where it came from and who answers it:
 
-    to is None   → said to everyone           (say)
-    to is an id  → addressed to one peer      (ask)
-    reply_to set → it answers that message    (answer)
-    asked_of     → whose ``answer`` the session calls: ``to``, or the peer
-                   :class:`~chatinho.session.ChatSession` routed a say to
+    to is None   → owed by nobody: heard by all, answered by none
+    to is an id  → that peer answers it: addressed by its speaker, or by the
+                   router for a say that named nobody
+    to is TOOL   → a command was run
+    reply_to set → it replies to that message; an answer has ``to`` unset
 
 Neither class touches Textual, so both can be exercised without mounting an
 application.
@@ -25,7 +24,7 @@ import secrets
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, overload
 
 #: The chat itself — the user's own id. Every connector is numbered from one.
 LOCAL : int = 0
@@ -169,20 +168,33 @@ class MessageID:
         """
         return cls(secrets.token_hex(8))
 
+    @overload
     @classmethod
-    def parse(cls, text: str) -> "MessageID":
+    def parse(cls, text: str) -> "MessageID": ...
+
+    @overload
+    @classmethod
+    def parse(cls, text: None) -> None: ...
+
+    @classmethod
+    def parse(cls, text: Optional[str]) -> Optional["MessageID"]:
         """
-        Reads back what ``str()`` wrote.
+        Reads back what ``str()`` wrote, and None as None.
+
+        None reads back as itself so a field that may hold no id — a
+        ``reply_to`` — is read the same way as one that always holds one.
 
         Args:
-            text: ``msg-`` and hex digits, e.g. ``msg-3f9a1c2e7b04d5a6``.
+            text: ``msg-`` and hex digits, e.g. ``msg-3f9a1c2e7b04d5a6``, or None.
 
         Returns:
-            MessageID: The id *text* names.
+            Optional[MessageID]: The id *text* names; None for None.
 
         Raises:
-            ValueError: If *text* is not ``msg-`` and hex digits.
+            ValueError: If *text* is neither None nor ``msg-`` and hex digits.
         """
+        if text is None:
+            return None
         if not isinstance(text, str) or not text.startswith(_PREFIX):
             raise ValueError("A message id starts with %r, got %r" % (_PREFIX, text))
         return cls(text[len(_PREFIX):])
@@ -211,12 +223,10 @@ class ChatMessage:
             store. The terminal shows its :attr:`MessageID.short`.
         text: What was said, as Markdown.
         frm: The id of whoever said it; :data:`LOCAL` for the user.
-        to: The id the speaker addressed it to, or None when it was said to
-            everyone. The session never changes it.
-        asked_of: The id of the peer whose ``answer`` the session calls for it,
-            or None: ``to`` when it was addressed, or the peer the session
-            routed a say to. An answer, an error reply and a command's run and
-            result are asked of nobody.
+        to: The id of the peer whose ``answer`` the session calls for it, or
+            None for nobody: what the speaker addressed it to, or what the
+            router chose for a say that named nobody. An answer, an error reply
+            and a command's result are addressed to nobody.
         reply_to: The id of the message this answers, when it answers one.
         timestamp: When it entered the history.
         status: What an answer said about itself, from the ``Reply`` that
@@ -236,13 +246,6 @@ class ChatMessage:
     timestamp : datetime = field(default_factory=datetime.now)
     status    : ReplyStatus = ReplyStatus.ANSWERED
     credentials : Dict[str, "Secret"] = field(default_factory=dict, repr=False, compare=False)
-    #: Last, so a message built positionally keeps every older field where it was.
-    asked_of    : Optional[int] = None
-
-    @property
-    def is_broadcast(self) -> bool:
-        """Whether it went to everyone rather than to one peer."""
-        return self.to is None
 
     @property
     def is_local(self) -> bool:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-The fourteen hooks, one example each, in a chat with no terminal.
+The fifteen hooks, one example each, in a chat with no terminal.
 
 Every other example shows a chat. This one shows the *declarations* — what each
 hook demands, what it grants, and what actually arrives at each door — by
@@ -41,6 +41,7 @@ from chatinho import (
     HookLocate,
     HookPeers,
     HookCommands,
+    HookRoute,
     HookSay,
     Reply,
     Invoke,
@@ -108,9 +109,9 @@ class EchoConnector:
     ``HookListen`` demands ``listen(msg)``: every message that crosses.
 
     Every one — a say, an ask, the answer to it, a command being run and what it
-    answered, whoever it was for. A peer that only wants what was said to the
-    room checks ``msg.is_broadcast``, and this one does: without that it would
-    reply to a ``/upper`` the user typed.
+    answered, whoever it was for. A peer that only wants what is owed by nobody
+    checks ``msg.to is None``, and this one does: without that it would reply
+    to a ``/upper`` the user typed, or to a say the router gave a peer.
 
     You never hear yourself, which is what stops this from answering forever.
     """
@@ -120,7 +121,7 @@ class EchoConnector:
     async def listen(self, msg: ChatMessage) -> None:
         """Sees everything; answers only what the user said to the room."""
         note("HookListen", "heard from=%d to=%s %r" % (msg.frm, msg.to, msg.text))
-        if not msg.is_broadcast or not msg.is_local:
+        if msg.to is not None or not msg.is_local:
             return                      # an ask, a command, or TOOL — not for it
         await self.say("echo: %s" % msg.text, reply_to=msg.id)
 
@@ -147,17 +148,40 @@ class WeatherConnector:
 @require(HookAnswer)
 class ClockConnector:
     """
-    A second peer that answers, which keeps a say to the room a broadcast.
+    A second peer that answers, so the router has a choice to make.
 
-    With exactly one answering peer in the chat, the session asks it whatever
-    is said to the room — the lone-answerer rule, so a chat with one model just
-    works. Two answering peers, and a say is heard by everyone and asked of no one.
+    With exactly one answering peer in the chat, ``SimpleRouter`` gives it
+    whatever names nobody, so a chat with one model just works. With two, it
+    gives a say to no one; ``Triage`` below picks by what was said.
     """
 
     async def answer(self, msg: ChatMessage) -> Optional[Reply]:
         """Answers inline."""
         note("HookAnswer", "clock was asked %r" % msg.text)
         return Reply("noon")
+
+
+@require(HookRoute)
+@require(HookPeers)
+class Triage:
+    """
+    ``HookRoute`` demands ``route(msg)``: who answers a say that named nobody.
+
+    Whatever it returns becomes the say's ``to`` before anyone hears it; None
+    leaves it to nobody. The router is what ``ChatSession(router=…)`` is
+    given, and like a command it is not a peer; the builders give
+    ``SimpleRouter``, and a session given none routes nothing.
+    """
+
+    peers : Peers
+
+    async def route(self, msg: ChatMessage) -> Optional[int]:
+        """Sends what mentions the weather to ``weather``, and the rest to nobody."""
+        if "weather" not in msg.text:
+            return None
+        at = next((at for at, who in self.peers().items() if getattr(who, "name", "") == "weather"), None)
+        note("HookRoute", "gave %r to %s" % (msg.text, at))
+        return at
 
 
 @tool("upper", "Upper-case the rest of the line")
@@ -287,6 +311,7 @@ async def main() -> None:
         commands   = [UpperCommand()],
         frontend   = screen,
         backend    = ListArchive(seeded),
+        router     = Triage(),
     )
 
     print("\n-- start(): HookLoad runs before anyone can ask for context --")
@@ -307,6 +332,10 @@ async def main() -> None:
     assert weather is not None
     reply = await screen.ask(weather, "what is the weather?")
     print("   →", reply.text, "(%s)" % reply.status.value)
+    await settle()
+
+    print("\n-- HookRoute: a say that names nobody is given a `to` before it is heard --")
+    await screen.say("will the weather hold?")
     await settle()
 
     print("\n-- HookInvoke: a command runs, and the running is recorded --")

@@ -205,14 +205,12 @@ HookSay = Hook(
     # A reply to a say is another say: a broadcast is owed to nobody, so there
     # is no fourth verb for answering one.
     #
-    # One exception, so a room with one peer that answers behaves like a
-    # conversation with it: a say that is not itself a reply, said by a peer
-    # (not a command) in a room where exactly one peer answers — besides the
-    # speaker and the frontend — is asked of that peer. Everyone who listens
-    # still hears it; the answer comes back as a reply to it.
-    #
-    # say(text, to=peer) does that on purpose: an addressed say is asked of
-    # that peer and nobody waits on it — the answer is a reply like any other.
+    # say(text, to=peer) is addressed: that peer's `answer` is called, nobody
+    # waits on it, and the answer is a reply like any other. A say that names
+    # nobody is given a `to` by the router (HookRoute) before anyone hears it,
+    # so a room with one peer that answers behaves like a conversation with
+    # it. A say replying to a question put to its speaker is an answer, and
+    # goes to nobody.
 )
 
 HookAsk = Hook(
@@ -229,9 +227,10 @@ HookListen = Hook(
     # the answer to it, a command's invocation and what it answered. Whoever
     # said it, whoever it was for. Nothing is owed back.
     #
-    # There is one way to hear, not two. A peer that only wants what was said
-    # to the room checks msg.is_broadcast — which it must, or it will reply to
-    # a question that was never its own.
+    # There is one way to hear, not two. A peer that only wants what is owed by
+    # nobody checks msg.to is None — which it must, or it will reply to a
+    # question that was never its own. A say the router gave a peer has `to`
+    # set, so it is that peer's, not the room's.
     #
     # You still never hear yourself. That is what stops a peer that listens and
     # speaks from answering its own words forever.
@@ -294,6 +293,19 @@ HookCommands = Hook(
     # popup matches against it, the same way HookPeers lets both see the roster.
 )
 
+# === Deciding who answers =======================================================
+
+HookRoute = Hook(
+    name="HookRoute",
+    method="route",
+    # async route(msg) -> peer id | None. Decides who answers a say whose
+    # speaker named nobody: what it returns becomes the say's `to`, before
+    # anyone hears it. The router is what ChatSession(router=) is given, and it
+    # is not a peer; the builders give SimpleRouter, and a session given none
+    # routes nothing. A result that is not another peer that answers is
+    # ignored, and None means nobody answers.
+)
+
 # === Holding the conversation ===================================================
 
 HookLoad = Hook(
@@ -346,6 +358,7 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookContext,
     HookPeers,
     HookCommands,
+    HookRoute,
     HookLoad,
     HookForget,
     HookKeep,

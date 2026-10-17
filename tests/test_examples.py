@@ -20,7 +20,7 @@ import pytest
 from fastmcp import Client
 
 import chatinho
-from chatinho import ChatSession, Reply
+from chatinho import ChatSession, Reply, SimpleRouter
 from chatinho.connectors import openai as module
 from chatinho.connectors.mcp import McpConnector
 from chatinho.frontends.mcp import McpFrontend
@@ -58,7 +58,7 @@ def llm(monkeypatch):
 async def headless(parts: dict):
     """A started session made of a demo's parts, with a Driver as the frontend."""
     view    = Driver()
-    session = ChatSession(frontend=view, **parts)
+    session = ChatSession(frontend=view, router=SimpleRouter(), **parts)
     await session.start()
     return session, view
 
@@ -258,7 +258,7 @@ def _no_ui(**kwargs):
 async def lab():
     """lab_server's parts, served by an in-process McpFrontend."""
     front   = McpFrontend(token="t", credentials=example("lab_server").CREDENTIALS)
-    session = ChatSession(frontend=front, **example("lab_server").parts())
+    session = ChatSession(frontend=front, router=SimpleRouter(), **example("lab_server").parts())
     await session.start()
     return session, front
 
@@ -305,7 +305,7 @@ async def asked_over_http(timeout: float, answers=()):
     """Starts the inbox on a free port and POSTs a question; the status and body."""
     inbox   = example("inbox").InboxConnector(port=0, timeout=timeout)
     view    = Driver(answers=list(answers))
-    session = ChatSession(frontend=view, connectors=[inbox])
+    session = ChatSession(frontend=view, connectors=[inbox], router=SimpleRouter())
     await session.start()
     serving = asyncio.create_task(inbox.serve())     # run() would; start() does not
     try:
@@ -348,5 +348,6 @@ def test_the_reference_example_reaches_every_hook():
                          capture_output=True, text=True, timeout=60)
     assert run.returncode == 0, run.stderr
     hooks = [name for name in chatinho.__all__ if name.startswith("Hook") and name != "Hook"]
-    assert len(hooks) == 14
+    assert len(hooks) == 15
     assert [h for h in hooks if h not in run.stdout] == []
+    assert "HookRoute    gave" in run.stdout, "the router never ran"

@@ -1,7 +1,7 @@
 # chatinho — the hook specification
 
-Everything a peer can do, and everything it can be asked to do, is one of **fourteen hooks**. This
-document is the reference for all fourteen: what each one demands, what it grants, and what actually
+Everything a peer can do, and everything it can be asked to do, is one of **fifteen hooks**. This
+document is the reference for all fifteen: what each one demands, what it grants, and what actually
 arrives at its door.
 
 Every claim here is executable. `examples/hooks.py` declares one peer per hook and runs a short
@@ -39,21 +39,25 @@ seven, which is what the terminal shows.
 
 | field | when | meaning |
 |---|---|---|
-| `to is None` | `say` | everyone but the speaker heard it (`msg.is_broadcast`) |
-| `to` is an id | `ask` | one peer was asked, and owes a reply |
+| `to is None` | `say`, an answer | owed by nobody: everyone but the speaker heard it, nobody answers it |
+| `to` is an id | `ask`, an addressed or routed `say` | that peer answers it |
 | `to is TOOL` | `invoke` | a command was run |
 | `reply_to` set | `answer` | it answers that message, by id |
 
-`to` is what the **speaker** chose, and the session never changes it. Which peer the session puts a
-message to — whose `answer` it calls — is a second field, `msg.asked_of`: `to` itself for an
-addressed say or an ask, the peer the session routes a say to (below), and None for everything else.
+**`to` is the one field that says who answers.** The speaker sets it, or leaves it unset; a say
+that names nobody is given one by the **router** ([`HookRoute`](#hookroute)) before anyone hears
+it, so every listener, the archive and `context()` see it already addressed. The builders route
+with `SimpleRouter`, which sends a reply to the author of what it replies to, and anything else to
+the one peer that answers when there is exactly one; a `ChatSession` given no router routes
+nothing.
 
-What a peer's `answer` returns is an **answer**: it is addressed to whoever asked and every listener
-hears it, but it is asked of nobody, so it is never put to anyone's `answer`. That is what keeps two peers that answer from
-trading answers back and forth, and it is marked where the answer is made — a follow-up to an
-answer and the answer to that follow-up look exactly alike.
+What a peer's `answer` returns is an **answer**, and an answer is **addressed to nobody**: every
+listener hears it, and it is never put to anyone's `answer`. So is a say replying to a message that
+was addressed to its speaker — a peer answering late, or the user answering a question put to them.
+That is what keeps two peers that answer from trading answers back and forth, and it is why a
+follow-up to an answer is not one: the answer it replies to was addressed to nobody.
 
-`msg.is_local` is `frm == LOCAL`: the user said it. `msg.is_broadcast` is `to is None`.
+`msg.is_local` is `frm == LOCAL`: the user said it.
 
 ### Three verbs, three pairs
 
@@ -85,7 +89,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 
 ---
 
-## 2. The fourteen hooks at a glance
+## 2. The fifteen hooks at a glance
 
 | hook | demands | grants | declared by |
 |---|---|---|---|
@@ -98,6 +102,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 | [`HookContext`](#hookcontext) | — | `context` | a log widget, a connector that needs history |
 | [`HookPeers`](#hookpeers) | — | `peers` | `/help`, the autocomplete popup |
 | [`HookCommands`](#hookcommands) | — | `commands` | `/help`, the autocomplete popup |
+| [`HookRoute`](#hookroute) | `route` | — | a router: the rules, or a model, deciding who answers |
 | [`HookLoad`](#hookload) | `load` | — | a backend |
 | [`HookForget`](#hookforget) | `forget` | — | a backend |
 | [`HookKeep`](#hookkeep) | `keep` | — | a backend that keeps attachments |
@@ -146,7 +151,7 @@ await self.say("echo: good morning", reply_to=msg.id)   # a reply to a say is an
 **and** it is how an ask is answered late. A peer that returned `None` from `answer` resolves the
 waiting ask by saying the reply with `reply_to` set to the question's id.
 
-`to` addresses the message to one peer: it is asked of that peer, as an ask would be, but nobody
+`to` addresses the message to one peer: that peer's `answer` is called, as an ask's would be, but nobody
 waits on it — the answer comes back as a reply to it, and every listener still hears both. A `to`
 that is not another peer in the chat raises `ValueError`.
 
@@ -166,18 +171,15 @@ value, a function, or a key source from `chatinho.keys` (`Env`, `File`, `Keyring
 `Chain`, …), read for each question. A source that cannot yield its key answers that question with an
 `error` reply naming the reference, and nothing is sent.
 
-**A room with one peer that answers is a conversation with it.** A say that is not a reply, said by
-a peer — not by a command — when exactly one peer declares `HookAnswer` besides the speaker and the
-frontend, is asked of that peer: `asked_of` is that peer, its `answer` is called, and the reply comes
-back with `reply_to` set to the say. `to` stays unset, so the say is still a broadcast and everyone
-who listens hears it as one. With two or more such peers, or none, a say is asked of nobody.
-
-**A reply goes back to whoever it replies to.** A say with `reply_to` set and no `to`, said by a
-peer, is asked of the author of the message it replies to — when that author is a peer other than
-the speaker and the frontend, and declares `HookAnswer`. Selecting an answer in the terminal and
-typing is a follow-up, and the peer that answered is the one asked; `to` stays unset here too. A
-reply to the user, to a command's output, to a peer that only listens, or to oneself is asked of
-nobody; an explicit `to` always wins.
+**A say that names nobody is routed.** Leave `to` unset and the router decides it, before the say
+is posted: whatever it returns becomes `to`, and that peer answers. `SimpleRouter`, which the
+builders give, keeps two rules. **A room with one peer that answers is a conversation with it**: a say that is not a reply
+goes to the one peer besides the speaker and the frontend that declares `HookAnswer`, and with two
+or more such peers, or none, to nobody. **A reply goes back to whoever it replies to**: selecting
+an answer in the terminal and typing is a follow-up, and the peer that answered is the one asked; a
+reply to the user, to a command's output, to a peer that only listens, or to oneself goes to
+nobody. An explicit `to` always wins, and a say by a command, or one that answers a question put
+to its speaker, is never routed.
 
 ### HookAsk
 
@@ -203,7 +205,7 @@ else:
 What the reply said about itself is on its message: `msg.status` is `answered`, `asked` (a question
 back) or `error` — a `ReplyStatus`, a `str` enum, so `msg.status == "asked"` holds — from
 `Reply(..., status=ReplyStatus.ASKED)`; a `Reply` is `ANSWERED` unless it says otherwise. A peer whose `answer`
-fails replies with `ReplyStatus.ERROR` when nobody is awaiting it — a say asked of it.
+fails replies with `ReplyStatus.ERROR` when nobody is awaiting it — a say addressed to it.
 
 `ask(LOCAL, ...)` asks the user. It does not block the chat: the awaiting peer's own task is
 parked, and every other peer carries on.
@@ -284,10 +286,10 @@ lines = ["/%s - %s" % (name, cmd.description) for name, cmd in self.commands().i
 
 **Every** message that crosses the session, whoever said it and whoever it was for.
 
-There is one way to hear, not two. A peer that only wants what was said to the room checks
-`msg.is_broadcast` itself — and it **must**. A say the session routed to an answering peer is still
-a broadcast, so such a listener hears it; a peer that both listens *and* answers checks
-`msg.asked_of` too, or it responds twice to a say it is also asked:
+There is one way to hear, not two. A peer that only wants what is owed by nobody checks
+`msg.to is None` itself — and it **must**. A say the router gave a peer has `to` set, so it is that
+peer's to answer, and such a listener leaves it alone; a peer that both listens *and* answers needs
+nothing more, since a say addressed to it fails the same check:
 
 ```python
 @connector("echo")
@@ -297,8 +299,8 @@ class EchoConnector:
     say : Say
 
     async def listen(self, msg: ChatMessage) -> None:
-        if not msg.is_broadcast or not msg.is_local:
-            return                      # an ask, a command, or TOOL — not for it
+        if msg.to is not None or not msg.is_local:
+            return                      # an ask, a routed say, a command, or TOOL — not for it
         await self.say("echo: %s" % msg.text, reply_to=msg.id)
 ```
 
@@ -308,7 +310,7 @@ and it *is* local. What one listener sees, from `examples/hooks.py`:
 ```
    HookListen   heard from=0 to=None 'good morning'          ← said to the room
    HookListen   heard from=0 to=2 'what is the weather?'     ← an ask, not for it
-   HookListen   heard from=2 to=0 'sunny'                    ← the answer to it
+   HookListen   heard from=2 to=None 'sunny'                 ← the answer to it, owed by nobody
    HookListen   heard from=0 to=-1 '/upper nothing is hidden'    ← the invocation
    HookListen   heard from=-1 to=None 'NOTHING IS HIDDEN'    ← what it answered
 ```
@@ -373,6 +375,39 @@ Three consequences worth knowing before they surprise you:
 
 The invocation is *addressed* to `TOOL` rather than said to the room, which is what keeps a
 connector that answers the user from answering somebody else's `/help`.
+
+### HookRoute
+
+> **demands** `async route(msg: ChatMessage) -> Optional[int]`
+
+Decides who answers a say whose speaker named nobody. The session calls it for a say with `to`
+unset, said by a peer (not by `TOOL`), that is not an answer, and whatever it returns becomes the
+say's `to` **before** anyone hears it — so every listener, the archive and `context()` see the say
+already addressed. None leaves `to` unset, and then nobody answers.
+
+```python
+@require(HookRoute)
+@require(HookPeers)
+class Triage:
+    peers : Peers
+
+    async def route(self, msg) -> Optional[int]:
+        wanted = "meteo" if "rain" in msg.text else "gpt"
+        return next((at for at, who in self.peers().items() if name_of(who) == wanted), None)
+```
+
+**The router is what `ChatSession(router=…)` is given**, and like a command it is **not a peer**:
+no id, nothing addressed to it, in nobody's `peers()`. It is granted what it declares, and its
+`initialize()` and `shutdown()` run with everyone else's. A connector that declares `HookRoute` is
+not the router for having declared it. A session given no router routes nothing: a say that names
+nobody stays owed by nobody.
+
+**The builders give `SimpleRouter`** unless told otherwise, and it keeps two rules: a reply goes to
+the author of what it replies to, and anything else to the one peer that answers, when there is
+exactly one. Both exclude the speaker and the frontend, and both answer None otherwise.
+
+What a router returns is checked: anything but another peer that declares `HookAnswer` is ignored
+with a warning, and a router that raises is logged — the say is posted either way, with `to` unset.
 
 ### HookLoad
 
@@ -566,8 +601,11 @@ Stated rather than hidden, because each one is a real trade:
 - **With no base class, peers are typed `Any`**, so mypy no longer checks their shape. `require`
   moved that check from type-check time to import time; it did not disappear, but it is not the
   same guarantee.
-- **A peer that only wants broadcasts must filter for itself.** That check is the price of the
-  second listening hook that no longer exists.
+- **A peer that only wants what is owed by nobody must filter for itself** (`msg.to is None`).
+  That check is the price of the second listening hook that no longer exists, and since the
+  router writes `to`, such a listener stays quiet in a room with one peer that answers.
+- **A router decides before the say is posted**, so a slow one delays it. The terminal sends in a
+  worker so the input stays free, but the say appears only once the router has returned.
 - **A command cannot answer privately**, and `context()` cannot reach past the recall window.
 
 ---

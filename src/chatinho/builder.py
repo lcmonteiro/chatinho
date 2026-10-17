@@ -4,7 +4,8 @@ Builds a session with its frontend attached like any peer.
 Each builder does what a caller would do by hand — build a
 :class:`~chatinho.session.ChatSession`, build a frontend, and hand it over as
 the session's ``frontend`` — because a frontend is a normal peer, one of the
-four roles a session takes, not something the session's constructor wires up.
+roles a session takes, not something the session's constructor wires up. Both
+route with :class:`~chatinho.routers.SimpleRouter` unless given another router.
 
 - :func:`build_chat_session` attaches the terminal.
 - :func:`build_mcp_session` attaches an MCP server.
@@ -20,6 +21,7 @@ from .frontends.chat.composer import NEWLINE_ESCAPE
 from .frontends.chat.style import ChatStyle
 from .frontends.mcp import McpFrontend
 from .keys import KeyLike
+from .routers import SimpleRouter
 from .session import ChatSession
 
 
@@ -35,6 +37,7 @@ def build_chat_session(
     copy_key        : str = "ctrl+y",
     newline_escape  : Optional[str] = NEWLINE_ESCAPE,
     name            : Optional[str] = None,
+    router          : Optional[Any] = None,
 ) -> ChatSession:
     """
     Builds a chat with a terminal from peers and a backend.
@@ -72,6 +75,8 @@ def build_chat_session(
             ``"f10"``, ``"escape"``. Defaults to Textual's own ``"ctrl+q"``,
             which stops quitting when another key is given. ``ctrl+c`` is a
             separate binding and is left alone.
+        router: The peer that decides who answers a say that names nobody;
+            :class:`~chatinho.routers.SimpleRouter` when omitted.
 
     Returns:
         ChatSession: The session, with the terminal as its ``frontend`` and so
@@ -96,6 +101,7 @@ def build_chat_session(
         commands   = commands,
         frontend   = presentation,
         backend    = backend,
+        router     = router if router is not None else SimpleRouter(),
     )
 
 
@@ -109,6 +115,7 @@ def build_mcp_session(
     host        : str = "127.0.0.1",
     port        : int = 8000,
     credentials : Optional[Dict[str, str]] = None,
+    router      : Optional[Any] = None,
 ) -> ChatSession:
     """
     Builds a chat served over MCP from peers and a backend.
@@ -127,6 +134,8 @@ def build_mcp_session(
         host: Where the server listens.
         port: The port it listens on.
         credentials: Lent with every message to the peers that answer it.
+        router: The peer that decides who answers a say that names nobody;
+            :class:`~chatinho.routers.SimpleRouter` when omitted.
 
     Returns:
         ChatSession: The session, with the MCP server as its ``frontend``.
@@ -147,4 +156,5 @@ def build_mcp_session(
         commands   = commands,
         frontend   = presentation,
         backend    = backend,
+        router     = router if router is not None else SimpleRouter(),
     )

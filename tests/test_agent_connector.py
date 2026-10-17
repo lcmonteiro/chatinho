@@ -355,7 +355,7 @@ async def test_the_only_answering_peer_answers_once():
     await session.close()
     assert len(model.sent) == 1
     mine = [m for m in view.context() if m.frm == agent.peer_id]
-    assert [(m.text, m.reply_to, m.to) for m in mine] == [("once", said, view.peer_id)]
+    assert [(m.text, m.reply_to, m.to) for m in mine] == [("once", said, None)]
 
 
 async def test_the_run_fails_on_a_say():

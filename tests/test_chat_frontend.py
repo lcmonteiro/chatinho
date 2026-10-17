@@ -20,6 +20,7 @@ from textual.color import Color
 from textual.widgets import Static
 
 from chatinho.frontends.chat import ChatFrontend
+from chatinho.routers import SimpleRouter
 from chatinho.frontends.chat.composer import NEWLINE_KEYS, CommandInput
 from chatinho.frontends.chat.messages import chat_markdown, preview_of
 from chatinho.message import MessageID
@@ -36,6 +37,7 @@ from chatinho import (
     HookAnswer,
     HookAsk,
     HookExecute,
+    HookRoute,
     Reply,
     connector,
     ChatSession,
@@ -55,7 +57,7 @@ async def chat_frontend(connectors=None, commands=None, backend=None, **kwargs):
     does not hold the session either, so this starts it directly rather than
     relying on the app to reach back for it.
     """
-    session = ChatSession(connectors=connectors, commands=commands, backend=backend)
+    session = ChatSession(connectors=connectors, commands=commands, backend=backend, router=SimpleRouter())
     app = ChatFrontend(**kwargs)
     session.add_connector(app)
     await session.start()
@@ -232,7 +234,7 @@ async def test_anything_else_is_said_as_typed(typed):
     app = await chat_frontend(connectors=[sol, _Lua()])
     async with app.run_test() as pilot:
         await _submit(app, pilot, typed)
-        assert app.messages[0].text == typed and app.messages[0].is_broadcast
+        assert app.messages[0].text == typed and app.messages[0].to is None
         assert sol.asked == []
 
 
@@ -265,7 +267,7 @@ async def test_what_a_command_writes_is_not_the_user_speaking():
         await app.command("eco", "ola")
         await pilot.pause()
         invocacao, resposta = app.messages
-        assert invocacao.to == TOOL and invocacao.is_broadcast is False
+        assert invocacao.to == TOOL
         assert resposta.frm == TOOL and resposta.is_local is False
 
 
@@ -2346,3 +2348,31 @@ async def test_an_absolute_link_opens_without_asking_the_backend(monkeypatch):
         await _click(app, pilot, msg_id, "https://example.com/page")
     assert opened == ["https://example.com/page"]
     assert (notices, keeper.asked) == ([], 0)
+
+
+async def test_a_slow_router_does_not_hold_the_input():
+    """The router decides before a say is posted; the person keeps typing meanwhile."""
+    @require(HookRoute)
+    class Slow:
+        async def route(self, msg):
+            await asyncio.sleep(1.0)
+            return None
+
+    session = ChatSession(connectors=[_Sol()], router=Slow())
+    app     = ChatFrontend()
+    session.add_connector(app)
+    await session.start()
+    async with app.run_test() as pilot:
+        line = app.query_one("#input-line", CommandInput)
+        line.text = "hi"
+        await pilot.press("enter")
+        await pilot.press("x")
+        await pilot.pause(0.1)
+        assert line.text == "x", "the input waited for the router"
+        assert "hi" not in [m.text for m in app.messages]
+        for _ in range(60):
+            await pilot.pause(0.05)
+            if "hi" in [m.text for m in app.messages]:
+                break
+        assert "hi" in [m.text for m in app.messages]
+    await session.close()

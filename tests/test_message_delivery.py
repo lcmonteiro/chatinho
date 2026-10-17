@@ -271,8 +271,9 @@ async def test_replies_traded_past_the_limit_are_dropped():
     """
     Two peers that answer by saying a reply stop at the limit, without trading errors.
 
-    What ``answer`` returns is never asked of anyone, so the only chain left is
-    one a peer builds by *saying* its reply from inside ``answer``.
+    What ``answer`` returns is never asked of anyone, and neither is a reply
+    said to a question put to the speaker, so the only chain left is one a peer
+    builds by saying its reply *addressed* back to whoever asked.
     """
     @require(HookAnswer)
     @require(HookSay)
@@ -283,7 +284,7 @@ async def test_replies_traded_past_the_limit_are_dropped():
             self.name = name
 
         async def answer(self, msg: ChatMessage) -> None:
-            await self.say("re: %s" % msg.text, reply_to=msg.id)
+            await self.say("re: %s" % msg.text, reply_to=msg.id, to=msg.frm)
 
     session, view = await driven()
     first, second = Chatty("first"), Chatty("second")
@@ -397,3 +398,82 @@ async def test_a_reply_to_ones_own_ask_is_heard_not_answered():
     await session.close()
     assert curious.answered == ["go"]
     assert "slow: and you?" in curious.heard
+
+
+# === An answer is addressed to nobody =============================================
+
+async def test_an_answer_is_addressed_to_nobody():
+    session, view = await driven(connectors=[_Slow()])
+    await view.ask(1, "rain?")
+    await session.close()
+    question, answer = view.context()
+    assert question.to == 1
+    assert answer.to is None and answer.reply_to == question.id
+
+
+async def test_an_error_reply_is_addressed_to_nobody():
+    @connector("broken")
+    @require(HookAnswer)
+    class Broken:
+        async def answer(self, msg: ChatMessage) -> Reply:
+            raise RuntimeError("down")
+
+    session, view = await driven(connectors=[Broken()])
+    await view.say("hi", to=1)
+    await session.close()
+    said, error = view.context()
+    assert error.status == ReplyStatus.ERROR
+    assert error.to is None and error.reply_to == said.id
+
+
+async def test_a_late_answer_is_not_put_to_the_asker():
+    """The asked peer says its reply later; the asker also answers, and is not asked it."""
+    @connector("late")
+    @require(HookAnswer)
+    @require(HookSay)
+    class Late:
+        say : Say
+
+        async def answer(self, msg: ChatMessage) -> None:
+            await self.say("later", reply_to=msg.id)
+            return None
+
+    @connector("asker")
+    @require(HookAnswer)
+    @require(HookAsk)
+    class Asker:
+        ask : Ask
+
+        def __init__(self) -> None:
+            self.answered : List[str] = []
+            self.got      : List[str] = []
+
+        async def answer(self, msg: ChatMessage) -> Reply:
+            self.answered.append(msg.text)
+            return Reply("ok")
+
+    asker   = Asker()
+    session, view = await driven(connectors=[Late(), asker])
+    asker.got.append((await asyncio.wait_for(asker.ask(1, "when?"), timeout=2)).text)
+    await session.close()
+    assert asker.got == ["later"] and asker.answered == []
+    late = next(m for m in view.context() if m.text == "later")
+    assert late.to is None
+
+
+async def test_the_users_answer_to_a_question_is_addressed_to_nobody():
+    @connector("curious")
+    @require(HookAsk)
+    class Curious:
+        ask : Ask
+
+    curious = Curious()
+    session, view = await driven(connectors=[curious])
+    asking  = asyncio.ensure_future(curious.ask(LOCAL, "name?"))
+    await asyncio.sleep(0.05)
+    question = view.asked[-1]
+    await view.say("Ana", reply_to=question.id)
+    assert (await asyncio.wait_for(asking, timeout=2)).text == "Ana"
+    await session.close()
+    reply = next(m for m in view.context() if m.text == "Ana")
+    assert reply.to is None

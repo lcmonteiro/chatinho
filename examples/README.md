@@ -81,7 +81,7 @@ reference, never a key.
 | `lab_client.py` | Your chat, with the lab as a peer, lending your key (your profile's, else `OPENAI_API_KEY`) as the `llm` credential. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_client.py` |
 | `lab_fastmcp_client.py` | The same question from a plain FastMCP client, without chatinho: the MCP surface is all a client needs. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_fastmcp_client.py http://127.0.0.1:8000/mcp "what is MCP?"` |
 | `inbox.py` | A script asks you a question and waits: `answer=$(curl -s -d '{"text":"Deploy?"}' 127.0.0.1:8765/ask)` returns `{"answer": "..."}` once you reply in the chat, or a 504 after the timeout. No model and no key. | `python examples/inbox.py` |
-| `hooks.py` | The fourteen hooks, one peer each, in a chat with no terminal, printing what reaches each door. The runnable half of [`docs/SPEC.md`](../docs/SPEC.md). No key needed. | `python examples/hooks.py` |
+| `hooks.py` | The fifteen hooks, one peer each, in a chat with no terminal, printing what reaches each door. The runnable half of [`docs/SPEC.md`](../docs/SPEC.md). No key needed. | `python examples/hooks.py` |
 
 Every LLM demo has the same shape: `parts()` returns the connectors, commands and
 backend, and `main()` hands them to `build_chat_session` (or `build_mcp_session`).

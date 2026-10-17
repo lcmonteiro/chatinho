@@ -27,7 +27,7 @@ from datetime import datetime
 from inspect import isawaitable
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-from .hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, HookListen, HookLoad
+from .hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, HookListen, HookLoad, HookRoute
 from .hooks import declared_id, declares, hooks_of, name_of
 from .message import LOCAL, TOOL
 from .message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
@@ -54,7 +54,7 @@ class ChatSession:
     Routes messages between peers, and keeps the history.
 
     The conversation is reached only by declaring a hook. The five most used
-    are below; ``docs/SPEC.md`` has all fourteen:
+    are below; ``docs/SPEC.md`` has all fifteen:
 
     - ``HookSay``      grants  ``say(text, *, to=None, reply_to=None, attachments=())``.
     - ``HookAsk``      grants  ``ask(to, text, *, attachments=())``, which awaits the answer.
@@ -65,7 +65,8 @@ class ChatSession:
     Four roles arrive as four parameters, and every one of them is a plain
     class the session tells apart by what it declared, never by which parameter
     carried it: ``frontend`` speaks for the person, ``connectors`` are who they
-    are talking to, ``commands`` only run, and ``backend`` listens and recalls.
+    are talking to, ``commands`` only run, ``backend`` listens and recalls, and
+    ``router`` decides who answers a say that names nobody.
     """
 
     #: How long :meth:`close` waits for the deliveries in flight, in seconds.
@@ -77,6 +78,7 @@ class ChatSession:
         commands   : Optional[List[Any]] = None,
         frontend   : Optional[Any] = None,
         backend    : Optional[Any] = None,
+        router     : Optional[Any] = None,
         recall     : int = 200,
         max_depth  : int = 8,
     ) -> None:
@@ -84,6 +86,8 @@ class ChatSession:
         self.frontend : Optional[Any] = frontend
         #: Where the conversation goes when it is no longer recent.
         self.backend  : Optional[Any] = backend
+        #: Who decides who answers a say that names nobody; without one, nobody does.
+        self.router   : Optional[Any] = router
         #: How much of the archive ``start()`` pulls back into the session.
         self.recall   : int = recall
         #: How deeply asks may nest; a deeper question is answered with an error.
@@ -135,6 +139,13 @@ class ChatSession:
             # only sugar for the role — the session finds what it needs by what
             # the thing declared, not by which parameter it arrived in.
             self.add_connector(backend)
+        if router is not None:
+            if not declares(router, HookRoute):
+                raise TypeError("%r does not declare %s: a router must @require(HookRoute)"
+                                % (router, HookRoute))
+            # Not a peer, as a command is not: no id, nothing addressed to it,
+            # in nobody's roster. It reads the room through what it declared.
+            self._grant(router, TOOL)
 
     # === Peers ===============================================================
 
@@ -276,6 +287,10 @@ class ChatSession:
         """The first peer that declares *hook*, or None: the backend, for the hooks only it has."""
         return next((who for who in self._connectors.values() if declares(who, hook)), None)
 
+    def _routers(self) -> List[Any]:
+        """The router, as a list, for the lifecycle loops that run over peers and commands."""
+        return [self.router] if self.router is not None else []
+
     def _commands(self) -> Dict[str, Any]:
         """Every command registered, by name. Granted by ``HookCommands``."""
         return dict(self.commands)
@@ -335,36 +350,41 @@ class ChatSession:
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, reply_to=reply_to)
             if credentials is not None:
                 msg.credentials = credentials     # the lender's own mapping, so it can clear it
-            # The speaker's `to` is never changed: who the session asks goes
-            # beside it, so a say routed to a peer is still said to the room.
-            if to is not None:
-                msg.asked_of = to
-            elif frm != TOOL:
-                msg.asked_of = self._answerer_of(frm, reply_to)
+            # Who answers is `to`, and a say that names nobody is routed, when
+            # there is a router: unless a command wrote it, or it answers
+            # something put to its speaker, which is owed no answer of its own.
+            router = self.router
+            if to is None and router is not None and frm != TOOL and not self._answers(frm, reply_to):
+                msg.to = await self._routed(router, msg)
             await self._kept(msg, attachments)
             return await self._post(msg)
         return say
 
-    def _answerer_of(self, frm: int, reply_to: Optional[MessageID]) -> Optional[int]:
-        """
-        The peer a say with no ``to`` is asked of, or None for a broadcast.
+    def _answers(self, frm: int, reply_to: Optional[MessageID]) -> bool:
+        """Whether a say by *frm* replying to *reply_to* answers something put to *frm*."""
+        parent = self._store.find(reply_to) if reply_to is not None else None
+        return parent is not None and parent.to == frm
 
-        A reply goes back to whoever said what it replies to; any other say,
-        to the only peer that answers. Either way the speaker and the frontend
-        do not count — the frontend speaks for the person, and a say must not
-        turn into a question put to them — and a peer that does not answer
-        cannot be asked. A reply to something no longer in the session, or
-        said by a command, is a broadcast.
+    async def _routed(self, router: Any, msg: ChatMessage) -> Optional[int]:
         """
-        def answers(at: int) -> bool:
-            return at not in (frm, LOCAL) and declares(self._connectors[at], HookAnswer)
+        Who *msg* is for, as *router* decides; None for nobody.
 
-        if reply_to is not None:
-            parent = self._store.find(reply_to)
-            author = parent.frm if parent is not None else None
-            return author if author in self._connectors and answers(author) else None
-        answering = [at for at in self._connectors if answers(at)]
-        return answering[0] if len(answering) == 1 else None
+        What it returns is used only when it is another peer that answers;
+        anything else is ignored with a warning, and a router that raises is
+        logged, so a broken router never silences a say.
+        """
+        try:
+            at = await router.route(msg)
+        except Exception:
+            logger.error("Routing %s failed; it goes to nobody", msg.id, exc_info=True)
+            return None
+        if at is None:
+            return None
+        who = self._connectors.get(at)
+        if at == msg.frm or who is None or not declares(who, HookAnswer):
+            logger.warning("Ignored the router's %r for %s: not another peer that answers", at, msg.id)
+            return None
+        return at
 
     def _ask_for(self, frm: int):
         async def ask(
@@ -375,7 +395,7 @@ class ChatSession:
         ) -> Reply:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
-            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, asked_of=to)
+            msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to)
             await self._kept(msg, attachments)
             future : "asyncio.Future[ChatMessage]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
@@ -421,19 +441,19 @@ class ChatSession:
         it. A question, anything asked of a peer, is given its depth: one more
         than the question being answered in this task, if any.
 
-        Who is asked is ``asked_of``, set where the message was made, never its
-        shape: the user following up on an answer and the answer to that
-        follow-up look alike. An answer — what a peer's ``answer`` returned, or
-        a reply the session posts in its name — is asked of nobody: it may
-        resolve an ask that is waiting, and everyone who listens hears it.
+        Who is asked is ``to``, set where the message was made — by the
+        speaker, or by the router for a say that named nobody. An answer — what
+        a peer's ``answer`` returned, or a reply the session posts in its name —
+        is addressed to nobody: it may resolve an ask that is waiting, and
+        everyone who listens hears it.
         """
         self._store.add(msg)
-        # Only the peer the question was asked of resolves its ask: anyone
+        # Only the peer the question is addressed to resolves its ask: anyone
         # else's reply is heard like any message, and the ask keeps waiting.
         question = self._store.find(msg.reply_to) if msg.reply_to else None
         waiting  = self._pending.get(msg.reply_to) if msg.reply_to else None
         resolved = (waiting is not None and not waiting.done()
-                    and question is not None and question.asked_of == msg.frm)
+                    and question is not None and question.to == msg.frm)
         if resolved:
             del self._pending[msg.reply_to]       # type: ignore[arg-type]
             waiting.set_result(msg)               # type: ignore[union-attr]
@@ -441,7 +461,7 @@ class ChatSession:
         # You never hear yourself; that is the whole of the loop protection.
         listeners = {at for at, who in self._connectors.items()
                      if at != msg.frm and declares(who, HookListen)}
-        audience  = {msg.asked_of} if msg.asked_of is not None and not resolved else set()
+        audience  = {msg.to} if msg.to is not None and not resolved else set()
         audience &= self._connectors.keys()
         if audience:
             self._depth[msg.id] = _ANSWERING.get() + 1
@@ -524,14 +544,16 @@ class ChatSession:
             else:
                 await self._post(ChatMessage(
                     id=self._store.new_id(), text="%s failed: %s" % (name_of(who), type(exc).__name__),
-                    frm=at, to=msg.frm, reply_to=msg.id, status=ReplyStatus.ERROR))
+                    frm=at, to=None, reply_to=msg.id, status=ReplyStatus.ERROR))
             raise
         if reply is not None:
             await self._answered(at, msg, reply)
 
     async def _answered(self, at: int, msg: ChatMessage, reply: Reply) -> None:
         """Posts *reply* in the name of peer *at*, as its answer to *msg*."""
-        answered = ChatMessage(id=self._store.new_id(), text=reply.text, frm=at, to=msg.frm,
+        # Addressed to nobody: an answer is owed no answer, and `to` set
+        # would put it to the asker's own `answer`.
+        answered = ChatMessage(id=self._store.new_id(), text=reply.text, frm=at, to=None,
                                reply_to=msg.id, status=reply.status)
         await self._kept(answered, reply.attachments)
         await self._post(answered)
@@ -647,7 +669,7 @@ class ChatSession:
         anything, or is initialized, at all. What was said to a peer before it
         started is delivered to it now, in the order it was said.
         """
-        for who in list(self._connectors.values()) + list(self.commands.values()):
+        for who in list(self._connectors.values()) + list(self.commands.values()) + self._routers():
             if id(who) not in self._initialized:
                 self._initialized.add(id(who))
                 await self._initialize(who)
@@ -713,7 +735,7 @@ class ChatSession:
         finish is cancelled with a warning, so it cannot hang the close.
         """
         pending : Dict["asyncio.Future[Any]", str] = {}
-        for who in list(self._connectors.values()) + list(self.commands.values()):
+        for who in list(self._connectors.values()) + list(self.commands.values()) + self._routers():
             shutdown = getattr(who, "shutdown", None)
             if not callable(shutdown):
                 continue
