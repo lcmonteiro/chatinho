@@ -16,7 +16,9 @@ Textual app. That ratio is the point of the layout below, not an accident of it.
 ## Everyone is a peer
 
 A chat is peers exchanging messages. Each has an integer id, and `LOCAL` — zero — is the user.
-Connectors are numbered from one.
+Connectors are numbered from one, past any id already taken: a peer pinned with
+`@connector(name, id=1)` used to be silently replaced by the next one numbered, and kept believing
+it was peer 1. Two peers pinned to one id is still an error.
 
 **A command is not a peer.** It has no id, nothing is addressed to it, and it hears
 nothing. It runs when someone runs it, and it answers whoever did. Treating commands as peers meant
@@ -60,6 +62,12 @@ nor the frontend. **What `answer` returns is asked of nobody**, so it is heard b
 and never put to anyone's `answer`. `Query(peer=)` matches `asked_of`, and `DatabaseBackend`
 archives it. That schema is the baseline: an archive from before `asked_of` existed is not upgraded.
 
+**The archive keeps `status` too.** Without it a failed reply came back from a reopened archive
+as an answer, and `Query(errors=False)` — what both LLM connectors remember by default — let it
+into the model's memory on every restart. Like `asked_of`, it is part of the baseline schema, and
+nothing is migrated. `DatabaseBackend` also refuses a keyword it does not know — `ecoh=True` used
+to be swallowed into a `config` nothing read.
+
 **The presentation is peer zero, and says so itself.** `ChatFrontend` is `@frontend("chat")` — being
 the person is what it *is*, not a favour whoever attaches it does — and it declares the same hooks
 a connector does. There is no privileged path: a terminal reaches the conversation through exactly
@@ -67,6 +75,13 @@ the doors a weather service does, and the session numbers everything else from o
 longer attaches itself, either: it takes no session in its constructor, and
 `builder.build_chat_session` hands it over as the session's `frontend` the same way it would hand
 over any other peer.
+
+**What the terminal says is what the person says, so it says nothing of its own.** The welcome
+is a banner at the top of the log, and an unknown `/command` or one that fails is a toast — none
+of them a message. They used to be `say`s, and a say of the person's in a room with one answering
+peer is asked of it: every demo opened by sending its welcome to the model, and an unknown
+`/nope` was put to it too. A banner and a toast are the terminal's to show; the conversation is
+not, and nothing in it is archived that the person never wrote.
 
 **`@frontend(name)` is `@connector(name, id=LOCAL)`, and exists because writing that out is an
 invitation to get it wrong.** Three presentations in this repository wrote it by hand, and a
@@ -94,13 +109,23 @@ Every verb is a pair: the word you call, and the word the other side writes. No 
 `on_` prefix, and no name is both — a grant arrives by `setattr` and would silently clobber a
 method it shares a name with.
 
+**`ask` returns the answer's `Reply`, status and all.** It used to return the text alone, so a
+caller — the agent's `ask_<peer>` tools among them — could not tell "quota exceeded" from an
+answer: the status was on the message in the conversation, and nowhere the asker looked. The
+status is the answer's own word on what it is, so the caller reads it there — `answered`, `asked`
+back, or `error` — rather than the session turning one of them into an exception. What the answer
+attached is with the backend, so the returned `Reply` carries none of it; `locate` finds it.
+
 A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:
 `ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
 by the message it answers. A broadcast is owed to nobody.
 
 **Answering late is not a fourth thing either.** A peer that cannot answer inline — a terminal
 waiting on a person, a connector waiting on a server — returns `None` from `answer` and says the
-reply when it has it, with `reply_to` set. The session matches it and resolves the ask. All three
+reply when it has it, with `reply_to` set. The session matches it and resolves the ask — **only
+when it comes from the peer the question was asked of** (`asked_of`). Anyone else's reply to it is
+heard like any message and leaves the ask waiting; before that rule, a listener replying to a
+question it overheard answered somebody else's `ask`. All three
 presentations in this repository work exactly that way, which is why the grant that used to exist
 for it was deleted: it was a second door onto the same room.
 
@@ -223,7 +248,7 @@ log from inside a *synchronous* Textual paint.
 ## Attachments go to the backend, and the message stays text
 
 A peer attaches through every door it speaks through: `say` and `ask` take `attachments`, `answer`
-and a command's `execute` both return a `Reply` (a string raises `TypeError`); `ask` and `invoke` still return text. None of it rides on `ChatMessage`:
+and a command's `execute` both return a `Reply` (a string raises `TypeError`); `ask` returns a `Reply` holding the answer's text and status, and `invoke` still returns text. None of it rides on `ChatMessage`:
 at each door the session hands the attachments to the backend's `keep` (`HookKeep`), under the new
 message's id, **before** `_post` — so the link exists when the text arrives — and posts the text
 alone. No keeper, and they are dropped; a keeper that raises is logged and the text posted anyway.

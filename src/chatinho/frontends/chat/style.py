@@ -168,6 +168,10 @@ $peer_header_rules
 .message-body > *:last-child {
     margin-bottom: 0;
 }
+.chat-banner {
+    color: $quote_color;
+    padding: 0 0 1 0;
+}
 .message-quote {
     color: $quote_color;
     background: $quote_bg;

@@ -1,7 +1,7 @@
 [project]
 name = "chatinho"
 version = "0.1.0"
-description = "An extensible chat library: peers, three verbs, eighteen hooks — with an optional Textual TUI"
+description = "An extensible chat library: peers, three verbs, fourteen hooks — with an optional Textual TUI"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}

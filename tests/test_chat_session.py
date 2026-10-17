@@ -133,7 +133,7 @@ async def test_renaming_does_not_change_the_address():
     session, view = await driven(connectors=[_Rapido()])
     peer = view.peers()[1]
     peer.name = "outro-nome"
-    assert await view.ask(1, "ola") == "eco: ola"
+    assert (await view.ask(1, "ola")).text == "eco: ola"
     assert session.id_of("outro-nome") == 1
     await session.close()
 
@@ -163,7 +163,7 @@ async def test_a_reply_to_a_say_is_another_say():
 
 async def test_ask_returns_the_answer():
     session, view = await driven(connectors=[_Rapido()])
-    assert await view.ask(1, "ola") == "eco: ola"
+    assert (await view.ask(1, "ola")).text == "eco: ola"
     await session.close()
 
 
@@ -247,7 +247,7 @@ async def test_a_slow_peer_holds_up_only_itself():
     started = time.perf_counter()
     slow, quick = await asyncio.gather(view.ask(1, "?"), view.ask(2, "ola"))
     elapsed = time.perf_counter() - started
-    assert (slow, quick) == ("finalmente", "eco: ola")
+    assert (slow.text, quick.text) == ("finalmente", "eco: ola")
     assert elapsed < 0.45, "as duas perguntas serializaram: %.2fs" % elapsed
     await session.close()
 
@@ -256,7 +256,7 @@ async def test_a_peer_that_raises_does_not_take_the_chat_down():
     session, view = await driven(connectors=[_Rebenta(), _Rapido()])
     failing = asyncio.create_task(view.ask(1, "?"))     # raises in the asker
     await asyncio.sleep(0.05)
-    assert await view.ask(2, "ola") == "eco: ola"
+    assert (await view.ask(2, "ola")).text == "eco: ola"
     with pytest.raises(RuntimeError, match="kaboom"):
         await failing
     await session.close()
@@ -275,7 +275,7 @@ async def test_a_peer_can_ask_the_user():
     agente = Agente()
     session.add_connector(agente)
     await session.start()
-    assert await agente.ask(LOCAL, "Autorizas?") == "sim, autorizo"
+    assert (await agente.ask(LOCAL, "Autorizas?")).text == "sim, autorizo"
     assert [m.text for m in view.asked] == ["Autorizas?"]
     await session.close()
 
@@ -310,7 +310,7 @@ async def test_an_answer_given_later_still_resolves_the_ask():
     pergunta = asyncio.create_task(view.ask(at, "e depois?"))
     await asyncio.sleep(0.02)
     await adiado.say("agora sim", reply_to=adiado.pendente.id)
-    assert await pergunta == "agora sim"
+    assert (await pergunta).text == "agora sim"
     await session.close()
 
 
@@ -710,3 +710,77 @@ async def test_a_shutdown_that_never_returns(monkeypatch, caplog):
         await session.close()
     assert time.monotonic() - started < 1.0
     assert "to shut down" in caplog.text
+
+
+# === Who resolves an ask, and whose id is whose =================================
+
+
+@connector("pinned", id=1)
+@require(HookAnswer)
+class _Pinned:
+    async def answer(self, msg) -> Reply:
+        return Reply("pinned")
+
+
+@connector("numbered")
+@require(HookAnswer)
+class _Numbered:
+    async def answer(self, msg) -> Reply:
+        return Reply("numbered")
+
+
+def test_a_numbered_peer_skips_an_id_already_pinned():
+    """Numbering used to hand out 1 again, and the pinned peer silently vanished."""
+    pinned, numbered = _Pinned(), _Numbered()
+    session = ChatSession(connectors=[pinned, numbered])
+    assert (pinned.peer_id, numbered.peer_id) == (1, 2)
+    assert session.id_of("pinned") == 1 and session.id_of("numbered") == 2
+
+
+def test_two_peers_pinned_to_one_id_are_refused():
+    session = ChatSession(connectors=[_Pinned()])
+    with pytest.raises(ValueError, match="already taken"):
+        session.add_connector(_Pinned())
+
+
+@connector("asker")
+@require(HookAsk)
+class _Asker:
+    ask : Ask
+
+
+@connector("slow")
+@require(HookAnswer)
+class _Slow:
+    async def answer(self, msg) -> Reply:
+        await asyncio.sleep(0.2)
+        return Reply("the real answer")
+
+
+@connector("bystander")
+@require(HookListen)
+@require(HookSay)
+class _Bystander:
+    """Replies to every question it overhears, before the peer asked can."""
+
+    say : Say
+
+    async def listen(self, msg) -> None:
+        if msg.to is not None and msg.reply_to is None:
+            await self.say("not my question", reply_to=msg.id)
+
+
+async def test_only_the_asked_peer_resolves_an_ask():
+    asker, slow = _Asker(), _Slow()
+    session = ChatSession(connectors=[asker, slow, _Bystander()])
+    await session.start()
+    assert (await asker.ask(slow.peer_id, "q")).text == "the real answer"
+    await session.close()
+    # The bystander's reply was not lost, only not taken for the answer.
+    assert "not my question" in [m.text for m in session._context()]
+
+
+def test_help_declares_only_what_it_uses():
+    """It declared HookSay and never said anything: the answer is posted for it."""
+    from chatinho import HelpCommand, HookCommands, HookPeers, hooks_of
+    assert hooks_of(HelpCommand()) == {HookExecute, HookPeers, HookCommands}

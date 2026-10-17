@@ -166,7 +166,7 @@ async def test_a_keeper_that_fails_is_logged_and_the_text_still_posted(caplog):
 async def test_ask_keeps_under_the_question():
     keeper = _Keeper()
     session, view = await driven(connectors=[_Plain()], backend=keeper)
-    assert await view.ask(1, "Review [this](draft.md)", attachments=[item("draft.md")]) == "just text"
+    assert (await view.ask(1, "Review [this](draft.md)", attachments=[item("draft.md")])).text == "just text"
     await session.close()
     question = view.context()[0]
     assert set(keeper.kept) == {(question.id, "draft.md")}
@@ -175,7 +175,7 @@ async def test_ask_keeps_under_the_question():
 async def test_an_answer_keeps_under_the_answer_and_ask_returns_its_text():
     keeper = _Keeper()
     session, view = await driven(connectors=[_Reporter()], backend=keeper)
-    assert await view.ask(1, "report?") == "Here: [report](report.html)"
+    assert (await view.ask(1, "report?")).text == "Here: [report](report.html)"
     await session.close()
     answer = view.context()[-1]
     assert (answer.frm, set(keeper.kept)) == (1, {(answer.id, "report.html")})
@@ -184,7 +184,7 @@ async def test_an_answer_keeps_under_the_answer_and_ask_returns_its_text():
 async def test_a_plain_string_answer_keeps_nothing():
     keeper = _Keeper()
     session, view = await driven(connectors=[_Plain()], backend=keeper)
-    assert await view.ask(1, "?") == "just text"
+    assert (await view.ask(1, "?")).text == "just text"
     await session.close()
     assert keeper.kept == {}
 

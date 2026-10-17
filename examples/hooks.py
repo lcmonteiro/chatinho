@@ -293,7 +293,8 @@ async def main() -> None:
     print("\n-- HookAsk: ask one peer, and it owes a reply --")
     weather = session.id_of("weather")
     assert weather is not None
-    print("   →", await screen.ask(weather, "what is the weather?"))
+    reply = await screen.ask(weather, "what is the weather?")
+    print("   →", reply.text, "(%s)" % reply.status.value)
     await settle()
 
     print("\n-- HookInvoke: a command runs, and the running is recorded --")

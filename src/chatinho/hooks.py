@@ -5,16 +5,17 @@ says what it can do by declaring hooks, and :func:`require` checks at
 class-definition time that it implements what it declared, so a missing or
 misspelled method is an import error rather than a silent no-op at runtime.
 
-There are three verbs and nothing else:
+There are three verbs, each a pair — the word you call, and the word the
+other side writes:
 
-    say(text)          a message for everyone
-    ask(to, text)      a message for one peer, awaiting its reply
-    answer(msg, text)  the reply that ask is waiting on
+    say(text)          -> listen(msg)        a message for everyone
+    ask(to, text)      -> answer(msg)        a message for one peer, awaiting its reply
+    invoke(name, args) -> execute(args, by)  a command run by name
 
 and two ways of being told:
 
-    listen(msg)   someone spoke to everyone
-    answer(msg)   someone asked *you*; return the answer, or answer() later
+    listen(msg)   every message that crosses the session, whoever it was for
+    answer(msg)   someone asked *you*; return a Reply, or None and say it later
 
 Everything is a coroutine and every delivery is its own task, so a slow
 subsystem holds up nobody, and a peer may ask one that is asking it.
@@ -37,7 +38,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
 
-from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Secret
+from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, Secret
 from .query import Query
 
 logger = logging.getLogger(__name__)
@@ -72,10 +73,16 @@ class Say(Protocol):
 class Ask(Protocol):
     """Granted by ``HookAsk``: a message for one peer, and its reply."""
 
-    async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
-        """Asks peer *to* and waits for the text of the answer it sends back.
+    async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> Reply:
+        """Asks peer *to* and waits for the answer it sends back.
 
+        Only *to*'s reply resolves it; anyone else's is heard, not taken for it.
         *attachments* go to the backend, as with ``say``.
+
+        Returns:
+            Reply: The answer's text and its status — ``answered``, ``asked``
+            back, or ``error`` when the peer could not answer. What the answer
+            attached is with the backend, where ``locate`` finds it.
 
         Raises:
             Exception: Whatever the peer's ``answer`` raised, when it failed.
@@ -247,9 +254,10 @@ HookAnswer = Hook(
 HookInvoke = Hook(
     name="HookInvoke",
     grants=("invoke",),
-    # await run(name, args) -> the command's answer, or None. A peer that may
-    # invoke commands. The answer comes back to the peer that ran it; nothing
-    # about the invocation enters the conversation.
+    # await invoke(name, args) -> the command's answer, or None. A peer that
+    # may invoke commands. The invocation and what the command answered are
+    # both messages: the invocation addressed to TOOL, the answer from TOOL
+    # replying to it, and its text returned to the peer that ran it.
 )
 
 HookExecute = Hook(
@@ -258,7 +266,8 @@ HookExecute = Hook(
     # async execute(args, **kwargs) -> Reply | None. What a command is. It is
     # not a peer: no id, nothing addressed to it. Declare HookSay too
     # and it can write as it works; return a Reply, with or without
-    # attachments, and its text goes to whoever ran it.
+    # attachments, and the session posts it as TOOL, replying to the
+    # invocation, so everyone hears it, and its text returns to whoever ran it.
 )
 
 HookContext = Hook(
@@ -272,9 +281,9 @@ HookContext = Hook(
 HookPeers = Hook(
     name="HookPeers",
     grants=("peers",),
-    # Who else is here, by id. The roster's counterpart to load_messages: /help
-    # lists it and the autocomplete popup matches against it, and neither can
-    # be written without a way to see past its own class.
+    # Who else is here, by id. The roster's counterpart to context(): /help
+    # lists it and the terminal names each message's speaker from it, and
+    # neither can be written without a way to see past its own class.
 )
 
 HookCommands = Hook(
@@ -406,10 +415,10 @@ def declared_id(obj: Any) -> Optional[int]:
 def tool(name: str, description: str = "") -> Callable[[type], type]:
     """Names a tool and gives it the text the UI shows.
 
-    A tool is a peer like any other, and a command is an ask addressed
-    to one: typing ``/help`` asks the tool named "help". The name is what the
-    user types after ``/``; the description is what the autocomplete popup and
-    ``/help`` display beside it.
+    A tool is not a peer: it has no id and nothing is addressed to it. It runs
+    when someone invokes it — typing ``/help`` runs the tool named "help". The
+    name is what the user types after ``/``; the description is what the
+    autocomplete popup and ``/help`` display beside it.
 
     Args:
         name: The command name, without the prefix; a non-empty string.

@@ -12,7 +12,9 @@ import time
 from typing import Awaitable, Callable, Dict, List, Optional
 
 from markdown_it import MarkdownIt
+from rich.cells import cell_len
 from textual import events
+from textual.app import ComposeResult
 from textual.containers import ScrollableContainer, Vertical
 from textual.widget import Widget
 from textual.widgets import Markdown, Static
@@ -297,9 +299,13 @@ class ChatLog(TouchScrollableContainer):
         style : Optional[ChatStyle] = None,
         on_reply_target_change : Optional[Callable[[Optional[MessageID]], None]] = None,
         locate : Optional[Callable[[MessageID, str], Awaitable[Optional[str]]]] = None,
+        banner : str = "",
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
+        # Shown above the messages and never one of them: it is the terminal's
+        # to show, so no peer hears it, is asked it, or archives it.
+        self._banner = banner
         # Granted by HookLocate: asks the backend where a message's attachment
         # can be opened. The log never learns where attachments live.
         self._locate = locate
@@ -322,6 +328,11 @@ class ChatLog(TouchScrollableContainer):
         self.reply_target : Optional[MessageID] = None
 
     # === Rendering ==================================================================
+
+    def compose(self) -> ComposeResult:
+        """The banner, when there is one; the messages are mounted by :meth:`sync`."""
+        if self._banner:
+            yield Static(self._banner, classes="chat-banner")
 
     def sync(self) -> None:
         """Brings the rendered widgets in line with the store's window.
@@ -422,8 +433,7 @@ class ChatLog(TouchScrollableContainer):
         if msg.reply_to is not None:
             original = self._find(msg.reply_to)
             if original is not None:
-                preview = " ".join(original.text.split())[:60]
-                quote = f"↳ {original.id.short}: {preview}…"
+                quote = "↳ %s: %s" % (original.id.short, preview_of(original.text))
                 parts.append(Static(quote, classes="message-quote"))
 
         # Links are ours to open: a relative one names an attachment of this
@@ -488,7 +498,8 @@ class ChatLog(TouchScrollableContainer):
             int: The width to set, borders and padding included.
         """
         lines  = text.splitlines() + ([quote] if quote else [])
-        widest = max([len(line) for line in lines] + [0]) + _BUBBLE_CHROME
+        # Cells, not characters: a CJK character or an emoji takes two.
+        widest = max([cell_len(line) for line in lines] + [0]) + _BUBBLE_CHROME
         return min(max(widest, floor + _HEADER_SLACK), self.style.bubble_max_width)
 
     def copy_message(self, msg_id: MessageID) -> None:

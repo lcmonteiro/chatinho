@@ -350,7 +350,7 @@ async def test_three_questions_at_once_share_one_client():
             await asyncio.sleep(0.01)
         assert len(requests()) == 3, "the questions did not overlap"
         FakeOpenAI.gate.set()
-        assert await asyncio.wait_for(asking, timeout=2) == ["Sunny"] * 3
+        assert [a.text for a in await asyncio.wait_for(asking, timeout=2)] == ["Sunny"] * 3
         assert len(FakeOpenAI.clients) == 1
         assert sorted(r["messages"][-1]["content"] for r in requests()) == ["q0", "q1", "q2"]
     finally:
@@ -362,7 +362,7 @@ async def test_three_questions_at_once_share_one_client():
 async def test_asked_then_closed():
     gpt = OpenAIConnector("gpt", Endpoint(api_key="sk-own"), memory=None)
     session, view = await driven(connectors=[gpt])
-    assert await view.ask(gpt.peer_id, "weather?") == "Sunny"
+    assert (await view.ask(gpt.peer_id, "weather?")).text == "Sunny"
     own, = FakeOpenAI.clients
     assert not own.closed
     await session.close()

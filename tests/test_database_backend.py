@@ -14,6 +14,7 @@ import pytest
 
 from chatinho import (
     LOCAL, Attachment, ChatMessage, ChatSession, DatabaseBackend, HookAnswer, MessageID, Query, Reply,
+    ReplyStatus,
     connector, require,
 )
 from conftest import Driver
@@ -361,3 +362,39 @@ async def test_forgotten_here_not_only_in_the_archive(tmp_path):
     assert await session.forget(before=cut) == 2
     assert [m.text for m in view.context()] == ["third"]
     await session.close()
+
+
+# === The status survives the archive ============================================
+
+
+@connector("failing")
+@require(HookAnswer)
+class _Failing:
+    async def answer(self, msg) -> Reply:
+        return Reply("rate limited", status=ReplyStatus.ERROR)
+
+
+async def test_a_failed_reply_stays_failed_when_reopened(tmp_path):
+    """Without its status, a failed reply came back as an answer, into the model's memory."""
+    url = "sqlite:///%s" % (tmp_path / "chat.db")
+
+    first, view = ChatSession(connectors=[_Failing()], backend=DatabaseBackend(url)), Driver()
+    first.add_connector(view, at=LOCAL)
+    await first.start()
+    await view.say("hi")
+    await asyncio.sleep(0.05)
+    await first.close()
+
+    second, again = ChatSession(connectors=[_Failing()], backend=DatabaseBackend(url)), Driver()
+    second.add_connector(again, at=LOCAL)
+    await second.start()
+    reply = [m for m in again.context() if m.text == "rate limited"][0]
+    assert reply.status == ReplyStatus.ERROR
+    assert [m.text for m in again.context(Query(errors=False))] == ["hi"]
+    await second.close()
+
+
+def test_an_unknown_keyword_is_refused():
+    """It used to be swallowed, so a typo was a setting that silently did nothing."""
+    with pytest.raises(TypeError):
+        DatabaseBackend("sqlite://", ecoh=True)            # type: ignore[call-arg]

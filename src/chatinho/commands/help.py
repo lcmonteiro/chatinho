@@ -1,6 +1,6 @@
 """The ``/help`` command: lists what can be run."""
 
-from ..hooks import HookExecute, HookPeers, HookCommands, HookSay, Commands, Peers, Say, require, tool
+from ..hooks import HookExecute, HookPeers, HookCommands, Commands, Peers, require, tool
 from ..message import LOCAL, Reply
 
 
@@ -8,7 +8,6 @@ from ..message import LOCAL, Reply
 @require(HookExecute)
 @require(HookPeers)
 @require(HookCommands)
-@require(HookSay)
 class HelpCommand:
     """Answers with the commands registered in the chat it belongs to.
 
@@ -19,7 +18,6 @@ class HelpCommand:
 
     peers    : Peers
     commands : Commands
-    say      : Say
 
     async def execute(self, args: str = "", by: int = LOCAL, **kwargs) -> Reply:
         """Answers with the listing.

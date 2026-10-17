@@ -76,14 +76,14 @@ def test_an_unknown_status_is_refused():
 ])
 async def test_the_answer_message_carries_the_status(reply, status):
     session, view = await driven(connectors=[_Eco(reply)])
-    await view.ask(view.id_of("eco"), "q")
+    assert (await view.ask(view.id_of("eco"), "q")).status == status
     assert view.context()[-1].status == status
     await session.close()
 
 
 async def test_ask_still_returns_the_text():
     session, view = await driven(connectors=[_Eco("sunny")])
-    assert await view.ask(view.id_of("eco"), "weather?") == "sunny"
+    assert (await view.ask(view.id_of("eco"), "weather?")).text == "sunny"
     await session.close()
 
 
@@ -345,4 +345,24 @@ async def test_a_command_is_asked_of_nobody():
     invocation, result = view.context()[-2:]
     assert (invocation.to, invocation.asked_of) == (TOOL, None)
     assert result.asked_of is None
+    await session.close()
+
+
+# === What ask returns ===========================================================
+
+
+async def test_ask_returns_a_question_back_with_its_status():
+    eco = _Eco(Reply("which city?", status="asked"))
+    session, view = await driven(connectors=[eco])
+    assert await view.ask(eco.peer_id, "weather?") == Reply("which city?", status=ReplyStatus.ASKED)
+    await session.close()
+
+
+async def test_ask_returns_an_error_answer_with_its_status():
+    """The status tells the asker a failure from an answer; the text alone could not."""
+    eco = _Eco(Reply("quota exceeded", status="error"))
+    session, view = await driven(connectors=[eco])
+    assert await view.ask(eco.peer_id, "weather?") == Reply("quota exceeded", status=ReplyStatus.ERROR)
+    errors = [m for m in view.context() if m.status == ReplyStatus.ERROR]
+    assert [m.text for m in errors] == ["quota exceeded"]
     await session.close()

@@ -16,6 +16,7 @@ import pytest
 from textual import events
 from textual.binding import NoBinding
 from textual.color import Color
+from textual.widgets import Static
 
 from chatinho.frontends.chat import ChatFrontend
 from chatinho.frontends.chat.composer import NEWLINE_KEYS, CommandInput
@@ -100,10 +101,46 @@ async def test_say_returns_an_id_and_stores():
         assert msg.is_local is True
 
 
-async def test_the_welcome_message_is_the_app_saying_it():
+async def test_the_welcome_message_is_a_banner_not_a_message():
     app = await chat_frontend(welcome_message="Bem-vindo")
     async with app.run_test():
-        assert [m.text for m in app.messages] == ["Bem-vindo"]
+        banner = app.query_one(".chat-banner", Static)
+        assert str(banner.render()) == "Bem-vindo"
+        assert app.messages == []
+
+
+async def test_no_welcome_no_banner():
+    app = await chat_frontend()
+    async with app.run_test():
+        assert not app.query(".chat-banner")
+
+
+@connector("model")
+@require(HookAnswer)
+class _Model:
+    """The lone answering peer: every say of the user's is asked of it."""
+
+    def __init__(self) -> None:
+        self.asked : list = []
+
+    async def answer(self, msg) -> Reply:
+        self.asked.append(msg.text)
+        return Reply("ok")
+
+
+async def test_the_terminal_never_puts_its_own_notices_to_a_peer():
+    """The welcome and an unknown command are the terminal's, not the user's words.
+
+    Said as the user, both were asked of the room's lone answering peer, so
+    every demo opened by sending its welcome to the model.
+    """
+    model = _Model()
+    app = await chat_frontend(connectors=[model], welcome_message="Welcome")
+    async with app.run_test() as pilot:
+        await app.command("nope")
+        await pilot.pause(0.1)
+    assert model.asked == []
+    assert app.messages == []
 
 
 async def test_submitting_text_says_it():
@@ -252,6 +289,17 @@ class _LentaPeer:
         return Reply("lenta: done")
 
 
+async def _toasts(app, pilot, tries=20):
+    """The text of every toast on screen, once one is; needs ``notifications=True``."""
+    from textual.widgets._toast import Toast
+    for _ in range(tries):
+        await pilot.pause()
+        shown = [str(toast.render()) for toast in app.screen.query(Toast)]
+        if shown:
+            return shown
+    return []
+
+
 async def _wait_for(app, pilot, text, tries=100):
     for _ in range(tries):
         if text in [m.text for m in app.messages]:
@@ -265,10 +313,12 @@ async def test_a_slow_command_does_not_freeze_the_input():
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", CommandInput)
         inp.text = "/lento"
-        started = asyncio.get_running_loop().time()
         await pilot.press("enter")
-        # Well under the command's 0.5 s; the press includes painting "/lento".
-        assert asyncio.get_running_loop().time() - started < 0.3
+        # The press came back before the command finished: had it waited, the
+        # answer would be here already. A wall-clock bound measured the paint
+        # inside the press too, and a loaded runner took 0.327 s of a 0.3 s cap.
+        assert "/lento" in [m.text for m in app.messages]
+        assert "lento: done" not in [m.text for m in app.messages]
         inp.text = "meanwhile"
         await pilot.press("enter")
         await _wait_for(app, pilot, "meanwhile")
@@ -284,13 +334,14 @@ class _BoomCmd:
         raise RuntimeError("kaboom")
 
 
-async def test_a_failing_command_is_said_and_the_terminal_stays():
+async def test_a_failing_command_is_a_notice_and_the_terminal_stays():
     app = await chat_frontend(commands=[_BoomCmd()])
-    async with app.run_test() as pilot:
+    async with app.run_test(notifications=True) as pilot:
         inp = app.query_one("#input-line", CommandInput)
         inp.text = "/boom"
         await pilot.press("enter")
-        await _wait_for(app, pilot, "/boom failed: RuntimeError")
+        assert any("/boom failed: RuntimeError" in shown for shown in await _toasts(app, pilot))
+        assert "/boom failed: RuntimeError" not in [m.text for m in app.messages]
         inp.text = "still here"
         await pilot.press("enter")
         await _wait_for(app, pilot, "still here")
@@ -341,12 +392,12 @@ async def test_a_question_to_the_user_keeps_only_its_asker_waiting():
         waiting.cancel()
 
 
-async def test_an_unknown_command_says_so():
+async def test_an_unknown_command_is_a_notice_not_a_message():
     app = await chat_frontend()
-    async with app.run_test() as pilot:
+    async with app.run_test(notifications=True) as pilot:
         assert await app.command("nope") is None
-        await pilot.pause()
-    assert app.messages[-1].text == "Unknown command: /nope"
+        assert any("Unknown command: /nope" in shown for shown in await _toasts(app, pilot))
+    assert app.messages == []
 
 
 async def test_help_lists_the_tools_that_can_be_asked():
@@ -371,7 +422,7 @@ async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
         assert (asked.frm, asked.to, asked.text) == (1, LOCAL, "Autorizas?")
 
         await app.say("sim", reply_to=asked.id)
-        assert await question == "sim"
+        assert (await question).text == "sim"
         await pilot.pause()
     assert [m.text for m in app.messages] == ["Autorizas?", "sim"]
 
@@ -415,7 +466,32 @@ async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
         citacoes   = [str(w.visual) for w in log.query(".message-quote")]
         assert "@chat" in cabecalhos[0] and "↳ replying" not in cabecalhos[0]
         assert "@tool" in cabecalhos[1] and "↳ replying" in cabecalhos[1]
-        assert citacoes == ["↳ %s: /eco ola…" % app.messages[0].id.short]
+        assert citacoes == ["↳ %s: /eco ola" % app.messages[0].id.short], "short: no ellipsis"
+
+
+async def test_a_long_original_is_quoted_cut_with_an_ellipsis():
+    app = await chat_frontend()
+    async with app.run_test() as pilot:
+        first = await app.say("palavra " * 20)
+        await app.say("resposta", reply_to=first)
+        await pilot.pause()
+        [quote] = [str(w.visual) for w in app._chat_log.query(".message-quote")]
+        assert quote == "↳ %s: %s" % (first.short, preview_of("palavra " * 20))
+        assert quote.endswith("…")
+
+
+async def test_a_bubble_is_measured_in_cells_not_characters():
+    """A CJK character takes two cells; counting characters made its bubble too narrow."""
+    app = await chat_frontend()
+    async with app.run_test():
+        log = app._chat_log
+        assert log._bubble_width("你好" * 10) == log._bubble_width("ab" * 10) + 20
+
+
+def test_a_bad_copy_key_is_named_as_the_copy_key():
+    with pytest.raises(ValueError, match="copy_key") as refused:
+        ChatFrontend(copy_key="ctrl+h")
+    assert "quit_key" not in str(refused.value)
 
 
 async def test_the_log_renders_what_the_history_holds():

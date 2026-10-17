@@ -56,7 +56,7 @@ async def test_named_by_the_connector():
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
     assert lab.name == "lab"
-    assert await view.ask(lab.peer_id, "rain?") == "sunny"
+    assert (await view.ask(lab.peer_id, "rain?")).text == "sunny"
     await session.close()
     await remote_session.close()
 
@@ -102,7 +102,7 @@ async def test_asked_directly():
     remote_session, front = await remote(Weather("sunny"))
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
-    assert await view.ask(lab.peer_id, "rain?") == "sunny"
+    assert (await view.ask(lab.peer_id, "rain?")).text == "sunny"
     await session.close()
     await remote_session.close()
 
@@ -126,7 +126,7 @@ async def test_three_questions_at_once():
     answers = await asyncio.wait_for(
         asyncio.gather(*(view.ask(lab.peer_id, "q%d" % n) for n in range(3))), timeout=5)
     elapsed = asyncio.get_running_loop().time() - started
-    assert answers == ["echo: q0", "echo: q1", "echo: q2"]
+    assert [a.text for a in answers] == ["echo: q0", "echo: q1", "echo: q2"]
     assert elapsed < 0.5, "the three questions took turns: %.2fs" % elapsed
     await session.close()
     await remote_session.close()
@@ -236,7 +236,7 @@ async def test_no_link_stays_open_between_questions():
     remote_session, front = await remote(Weather())
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
-    assert await view.ask(lab.peer_id, "rain?") == "sunny"
+    assert (await view.ask(lab.peer_id, "rain?")).text == "sunny"
     assert not lab._client.is_connected()
     await session.close()
     await remote_session.close()
@@ -247,7 +247,7 @@ async def test_two_questions_at_once():
     lab = McpConnector(server=front.server, name="lab")
     session, view = await _local(lab)
     got = await asyncio.gather(view.ask(lab.peer_id, "one?"), view.ask(lab.peer_id, "two?"))
-    assert got == ["sunny", "sunny"]
+    assert [g.text for g in got] == ["sunny", "sunny"]
     await session.close()
     await remote_session.close()
 
@@ -260,7 +260,7 @@ async def test_with_several_remote_peers_one_is_named():
     session, view = await driven(connectors=[unnamed, named])
     got = await _asked(view, unnamed, "rain?")
     assert got.status == "error" and "peer=" in got.text
-    assert await view.ask(named.peer_id, "rain?") == "sunny"
+    assert (await view.ask(named.peer_id, "rain?")).text == "sunny"
     assert [m.text for m in weather.asked] == ["rain?"]
     await session.close()
     await remote_session.close()
@@ -294,8 +294,8 @@ async def test_a_lent_source_that_cannot_read(monkeypatch):
     remote_session, front = await remote(agent, credentials={"llm": "key"})
     lab = McpConnector(server=front.server, name="lab", delegate={"llm": Env("UNSET")})
     session, view = await _local(lab)
-    answer = await view.ask(lab.peer_id, "go")
-    assert "UNSET is not set" in answer
+    reply = await view.ask(lab.peer_id, "go")
+    assert reply.status == "error" and "UNSET is not set" in reply.text
     assert agent.keys == [] and agent.heard == []
     await session.close()
     await remote_session.close()

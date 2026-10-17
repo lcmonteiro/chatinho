@@ -92,7 +92,7 @@ class ChatSession:
         #: Every peer, by id; the frontend is at LOCAL.
         self._connectors  : Dict[int, Any] = {}
         #: Asks still waiting for their answer, by the id of the question.
-        self._pending     : Dict[MessageID, "asyncio.Future[str]"] = {}
+        self._pending     : Dict[MessageID, "asyncio.Future[ChatMessage]"] = {}
         #: Peers that start() has started; deliveries to the others are held.
         self._running     : Set[int] = set()
         #: Deliveries waiting for their peer to start, in the order they were posted.
@@ -161,6 +161,10 @@ class ChatSession:
         if at is None:
             at = declared_id(connector)
         if at is None:
+            # Past any id already taken: a peer pinned at one was otherwise
+            # silently replaced by the next one numbered.
+            while self._next_id in self._connectors:
+                self._next_id += 1
             at = self._next_id
             self._next_id += 1
         elif at in self._connectors:
@@ -354,18 +358,21 @@ class ChatSession:
             text        : str,
             *,
             attachments : Sequence[Attachment] = (),
-        ) -> str:
+        ) -> Reply:
             if to not in self._connectors:
                 raise ValueError("No peer with id %d" % to)
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, asked_of=to)
             await self._kept(msg, attachments)
-            future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
+            future : "asyncio.Future[ChatMessage]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
             try:
                 await self._post(msg)
-                return await future
+                answered = await future
             finally:
                 self._pending.pop(msg.id, None)
+            # The status says whether it answered, asked back or failed; what
+            # the answer attached is with the backend, under its id.
+            return Reply(answered.text, status=answered.status)
         return ask
 
     async def _kept(self, msg: ChatMessage, attachments: Sequence[Attachment]) -> None:
@@ -406,10 +413,15 @@ class ChatSession:
         resolve an ask that is waiting, and everyone who listens hears it.
         """
         self._store.add(msg)
-        waiting  = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
-        resolved = waiting is not None and not waiting.done()
+        # Only the peer the question was asked of resolves its ask: anyone
+        # else's reply is heard like any message, and the ask keeps waiting.
+        question = self._store.find(msg.reply_to) if msg.reply_to else None
+        waiting  = self._pending.get(msg.reply_to) if msg.reply_to else None
+        resolved = (waiting is not None and not waiting.done()
+                    and question is not None and question.asked_of == msg.frm)
         if resolved:
-            waiting.set_result(msg.text)          # type: ignore[union-attr]
+            del self._pending[msg.reply_to]       # type: ignore[arg-type]
+            waiting.set_result(msg)               # type: ignore[union-attr]
 
         # You never hear yourself; that is the whole of the loop protection.
         listeners = {at for at, who in self._connectors.items()
@@ -490,7 +502,7 @@ class ChatSession:
         except Exception as exc:
             # The asker is owed one reply, and a failure is one. An ask that is
             # waiting raises; a say that was asked of this peer gets an error
-            # reply, so whoever waits on it hears. _drain logs it either way.
+            # reply, so whoever waits on it hears. _delivery logs it either way.
             waiting = self._pending.pop(msg.id, None)
             if waiting is not None and not waiting.done():
                 waiting.set_exception(exc)

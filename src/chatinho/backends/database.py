@@ -31,7 +31,7 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from ..hooks import HookForget, HookKeep, HookLink, HookListen, HookLoad, backend, require
-from ..message import Attachment, ChatMessage, MessageID
+from ..message import Attachment, ChatMessage, MessageID, ReplyStatus
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,8 @@ class ArchivedMessage(Base):
     reply_to  = Column(String, nullable=True)
     asked_of  = Column(Integer, nullable=True)
     timestamp = Column(DateTime(timezone=False), nullable=False, index=True)
+    #: What an answer said about itself; kept so errors stay errors after a reopen.
+    status    = Column(String, nullable=False, default=ReplyStatus.ANSWERED.value)
 
 
 class ArchivedAttachment(Base):
@@ -90,15 +92,17 @@ class DatabaseBackend:
     gives back what it held when the next session starts.
     """
 
-    def __init__(self, database_url: str, echo: bool = False, **kwargs: Any) -> None:
+    def __init__(self, database_url: str, echo: bool = False) -> None:
         """Prepares the backend; the connection opens in :meth:`initialize`.
 
         Args:
             database_url: Any URL SQLAlchemy accepts.
             echo: Whether SQLAlchemy logs the statements it runs.
-            **kwargs: Kept for callers that pass extra configuration.
+
+        Raises:
+            TypeError: Any other keyword — a typo such as ``ecoh=True`` is an
+                error rather than a setting that silently does nothing.
         """
-        self.config       = kwargs
         self.database_url = database_url
         self.echo         = echo
         self.engine       : Optional[Any] = None
@@ -242,7 +246,7 @@ class DatabaseBackend:
                 session.merge(ArchivedMessage(
                     id=str(msg.id), text=msg.text, frm=msg.frm, to=msg.to,
                     reply_to=None if msg.reply_to is None else str(msg.reply_to),
-                    asked_of=msg.asked_of, timestamp=msg.timestamp,
+                    asked_of=msg.asked_of, timestamp=msg.timestamp, status=ReplyStatus(msg.status).value,
                 ))
             session.commit()
 
@@ -259,7 +263,7 @@ class DatabaseBackend:
             return [
                 ChatMessage(id=MessageID.parse(r.id), text=r.text, frm=r.frm, to=r.to,
                             reply_to=None if r.reply_to is None else MessageID.parse(r.reply_to),
-                            asked_of=r.asked_of, timestamp=r.timestamp)
+                            asked_of=r.asked_of, timestamp=r.timestamp, status=ReplyStatus(r.status))
                 for r in rows
             ]
 

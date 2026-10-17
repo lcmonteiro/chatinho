@@ -198,7 +198,8 @@ class ChatMessage:
         reply_to: The id of the message this answers, when it answers one.
         timestamp: When it entered the history.
         status: What an answer said about itself, from the ``Reply`` that
-            made it; :attr:`ReplyStatus.ANSWERED` for everything else. Not kept by the archive.
+            made it; :attr:`ReplyStatus.ANSWERED` for everything else. Kept by the
+            archive, so an error is still one when the chat reopens.
         credentials: Keys lent with this message, by name — for answering it
             and nothing else, so a peer can work with a different key for each
             message. Never in the text, never shown, never kept by the archive;
