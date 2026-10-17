@@ -75,9 +75,12 @@ class Ask(Protocol):
     async def __call__(self, to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str:
         """Asks peer *to* and waits for the text of the answer it sends back.
 
+        Only *to*'s reply resolves it; anyone else's is heard, not taken for it.
         *attachments* go to the backend, as with ``say``.
 
         Raises:
+            PeerError: The answer's status is ``error``; its message is the
+                answer's text, and the answer stays in the conversation.
             Exception: Whatever the peer's ``answer`` raised, when it failed.
         """
         ...

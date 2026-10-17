@@ -21,6 +21,7 @@ from chatinho import (
     HookListen,
     HookSay,
     Reply,
+    PeerError,
     ReplyStatus,
     Say,
     connector,
@@ -205,8 +206,10 @@ async def test_a_loop_stops_at_the_limit():
     session, view = await driven()
     ping, pong = _relays(session, "ping", "pong")
     await session.start()
-    answer = await asyncio.wait_for(view.ask(ping.peer_id, "go"), timeout=2)
-    assert answer == "ping<pong<" * 4 + "too many nested asks (limit 8)" + ">>" * 4
+    # The limit's ERROR reply raises in the relay that asked; none catches it,
+    # so each relay's answer fails in turn and the user's ask raises it too.
+    with pytest.raises(PeerError, match=r"too many nested asks \(limit 8\)"):
+        await asyncio.wait_for(view.ask(ping.peer_id, "go"), timeout=2)
     assert ping.asked + pong.asked == 8
     errors = [m for m in view.context() if m.status == ReplyStatus.ERROR]
     assert [m.text for m in errors] == ["too many nested asks (limit 8)"]
@@ -217,9 +220,18 @@ async def test_the_limit_is_configurable():
     session, view = await driven(max_depth=2)
     a, b, c = _relays(session, "a", "b", "c")
     await session.start()
-    answer = await asyncio.wait_for(view.ask(a.peer_id, "go"), timeout=2)
-    assert answer == "a<b<too many nested asks (limit 2)>>"
+    with pytest.raises(PeerError, match=r"too many nested asks \(limit 2\)"):
+        await asyncio.wait_for(view.ask(a.peer_id, "go"), timeout=2)
     assert (a.asked, b.asked, c.asked) == (1, 1, 0)
+    await session.close()
+
+
+async def test_the_asker_of_a_question_past_the_limit_gets_a_peer_error():
+    session, view = await driven(max_depth=1)
+    a, b = _relays(session, "a", "b")
+    await session.start()
+    with pytest.raises(PeerError, match="too many nested asks"):
+        await asyncio.wait_for(a.ask(b.peer_id, "go"), timeout=2)
     await session.close()
 
 

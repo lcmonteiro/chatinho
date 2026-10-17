@@ -103,6 +103,13 @@ Every verb is a pair: the word you call, and the word the other side writes. No 
 `on_` prefix, and no name is both — a grant arrives by `setattr` and would silently clobber a
 method it shares a name with.
 
+**An answer whose status is `error` is a failure, not an answer**: `ask` raises `PeerError` with its
+text, as it raises whatever an `answer` raised. It used to return that text like any other, so a
+caller — the agent's `ask_<peer>` tools among them — could not tell "quota exceeded" from a reply,
+while a peer that *raised* the same failure made `ask` raise. Two kinds of failure, one contract.
+The error reply is still posted, so the conversation shows it either way; an `asked` reply is still
+returned as text.
+
 A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:
 `ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
 by the message it answers. A broadcast is owed to nobody.
@@ -849,8 +856,8 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 65 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
-`MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
+`__init__.py` exports 66 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `PeerError`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
 (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
 `declared_id`, `name_of`, `Hook`); the fourteen `Hook*` constants; the grant protocols (`Say`, `Ask`,
 `Invoke`, `Context`, `Peers`, `Commands`, `Locate`); and the batteries

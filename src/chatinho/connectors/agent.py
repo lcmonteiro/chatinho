@@ -33,7 +33,7 @@ from ..hooks import Ask, Commands, Context, Invoke, Peers, Say
 from ..hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke, HookListen, HookPeers, HookSay
 from ..hooks import connector, declares, name_of, require
 from ..keys import KeyUnavailable, read_async
-from ..message import LOCAL, Attachment, ChatMessage, Reply, ReplyStatus
+from ..message import LOCAL, Attachment, ChatMessage, PeerError, Reply, ReplyStatus
 from ..query import SELF, Query
 
 logger = logging.getLogger(__name__)
@@ -336,7 +336,11 @@ class AgentConnector:
         async def ask(question: str) -> str:
             try:
                 return await self.ask(at, question)
+            except PeerError as exc:
+                # The peer's own error reply, already in the conversation.
+                return "%s failed: %s" % (name, exc)
             except Exception as exc:
+                # Only the type: anything else may echo a prompt.
                 return "%s failed: %s" % (name, type(exc).__name__)
         return ask
 

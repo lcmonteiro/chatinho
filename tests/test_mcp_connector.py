@@ -1,10 +1,11 @@
 """McpConnector: putting questions to a remote session from the local chat."""
 
+import contextlib
 import asyncio
 
 import pytest
 
-from chatinho import Attachment, HookAnswer, Reply, connector, require
+from chatinho import Attachment, HookAnswer, PeerError, Reply, connector, require
 from chatinho.connectors.mcp import McpConnector
 from chatinho.keys import Env
 from conftest import driven
@@ -27,7 +28,8 @@ class _Quiet:
 
 async def _asked(view, lab, text):
     """Asks the connector directly and returns its reply message, status included."""
-    await view.ask(lab.peer_id, text)
+    with contextlib.suppress(PeerError):            # an error reply raises; its message is kept
+        await view.ask(lab.peer_id, text)
     return view.context()[-1]
 
 
@@ -294,8 +296,8 @@ async def test_a_lent_source_that_cannot_read(monkeypatch):
     remote_session, front = await remote(agent, credentials={"llm": "key"})
     lab = McpConnector(server=front.server, name="lab", delegate={"llm": Env("UNSET")})
     session, view = await _local(lab)
-    answer = await view.ask(lab.peer_id, "go")
-    assert "UNSET is not set" in answer
+    with pytest.raises(PeerError, match="UNSET is not set"):
+        await view.ask(lab.peer_id, "go")
     assert agent.keys == [] and agent.heard == []
     await session.close()
     await remote_session.close()

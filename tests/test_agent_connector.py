@@ -4,6 +4,7 @@ Every agent here runs on a scripted model (``fakes.agent``), so no key and no
 network: the script decides each call from the messages of that run alone.
 """
 
+import contextlib
 import asyncio
 import json
 from typing import Any, Dict, List, Optional
@@ -25,6 +26,7 @@ from chatinho import (
     HookKeep,
     HookSay,
     LOCAL,
+    PeerError,
     Reply,
     ReplyStatus,
     Say,
@@ -60,7 +62,8 @@ class _Broken:
 
 async def _asked(view, agent, text: str) -> ChatMessage:
     """Asks the agent and returns its reply message, status included."""
-    await view.ask(agent.peer_id, text)
+    with contextlib.suppress(PeerError):            # an error reply raises; its message is kept
+        await view.ask(agent.peer_id, text)
     return next(m for m in reversed(view.context()) if m.frm == agent.peer_id)
 
 
@@ -452,6 +455,22 @@ async def test_the_callers_tool_wins(caplog):
     await session.close()
 
 
+@connector("quota")
+@require(HookAnswer)
+class _OutOfQuota:
+    async def answer(self, msg: ChatMessage) -> Reply:
+        return Reply("quota exceeded", status=ReplyStatus.ERROR)
+
+
+async def test_a_peers_error_reply_reaches_the_model_as_a_failure():
+    """An error reply is the peer's own words, so the model is told them, as a failure."""
+    model = fake(calls("ask_quota", question="x", then=lambda result: "It said: " + result))
+    agent = AgentConnector("agent", model)
+    session, view = await driven(connectors=[agent, _OutOfQuota()])
+    assert await view.ask(agent.peer_id, "go") == "It said: quota failed: quota exceeded"
+    await session.close()
+
+
 async def test_a_failing_peer():
     model = fake(calls("ask_broken", question="x", then=lambda result: "It said: " + result))
     agent = AgentConnector("agent", model)
@@ -507,7 +526,7 @@ async def test_a_loop_of_agents_stops_at_max_depth():
     pong = AgentConnector("pong", fake(calls("ask_ping", question="again")), peers=["ping"])
     session, view = await driven(connectors=[ping, pong], max_depth=4)
     answer = await asyncio.wait_for(view.ask(ping.peer_id, "go"), timeout=5)
-    assert answer == "too many nested asks (limit 4)"
+    assert answer == "ping failed: too many nested asks (limit 4)"   # the tool reports the failure
     await session.close()
 
 

@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from .hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, HookListen, HookLoad
 from .hooks import declared_id, declares, hooks_of, name_of
 from .message import LOCAL, TOOL
-from .message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
+from .message import Attachment, ChatMessage, MessageID, MessageStore, PeerError, Reply, ReplyStatus, Secret
 from .query import Query
 
 #: How deeply the question being answered in this task is nested; 0 when none is.
@@ -92,7 +92,7 @@ class ChatSession:
         #: Every peer, by id; the frontend is at LOCAL.
         self._connectors  : Dict[int, Any] = {}
         #: Asks still waiting for their answer, by the id of the question.
-        self._pending     : Dict[MessageID, "asyncio.Future[str]"] = {}
+        self._pending     : Dict[MessageID, "asyncio.Future[ChatMessage]"] = {}
         #: Peers that start() has started; deliveries to the others are held.
         self._running     : Set[int] = set()
         #: Deliveries waiting for their peer to start, in the order they were posted.
@@ -363,13 +363,17 @@ class ChatSession:
                 raise ValueError("No peer with id %d" % to)
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, asked_of=to)
             await self._kept(msg, attachments)
-            future : "asyncio.Future[str]" = asyncio.get_running_loop().create_future()
+            future : "asyncio.Future[ChatMessage]" = asyncio.get_running_loop().create_future()
             self._pending[msg.id] = future
             try:
                 await self._post(msg)
-                return await future
+                answered = await future
             finally:
                 self._pending.pop(msg.id, None)
+            if answered.status == ReplyStatus.ERROR:
+                # A failure, not an answer: the reply stays in the conversation.
+                raise PeerError(answered.text)
+            return answered.text
         return ask
 
     async def _kept(self, msg: ChatMessage, attachments: Sequence[Attachment]) -> None:
@@ -418,7 +422,7 @@ class ChatSession:
                     and question is not None and question.asked_of == msg.frm)
         if resolved:
             del self._pending[msg.reply_to]       # type: ignore[arg-type]
-            waiting.set_result(msg.text)          # type: ignore[union-attr]
+            waiting.set_result(msg)               # type: ignore[union-attr]
 
         # You never hear yourself; that is the whole of the loop protection.
         listeners = {at for at, who in self._connectors.items()

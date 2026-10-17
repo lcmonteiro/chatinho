@@ -184,8 +184,10 @@ nobody; an explicit `to` always wins.
 > **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> str`
 
 Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id,
-and whatever the peer's `answer` raised if it failed. What comes back is the reply's
-text. Anything the reply attached went to the backend, under the reply's id, where `locate` finds it.
+whatever the peer's `answer` raised if it failed, and `PeerError` — its message the reply's text —
+when the reply's status is `error`, including the session's own "too many nested asks". Only a
+reply from *to* resolves it: anyone else's reply to the question is heard, and the ask keeps
+waiting. What comes back is the reply's text, for an `answered` reply and an `asked` one alike. Anything the reply attached went to the backend, under the reply's id, where `locate` finds it.
 
 ```python
 answer = await self.ask(session.id_of("weather"), "what is the weather?")
@@ -195,6 +197,13 @@ What the reply said about itself is on its message: `msg.status` is `answered`, 
 back) or `error` — a `ReplyStatus`, a `str` enum, so `msg.status == "asked"` holds — from
 `Reply(..., status=ReplyStatus.ASKED)`; a `Reply` is `ANSWERED` unless it says otherwise. A peer whose `answer`
 fails replies with `ReplyStatus.ERROR` when nobody is awaiting it — a say asked of it.
+
+```python
+try:
+    answer = await self.ask(weather, "what is the weather?")
+except PeerError as failed:
+    answer = "weather is unavailable: %s" % failed          # the peer's own error reply
+```
 
 `ask(LOCAL, ...)` asks the user. It does not block the chat: the awaiting peer's own task is
 parked, and every other peer carries on.

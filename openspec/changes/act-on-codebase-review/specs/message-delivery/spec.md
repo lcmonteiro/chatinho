@@ -33,7 +33,7 @@ The session SHALL track how deeply each question is nested: a question asked, or
 
 #### Scenario: A loop stops at the limit
 - **WHEN** two peers answer every question by asking the other, and the user asks one of them in a session with the default limit
-- **THEN** the ninth nested question gets an `ERROR` reply saying there are too many nested asks, each peer above it receives an answer, and the user's question is answered
+- **THEN** the ninth nested question gets an `ERROR` reply saying there are too many nested asks, the peer that asked it gets `PeerError`, and since neither peer catches it, each `answer` above it fails in turn and the user's `ask` raises `PeerError` with the same text
 
 #### Scenario: The limit is configurable
 - **WHEN** the session is created with a limit of 2 and a question is nested three deep

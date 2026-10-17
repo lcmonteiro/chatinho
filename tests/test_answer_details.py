@@ -10,6 +10,7 @@ from chatinho import (
     HookExecute,
     HookListen,
     HookSay,
+    PeerError,
     Reply,
     ReplyStatus,
     connector,
@@ -76,7 +77,10 @@ def test_an_unknown_status_is_refused():
 ])
 async def test_the_answer_message_carries_the_status(reply, status):
     session, view = await driven(connectors=[_Eco(reply)])
-    await view.ask(view.id_of("eco"), "q")
+    try:
+        await view.ask(view.id_of("eco"), "q")
+    except PeerError:
+        assert status == "error"            # an error answer raises; its message still carries it
     assert view.context()[-1].status == status
     await session.close()
 
@@ -345,4 +349,26 @@ async def test_a_command_is_asked_of_nobody():
     invocation, result = view.context()[-2:]
     assert (invocation.to, invocation.asked_of) == (TOOL, None)
     assert result.asked_of is None
+    await session.close()
+
+
+# === What ask returns ===========================================================
+
+
+async def test_ask_returns_a_question_back_as_text():
+    eco = _Eco(Reply("which city?", status="asked"))
+    session, view = await driven(connectors=[eco])
+    assert await view.ask(eco.peer_id, "weather?") == "which city?"
+    await session.close()
+
+
+async def test_ask_raises_on_an_error_answer():
+    """An error is a failure, not an answer: the asker can no longer take one for the other."""
+    eco = _Eco(Reply("quota exceeded", status="error"))
+    session, view = await driven(connectors=[eco])
+    with pytest.raises(PeerError) as failed:
+        await view.ask(eco.peer_id, "weather?")
+    assert str(failed.value) == "quota exceeded"
+    errors = [m for m in view.context() if m.status == ReplyStatus.ERROR]
+    assert [m.text for m in errors] == ["quota exceeded"]
     await session.close()
