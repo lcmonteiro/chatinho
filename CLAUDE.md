@@ -125,7 +125,10 @@ waiting on a person, a connector waiting on a server — returns `None` from `an
 reply when it has it, with `reply_to` set. The session matches it and resolves the ask — **only
 when it comes from the peer the question was asked of** (`asked_of`). Anyone else's reply to it is
 heard like any message and leaves the ask waiting; before that rule, a listener replying to a
-question it overheard answered somebody else's `ask`. All three
+question it overheard answered somebody else's `ask`. `McpFrontend` holds a client's open question
+to the same rule, and keeps nothing to do it: it reads who was asked — the question's `asked_of` —
+from the conversation through `HookContext`, and takes the first reply only when the question has
+been forgotten while open, so no call waits forever. All three
 presentations in this repository work exactly that way, which is why the grant that used to exist
 for it was deleted: it was a second door onto the same room.
 
