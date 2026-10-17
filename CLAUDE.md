@@ -125,8 +125,7 @@ waiting on a person, a connector waiting on a server — returns `None` from `an
 reply when it has it, with `reply_to` set. The session matches it and resolves the ask — **only
 when it comes from the peer the question was asked of** (`asked_of`). Anyone else's reply to it is
 heard like any message and leaves the ask waiting; before that rule, a listener replying to a
-question it overheard answered somebody else's `ask`. `McpFrontend` holds its open questions to
-the same rule. All three
+question it overheard answered somebody else's `ask`. All three
 presentations in this repository work exactly that way, which is why the grant that used to exist
 for it was deleted: it was a second door onto the same room.
 
@@ -364,8 +363,8 @@ Two costs, stated plainly:
 ```
 src/chatinho/
   __init__.py      public API
-  builder.py       build_chat_session, build_mcp_session — a ChatSession with its frontend; each
-                   imports its own frontend when called, so it needs only that frontend's extra
+  builder.py       build_chat_session, build_mcp_session — a ChatSession with its frontend;
+                   imports both frontends, so it needs chatinho[tui,mcp]
   session.py       ChatSession: run, peers, commands, delivery, routing, context
   hooks.py         Hook, the fourteen constants, @require, the grant protocols
   query.py         Query (peer/thread/errors/since/limit) and SELF: which part of the conversation
@@ -836,15 +835,13 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 `dependencies = []`. `ChatSession`, the fourteen hooks, `HelpCommand` and `TestCommand` import nothing
 but the standard library — which the fitness tests already enforced, so the packaging now says it
-too. Seven names live behind an extra and are resolved on first use with PEP 562 `__getattr__`;
-the two builders import nothing until called, and then need their own frontend's:
+too. Nine names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
 | name | extra | brings |
 |---|---|---|
 | `ChatFrontend`, `ChatStyle` | `chatinho[tui]` | `textual` |
 | `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` (4.0+, on the official `mcp` SDK) |
-| `build_chat_session` | `chatinho[tui]` | `textual` |
-| `build_mcp_session` | `chatinho[mcp]` | `fastmcp` |
+| `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `AgentConnector` | `chatinho[langchain]` | `langchain`, `langchain-openai` (langgraph with them) |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
@@ -875,14 +872,10 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 **Both frontends are public, and both have a builder.** `ChatFrontend` (in `chatinho.frontends.chat`)
 and `McpFrontend` (in `chatinho.frontends.mcp`) take no session: either can be passed to
-`ChatSession(frontend=...)` by hand, and `build_chat_session` / `build_mcp_session` do exactly that,
-more conveniently. **Both live in `builder.py`, and each imports its own frontend only when it is
-called**, so each needs only its own extra. `builder.py` used to import both frontends at the top,
-so opening a terminal needed `chatinho[mcp]` (the heaviest extra) for nothing. The cost of the
-fix, stated plainly: a missing extra is named when the builder is *called*, not when its name is
-read — it comes from the frontend's own lazy name, through the package root, so it still says
-which extra to install. The lazy table lists every `(extra, library)` pair a name needs, and a
-missing one names them all.
+`ChatSession(frontend=...)` by hand, and `build_chat_session` / `build_mcp_session` in `builder.py`
+do exactly that, more conveniently. `builder.py` imports both frontends at the top, so the builders
+need both extras — `chatinho[tui,mcp]` — while each frontend needs only its own. The lazy table
+lists every `(extra, library)` pair a name needs, and a missing one names them all.
 
 `build_chat_session` returns a `ChatSession`, so a consumer's mypy sees the whole surface `ChatSession`
 promises — which is also why the `TYPE_CHECKING` block in `__init__.py` matters: without it the

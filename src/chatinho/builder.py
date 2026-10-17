@@ -5,31 +5,21 @@ Each builder does what a caller would do by hand — build a
 the session's ``frontend`` — because a frontend is a normal peer, one of the
 four roles a session takes, not something the session's constructor wires up.
 
-- :func:`build_chat_session` attaches the terminal, and needs ``chatinho[tui]``.
-- :func:`build_mcp_session` attaches an MCP server, and needs ``chatinho[mcp]``.
+- :func:`build_chat_session` attaches the terminal.
+- :func:`build_mcp_session` attaches an MCP server.
 
-Neither frontend is imported here at the top: each builder imports its own when
-it is called, so this module needs no extra and each builder only its own. A
-missing one is reported when the builder is called, naming the extra to install.
+This module imports both frontends, so it needs both extras: ``chatinho[tui,mcp]``.
+A caller with only one of them builds a ``ChatSession`` with that frontend by hand.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
+from .frontends.chat import ChatFrontend
+from .frontends.chat.composer import NEWLINE_ESCAPE
+from .frontends.chat.style import ChatStyle
+from .frontends.mcp import McpFrontend
 from .keys import KeyLike
 from .session import ChatSession
-
-if TYPE_CHECKING:                       # never executed; read by type checkers
-    from .frontends.chat.style import ChatStyle
-
-#: The terminal's newline escape, written out so this module need not import
-#: the terminal; a test holds it equal to ``composer.NEWLINE_ESCAPE``.
-NEWLINE_ESCAPE : str = " "
-
-
-def _batteries() -> Any:
-    """The package root, whose lazy names import a frontend and name its extra when it is missing."""
-    import chatinho
-    return chatinho
 
 
 def build_chat_session(
@@ -39,7 +29,7 @@ def build_chat_session(
     title           : str = "Chatinho",
     welcome_message : str = "",
     max_displayed   : int = 100,
-    style           : Optional["ChatStyle"] = None,
+    style           : Optional[ChatStyle] = None,
     quit_key        : str = "ctrl+q",
     copy_key        : str = "ctrl+y",
     newline_escape  : Optional[str] = NEWLINE_ESCAPE,
@@ -89,9 +79,7 @@ def build_chat_session(
     Raises:
         ValueError: ``quit_key`` is not a key Textual could receive.
     """
-    # Imported here, not at the top: this is what keeps the terminal's builder
-    # off the MCP extra, and the MCP builder off the terminal's.
-    presentation = _batteries().ChatFrontend(
+    presentation = ChatFrontend(
         title           = title,
         welcome_message = welcome_message,
         max_displayed   = max_displayed,
@@ -144,7 +132,7 @@ def build_mcp_session(
     Raises:
         ValueError: ``token`` is empty.
     """
-    presentation = _batteries().McpFrontend(
+    presentation = McpFrontend(
         name,
         token       = token,
         host        = host,

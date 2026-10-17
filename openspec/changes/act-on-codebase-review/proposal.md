@@ -20,11 +20,11 @@ The review also found duplicated code, stale documentation and workflow overhead
 - The terminal no longer *says* its own notices:
   - the welcome text is shown at the top of the log but never posted to the conversation;
   - "Unknown command" and "/x failed" become notifications.
-- An ask is resolved only by a reply from the peer it was asked of. A reply from anyone else is heard like any other message and leaves the ask waiting. The MCP frontend applies the same rule to its open questions.
+- An ask is resolved only by a reply from the peer it was asked of. A reply from anyone else is heard like any other message and leaves the ask waiting.
 - `add_connector` never hands out an id that is already taken. Automatic numbering skips ids pinned with `@connector(name, id=…)`.
 - **BREAKING**: `ask()` raises `PeerError` when the answer's status is `error`. This includes the "too many nested asks" reply. `PeerError` is a new public exception carrying the reply's text. Answers with status `answered` or `asked` still return their text.
 - The database backend keeps each message's `status` and gives it back on load, so `Query(errors=False)` still leaves failed replies out after a restart.
-- `build_chat_session` needs only `chatinho[tui]`, and `build_mcp_session` needs only `chatinho[mcp]`. Both stay in `builder.py`, and each imports its own frontend when it is called.
+- ~~Each builder needs only its own extra.~~ Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)): `builder.py` keeps importing both frontends, so each builder still needs `chatinho[tui,mcp]`.
 - **BREAKING**: `DatabaseBackend` refuses keyword arguments it does not know (`TypeError`) instead of silently swallowing them.
 - `copy_key` validation errors name `copy_key`, not `quit_key`.
 
@@ -36,7 +36,7 @@ The review also found duplicated code, stale documentation and workflow overhead
   - the second `COMMAND_PREFIX`;
   - the thread-id field `ChatFrontend` uses only as a "mounted" flag;
   - the hand-rolled reply-quote preview, in favour of `preview_of`.
-- `ChatLog.sync()` reads the conversation once per sync, not once per new message.
+- ~~`ChatLog.sync()` reads the conversation once per sync.~~ Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)).
 - Bubble widths are measured in terminal cells, so wide characters (CJK, emoji) are no longer under-counted.
 - Stale docstrings are corrected in `hooks.py`, `session.py`, `builder.py` and `composer.py`, along with the "eighteen hooks" description in `pyproject.toml`.
 
@@ -58,19 +58,18 @@ None.
 - `answer-details`: `ask` raises `PeerError` on an `error` answer, and the archive keeps `status`. This replaces "`ask` MUST keep returning the answer's text" and "the archive need not keep the status".
 - `conversation-context`: the archive keeps `status`, so `Query(errors=False)` holds across a restart.
 - `peer-lifecycle`: ids are unique, and automatic numbering skips pinned ids.
-- `mcp-server`: each open question is resolved only by the reply of the peer it asked.
-- `package-layout`: each builder needs only its own frontend's extra. This replaces "The builders need both frontend extras".
+- ~~`mcp-server`~~: Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)); `McpFrontend` still takes the first reply to a question.
+- ~~`package-layout`~~: Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)); no requirement changes.
 
 ## Impact
 
 - **Code:**
   - `src/chatinho/session.py`: `add_connector`, `_post`, `ask`.
   - `src/chatinho/message.py`: `PeerError`.
-  - `src/chatinho/__init__.py`: the export and the lazy table for the builders.
-  - `src/chatinho/builder.py`
+  - `src/chatinho/__init__.py`: the `PeerError` export.
+  - `src/chatinho/builder.py`: docstrings only.
   - `src/chatinho/backends/database.py`
   - `src/chatinho/frontends/chat/`: `__init__.py`, `messages.py`, `composer.py`.
-  - `src/chatinho/frontends/mcp.py`
   - `src/chatinho/connectors/`: `openai.py`, `agent.py`, plus a shared helper.
   - `src/chatinho/commands/help.py`
   - `src/chatinho/hooks.py`
@@ -82,4 +81,4 @@ None.
   - `ask()` callers that relied on receiving error text must catch `PeerError`.
   - `DatabaseBackend(**kwargs)` no longer accepts unknown keywords.
 - **Data:** the archive schema gains a `status` column. It is the baseline, like `asked_of`: archives from before it are not migrated.
-- **Docs and tooling:** `CLAUDE.md` (the public-API count, the archive policy and the builder extras), `docs/SPEC.md` (the `HookAsk` section), `README.md`, `.github/workflows/tests.yml`, `openspec/config.yaml` and `.claude/`.
+- **Docs and tooling:** `CLAUDE.md` (the public-API count and the archive policy), `docs/SPEC.md` (the `HookAsk` section), `README.md`, `.github/workflows/tests.yml`, `openspec/config.yaml` and `.claude/`.

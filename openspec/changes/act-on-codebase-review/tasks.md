@@ -14,7 +14,7 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 - [x] 2.1 Add the two regression tests to `tests/test_chat_session.py`. A bystander that replies to a question first must not resolve the `ask`. A peer declaring `id=1` followed by an unnumbered peer must get ids 1 and 2. Verify that both **fail** on the current code.
 - [x] 2.2 In `ChatSession._post`, resolve a waiting ask only when `msg.frm` is the question's `asked_of`, keeping it in `_pending` otherwise (design Decision 1). Verify the first test of 2.1 passes, and that `ask(LOCAL)` answered by the user still resolves (existing tests).
 - [x] 2.3 In `add_connector`, skip `_next_id` past taken ids (design Decision 2). Verify the second test of 2.1 passes, and that a duplicate pinned id still raises `ValueError` (existing test).
-- [x] 2.4 In `McpFrontend`, remember the addressed peer id on `_Message`, and have `listen` ignore replies from any other peer. Verify with a new test in `tests/test_mcp_frontend.py` (`Another peer replies first`) that fails before the change and passes after.
+- [x] 2.4 ~~Hold `McpFrontend`'s open questions to the asked peer.~~ Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)); the field, its test and the `mcp-server` delta were removed.
 - [x] 2.5 Add both rules to CLAUDE.md ("Everyone is a peer" and "Three verbs"), and fix the stale `_drain` comment in `session.py`. Verify the checks pass.
 
 ## 3. `ask` raises `PeerError` on an error answer
@@ -48,15 +48,15 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 - [x] 6.2 Drop `HookSay` and `say` from `HelpCommand`. Verify `/help` tests pass, and that `hooks_of(HelpCommand)` no longer contains `HookSay`.
 - [x] 6.3 Make `composer.py` import `COMMAND_PREFIX` from `chatinho.session`, and replace `ChatFrontend._app_thread_id`/`threading` with a `_mounted` bool. Verify the threading test (`test_a_message_from_another_thread_reaches_the_log`) and the checks pass.
 - [x] 6.4 Use `preview_of` for the reply quote. Verify with a test that a short original is quoted without "…" and a long one with it.
-- [x] 6.5 Read `context()` once per `ChatLog.sync()` into an id → message dict, shared with `_render_message`. Verify the rendering tests pass.
+- [x] 6.5 ~~Read `context()` once per `ChatLog.sync()`.~~ Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)): `by_id` removed.
 - [x] 6.6 Measure bubble widths with `rich.cells.cell_len`. Verify with a test that `ChatLog._bubble_width("你好")` is two cells wider than `_bubble_width("ab")`.
 - [x] 6.7 Name the parameter in `_validate_key` errors. Verify with a test that `ChatFrontend(copy_key="ctrl+h")` raises a message containing `copy_key` and not `quit_key`.
 
-## 7. Each builder needs only its own extra
+## 7. Each builder needs only its own extra (reverted)
 
-- [x] 7.1 Keep both builders in `chatinho/builder.py`, each importing its own frontend when called through the root's lazy names, and import `builder` directly from `chatinho` (design Decision 6, revised). Verify with `python -c "import chatinho.builder"` succeeding in a subprocess with `textual` and `fastmcp` blocked.
-- [x] 7.2 Replace `test_either_builder_needs_both_extras` in `tests/test_package_layout.py` with the spec's scenarios: each builder works without the other extra, and calling it without its own library names its own extra. Add a test holding `builder.NEWLINE_ESCAPE` equal to the terminal's. Verify that `test_architecture.py` still passes.
-- [x] 7.3 Update CLAUDE.md (the packaging table, "builder.py imports both frontends", Layout) and README.md's install notes. Verify with `grep -rn "tui,mcp" CLAUDE.md README.md src` showing only intended mentions.
+- [x] 7.1 ~~Each builder imports its own frontend.~~ Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)): `builder.py` restored from `main` (docstring fix from 5.1 kept).
+- [x] 7.2 ~~Replace the builder layout tests.~~ Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)): `tests/test_package_layout.py` restored from `main`.
+- [x] 7.3 ~~Update the builder docs.~~ Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)): CLAUDE.md's and README.md's builder passages restored from `main`.
 
 ## 8. Workflow
 

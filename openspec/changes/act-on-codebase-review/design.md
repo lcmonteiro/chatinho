@@ -39,7 +39,7 @@ In `_post`, a reply resolves the waiting ask only when `msg.frm` equals the ques
 - **Already checked:** applied to a scratch copy, this passed the full suite (595 tests) and the reproduction.
 - **Alternative rejected:** keying `_pending` by `(question, peer)`. It means more state for the same check.
 
-`McpFrontend.listen` applies the same rule. It keeps the peer id it addressed in `_Message` and ignores replies from anyone else.
+`McpFrontend.listen` was given the same rule (the addressed peer kept on `_Message`); Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)), so it still takes the first reply to a client's question.
 
 ### 2. Automatic numbering skips taken ids
 
@@ -73,11 +73,9 @@ An `ArchivedMessage.status` column: `String`, not null, default `'answered'`, wr
   - `test_the_welcome_message_is_the_app_saying_it` and the two "Unknown command" assertions are rewritten to check the banner, the toast (with notifications enabled, as the existing toast test does) and an empty conversation.
   - A regression test with one answering peer asserts it is never asked.
 
-### 6. Each builder imports its own frontend when called (revised during apply)
+### 6. The builders (reverted)
 
-- Both builders stay in `chatinho.builder`. Each imports its frontend inside the function, through the package root's lazy name (`chatinho.ChatFrontend` / `chatinho.McpFrontend`), so a missing extra raises the root's named `ImportError` at call time.
-- `builder.py` imports only the core, so `chatinho` imports it directly and the builders leave the lazy table (nine names behind an extra become seven). `ChatStyle` is named under `TYPE_CHECKING`, and the newline-escape default is written out, with a test holding it equal to `composer.NEWLINE_ESCAPE`.
-- **First implemented the other way:** each builder moved beside its frontend, with `builder.py` reduced to a PEP 562 forwarder, so that *reading* a builder named the missing extra. The user chose to keep the builders in `builder.py`. The cost is that the extra is named when the builder is called rather than when it is read; it is still named.
+Two designs were implemented in turn: each builder beside its frontend, then both in `builder.py` importing their frontend when called. Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)): `builder.py` is as on `main`, importing both frontends at the top, so each builder needs both extras.
 
 ### 7. One memory helper for both LLM connectors
 
@@ -92,7 +90,7 @@ An `ArchivedMessage.status` column: `String`, not null, default `'answered'`, wr
 
 - **`_validate_key(key, what)`:** takes the parameter's name for its messages.
 - **Reply quote:** `_render_message` uses `preview_of(original.text)`.
-- **`ChatLog.sync()`:** reads `context()` once into an id → message dict and passes it to `_render_message`.
+- **`ChatLog.sync()`:** Reverted at review ([lcmonteiro/chatinho#42](https://github.com/lcmonteiro/chatinho/pull/42)); it still looks each new message up with `_find`.
 - **Bubble widths:** `rich.cells.cell_len` replaces `len` in `_bubble_width`. `rich` comes with `textual`.
 - **`DatabaseBackend.__init__`:** loses `**kwargs` and `self.config`. Python's own `TypeError` is the refusal.
 - **`HelpCommand`:** drops `@require(HookSay)` and `say`.

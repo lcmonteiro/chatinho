@@ -49,8 +49,6 @@ class _Message:
 
     credentials : Dict[str, Secret]
     reply       : "asyncio.Future[ChatMessage]"
-    #: The peer asked: only its reply ends the call.
-    peer        : int
     msg_id      : Optional[MessageID] = None
     closed      : bool = False
 
@@ -146,14 +144,11 @@ class McpFrontend:
     # === Being peer zero ============================================================
 
     async def listen(self, msg: ChatMessage) -> None:
-        """Hands the asked peer's reply to a client's message back to that client.
-
-        Anyone else's reply to it is only overheard: the client asked one peer.
-        """
+        """Hands the first reply to a client's message back to that client."""
         if msg.reply_to is None:
             return
         open_ = self._open.get(msg.reply_to)
-        if open_ is not None and open_.peer == msg.frm and not open_.reply.done():
+        if open_ is not None and not open_.reply.done():
             open_.reply.set_result(msg)
 
     async def serve(self) -> None:
@@ -222,8 +217,7 @@ class McpFrontend:
         at, who = named[0]
         if not declares(who, HookAnswer):
             raise ToolError("%s does not answer what it is asked" % peer)
-        message = _Message(credentials=self._lent(meta), reply=asyncio.get_running_loop().create_future(),
-                           peer=at)
+        message = _Message(credentials=self._lent(meta), reply=asyncio.get_running_loop().create_future())
         message.msg_id = await self.say(text, to=at, credentials=message.credentials)
         self._open[message.msg_id] = message
         return message

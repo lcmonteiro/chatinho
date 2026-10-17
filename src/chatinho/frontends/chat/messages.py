@@ -344,12 +344,7 @@ class ChatLog(TouchScrollableContainer):
         # lose their reading position)
         was_at_bottom = self.scroll_offset.y >= (self.max_scroll_y - 1)
 
-        # One read of the conversation per sync: each read is a copy, and a
-        # lookup per new message (and per quote) made a sync quadratic.
-        everything  = self._read_context()
-        by_id       = {m.id: m for m in everything}
-        window      = everything[-self.max_displayed:] if self.max_displayed > 0 else []
-        desired_ids = [m.id for m in window]
+        desired_ids = [m.id for m in self._read_context(limit=self.max_displayed)]
         current = set(self._rendered_msg_ids)
         desired = set(desired_ids)
 
@@ -362,8 +357,10 @@ class ChatLog(TouchScrollableContainer):
 
         # Mount the new ones, in the correct order
         for msg_id in desired_ids:
-            if msg_id not in current and msg_id in by_id:
-                self.mount(self._render_message(by_id[msg_id], by_id))
+            if msg_id not in current:
+                msg = self._find(msg_id)
+                if msg is not None:
+                    self.mount(self._render_message(msg))
 
         self._rendered_msg_ids = desired_ids
         if was_at_bottom:
@@ -420,14 +417,8 @@ class ChatLog(TouchScrollableContainer):
         who  = here.get(frm)
         return name_of(who) if who is not None else str(frm)
 
-    def _render_message(
-        self, msg: ChatMessage, by_id: Optional[Dict[MessageID, ChatMessage]] = None,
-    ) -> Widget:
-        """Render a message as a clickable container with header and body.
-
-        *by_id* is the conversation as :meth:`sync` read it, where the message
-        this one replies to is looked up; without it, the conversation is read.
-        """
+    def _render_message(self, msg: ChatMessage) -> Widget:
+        """Render a message as a clickable container with header and body."""
         prefix = "%s @%s · %s" % (
             msg.timestamp.strftime("%H:%M"), self._name_of_peer(msg.frm), msg.id.short,
         )
@@ -440,7 +431,7 @@ class ChatLog(TouchScrollableContainer):
         # Quote of the original message when this is a reply
         quote = None
         if msg.reply_to is not None:
-            original = by_id.get(msg.reply_to) if by_id is not None else self._find(msg.reply_to)
+            original = self._find(msg.reply_to)
             if original is not None:
                 quote = "↳ %s: %s" % (original.id.short, preview_of(original.text))
                 parts.append(Static(quote, classes="message-quote"))
