@@ -13,7 +13,7 @@ See proposal.md for why the change is being made.
 **Goals:**
 - One field, `to`, decides whose `answer` is called and which reply resolves an `ask`.
 - The rule that picks `to` for an unaddressed say is a replaceable object.
-- With the default router, every existing chat routes as it does today, apart from the value of `to`.
+- With the builders' router, every existing chat routes as it does today, apart from the value of `to`.
 
 **Non-Goals:**
 - Shipping an LLM router. The hook makes one possible, and a later change can add it to `connectors/` or `examples/`.
@@ -35,15 +35,15 @@ The first must not be answered and the second must be. So answers are posted wit
 
 Alternative: mark answers with a flag or a status. Rejected, because that is `asked_of` back under another name, and `status` already means something else (`answered` / `asked` / `error`).
 
-### The router is whoever declares it
+### The router is a role, given as router=, and not a peer
 
-The session tells roles apart by what an object declares, never by which parameter carried it, so the router is the one peer that declares `HookRoute`. `router=` calls `add_connector`, as `backend=` does. `add_connector` refuses a second `HookRoute` with `ValueError`, and the session keeps the router's id in `self._router`. A connector that converses can therefore route too, with its id, its grants, and `listen`/`answer` if it declares them. `initialize()`/`shutdown()` are the peers' lifecycle, so nothing new is needed.
+The session routes with what `ChatSession(router=…)` is given and nothing else, held in `self.router` beside `self.frontend` and `self.backend`. A peer that declares `HookRoute` does not route for having declared it. The router is granted as `TOOL`, as a command is, and is never registered: no id, in nobody's `peers()`. Its `initialize()`/`shutdown()` run in the same loops as the peers' and the commands'.
 
-Cost: `router=` takes an id like `backend=`, so a router given there is numbered after the connectors. It appears in `peers()`, and therefore in `@name` addressing and the `ask_<peer>` tools, but it is only asked if it declares `HookAnswer`.
+Alternative, tried first: the router is whichever peer declares `HookRoute`, and `router=` registers it as `backend=` does. Rejected in review. It put the builders' `SimpleRouter` in `/help`, the MCP `peers` tool and every roster of every chat, for a role nothing addresses, and it needed a second-router check in `add_connector` that the session does not otherwise need.
 
-Alternative: a router outside the room (no id, granted as `TOOL`, like a command). Rejected, because a connector declaring `HookRoute` would then be silently ignored, the kind of declared-but-never-fires failure `require` exists to prevent, and because the useful router, a model, is usually already a connector.
+### The default lives in the builders
 
-**The default is not a peer.** When no peer declares `HookRoute`, the session builds a `SimpleRouter` and grants it `HookPeers`/`HookContext` bound to `TOOL`, as it does a command's grants, without registering it. Registering it would put a router in every roster and take an id in every chat for a rule nobody chose.
+A `ChatSession` given no router routes nothing. `build_chat_session` and `build_mcp_session` give `SimpleRouter()` unless passed a router, as they give a frontend. A rule nobody chose has no place in the bare machinery. The cost is that a session built by hand (a test, a bot) must pass `router=SimpleRouter()` to keep the old behaviour, which `conftest.driven` does by default.
 
 ### Where routing runs
 
@@ -52,7 +52,7 @@ Alternative: a router outside the room (no id, granted as `TOOL`, like a command
 1. `to` given → validated as today, no routing.
 2. `frm == TOOL` → no routing.
 3. `reply_to` names a message whose `to == frm` → an answer: `to = None`, no routing.
-4. Otherwise `to = _checked_route(await router.route(msg))`, where `router` is the peer at `self._router`, or the default. A result that is not a peer other than the speaker that declares `HookAnswer` becomes None with a warning. An exception is logged and becomes None.
+4. Otherwise, when there is a router, `to = _routed(router, msg)`, which awaits `router.route(msg)`. A result that is not a peer other than the speaker that declares `HookAnswer` becomes None with a warning. An exception is logged and becomes None.
 
 The message is built with `to=None`, routed, and its `to` assigned before it is posted, so the store, listeners and the archive only ever see the routed value. `route` receives the message itself (text, `frm`, `reply_to`, credentials). Anything else it needs it reads through its own grants.
 

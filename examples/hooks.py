@@ -150,9 +150,9 @@ class ClockConnector:
     """
     A second peer that answers, so the router has a choice to make.
 
-    With exactly one answering peer in the chat, the default router gives it
-    whatever names nobody, so a chat with one model just works. With two, the
-    default gives a say to no one; ``Triage`` below picks by what was said.
+    With exactly one answering peer in the chat, ``SimpleRouter`` gives it
+    whatever names nobody, so a chat with one model just works. With two, it
+    gives a say to no one; ``Triage`` below picks by what was said.
     """
 
     async def answer(self, msg: ChatMessage) -> Optional[Reply]:
@@ -161,7 +161,6 @@ class ClockConnector:
         return Reply("noon")
 
 
-@connector("triage")
 @require(HookRoute)
 @require(HookPeers)
 class Triage:
@@ -169,8 +168,9 @@ class Triage:
     ``HookRoute`` demands ``route(msg)``: who answers a say that named nobody.
 
     Whatever it returns becomes the say's ``to`` before anyone hears it; None
-    leaves it to nobody. The router is whichever peer declares this — with
-    none, the session routes with ``SimpleRouter``.
+    leaves it to nobody. The router is what ``ChatSession(router=…)`` is
+    given, and like a command it is not a peer; the builders give
+    ``SimpleRouter``, and a session given none routes nothing.
     """
 
     peers : Peers
@@ -307,10 +307,11 @@ async def main() -> None:
 
     screen  = Screen()
     session = ChatSession(
-        connectors = [EchoConnector(), WeatherConnector(), ClockConnector(), Triage()],
+        connectors = [EchoConnector(), WeatherConnector(), ClockConnector()],
         commands   = [UpperCommand()],
         frontend   = screen,
         backend    = ListArchive(seeded),
+        router     = Triage(),
     )
 
     print("\n-- start(): HookLoad runs before anyone can ask for context --")

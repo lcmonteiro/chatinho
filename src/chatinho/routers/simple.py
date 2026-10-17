@@ -1,4 +1,4 @@
-"""The default router: a reply goes back to its author, and anything else to the lone peer that answers."""
+"""The builders' router: a reply goes back to its author, and anything else to the lone peer that answers."""
 
 from typing import Optional
 

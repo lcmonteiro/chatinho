@@ -154,3 +154,10 @@ def test_forget_with_no_cut_drops_everything():
     store, *_ = _three()
     assert store.forget() == 3
     assert store.messages == []
+
+
+def test_parse_reads_none_back_as_none():
+    """A field that may hold no id, a reply_to, is read the same way as one that always does."""
+    assert MessageID.parse(None) is None
+    said = MessageID.new()
+    assert MessageID.parse(str(said)) == said

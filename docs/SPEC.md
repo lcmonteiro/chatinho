@@ -46,9 +46,10 @@ seven, which is what the terminal shows.
 
 **`to` is the one field that says who answers.** The speaker sets it, or leaves it unset; a say
 that names nobody is given one by the **router** ([`HookRoute`](#hookroute)) before anyone hears
-it, so every listener, the archive and `context()` see it already addressed. With no router of
-its own, a session sends a reply to the author of what it replies to, and anything else to the one
-peer that answers when there is exactly one.
+it, so every listener, the archive and `context()` see it already addressed. The builders route
+with `SimpleRouter`, which sends a reply to the author of what it replies to, and anything else to
+the one peer that answers when there is exactly one; a `ChatSession` given no router routes
+nothing.
 
 What a peer's `answer` returns is an **answer**, and an answer is **addressed to nobody**: every
 listener hears it, and it is never put to anyone's `answer`. So is a say replying to a message that
@@ -171,8 +172,8 @@ value, a function, or a key source from `chatinho.keys` (`Env`, `File`, `Keyring
 `error` reply naming the reference, and nothing is sent.
 
 **A say that names nobody is routed.** Leave `to` unset and the router decides it, before the say
-is posted: whatever it returns becomes `to`, and that peer answers. The default router keeps two
-rules. **A room with one peer that answers is a conversation with it**: a say that is not a reply
+is posted: whatever it returns becomes `to`, and that peer answers. `SimpleRouter`, which the
+builders give, keeps two rules. **A room with one peer that answers is a conversation with it**: a say that is not a reply
 goes to the one peer besides the speaker and the frontend that declares `HookAnswer`, and with two
 or more such peers, or none, to nobody. **A reply goes back to whoever it replies to**: selecting
 an answer in the terminal and typing is a follow-up, and the peer that answered is the one asked; a
@@ -385,7 +386,6 @@ say's `to` **before** anyone hears it — so every listener, the archive and `co
 already addressed. None leaves `to` unset, and then nobody answers.
 
 ```python
-@connector("triage")
 @require(HookRoute)
 @require(HookPeers)
 class Triage:
@@ -396,15 +396,15 @@ class Triage:
         return next((at for at, who in self.peers().items() if name_of(who) == wanted), None)
 ```
 
-**The router is whichever peer declares it**, however it arrived: among the connectors, through
-`add_connector`, or through `ChatSession(router=…)`, which only registers it as a peer, as
-`backend=` does. So a connector that converses can route as well, and a model deciding who answers
-is usually already one. A second router is refused with `ValueError`.
+**The router is what `ChatSession(router=…)` is given**, and like a command it is **not a peer**:
+no id, nothing addressed to it, in nobody's `peers()`. It is granted what it declares, and its
+`initialize()` and `shutdown()` run with everyone else's. A connector that declares `HookRoute` is
+not the router for having declared it. A session given no router routes nothing: a say that names
+nobody stays owed by nobody.
 
-**With none, the session routes with `SimpleRouter`**, which is not a peer — no id, not in
-`peers()` — and keeps two rules: a reply goes to the author of what it replies to, and anything
-else to the one peer that answers, when there is exactly one. Both exclude the speaker and the
-frontend, and both answer None otherwise.
+**The builders give `SimpleRouter`** unless told otherwise, and it keeps two rules: a reply goes to
+the author of what it replies to, and anything else to the one peer that answers, when there is
+exactly one. Both exclude the speaker and the frontend, and both answer None otherwise.
 
 What a router returns is checked: anything but another peer that declares `HookAnswer` is ignored
 with a warning, and a router that raises is logged — the say is posted either way, with `to` unset.

@@ -363,7 +363,7 @@ async with client:
 - **A question names its peer.** A question asked of `lab` goes to one remote peer: the
   `McpConnector(peer=...)` given, or else the remote session's only answering peer. With several and
   no `peer=`, the connector answers with an error. In any chatinho session, a say that names
-  nobody is given a `to` by the router: by default, the one peer that answers, when there is one.
+  nobody is given a `to` by the router: in the builders, the one peer that answers, when there is one.
 - **One reply, always.** Every question ends in exactly one of `answered`, `asked` (a question back)
   or `error`. There is no deadline: a client that stops waiting just ends its call.
   Attachments come back with the answer and the local backend keeps them.

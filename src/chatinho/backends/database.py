@@ -28,6 +28,7 @@ from typing import Any, List, Optional, Sequence
 from urllib.parse import quote
 
 from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, create_engine
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -41,6 +42,19 @@ class Base(DeclarativeBase):
     """Declarative base for the backend's models."""
 
 
+class _MessageIDText(TypeDecorator):
+    """A :class:`MessageID` kept as the text ``str()`` writes, and read back with ``MessageID.parse``."""
+
+    impl     = String
+    cache_ok = True
+
+    def process_bind_param(self, value: Any, dialect: Any) -> Optional[str]:
+        return None if value is None else str(value)
+
+    def process_result_value(self, value: Optional[str], dialect: Any) -> Optional[MessageID]:
+        return MessageID.parse(value)
+
+
 class ArchivedMessage(Base):
     """
     One archived message, addressed exactly as it was when it was said.
@@ -52,11 +66,11 @@ class ArchivedMessage(Base):
 
     __tablename__ = "messages"
 
-    id        = Column(String, primary_key=True)
+    id        = Column(_MessageIDText, primary_key=True)
     text      = Column(Text, nullable=False)
     frm       = Column(Integer, nullable=False)
     to        = Column(Integer, nullable=True)
-    reply_to  = Column(String, nullable=True)
+    reply_to  = Column(_MessageIDText, nullable=True)
     timestamp = Column(DateTime(timezone=False), nullable=False, index=True)
     #: What an answer said about itself; kept so errors stay errors after a reopen.
     status    = Column(String, nullable=False, default=ReplyStatus.ANSWERED.value)
@@ -256,8 +270,7 @@ class DatabaseBackend:
         with self._session() as session:
             for msg in messages:
                 session.merge(ArchivedMessage(
-                    id=str(msg.id), text=msg.text, frm=msg.frm, to=msg.to,
-                    reply_to=None if msg.reply_to is None else str(msg.reply_to),
+                    id=msg.id, text=msg.text, frm=msg.frm, to=msg.to, reply_to=msg.reply_to,
                     timestamp=msg.timestamp, status=ReplyStatus(msg.status).value,
                 ))
             session.commit()
@@ -273,8 +286,7 @@ class DatabaseBackend:
             if limit is not None:
                 rows = list(reversed(rows))
             return [
-                ChatMessage(id=MessageID.parse(r.id), text=r.text, frm=r.frm, to=r.to,
-                            reply_to=None if r.reply_to is None else MessageID.parse(r.reply_to),
+                ChatMessage(id=r.id, text=r.text, frm=r.frm, to=r.to, reply_to=r.reply_to,
                             timestamp=r.timestamp, status=ReplyStatus(r.status))
                 for r in rows
             ]

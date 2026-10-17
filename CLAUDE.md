@@ -57,13 +57,20 @@ reply_to set  → it replies to that message
 not.** It used to be two: `to` for what the speaker chose and `asked_of` for whose `answer` the
 session called, split so a say routed to the room's lone answering peer stayed a broadcast. Every
 reader then had to know which of the two to look at, and the routing rule was fixed inside the
-session. Now a say with no `to` is handed to the **router** — whichever peer declares `HookRoute`,
-or `SimpleRouter` when none does — and what it returns *is* the `to`, written before anyone hears
-the say. `SimpleRouter` keeps the two old rules: **a say that replies goes to whoever said what it
-replies to**, and **any other goes to the lone answering peer**, each only when that is a peer
-that answers and is neither the speaker nor the frontend. A router may be a model; a connector
-that converses can route too, and `router=` is sugar for the role, as `backend=` is. A second
-router is refused like a second frontend.
+session. Now a say with no `to` is handed to the **router** — what `ChatSession(router=…)` was
+given — and what it returns *is* the `to`, written before anyone hears the say. **The router is
+not a peer**, as a command is not: no id, in nobody's roster, granted what it declares; and a
+session given none routes nothing. **The builders give `SimpleRouter`**, which keeps the two old
+rules: **a say that replies goes to whoever said what it replies to**, and **any other goes to the
+lone answering peer**, each only when that is a peer that answers and is neither the speaker nor
+the frontend. A router may be a model.
+
+The default lives in the builders and not in the session for the reason the frontend does: a
+`ChatSession` is the bare machinery, and a rule nobody chose has no business inside it. The cost is
+that a session built by hand — a test, a bot — routes nothing until it is given a router, and
+`conftest.driven` gives `SimpleRouter` for exactly that reason. The router was a peer for a while
+too: whoever declared `HookRoute`, `router=` as sugar. That put a `router` in `/help`, in the MCP
+`peers` tool and in every roster of every chat the builders made, for a role nothing addresses.
 
 **An answer is addressed to nobody.** What `answer` returns, the error replies the session posts,
 and a say replying to a message that was addressed to its speaker are all posted with `to` unset.

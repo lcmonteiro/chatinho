@@ -15,7 +15,7 @@ import pytest
 
 from chatinho import (
     LOCAL, Attachment, ChatMessage, ChatSession, DatabaseBackend, HookAnswer, MessageID, Query, Reply,
-    ReplyStatus,
+    ReplyStatus, SimpleRouter,
     connector, require,
 )
 from conftest import Driver
@@ -332,14 +332,16 @@ async def test_asked_closed_and_reopened(tmp_path):
     """A say routed to the lone answering peer keeps its `to` in the archive, and in its memory."""
     url = "sqlite:///%s" % (tmp_path / "chat.db")
 
-    first, view = ChatSession(connectors=[_Bot()], backend=DatabaseBackend(url)), Driver()
+    first = ChatSession(connectors=[_Bot()], backend=DatabaseBackend(url), router=SimpleRouter())
+    view  = Driver()
     first.add_connector(view, at=LOCAL)
     await first.start()
     said = await view.say("hi")
     await first.close()
 
     bot = _Bot()
-    second, again = ChatSession(connectors=[bot], backend=DatabaseBackend(url)), Driver()
+    second = ChatSession(connectors=[bot], backend=DatabaseBackend(url), router=SimpleRouter())
+    again  = Driver()
     second.add_connector(again, at=LOCAL)
     await second.start()
     reloaded = [m for m in again.context() if m.id == said][0]
@@ -379,14 +381,16 @@ async def test_a_failed_reply_stays_failed_when_reopened(tmp_path):
     """Without its status, a failed reply came back as an answer, into the model's memory."""
     url = "sqlite:///%s" % (tmp_path / "chat.db")
 
-    first, view = ChatSession(connectors=[_Failing()], backend=DatabaseBackend(url)), Driver()
+    first = ChatSession(connectors=[_Failing()], backend=DatabaseBackend(url), router=SimpleRouter())
+    view  = Driver()
     first.add_connector(view, at=LOCAL)
     await first.start()
     await view.say("hi")
     await asyncio.sleep(0.05)
     await first.close()
 
-    second, again = ChatSession(connectors=[_Failing()], backend=DatabaseBackend(url)), Driver()
+    second = ChatSession(connectors=[_Failing()], backend=DatabaseBackend(url), router=SimpleRouter())
+    again  = Driver()
     second.add_connector(again, at=LOCAL)
     await second.start()
     reply = [m for m in again.context() if m.text == "rate limited"][0]

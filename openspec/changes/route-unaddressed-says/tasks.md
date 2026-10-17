@@ -27,3 +27,9 @@
 ## 5. Integration
 
 - [x] 5.1 Run `ruff check src tests examples`, `mypy src/chatinho examples`, `pytest -q` and `openspec validate --all --strict --no-interactive`, and verify all four pass.
+
+## 6. Review
+
+- [x] 6.1 Make the router what `router=` is given and not a peer: `self.router`, granted as `TOOL`, `initialize`/`shutdown` with the rest; drop the `HookRoute` handling in `add_connector` and the session's own default. Verify with `tests/test_message_routing.py` covering every scenario of "The router is what router= is given".
+- [x] 6.2 Give `SimpleRouter` from the builders when no `router=` is passed, and from `conftest.driven` and the hand-built sessions in the tests that stand in for a builder. Verify with the scenario "The builders' router" and `pytest -q`.
+- [x] 6.3 Store `MessageID` columns through a `TypeDecorator`, so `DatabaseBackend` neither casts with `str()` nor tests for None, and let `MessageID.parse(None)` return None. Verify with `tests/test_message_store.py` and `tests/test_database_backend.py`.

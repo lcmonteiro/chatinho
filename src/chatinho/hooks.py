@@ -300,10 +300,10 @@ HookRoute = Hook(
     method="route",
     # async route(msg) -> peer id | None. Decides who answers a say whose
     # speaker named nobody: what it returns becomes the say's `to`, before
-    # anyone hears it. The router is whichever peer declares this, however it
-    # was registered; with none, the session routes with SimpleRouter. A
-    # result that is not another peer that answers is ignored, and None means
-    # nobody answers.
+    # anyone hears it. The router is what ChatSession(router=) is given, and it
+    # is not a peer; the builders give SimpleRouter, and a session given none
+    # routes nothing. A result that is not another peer that answers is
+    # ignored, and None means nobody answers.
 )
 
 # === Holding the conversation ===================================================

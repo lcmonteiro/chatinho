@@ -8,8 +8,8 @@ This change makes `to` the only answer to "who answers this". When the speaker l
 
 ## What Changes
 
-- **New: a router decides `to` for an unaddressed say.** A router is a plain class that declares the new `HookRoute`, which demands `async route(msg) -> Optional[int]`. The router is whichever peer declares `HookRoute`, however it was registered, so a connector can route as well as answer (a model that converses and also decides who replies). `ChatSession(router=…)` is sugar that registers it as a peer, as `backend=` does. A second router is refused like a second frontend.
-- **New: `SimpleRouter`, the default** when no peer declares `HookRoute`. It is not a peer. It holds no state and imports only the standard library. It keeps today's two rules, now writing them into `to`:
+- **New: a router decides `to` for an unaddressed say.** A router is a plain class that declares the new `HookRoute`, which demands `async route(msg) -> Optional[int]`. The router is what `ChatSession(router=…)` is given. Like a command, it is not a peer: it has no id and is in nobody's roster, but it is granted what it declares. A session given no router routes nothing.
+- **New: `SimpleRouter`, the builders' default.** `build_chat_session` and `build_mcp_session` give it unless passed a `router=`. It holds no state and imports only the standard library. It keeps today's two rules, now writing them into `to`:
   - A say that replies to a message goes to that message's author, when the author is a peer that answers and is neither the speaker nor the frontend.
   - Any other say goes to the one peer that answers other than the speaker and the frontend. With none, or with more than one, `to` stays `None` and nobody answers.
 - The session consults the router only for a say with `to` unset, said by a peer (not by `TOOL`), that is not an answer. A router result that is not a peer that answers, other than the speaker, is ignored with a warning. A router that raises is logged, and `to` stays `None`.
@@ -22,7 +22,7 @@ This change makes `to` the only answer to "who answers this". When the speaker l
 ## Capabilities
 
 ### New Capabilities
-- `message-routing`: the router: `HookRoute`, who the router is (any peer declaring it; `router=` as sugar), when the session consults it, how its result is checked, and `SimpleRouter`'s two rules.
+- `message-routing`: the router: `HookRoute`, who the router is (what `router=` is given, not a peer; `SimpleRouter` in the builders), when the session consults it, how its result is checked, and `SimpleRouter`'s two rules.
 
 ### Modified Capabilities
 - `answer-details`: the lone-answering-peer and reply-routing requirements move to the router and set `to`. The requirement that a message carries `asked_of` is removed, and an answer is addressed to nobody.

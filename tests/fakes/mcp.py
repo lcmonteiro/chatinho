@@ -8,7 +8,7 @@ import mcp_types as types
 from fastmcp import Client
 
 from chatinho import HookAnswer, HookKeep, HookLink, HookListen, HookPeers, HookSay
-from chatinho import LOCAL, ChatSession, Reply
+from chatinho import LOCAL, ChatSession, Reply, SimpleRouter
 from chatinho import backend, connector, require
 from chatinho.frontends.mcp import McpFrontend
 
@@ -17,7 +17,8 @@ async def remote(*peers: Any, backend: Any = None, commands: Any = (), **options
     """A started session served by an McpFrontend, with *peers* and *commands* in it."""
     options.setdefault("token", "t")
     front   = McpFrontend(**options)
-    session = ChatSession(frontend=front, connectors=list(peers), commands=list(commands), backend=backend)
+    session = ChatSession(frontend=front, connectors=list(peers), commands=list(commands), backend=backend,
+                          router=SimpleRouter())
     await session.start()
     return session, front
 

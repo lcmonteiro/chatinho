@@ -4,7 +4,7 @@ import asyncio
 
 from chatinho import HookContext, HookListen, HookSay
 from chatinho import Context, Say
-from chatinho import LOCAL, Attachment, ChatSession
+from chatinho import LOCAL, Attachment, ChatSession, SimpleRouter
 from chatinho import frontend, require
 from chatinho.connectors.mcp import McpConnector
 from chatinho.frontends.mcp import McpFrontend
@@ -37,12 +37,14 @@ async def test_a_question_crosses_with_a_lent_key_and_returns_with_its_drawing(t
     chart  = Attachment("chart.svg", "image/svg+xml", b"<svg>login</svg>")
     agent  = Agent(key=True, attach=chart)
     front  = McpFrontend(token="t", credentials={"llm": "OpenAI-compatible API key"})
-    there  = ChatSession(frontend=front, connectors=[agent], backend=Files(tmp_path / "there"))
+    there  = ChatSession(frontend=front, connectors=[agent], backend=Files(tmp_path / "there"),
+                         router=SimpleRouter())
     await there.start()
 
     me     = Me()
     lab    = McpConnector(server=front.server, name="lab", delegate={"llm": "sk-lent"})
-    here   = ChatSession(frontend=me, backend=Files(tmp_path / "here"), connectors=[lab])
+    here   = ChatSession(frontend=me, backend=Files(tmp_path / "here"), connectors=[lab],
+                         router=SimpleRouter())
     await here.start()
 
     await me.say("draw the login flow")
@@ -62,11 +64,11 @@ async def test_a_question_crosses_with_a_lent_key_and_returns_with_its_drawing(t
 
 async def test_with_two_remote_peers_the_connector_names_one():
     front  = McpFrontend(token="t")
-    there  = ChatSession(frontend=front, connectors=[Agent("agent"), Weather()])
+    there  = ChatSession(frontend=front, connectors=[Agent("agent"), Weather()], router=SimpleRouter())
     await there.start()
     me     = Me()
     lab    = McpConnector(server=front.server, name="lab", peer="agent")
-    here   = ChatSession(frontend=me, connectors=[lab])
+    here   = ChatSession(frontend=me, connectors=[lab], router=SimpleRouter())
     await here.start()
 
     await me.say("who can draw?")

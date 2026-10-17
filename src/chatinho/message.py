@@ -24,7 +24,7 @@ import secrets
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, overload
 
 #: The chat itself — the user's own id. Every connector is numbered from one.
 LOCAL : int = 0
@@ -168,20 +168,33 @@ class MessageID:
         """
         return cls(secrets.token_hex(8))
 
+    @overload
     @classmethod
-    def parse(cls, text: str) -> "MessageID":
+    def parse(cls, text: str) -> "MessageID": ...
+
+    @overload
+    @classmethod
+    def parse(cls, text: None) -> None: ...
+
+    @classmethod
+    def parse(cls, text: Optional[str]) -> Optional["MessageID"]:
         """
-        Reads back what ``str()`` wrote.
+        Reads back what ``str()`` wrote, and None as None.
+
+        None reads back as itself so a field that may hold no id — a
+        ``reply_to`` — is read the same way as one that always holds one.
 
         Args:
-            text: ``msg-`` and hex digits, e.g. ``msg-3f9a1c2e7b04d5a6``.
+            text: ``msg-`` and hex digits, e.g. ``msg-3f9a1c2e7b04d5a6``, or None.
 
         Returns:
-            MessageID: The id *text* names.
+            Optional[MessageID]: The id *text* names; None for None.
 
         Raises:
-            ValueError: If *text* is not ``msg-`` and hex digits.
+            ValueError: If *text* is neither None nor ``msg-`` and hex digits.
         """
+        if text is None:
+            return None
         if not isinstance(text, str) or not text.startswith(_PREFIX):
             raise ValueError("A message id starts with %r, got %r" % (_PREFIX, text))
         return cls(text[len(_PREFIX):])

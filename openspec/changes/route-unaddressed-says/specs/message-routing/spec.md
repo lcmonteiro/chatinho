@@ -1,6 +1,6 @@
 ## Purpose
 
-Decides who answers a say whose speaker named nobody: a router, rule-based by default and replaceable by any peer that declares it (a model, for one), fills in the say's `to`, which is then the one field that says who owes it an answer.
+Decides who answers a say whose speaker named nobody: a router, rule-based in the builders and replaceable (by a model, for one), fills in the say's `to`, which is then the one field that says who owes it an answer.
 
 ## ADDED Requirements
 
@@ -23,28 +23,28 @@ A session SHALL consult its router for every say that is said by a peer (not by 
 - **WHEN** the user runs `/help`
 - **THEN** the router is consulted for neither the invocation nor its result
 
-### Requirement: The router is whoever declares HookRoute
-A router SHALL be any class declaring `HookRoute`, which demands `route(msg)`, a coroutine returning a peer id or None. The session SHALL route with the one peer that declares `HookRoute`, whichever way it was registered: among `connectors=`, through `add_connector`, or through `router=`. `router=` MUST register its object as a peer, as `backend=` does, so a router has an id, is granted what it declares, and hears and answers exactly what it declares, like any other peer. Registering a second peer that declares `HookRoute` MUST raise `ValueError`, and a `router=` object that does not declare `HookRoute` MUST raise `TypeError`. When no peer declares `HookRoute`, the session SHALL route with `SimpleRouter`, which is not a peer: it has no id and does not appear in `peers()`.
-
-#### Scenario: A connector that routes
-- **WHEN** a connector given in `connectors=` declares `HookAnswer` and `HookRoute`, and the user says "hi"
-- **THEN** that connector's `route` decides the say's `to`, and `SimpleRouter` is not used
+### Requirement: The router is what router= is given
+A router SHALL be any class declaring `HookRoute`, which demands `route(msg)`, a coroutine returning a peer id or None. A session SHALL route with the object given as `ChatSession(router=…)`, and with nothing else: a peer that declares `HookRoute` MUST NOT route for having declared it. The router MUST NOT be a peer: it has no id, nothing is addressed to it, it hears nothing, and it does not appear in `peers()`. It MUST be granted what it declares, and its `initialize()` and `shutdown()`, when present, MUST be called at `start()` and `close()`. A `router=` that does not declare `HookRoute` MUST raise `TypeError`. A session given no router MUST route nothing: a say that names nobody keeps `to` unset.
 
 #### Scenario: A router reads the room
 - **WHEN** a router declaring `HookRoute` and `HookPeers` is given as `router=`
-- **THEN** it has an id, appears in `peers()`, and can call `peers()` from `route`
+- **THEN** it can call `peers()` from `route`, and it has no id and does not appear in `peers()`
 
-#### Scenario: Two routers
-- **WHEN** two peers that declare `HookRoute` are registered in one session
-- **THEN** registering the second raises `ValueError`
+#### Scenario: A connector that declares HookRoute
+- **WHEN** a connector given in `connectors=` declares `HookAnswer` and `HookRoute`, and the user says "hi"
+- **THEN** its `route` is never called
 
 #### Scenario: Not a router
 - **WHEN** `ChatSession(router=obj)` is given an object that does not declare `HookRoute`
 - **THEN** it raises `TypeError`
 
-#### Scenario: The default router is not a peer
-- **WHEN** no peer declares `HookRoute`
-- **THEN** says are routed by `SimpleRouter`, and `peers()` holds no router
+#### Scenario: No router
+- **WHEN** a session is given no router, its only answering peer is `bot`, and the user says "hi"
+- **THEN** the say has `to` unset, and `bot`'s `answer` is not called
+
+#### Scenario: A router starts and stops with the chat
+- **WHEN** a router with `initialize()` and `shutdown()` is given, and the session starts and closes
+- **THEN** both are called once
 
 ### Requirement: What a router returns is checked
 A router's result SHALL be used only when it is the id of a peer in the chat, other than the speaker, that declares `HookAnswer`. Any other result MUST be ignored with a warning, leaving `to` unset. A router that raises MUST NOT stop the say: the failure MUST be logged, and the say posted with `to` unset.
@@ -61,8 +61,12 @@ A router's result SHALL be used only when it is the id of a peer in the chat, ot
 - **WHEN** a router's `route` raises
 - **THEN** the say is posted with `to` unset, and the failure is logged
 
-### Requirement: The default router
-When no peer declares `HookRoute`, a session SHALL route with `SimpleRouter`, which needs nothing from the standard library outward. For a say that replies to a message (`reply_to` set), it MUST return that message's author when the author is a peer other than the speaker and the frontend and declares `HookAnswer`, and None otherwise. For any other say, it MUST return the one peer other than the speaker and the frontend that declares `HookAnswer`, and None when there is no such peer or more than one.
+### Requirement: The builders route with SimpleRouter
+`build_chat_session` and `build_mcp_session` SHALL give the session `SimpleRouter` unless a `router=` is given, which they MUST pass on instead. `SimpleRouter` MUST need nothing beyond the standard library. For a say that replies to a message (`reply_to` set), it MUST return that message's author when the author is a peer other than the speaker and the frontend and declares `HookAnswer`, and None otherwise. For any other say, it MUST return the one peer other than the speaker and the frontend that declares `HookAnswer`, and None when there is no such peer or more than one.
+
+#### Scenario: The builders' router
+- **WHEN** `build_chat_session` or `build_mcp_session` is called without `router=`, and again with one
+- **THEN** the first session's router is a `SimpleRouter`, and the second's is the one given
 
 #### Scenario: One peer answers
 - **WHEN** the user says "will it rain?" and the only peer that answers is `weather`

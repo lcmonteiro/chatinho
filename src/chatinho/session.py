@@ -32,7 +32,6 @@ from .hooks import declared_id, declares, hooks_of, name_of
 from .message import LOCAL, TOOL
 from .message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
 from .query import Query
-from .routers import SimpleRouter
 
 #: How deeply the question being answered in this task is nested; 0 when none is.
 #: Set by the session around ``answer``, read when that answer asks again.
@@ -87,6 +86,8 @@ class ChatSession:
         self.frontend : Optional[Any] = frontend
         #: Where the conversation goes when it is no longer recent.
         self.backend  : Optional[Any] = backend
+        #: Who decides who answers a say that names nobody; without one, nobody does.
+        self.router   : Optional[Any] = router
         #: How much of the archive ``start()`` pulls back into the session.
         self.recall   : int = recall
         #: How deeply asks may nest; a deeper question is answered with an error.
@@ -116,11 +117,6 @@ class ChatSession:
         self._closed      : bool = False
         #: ids of peers/commands whose initialize() has already run.
         self._initialized : set = set()
-        #: The id of the peer that declares HookRoute, if one does.
-        self._router      : Optional[int] = None
-        #: Who routes when no peer does. Not a peer: no id, its grants bound to TOOL.
-        self._default_router : Any = SimpleRouter()
-        self._grant(self._default_router, TOOL)
 
         #: Commands are not peers: no id, nothing addressed to them.
         #: They run when someone runs them, and answer whoever did.
@@ -147,9 +143,9 @@ class ChatSession:
             if not declares(router, HookRoute):
                 raise TypeError("%r does not declare %s: a router must @require(HookRoute)"
                                 % (router, HookRoute))
-            # Sugar, like `backend`: whoever declares HookRoute is the router,
-            # whichever way it arrived, so it is registered as any peer is.
-            self.add_connector(router)
+            # Not a peer, as a command is not: no id, nothing addressed to it,
+            # in nobody's roster. It reads the room through what it declared.
+            self._grant(router, TOOL)
 
     # === Peers ===============================================================
 
@@ -173,20 +169,14 @@ class ChatSession:
             int: The id the peer now answers to.
 
         Raises:
-            ValueError: If the id is already taken, or *connector* declares
-                ``HookRoute`` and another peer already does.
+            ValueError: If the id is already taken.
         """
-        if declares(connector, HookRoute) and self._router is not None:
-            raise ValueError("%r declares %s, and %r already routes" % (
-                name_of(connector), HookRoute, name_of(self._connectors[self._router])))
         if at is None:
             at = declared_id(connector)
         if at is None:
             at = self._free_id()
         elif at in self._connectors:
             raise ValueError("Id %d is already taken by %r" % (at, name_of(self._connectors[at])))
-        if declares(connector, HookRoute):
-            self._router = at
 
         # peer_id, not id: Textual's DOMNode already owns `id` and validates it
         # as a string. A peer rarely needs its own number anyway — the
@@ -297,6 +287,10 @@ class ChatSession:
         """The first peer that declares *hook*, or None: the backend, for the hooks only it has."""
         return next((who for who in self._connectors.values() if declares(who, hook)), None)
 
+    def _routers(self) -> List[Any]:
+        """The router, as a list, for the lifecycle loops that run over peers and commands."""
+        return [self.router] if self.router is not None else []
+
     def _commands(self) -> Dict[str, Any]:
         """Every command registered, by name. Granted by ``HookCommands``."""
         return dict(self.commands)
@@ -356,11 +350,12 @@ class ChatSession:
             msg = ChatMessage(id=self._store.new_id(), text=text, frm=frm, to=to, reply_to=reply_to)
             if credentials is not None:
                 msg.credentials = credentials     # the lender's own mapping, so it can clear it
-            # Who answers is `to`, and a say that names nobody is routed:
-            # unless a command wrote it, or it answers something put to its
-            # speaker, which is owed no answer of its own.
-            if to is None and frm != TOOL and not self._answers(frm, reply_to):
-                msg.to = await self._routed(msg)
+            # Who answers is `to`, and a say that names nobody is routed, when
+            # there is a router: unless a command wrote it, or it answers
+            # something put to its speaker, which is owed no answer of its own.
+            router = self.router
+            if to is None and router is not None and frm != TOOL and not self._answers(frm, reply_to):
+                msg.to = await self._routed(router, msg)
             await self._kept(msg, attachments)
             return await self._post(msg)
         return say
@@ -370,17 +365,14 @@ class ChatSession:
         parent = self._store.find(reply_to) if reply_to is not None else None
         return parent is not None and parent.to == frm
 
-    async def _routed(self, msg: ChatMessage) -> Optional[int]:
+    async def _routed(self, router: Any, msg: ChatMessage) -> Optional[int]:
         """
-        Who *msg* is for, as its router decides; None for nobody.
+        Who *msg* is for, as *router* decides; None for nobody.
 
-        The router is the peer that declares ``HookRoute``, or the default when
-        none does. What it returns is used only when it is another peer that
-        answers; anything else is ignored with a warning, and a router that
-        raises is logged, so a broken router never silences a say.
+        What it returns is used only when it is another peer that answers;
+        anything else is ignored with a warning, and a router that raises is
+        logged, so a broken router never silences a say.
         """
-        router = (self._connectors[self._router] if self._router is not None
-                  else self._default_router)
         try:
             at = await router.route(msg)
         except Exception:
@@ -677,7 +669,7 @@ class ChatSession:
         anything, or is initialized, at all. What was said to a peer before it
         started is delivered to it now, in the order it was said.
         """
-        for who in list(self._connectors.values()) + list(self.commands.values()):
+        for who in list(self._connectors.values()) + list(self.commands.values()) + self._routers():
             if id(who) not in self._initialized:
                 self._initialized.add(id(who))
                 await self._initialize(who)
@@ -743,7 +735,7 @@ class ChatSession:
         finish is cancelled with a warning, so it cannot hang the close.
         """
         pending : Dict["asyncio.Future[Any]", str] = {}
-        for who in list(self._connectors.values()) + list(self.commands.values()):
+        for who in list(self._connectors.values()) + list(self.commands.values()) + self._routers():
             shutdown = getattr(who, "shutdown", None)
             if not callable(shutdown):
                 continue

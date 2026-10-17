@@ -148,9 +148,9 @@ async def test_what_a_command_writes_is_not_routed():
     assert eco.asked == [] and _said(view, said).to is None
 
 
-# === The router is whoever declares HookRoute =======================================
+# === The router is the one router= was given ======================================
 
-async def test_a_connector_that_routes():
+async def test_declaring_hookroute_does_not_make_a_connector_the_router():
     @connector("triage")
     @require(HookAnswer)
     @require(HookRoute)
@@ -169,8 +169,7 @@ async def test_a_connector_that_routes():
     session, view = await driven(connectors=[triage, _Eco(), _Eco()])
     said = await view.say("hi")
     await session.close()
-    assert _said(view, said).to == triage.peer_id
-    assert triage.answered == ["hi"]
+    assert _said(view, said).to is None and triage.answered == []
 
 
 async def test_a_router_reads_the_room():
@@ -187,16 +186,29 @@ async def test_a_router_reads_the_room():
     session, view = await driven(connectors=[eco, _Eco("other")], router=reader)
     said = await view.say("hi")
     await session.close()
-    assert reader.peer_id in view.peers()
+    assert reader not in view.peers().values() and not hasattr(reader, "peer_id")
     assert _said(view, said).to == eco.peer_id
 
 
-async def test_two_routers_are_refused():
-    session = ChatSession(connectors=[_Fixed(None)])
-    with pytest.raises(ValueError):
-        session.add_connector(_Fixed(None))
-    with pytest.raises(ValueError):
-        ChatSession(connectors=[_Fixed(None)], router=_Fixed(None))
+async def test_a_router_starts_and_stops_with_the_chat():
+    @require(HookRoute)
+    class Lived:
+        def __init__(self):
+            self.life : List[str] = []
+
+        async def initialize(self):
+            self.life.append("up")
+
+        async def shutdown(self):
+            self.life.append("down")
+
+        async def route(self, msg):
+            return None
+
+    lived = Lived()
+    session, _ = await driven(router=lived)
+    await session.close()
+    assert lived.life == ["up", "down"]
 
 
 def test_a_router_must_declare_hookroute():
@@ -204,10 +216,12 @@ def test_a_router_must_declare_hookroute():
         ChatSession(router=_Eco())
 
 
-async def test_the_default_router_is_not_a_peer():
-    session, view = await driven(connectors=[_Eco()])
+async def test_without_a_router_nothing_is_routed():
+    eco = _Eco()
+    session, view = await driven(connectors=[eco], router=None)
+    said = await view.say("hi")
     await session.close()
-    assert not any(isinstance(who, SimpleRouter) for who in view.peers().values())
+    assert _said(view, said).to is None and eco.asked == []
 
 
 # === What a router returns is checked ===============================================
@@ -416,11 +430,11 @@ async def test_a_late_answer_is_not_routed():
     assert router.consulted == []
 
 
-async def test_the_builders_pass_the_router_on():
+async def test_the_builders_route_with_simple_router_unless_given_one():
     pytest.importorskip("textual")
     pytest.importorskip("fastmcp")
     from chatinho import build_chat_session, build_mcp_session
-    for session in (build_chat_session(router=_Fixed(None)),
-                    build_mcp_session(token="t", router=_Fixed(None))):
-        assert session._router is not None
-        assert isinstance(session._connectors[session._router], _Fixed)
+    for build, extra in ((build_chat_session, {}), (build_mcp_session, {"token": "t"})):
+        assert isinstance(build(**extra).router, SimpleRouter)
+        mine = _Fixed(None)
+        assert build(router=mine, **extra).router is mine
