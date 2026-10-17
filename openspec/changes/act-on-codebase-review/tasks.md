@@ -27,10 +27,10 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 
 ## 4. The archive keeps `status`
 
-- [x] 4.1 Add tests to `tests/test_database_backend.py`. An `error` reply reloads with `status` `error` and is left out by `Query(errors=False)`. A database created with the old schema (a `messages` table without `status`, built with raw SQL) opens, and loads its rows as `answered`. Verify that both fail on the current code.
-- [x] 4.2 Add the `status` column, write and read it, and add it in place in `initialize()` when the table lacks it (design Decision 4). Verify that 4.1 passes, and that `scratchpad/repro_db.py`-style behaviour holds: `errors=False` gives the same result before and after a restart.
+- [x] 4.1 Add a test to `tests/test_database_backend.py`: an `error` reply reloads with `status` `error` and is left out by `Query(errors=False)`. Verify it fails on the current code.
+- [x] 4.2 Add the `status` column to the baseline schema, and write and read it (design Decision 4). Verify that 4.1 passes, and that `errors=False` gives the same result before and after a restart.
 - [x] 4.3 Remove `**kwargs` and `self.config` from `DatabaseBackend.__init__`. Verify with a test that `DatabaseBackend("sqlite://", ecoh=True)` raises `TypeError`, and grep `examples` and `tests` for extra keyword arguments to it.
-- [x] 4.4 Update the "status … Not kept by the archive" wording in `ChatMessage`'s docstring, and update CLAUDE.md's archive policy (a column with a safe default is added in place; nothing else is migrated). Verify the checks pass.
+- [x] 4.4 Update the "status … Not kept by the archive" wording in `ChatMessage`'s docstring, and state in CLAUDE.md that `status` is part of the baseline schema, like `asked_of`. Verify the checks pass.
 
 ## 5. Stale documentation
 

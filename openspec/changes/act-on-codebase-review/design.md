@@ -58,13 +58,11 @@ The failure path that already raises keeps calling `set_exception` unchanged.
 - **The agent's tools:** `AgentConnector._asking` already turns an exception into text for the model. It formats a `PeerError` with its text (the peer's own reply, already in the conversation) and keeps formatting other exceptions by type name only, as today, because those may echo a prompt.
 - **Alternative rejected:** returning a `Reply` from `ask`. It changes the return type for every caller, including the ones that only want the text. Raising follows the existing contract ("an ask waiting on it raises"), just extended to the reply a peer *returned* rather than *raised*.
 
-### 4. Status in the archive, added in place
+### 4. Status in the archive
 
-An `ArchivedMessage.status` column: `String`, not null, default `'answered'`. In `initialize()`, after `create_all`, SQLAlchemy's `inspect(engine)` checks whether the `messages` table lacks a `status` column. If it does, a single `ALTER TABLE messages ADD COLUMN status VARCHAR NOT NULL DEFAULT 'answered'` runs. Old rows therefore load as `answered`.
+An `ArchivedMessage.status` column: `String`, not null, default `'answered'`, written and read back with the message. It is part of the baseline schema, as `asked_of` is: an archive from before it is not migrated.
 
-- **This departs from the `asked_of` precedent on purpose.** Not upgrading would turn every existing `assistant.db` into a crash on the next launch, for a column with an obvious default.
-- **CLAUDE.md** is updated to state the new policy: columns with a safe default are added in place, and nothing else is migrated.
-- **Alternative rejected:** a migration framework (Alembic). It is out of proportion for one column.
+- **First implemented with an in-place `ALTER TABLE`** for archives without the column; removed during apply, because the user asked to treat this as the first version of the schema.
 
 ### 5. The terminal's notices leave the conversation
 
@@ -112,7 +110,6 @@ An `ArchivedMessage.status` column: `String`, not null, default `'answered'`. In
 ## Risks / Trade-offs
 
 - [`ask` callers that relied on receiving error text now get an exception] → Marked **BREAKING** in the proposal. In-repo callers are `AgentConnector` (handled in Decision 3) and the examples. A grep for `.ask(` across `src`, `examples` and `tests` is a task.
-- [The in-place `ALTER TABLE` could fail on a backend that disallows `NOT NULL` without a default] → The default is given in the same statement, which SQLite, PostgreSQL and MySQL accept. A failure is logged, and the error propagates from `initialize()` exactly as a connection failure does today.
 - [The welcome is no longer in the archive, so a reopened chat starts without it] → It is shown again by the banner on every launch, which is the point of a welcome.
 - [Stricter resolution could leave an ask waiting forever if the asked peer replies under a different id] → No path posts a peer's reply under another id. `close()` still fails every waiting ask, so nothing hangs past shutdown.
 - [Credentials remain readable by every listener] → Out of scope (see Non-Goals). The proposal's wording is not changed, and CLAUDE.md gets one sentence saying the scoping is by convention.
@@ -120,5 +117,5 @@ An `ArchivedMessage.status` column: `String`, not null, default `'answered'`. In
 ## Migration Plan
 
 - **`ask()` callers** must catch `PeerError` where they relied on error text. The CLAUDE.md "Three verbs" section and `docs/SPEC.md`'s `HookAsk` section state this.
-- **Archives** gain the `status` column on first open. Rolling back to an older chatinho still reads them, because an extra column is ignored by the older model.
+- **Archives** are not migrated: one written before `status` existed must be recreated.
 - **`DatabaseBackend(..., unknown=…)` callers** remove the unknown keyword.

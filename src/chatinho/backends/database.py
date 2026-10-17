@@ -26,8 +26,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence
 from urllib.parse import quote
 
-from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, create_engine, inspect
-from sqlalchemy import text as sql
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -59,8 +58,7 @@ class ArchivedMessage(Base):
     asked_of  = Column(Integer, nullable=True)
     timestamp = Column(DateTime(timezone=False), nullable=False, index=True)
     #: What an answer said about itself; kept so errors stay errors after a reopen.
-    status    = Column(String, nullable=False, default=ReplyStatus.ANSWERED.value,
-                       server_default=ReplyStatus.ANSWERED.value)
+    status    = Column(String, nullable=False, default=ReplyStatus.ANSWERED.value)
 
 
 class ArchivedAttachment(Base):
@@ -135,26 +133,7 @@ class DatabaseBackend:
         if self._worker is None:
             self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chatinho-db")
         Base.metadata.create_all(self.engine)
-        self._add_status_column()
         self.SessionLocal = sessionmaker(bind=self.engine, future=True)
-
-    def _add_status_column(self) -> None:
-        """Adds ``status`` to an archive written before it was kept.
-
-        ``create_all`` never alters a table that exists, so without this an
-        older archive would fail every read. A column with a safe default is
-        the one kind of change made in place: its old rows are ``answered``,
-        which is what they were taken for when they were written.
-        """
-        assert self.engine is not None
-        columns = {column["name"] for column in inspect(self.engine).get_columns("messages")}
-        if "status" in columns:
-            return
-        logger.info("Adding the status column to the message archive")
-        with self.engine.begin() as connection:
-            connection.execute(sql(
-                "ALTER TABLE messages ADD COLUMN status VARCHAR NOT NULL DEFAULT '%s'"
-                % ReplyStatus.ANSWERED.value))
 
     def shutdown(self) -> None:
         """Disposes of the engine, so its pool does not outlive the chat."""

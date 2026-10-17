@@ -394,24 +394,6 @@ async def test_a_failed_reply_stays_failed_when_reopened(tmp_path):
     await second.close()
 
 
-async def test_an_archive_from_before_the_status_still_opens(tmp_path):
-    """The column is added in place; every message it held is counted as answered."""
-    import sqlite3
-    path = tmp_path / "old.db"
-    with sqlite3.connect(path) as db:
-        db.execute("CREATE TABLE messages (id VARCHAR PRIMARY KEY, text TEXT NOT NULL, frm INTEGER NOT NULL,"
-                   " \"to\" INTEGER, reply_to VARCHAR, asked_of INTEGER, timestamp DATETIME NOT NULL)")
-        db.execute("INSERT INTO messages VALUES"
-                   " ('msg-0a', 'old', 0, NULL, NULL, NULL, '2026-01-01 10:00:00')")
-    store = DatabaseBackend("sqlite:///%s" % path)
-    store.initialize()
-    try:
-        [old] = await store.load()
-        assert (old.text, old.status) == ("old", ReplyStatus.ANSWERED)
-    finally:
-        store.shutdown()
-
-
 def test_an_unknown_keyword_is_refused():
     """It used to be swallowed, so a typo was a setting that silently did nothing."""
     with pytest.raises(TypeError):
