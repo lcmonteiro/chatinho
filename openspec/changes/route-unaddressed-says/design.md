@@ -35,11 +35,15 @@ The first must not be answered and the second must be. So answers are posted wit
 
 Alternative: mark answers with a flag or a status. Rejected, because that is `asked_of` back under another name, and `status` already means something else (`answered` / `asked` / `error`).
 
-### The router is a role, not a peer
+### The router is whoever declares it
 
-A router is registered the way a command is: no id, grants bound to `TOOL`, and `initialize()`/`shutdown()` called with the commands'. A peer gets an id, and giving the router one would shift every connector's number by one for a role that is never addressed. The session holds it in `self.router`. It is given through `ChatSession(router=…)`. `build_chat_session` and `build_mcp_session` pass it through.
+The session tells roles apart by what an object declares, never by which parameter carried it, so the router is the one peer that declares `HookRoute`. `router=` calls `add_connector`, as `backend=` does. `add_connector` refuses a second `HookRoute` with `ValueError`, and the session keeps the router's id in `self._router`. A connector that converses can therefore route too, with its id, its grants, and `listen`/`answer` if it declares them. `initialize()`/`shutdown()` are the peers' lifecycle, so nothing new is needed.
 
-Alternative: one more `add_*` method. Rejected, because a chat has one router, and a constructor parameter says that.
+Cost: `router=` takes an id like `backend=`, so a router given there is numbered after the connectors. It appears in `peers()`, and therefore in `@name` addressing and the `ask_<peer>` tools, but it is only asked if it declares `HookAnswer`.
+
+Alternative: a router outside the room (no id, granted as `TOOL`, like a command). Rejected, because a connector declaring `HookRoute` would then be silently ignored, the kind of declared-but-never-fires failure `require` exists to prevent, and because the useful router, a model, is usually already a connector.
+
+**The default is not a peer.** When no peer declares `HookRoute`, the session builds a `SimpleRouter` and grants it `HookPeers`/`HookContext` bound to `TOOL`, as it does a command's grants, without registering it. Registering it would put a router in every roster and take an id in every chat for a rule nobody chose.
 
 ### Where routing runs
 
@@ -48,7 +52,7 @@ Alternative: one more `add_*` method. Rejected, because a chat has one router, a
 1. `to` given → validated as today, no routing.
 2. `frm == TOOL` → no routing.
 3. `reply_to` names a message whose `to == frm` → an answer: `to = None`, no routing.
-4. Otherwise `to = _checked_route(await self.router.route(msg))`. A result that is not a peer other than the speaker that declares `HookAnswer` becomes None with a warning. An exception is logged and becomes None.
+4. Otherwise `to = _checked_route(await router.route(msg))`, where `router` is the peer at `self._router`, or the default. A result that is not a peer other than the speaker that declares `HookAnswer` becomes None with a warning. An exception is logged and becomes None.
 
 The message is built with `to=None`, routed, and its `to` assigned before it is posted, so the store, listeners and the archive only ever see the routed value. `route` receives the message itself (text, `frm`, `reply_to`, credentials). Anything else it needs it reads through its own grants.
 

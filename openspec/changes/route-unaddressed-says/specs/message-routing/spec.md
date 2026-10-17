@@ -1,6 +1,6 @@
 ## Purpose
 
-Decides who answers a say whose speaker named nobody: a router, rule-based by default and replaceable (by a model, for one), fills in the say's `to`, which is then the one field that says who owes it an answer.
+Decides who answers a say whose speaker named nobody: a router, rule-based by default and replaceable by any peer that declares it (a model, for one), fills in the say's `to`, which is then the one field that says who owes it an answer.
 
 ## ADDED Requirements
 
@@ -23,16 +23,28 @@ A session SHALL consult its router for every say that is said by a peer (not by 
 - **WHEN** the user runs `/help`
 - **THEN** the router is consulted for neither the invocation nor its result
 
-### Requirement: A router is declared, and is not a peer
-A router SHALL be a class declaring `HookRoute`, which demands `route(msg)`, a coroutine returning a peer id or None. It is given as `ChatSession(router=…)`. A router MUST NOT be given an id, be addressed, or hear the conversation, though it may declare grants (`HookPeers`, `HookContext` and the rest) to read the room, and the session MUST grant them. Its `initialize()` and `shutdown()`, when present, MUST be called at `start()` and `close()` as a command's are. A `router=` that does not declare `HookRoute` MUST raise `TypeError`.
+### Requirement: The router is whoever declares HookRoute
+A router SHALL be any class declaring `HookRoute`, which demands `route(msg)`, a coroutine returning a peer id or None. The session SHALL route with the one peer that declares `HookRoute`, whichever way it was registered: among `connectors=`, through `add_connector`, or through `router=`. `router=` MUST register its object as a peer, as `backend=` does, so a router has an id, is granted what it declares, and hears and answers exactly what it declares, like any other peer. Registering a second peer that declares `HookRoute` MUST raise `ValueError`, and a `router=` object that does not declare `HookRoute` MUST raise `TypeError`. When no peer declares `HookRoute`, the session SHALL route with `SimpleRouter`, which is not a peer: it has no id and does not appear in `peers()`.
+
+#### Scenario: A connector that routes
+- **WHEN** a connector given in `connectors=` declares `HookAnswer` and `HookRoute`, and the user says "hi"
+- **THEN** that connector's `route` decides the say's `to`, and `SimpleRouter` is not used
 
 #### Scenario: A router reads the room
-- **WHEN** a router declaring `HookRoute` and `HookPeers` is given
-- **THEN** it can call `peers()` from `route`, and it does not appear in `peers()` itself
+- **WHEN** a router declaring `HookRoute` and `HookPeers` is given as `router=`
+- **THEN** it has an id, appears in `peers()`, and can call `peers()` from `route`
+
+#### Scenario: Two routers
+- **WHEN** two peers that declare `HookRoute` are registered in one session
+- **THEN** registering the second raises `ValueError`
 
 #### Scenario: Not a router
 - **WHEN** `ChatSession(router=obj)` is given an object that does not declare `HookRoute`
 - **THEN** it raises `TypeError`
+
+#### Scenario: The default router is not a peer
+- **WHEN** no peer declares `HookRoute`
+- **THEN** says are routed by `SimpleRouter`, and `peers()` holds no router
 
 ### Requirement: What a router returns is checked
 A router's result SHALL be used only when it is the id of a peer in the chat, other than the speaker, that declares `HookAnswer`. Any other result MUST be ignored with a warning, leaving `to` unset. A router that raises MUST NOT stop the say: the failure MUST be logged, and the say posted with `to` unset.
@@ -50,7 +62,7 @@ A router's result SHALL be used only when it is the id of a peer in the chat, ot
 - **THEN** the say is posted with `to` unset, and the failure is logged
 
 ### Requirement: The default router
-Without `router=`, a session SHALL route with `SimpleRouter`, which needs nothing from the standard library outward. For a say that replies to a message (`reply_to` set), it MUST return that message's author when the author is a peer other than the speaker and the frontend and declares `HookAnswer`, and None otherwise. For any other say, it MUST return the one peer other than the speaker and the frontend that declares `HookAnswer`, and None when there is no such peer or more than one.
+When no peer declares `HookRoute`, a session SHALL route with `SimpleRouter`, which needs nothing from the standard library outward. For a say that replies to a message (`reply_to` set), it MUST return that message's author when the author is a peer other than the speaker and the frontend and declares `HookAnswer`, and None otherwise. For any other say, it MUST return the one peer other than the speaker and the frontend that declares `HookAnswer`, and None when there is no such peer or more than one.
 
 #### Scenario: One peer answers
 - **WHEN** the user says "will it rain?" and the only peer that answers is `weather`
