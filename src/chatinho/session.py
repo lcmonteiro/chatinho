@@ -161,6 +161,10 @@ class ChatSession:
         if at is None:
             at = declared_id(connector)
         if at is None:
+            # Past any id already taken: a peer pinned at one was otherwise
+            # silently replaced by the next one numbered.
+            while self._next_id in self._connectors:
+                self._next_id += 1
             at = self._next_id
             self._next_id += 1
         elif at in self._connectors:
@@ -406,9 +410,14 @@ class ChatSession:
         resolve an ask that is waiting, and everyone who listens hears it.
         """
         self._store.add(msg)
-        waiting  = self._pending.pop(msg.reply_to, None) if msg.reply_to else None
-        resolved = waiting is not None and not waiting.done()
+        # Only the peer the question was asked of resolves its ask: anyone
+        # else's reply is heard like any message, and the ask keeps waiting.
+        question = self._store.find(msg.reply_to) if msg.reply_to else None
+        waiting  = self._pending.get(msg.reply_to) if msg.reply_to else None
+        resolved = (waiting is not None and not waiting.done()
+                    and question is not None and question.asked_of == msg.frm)
         if resolved:
+            del self._pending[msg.reply_to]       # type: ignore[arg-type]
             waiting.set_result(msg.text)          # type: ignore[union-attr]
 
         # You never hear yourself; that is the whole of the loop protection.
@@ -490,7 +499,7 @@ class ChatSession:
         except Exception as exc:
             # The asker is owed one reply, and a failure is one. An ask that is
             # waiting raises; a say that was asked of this peer gets an error
-            # reply, so whoever waits on it hears. _drain logs it either way.
+            # reply, so whoever waits on it hears. _delivery logs it either way.
             waiting = self._pending.pop(msg.id, None)
             if waiting is not None and not waiting.done():
                 waiting.set_exception(exc)

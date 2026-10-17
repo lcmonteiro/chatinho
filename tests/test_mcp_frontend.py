@@ -4,7 +4,8 @@ import asyncio
 
 import pytest
 
-from chatinho import LOCAL, Attachment, HookAnswer, HookExecute, Reply, connector, declares, require, tool
+from chatinho import LOCAL, Attachment, HookAnswer, HookExecute, HookListen, HookSay, Reply
+from chatinho import connector, declares, require, tool
 from chatinho.frontends.mcp import McpFrontend
 from chatinho.helpers.mcp import CREDENTIALS_KEY, decode
 from fakes.mcp import Agent, Files, Weather, ask, call, client, remote
@@ -107,6 +108,25 @@ async def test_two_clients_at_once():
         first, second = await asyncio.gather(ask(one, "echo", "from lab"), ask(two, "echo", "from home"))
     assert (first["text"], second["text"]) == ("echo: from lab", "echo: from home")
     assert set(session._peers()) == before
+    await session.close()
+
+
+@connector("bystander")
+@require(HookListen)
+@require(HookSay)
+class _Bystander:
+    """Replies to every question it overhears, before the peer asked can."""
+
+    async def listen(self, msg) -> None:
+        if msg.to is not None and msg.reply_to is None:
+            await self.say("not my question", reply_to=msg.id)
+
+
+async def test_another_peers_reply_does_not_end_the_call():
+    session, front = await remote(Weather("sunny", delay=0.2), _Bystander())
+    async with client(front) as c:
+        got = await ask(c, "weather", "will it rain?")
+    assert got["text"] == "sunny"
     await session.close()
 
 

@@ -16,7 +16,9 @@ Textual app. That ratio is the point of the layout below, not an accident of it.
 ## Everyone is a peer
 
 A chat is peers exchanging messages. Each has an integer id, and `LOCAL` — zero — is the user.
-Connectors are numbered from one.
+Connectors are numbered from one, past any id already taken: a peer pinned with
+`@connector(name, id=1)` used to be silently replaced by the next one numbered, and kept believing
+it was peer 1. Two peers pinned to one id is still an error.
 
 **A command is not a peer.** It has no id, nothing is addressed to it, and it hears
 nothing. It runs when someone runs it, and it answers whoever did. Treating commands as peers meant
@@ -107,7 +109,11 @@ by the message it answers. A broadcast is owed to nobody.
 
 **Answering late is not a fourth thing either.** A peer that cannot answer inline — a terminal
 waiting on a person, a connector waiting on a server — returns `None` from `answer` and says the
-reply when it has it, with `reply_to` set. The session matches it and resolves the ask. All three
+reply when it has it, with `reply_to` set. The session matches it and resolves the ask — **only
+when it comes from the peer the question was asked of** (`asked_of`). Anyone else's reply to it is
+heard like any message and leaves the ask waiting; before that rule, a listener replying to a
+question it overheard answered somebody else's `ask`. `McpFrontend` holds its open questions to
+the same rule. All three
 presentations in this repository work exactly that way, which is why the grant that used to exist
 for it was deleted: it was a second door onto the same room.
 

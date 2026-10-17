@@ -11,11 +11,11 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 
 ## 2. Asks are resolved by the asked peer, and ids are unique
 
-- [ ] 2.1 Add the two regression tests to `tests/test_chat_session.py`. A bystander that replies to a question first must not resolve the `ask`. A peer declaring `id=1` followed by an unnumbered peer must get ids 1 and 2. Verify that both **fail** on the current code.
-- [ ] 2.2 In `ChatSession._post`, resolve a waiting ask only when `msg.frm` is the question's `asked_of`, keeping it in `_pending` otherwise (design Decision 1). Verify the first test of 2.1 passes, and that `ask(LOCAL)` answered by the user still resolves (existing tests).
-- [ ] 2.3 In `add_connector`, skip `_next_id` past taken ids (design Decision 2). Verify the second test of 2.1 passes, and that a duplicate pinned id still raises `ValueError` (existing test).
-- [ ] 2.4 In `McpFrontend`, remember the addressed peer id on `_Message`, and have `listen` ignore replies from any other peer. Verify with a new test in `tests/test_mcp_frontend.py` (`Another peer replies first`) that fails before the change and passes after.
-- [ ] 2.5 Add both rules to CLAUDE.md ("Everyone is a peer" and "Three verbs"), and fix the stale `_drain` comment in `session.py`. Verify the checks pass.
+- [x] 2.1 Add the two regression tests to `tests/test_chat_session.py`. A bystander that replies to a question first must not resolve the `ask`. A peer declaring `id=1` followed by an unnumbered peer must get ids 1 and 2. Verify that both **fail** on the current code.
+- [x] 2.2 In `ChatSession._post`, resolve a waiting ask only when `msg.frm` is the question's `asked_of`, keeping it in `_pending` otherwise (design Decision 1). Verify the first test of 2.1 passes, and that `ask(LOCAL)` answered by the user still resolves (existing tests).
+- [x] 2.3 In `add_connector`, skip `_next_id` past taken ids (design Decision 2). Verify the second test of 2.1 passes, and that a duplicate pinned id still raises `ValueError` (existing test).
+- [x] 2.4 In `McpFrontend`, remember the addressed peer id on `_Message`, and have `listen` ignore replies from any other peer. Verify with a new test in `tests/test_mcp_frontend.py` (`Another peer replies first`) that fails before the change and passes after.
+- [x] 2.5 Add both rules to CLAUDE.md ("Everyone is a peer" and "Three verbs"), and fix the stale `_drain` comment in `session.py`. Verify the checks pass.
 
 ## 3. `ask` raises `PeerError` on an error answer
 
