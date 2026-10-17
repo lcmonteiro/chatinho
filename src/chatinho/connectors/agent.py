@@ -33,14 +33,11 @@ from ..hooks import Ask, Commands, Context, Invoke, Peers, Say
 from ..hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke, HookListen, HookPeers, HookSay
 from ..hooks import connector, declares, name_of, require
 from ..keys import KeyUnavailable, read_async
+from ..helpers.memory import MEMORY, earlier, speaker
 from ..message import LOCAL, Attachment, ChatMessage, PeerError, Reply, ReplyStatus
-from ..query import SELF, Query
+from ..query import Query
 
 logger = logging.getLogger(__name__)
-
-#: What the agent remembers by default, as for the OpenAI connector: what passed
-#: between it and anyone, without the replies that failed, the last twenty.
-MEMORY = Query(peer=SELF, errors=False).last(20)
 
 #: What ``create_agent`` takes besides the model and the tools.
 OPTIONS : FrozenSet[str] = frozenset(inspect.signature(create_agent).parameters) - {"model", "tools"}
@@ -361,16 +358,12 @@ class AgentConnector:
         if self.memory is not None:
             me     = getattr(self, "peer_id", None)
             roster = self.peers()
-            limit  = self.memory.limit
-            query  = self.memory if limit is None else self.memory.last(limit + 1)
-            earlier = [m for m in self.context(query) if m.id != msg.id]
-            if limit is not None:
-                earlier = earlier[-limit:] if limit > 0 else []
+            remembered = earlier(self.context, self.memory, msg)
             # What it asked through its tools, and the answers to that, are not
             # the conversation: they were the work of answering it.
-            asked = {m.id for m in earlier if m.frm == me and m.to is not None and m.reply_to is None}
-            parents = self._parents(earlier, me)
-            for m in earlier:
+            asked = {m.id for m in remembered if m.frm == me and m.to is not None and m.reply_to is None}
+            parents = self._parents(remembered, me)
+            for m in remembered:
                 if m.id in asked or m.reply_to in asked:
                     continue
                 if m.id in parents:
@@ -396,12 +389,8 @@ class AgentConnector:
 
 
 def _turn(m: ChatMessage, me: Optional[int], roster: Dict[int, Any]) -> BaseMessage:
-    if m.frm == me:
-        return AIMessage(content=m.text)
-    if m.frm == LOCAL:
-        return HumanMessage(content=m.text)
-    who = name_of(roster[m.frm]) if m.frm in roster else str(m.frm)
-    return HumanMessage(content="%s: %s" % (who, m.text))
+    role, content = speaker(m, me, roster)
+    return AIMessage(content=content) if role == "assistant" else HumanMessage(content=content)
 
 
 def _text(state: AgentState) -> str:

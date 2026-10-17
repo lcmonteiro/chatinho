@@ -9,17 +9,14 @@ from openai import AsyncOpenAI
 
 from ..hooks import HookAnswer, HookContext, HookPeers
 from ..hooks import Context, Peers
-from ..hooks import connector, name_of, require
+from ..hooks import connector, require
 from ..endpoint import Endpoint
 from ..keys import KeyUnavailable, read_async
-from ..message import LOCAL, ChatMessage, Reply, ReplyStatus
-from ..query import SELF, Query
+from ..helpers.memory import MEMORY, earlier, speaker
+from ..message import ChatMessage, Reply, ReplyStatus
+from ..query import Query
 
 logger = logging.getLogger(__name__)
-
-#: What the model remembers by default: what passed between it and anyone,
-#: without the replies that failed, the last twenty.
-MEMORY = Query(peer=SELF, errors=False).last(20)
 
 
 @connector("openai")
@@ -162,23 +159,8 @@ class OpenAIConnector:
         if self.memory is not None:
             roster = self.peers()
             me     = getattr(self, "peer_id", None)
-            limit  = self.memory.limit
-            # The question is in the conversation too; ask for one more so it
-            # does not eat into the limit, then leave it out.
-            query  = self.memory if limit is None else self.memory.last(limit + 1)
-            earlier = [m for m in self.context(query) if m.id != msg.id]
-            if limit is not None:
-                earlier = earlier[-limit:] if limit > 0 else []
-            for m in earlier:
-                messages.append(self._turn(m, me, roster))
+            for m in earlier(self.context, self.memory, msg):
+                role, content = speaker(m, me, roster)
+                messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": msg.text})
         return messages
-
-    @staticmethod
-    def _turn(m: ChatMessage, me: Optional[int], roster: Dict[int, Any]) -> Dict[str, str]:
-        if m.frm == me:
-            return {"role": "assistant", "content": m.text}
-        if m.frm == LOCAL:
-            return {"role": "user", "content": m.text}
-        who = name_of(roster[m.frm]) if m.frm in roster else str(m.frm)
-        return {"role": "user", "content": "%s: %s" % (who, m.text)}

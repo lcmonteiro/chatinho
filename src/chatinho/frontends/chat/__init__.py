@@ -29,7 +29,6 @@ and the core it talks to, which imports no UI framework, lives above it in
 
 import asyncio
 import logging
-import threading
 from typing import Any, Dict, List, Optional, Tuple
 
 from textual.app import App, ComposeResult
@@ -94,7 +93,7 @@ def _swallowed_keys() -> Dict[str, str]:
 _SWALLOWED : Dict[str, str] = _swallowed_keys()
 
 
-def _validate_key(key: str) -> str:
+def _validate_key(key: str, what: str = "quit_key") -> str:
     """Returns *key* if Textual could ever receive it, and raises if not.
 
     ``Binding`` itself only rejects the empty string — ``Binding("not a key",
@@ -106,6 +105,7 @@ def _validate_key(key: str) -> str:
         key: A key or key-combination, as Textual writes them: ``"ctrl+q"``,
             ``"f5"``, ``"escape"``, ``"q"``. Comma-separated alternatives are
             allowed, because ``Binding`` expands them.
+        what: The parameter it was given as, named in the error.
 
     Returns:
         str: The key, unchanged.
@@ -119,14 +119,14 @@ def _validate_key(key: str) -> str:
         part = part.strip()
         if not part:
             raise ValueError(
-                "quit_key must be a Textual key, not %r: a part of it is empty" % key
+                "%s must be a Textual key, not %r: a part of it is empty" % (what, key)
             )
         if part in _SWALLOWED:
             raise ValueError(
-                "quit_key %r cannot work: a terminal sends the same byte for %s "
+                "%s %r cannot work: a terminal sends the same byte for %s "
                 "as for %s, so Textual reports %r and the binding never fires. "
                 "Try 'ctrl+g' or 'f10'."
-                % (key, part, _SWALLOWED[part], _SWALLOWED[part])
+                % (what, key, part, _SWALLOWED[part], _SWALLOWED[part])
             )
         if part in _KEY_NAMES:
             continue
@@ -134,13 +134,13 @@ def _validate_key(key: str) -> str:
         unknown = [m for m in modifiers if m not in _MODIFIERS]
         if unknown:
             raise ValueError(
-                "quit_key %r has an unknown modifier %r; Textual knows %s"
-                % (key, unknown[0], ", ".join(sorted(_MODIFIERS)))
+                "%s %r has an unknown modifier %r; Textual knows %s"
+                % (what, key, unknown[0], ", ".join(sorted(_MODIFIERS)))
             )
         if not base or (len(base) > 1 and base not in _KEY_NAMES):
             raise ValueError(
-                "quit_key %r is not a Textual key; try one of 'ctrl+q', 'f5', "
-                "'escape', or a single character" % key
+                "%s %r is not a Textual key; try one of 'ctrl+q', 'f5', "
+                "'escape', or a single character" % (what, key)
             )
     return key
 
@@ -210,7 +210,7 @@ class ChatFrontend(App):
         self._newline_escape : Optional[str] = validate_escape(newline_escape)
         self._rebind_quit(_validate_key(quit_key))
         self._bindings.bind(
-            _validate_key(copy_key), "copy_selected",
+            _validate_key(copy_key, "copy_key"), "copy_selected",
             description="Copy the selected message", show=False, priority=True,
         )
         # Held, not just rendered: the log reads the bubble's maximum width and
@@ -224,8 +224,8 @@ class ChatFrontend(App):
         self.welcome_message = welcome_message
         self._input_placeholder = "Type a message or /command"
         self.max_displayed : int = max_displayed
-        # Thread id of the app's main loop (set in on_mount)
-        self._app_thread_id : Optional[int] = None
+        # Whether on_mount has run: before it there is no widget tree to paint.
+        self._mounted : bool = False
 
     def initialize(self) -> None:
         """
@@ -343,7 +343,7 @@ class ChatFrontend(App):
         Whoever starts the session — ``run()``, or a test that mounts this app
         directly — starts it before anything can be delivered here.
         """
-        self._app_thread_id = threading.get_ident()
+        self._mounted = True
         self.query_one("#%s" % INPUT_ID, CommandInput).focus()
         if self.context():
             self._chat_log.sync()
@@ -494,7 +494,7 @@ class ChatFrontend(App):
         Before ``on_mount`` there is no widget tree yet: the messages stay in
         the session and are painted when the app mounts.
         """
-        if self._app_thread_id is None:
+        if not self._mounted:
             return
         self.call_later(self._sync_log)
 

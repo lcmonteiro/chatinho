@@ -464,7 +464,32 @@ async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
         citacoes   = [str(w.visual) for w in log.query(".message-quote")]
         assert "@chat" in cabecalhos[0] and "↳ replying" not in cabecalhos[0]
         assert "@tool" in cabecalhos[1] and "↳ replying" in cabecalhos[1]
-        assert citacoes == ["↳ %s: /eco ola…" % app.messages[0].id.short]
+        assert citacoes == ["↳ %s: /eco ola" % app.messages[0].id.short], "short: no ellipsis"
+
+
+async def test_a_long_original_is_quoted_cut_with_an_ellipsis():
+    app = await chat_frontend()
+    async with app.run_test() as pilot:
+        first = await app.say("palavra " * 20)
+        await app.say("resposta", reply_to=first)
+        await pilot.pause()
+        [quote] = [str(w.visual) for w in app._chat_log.query(".message-quote")]
+        assert quote == "↳ %s: %s" % (first.short, preview_of("palavra " * 20))
+        assert quote.endswith("…")
+
+
+async def test_a_bubble_is_measured_in_cells_not_characters():
+    """A CJK character takes two cells; counting characters made its bubble too narrow."""
+    app = await chat_frontend()
+    async with app.run_test():
+        log = app._chat_log
+        assert log._bubble_width("你好" * 10) == log._bubble_width("ab" * 10) + 20
+
+
+def test_a_bad_copy_key_is_named_as_the_copy_key():
+    with pytest.raises(ValueError, match="copy_key") as refused:
+        ChatFrontend(copy_key="ctrl+h")
+    assert "quit_key" not in str(refused.value)
 
 
 async def test_the_log_renders_what_the_history_holds():

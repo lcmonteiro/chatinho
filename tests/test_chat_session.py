@@ -778,3 +778,9 @@ async def test_only_the_asked_peer_resolves_an_ask():
     await session.close()
     # The bystander's reply was not lost, only not taken for the answer.
     assert "not my question" in [m.text for m in session._context()]
+
+
+def test_help_declares_only_what_it_uses():
+    """It declared HookSay and never said anything: the answer is posted for it."""
+    from chatinho import HelpCommand, HookCommands, HookPeers, hooks_of
+    assert hooks_of(HelpCommand()) == {HookExecute, HookPeers, HookCommands}

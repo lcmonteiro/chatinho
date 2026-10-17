@@ -22,11 +22,12 @@ from textual.message import Message
 from textual.widgets import OptionList, TextArea
 from textual.widgets.option_list import Option
 
+from ...session import COMMAND_PREFIX
+
 
 
 logger = logging.getLogger(__name__)
 
-COMMAND_PREFIX : str = "/"
 
 SUGGESTIONS_ID : str = "command-suggestions"
 

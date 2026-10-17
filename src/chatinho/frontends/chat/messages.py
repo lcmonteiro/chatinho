@@ -12,6 +12,7 @@ import time
 from typing import Awaitable, Callable, Dict, List, Optional
 
 from markdown_it import MarkdownIt
+from rich.cells import cell_len
 from textual import events
 from textual.app import ComposeResult
 from textual.containers import ScrollableContainer, Vertical
@@ -343,7 +344,12 @@ class ChatLog(TouchScrollableContainer):
         # lose their reading position)
         was_at_bottom = self.scroll_offset.y >= (self.max_scroll_y - 1)
 
-        desired_ids = [m.id for m in self._read_context(limit=self.max_displayed)]
+        # One read of the conversation per sync: each read is a copy, and a
+        # lookup per new message (and per quote) made a sync quadratic.
+        everything  = self._read_context()
+        by_id       = {m.id: m for m in everything}
+        window      = everything[-self.max_displayed:] if self.max_displayed > 0 else []
+        desired_ids = [m.id for m in window]
         current = set(self._rendered_msg_ids)
         desired = set(desired_ids)
 
@@ -356,10 +362,8 @@ class ChatLog(TouchScrollableContainer):
 
         # Mount the new ones, in the correct order
         for msg_id in desired_ids:
-            if msg_id not in current:
-                msg = self._find(msg_id)
-                if msg is not None:
-                    self.mount(self._render_message(msg))
+            if msg_id not in current and msg_id in by_id:
+                self.mount(self._render_message(by_id[msg_id], by_id))
 
         self._rendered_msg_ids = desired_ids
         if was_at_bottom:
@@ -416,8 +420,14 @@ class ChatLog(TouchScrollableContainer):
         who  = here.get(frm)
         return name_of(who) if who is not None else str(frm)
 
-    def _render_message(self, msg: ChatMessage) -> Widget:
-        """Render a message as a clickable container with header and body."""
+    def _render_message(
+        self, msg: ChatMessage, by_id: Optional[Dict[MessageID, ChatMessage]] = None,
+    ) -> Widget:
+        """Render a message as a clickable container with header and body.
+
+        *by_id* is the conversation as :meth:`sync` read it, where the message
+        this one replies to is looked up; without it, the conversation is read.
+        """
         prefix = "%s @%s · %s" % (
             msg.timestamp.strftime("%H:%M"), self._name_of_peer(msg.frm), msg.id.short,
         )
@@ -430,10 +440,9 @@ class ChatLog(TouchScrollableContainer):
         # Quote of the original message when this is a reply
         quote = None
         if msg.reply_to is not None:
-            original = self._find(msg.reply_to)
+            original = by_id.get(msg.reply_to) if by_id is not None else self._find(msg.reply_to)
             if original is not None:
-                preview = " ".join(original.text.split())[:60]
-                quote = f"↳ {original.id.short}: {preview}…"
+                quote = "↳ %s: %s" % (original.id.short, preview_of(original.text))
                 parts.append(Static(quote, classes="message-quote"))
 
         # Links are ours to open: a relative one names an attachment of this
@@ -498,7 +507,8 @@ class ChatLog(TouchScrollableContainer):
             int: The width to set, borders and padding included.
         """
         lines  = text.splitlines() + ([quote] if quote else [])
-        widest = max([len(line) for line in lines] + [0]) + _BUBBLE_CHROME
+        # Cells, not characters: a CJK character or an emoji takes two.
+        widest = max([cell_len(line) for line in lines] + [0]) + _BUBBLE_CHROME
         return min(max(widest, floor + _HEADER_SLACK), self.style.bubble_max_width)
 
     def copy_message(self, msg_id: MessageID) -> None:

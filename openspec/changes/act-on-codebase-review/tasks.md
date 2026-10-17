@@ -44,13 +44,13 @@ Each group lands its own tests and documentation. "The checks" means `ruff check
 
 ## 6. Simplification (no behaviour change)
 
-- [ ] 6.1 Add `src/chatinho/connectors/memory.py` with `earlier()` and `speaker()` (design Decision 7), and use it from `OpenAIConnector._messages_for` and `AgentConnector._history`, removing both `_turn` functions and one `MEMORY` (the agent imports it). Verify that `tests/test_openai_connector.py` and `tests/test_agent_connector.py` pass unchanged, and that `test_architecture.py` still finds no third-party imports in the core.
-- [ ] 6.2 Drop `HookSay` and `say` from `HelpCommand`. Verify `/help` tests pass, and that `hooks_of(HelpCommand)` no longer contains `HookSay`.
-- [ ] 6.3 Make `composer.py` import `COMMAND_PREFIX` from `chatinho.session`, and replace `ChatFrontend._app_thread_id`/`threading` with a `_mounted` bool. Verify the threading test (`test_a_message_from_another_thread_reaches_the_log`) and the checks pass.
-- [ ] 6.4 Use `preview_of` for the reply quote. Verify with a test that a short original is quoted without "…" and a long one with it.
-- [ ] 6.5 Read `context()` once per `ChatLog.sync()` into an id → message dict, shared with `_render_message`. Verify the rendering tests pass.
-- [ ] 6.6 Measure bubble widths with `rich.cells.cell_len`. Verify with a test that `ChatLog._bubble_width("你好")` is two cells wider than `_bubble_width("ab")`.
-- [ ] 6.7 Name the parameter in `_validate_key` errors. Verify with a test that `ChatFrontend(copy_key="ctrl+h")` raises a message containing `copy_key` and not `quit_key`.
+- [x] 6.1 Add `src/chatinho/connectors/memory.py` with `earlier()` and `speaker()` (design Decision 7), and use it from `OpenAIConnector._messages_for` and `AgentConnector._history`, removing both `_turn` functions and one `MEMORY` (the agent imports it). Verify that `tests/test_openai_connector.py` and `tests/test_agent_connector.py` pass unchanged, and that `test_architecture.py` still finds no third-party imports in the core.
+- [x] 6.2 Drop `HookSay` and `say` from `HelpCommand`. Verify `/help` tests pass, and that `hooks_of(HelpCommand)` no longer contains `HookSay`.
+- [x] 6.3 Make `composer.py` import `COMMAND_PREFIX` from `chatinho.session`, and replace `ChatFrontend._app_thread_id`/`threading` with a `_mounted` bool. Verify the threading test (`test_a_message_from_another_thread_reaches_the_log`) and the checks pass.
+- [x] 6.4 Use `preview_of` for the reply quote. Verify with a test that a short original is quoted without "…" and a long one with it.
+- [x] 6.5 Read `context()` once per `ChatLog.sync()` into an id → message dict, shared with `_render_message`. Verify the rendering tests pass.
+- [x] 6.6 Measure bubble widths with `rich.cells.cell_len`. Verify with a test that `ChatLog._bubble_width("你好")` is two cells wider than `_bubble_width("ab")`.
+- [x] 6.7 Name the parameter in `_validate_key` errors. Verify with a test that `ChatFrontend(copy_key="ctrl+h")` raises a message containing `copy_key` and not `quit_key`.
 
 ## 7. Each builder needs only its own extra
 
