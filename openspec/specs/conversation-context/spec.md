@@ -8,7 +8,7 @@ Lets a peer ask for the part of the conversation it needs (a thread, what passed
 
 ### Requirement: A Query says which messages
 chatinho SHALL provide `Query`, an immutable value with these fields, all optional and combined with AND:
-- `peer`: the messages from that peer, to it, asked of it, or replying to one of its messages;
+- `peer`: the messages from that peer, addressed to it, or replying to one of its messages;
 - `thread`: the reply chain of that message (the message, every message it replies to up to the root, and every reply to a message in that chain);
 - `errors`: when False, replies whose status is `error` are left out;
 - `since`: messages stamped at or after that moment;
@@ -25,8 +25,12 @@ chatinho SHALL provide `Query`, an immutable value with these fields, all option
 - **THEN** `context(Query(thread=C.id))` returns A, B and C, and not D
 
 #### Scenario: What a peer was asked is its own
-- **WHEN** the user says "hi" in a room whose only answering peer is `bot`, so the say is asked of `bot` without being addressed to it
+- **WHEN** the user says "hi" in a room whose only answering peer is `bot`, so the router addresses the say to `bot`
 - **THEN** `context(Query(peer=bot))` includes the say
+
+#### Scenario: An answer to a peer is its own
+- **WHEN** `bot` asks `sol`, and `sol` answers with `to` unset
+- **THEN** `context(Query(peer=bot))` includes the answer, because it replies to `bot`'s question
 
 ### Requirement: SELF is whoever asks
 `SELF` SHALL be a peer value that `context()` resolves to the id of the peer asking, so a peer can write a query before it knows its own id. Applying a query that names `SELF` with nobody asking MUST raise `ValueError`, rather than silently match nothing.
@@ -53,13 +57,6 @@ The `context` grant SHALL take one optional argument, a `Query`, and return the 
 #### Scenario: A keyword is refused
 - **WHEN** a peer calls `context(limit=5)`
 - **THEN** it raises `TypeError`
-
-### Requirement: The archive keeps who a message was asked of
-The database backend SHALL keep each message's `asked_of` and give it back when it loads the message.
-
-#### Scenario: Asked, closed and reopened
-- **WHEN** the user says "hi" asked of `bot`, and the chat is closed and reopened on the same database
-- **THEN** the reloaded say has `asked_of` set to `bot`, and `context(Query(peer=bot))` includes it
 
 ### Requirement: forget drops from the conversation too
 `ChatSession.forget(before)` SHALL drop the messages stamped before `before` from the session's conversation, and every message when `before` is None, whether or not a backend declares `HookForget`; afterwards `context()` MUST NOT return them. It SHALL also ask the backend that declares `HookForget` to drop them from the archive, and MUST return the number the backend reports, or 0 when there is no such backend.
