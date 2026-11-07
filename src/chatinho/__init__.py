@@ -42,17 +42,17 @@ Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both i
 
 Eleven names need an extra, and say so if it is missing:
 
-    build_chat_session  chatinho[tui,mcp]    textual, fastmcp
-    build_mcp_session   chatinho[tui,mcp]    textual, fastmcp
-    ChatFrontend        chatinho[tui]        textual
-    ChatStyle           chatinho[tui]        textual
-    McpFrontend         chatinho[mcp]        fastmcp
-    McpConnector        chatinho[mcp]        fastmcp
-    OpenAIConnector     chatinho[openai]     openai
-    AgentConnector      chatinho[langchain]  langchain
-    WorkspaceBackend    chatinho[deepagents] deepagents
-    DeepAgentConnector  chatinho[deepagents] deepagents
-    DatabaseBackend     chatinho[sql]        sqlalchemy
+    build_chat_session  chatinho[tui,mcp]     textual, fastmcp
+    build_mcp_session   chatinho[tui,mcp]     textual, fastmcp
+    ChatFrontend        chatinho[tui]         textual
+    ChatStyle           chatinho[tui]         textual
+    McpFrontend         chatinho[mcp]         fastmcp
+    McpConnector        chatinho[mcp]         fastmcp
+    OpenAIConnector     chatinho[openai]      openai
+    AgentConnector      chatinho[langchain]   langchain
+    DeepAgentConnector  chatinho[deepagents]  deepagents
+    DatabaseBackend     chatinho[sql]         sqlalchemy
+    WorkspaceBackend    chatinho[deepagents]  deepagents
 
 Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand``,
 the workspaces — imports nothing but the standard library.
@@ -97,17 +97,17 @@ __version__ = "0.1.0"
 _TUI = ("tui", "textual")
 _MCP = ("mcp", "fastmcp")
 _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
-    "build_chat_session" : (".builder",              (_TUI, _MCP)),
-    "build_mcp_session"  : (".builder",              (_TUI, _MCP)),
-    "ChatFrontend"       : (".frontends.chat",       (_TUI,)),
-    "ChatStyle"          : (".frontends.chat.style", (_TUI,)),
-    "McpFrontend"        : (".frontends.mcp",        (_MCP,)),
-    "McpConnector"       : (".connectors.mcp",       (_MCP,)),
-    "OpenAIConnector"    : (".connectors.openai",    (("openai", "openai"),)),
-    "AgentConnector"     : (".connectors.agent",     (("langchain", "langchain"),)),
-    "WorkspaceBackend"   : (".workspaces.deepagents", (("deepagents", "deepagents"),)),
+    "build_chat_session" : (".builder",               (_TUI, _MCP)),
+    "build_mcp_session"  : (".builder",               (_TUI, _MCP)),
+    "ChatFrontend"       : (".frontends.chat",        (_TUI,)),
+    "ChatStyle"          : (".frontends.chat.style",  (_TUI,)),
+    "McpFrontend"        : (".frontends.mcp",         (_MCP,)),
+    "McpConnector"       : (".connectors.mcp",        (_MCP,)),
+    "OpenAIConnector"    : (".connectors.openai",     (("openai", "openai"),)),
+    "AgentConnector"     : (".connectors.agent",      (("langchain", "langchain"),)),
     "DeepAgentConnector" : (".connectors.deep",       (("deepagents", "deepagents"),)),
-    "DatabaseBackend"    : (".backends",             (("sql", "sqlalchemy"),)),
+    "DatabaseBackend"    : (".backends",              (("sql", "sqlalchemy"),)),
+    "WorkspaceBackend"   : (".workspaces.deepagents", (("deepagents", "deepagents"),)),
 }
 
 
