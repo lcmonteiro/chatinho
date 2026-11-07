@@ -28,6 +28,7 @@ from inspect import isawaitable
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from .hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, HookListen, HookLoad, HookRoute
+from .hooks import HookProvision, NoWorkspaceProvider
 from .hooks import declared_id, declares, hooks_of, name_of
 from .message import LOCAL, TOOL
 from .message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
@@ -54,7 +55,7 @@ class ChatSession:
     Routes messages between peers, and keeps the history.
 
     The conversation is reached only by declaring a hook. The five most used
-    are below; ``docs/SPEC.md`` has all fifteen:
+    are below; ``docs/SPEC.md`` has all seventeen:
 
     - ``HookSay``      grants  ``say(text, *, to=None, reply_to=None, attachments=())``.
     - ``HookAsk``      grants  ``ask(to, text, *, attachments=())``, which awaits the answer.
@@ -62,11 +63,12 @@ class ChatSession:
     - ``HookListen``   demands ``listen(msg)`` — every message that crosses.
     - ``HookAnswer``   demands ``answer(msg)`` — someone asked you.
 
-    Four roles arrive as four parameters, and every one of them is a plain
-    class the session tells apart by what it declared, never by which parameter
-    carried it: ``frontend`` speaks for the person, ``connectors`` are who they
-    are talking to, ``commands`` only run, ``backend`` listens and recalls, and
-    ``router`` decides who answers a say that names nobody.
+    The roles arrive as parameters, and every one of them is a plain class the
+    session tells apart by what it declared, never by which parameter carried
+    it: ``frontend`` speaks for the person, ``connectors`` are who they are
+    talking to, ``commands`` only run, ``backend`` listens and recalls,
+    ``router`` decides who answers a say that names nobody, and ``workspaces``
+    keeps each peer's own place to work.
     """
 
     #: How long :meth:`close` waits for the deliveries in flight, in seconds.
@@ -79,6 +81,7 @@ class ChatSession:
         frontend   : Optional[Any] = None,
         backend    : Optional[Any] = None,
         router     : Optional[Any] = None,
+        workspaces : Optional[Any] = None,
         recall     : int = 200,
         max_depth  : int = 8,
     ) -> None:
@@ -88,6 +91,8 @@ class ChatSession:
         self.backend  : Optional[Any] = backend
         #: Who decides who answers a say that names nobody; without one, nobody does.
         self.router   : Optional[Any] = router
+        #: Who keeps each peer's workspace; without one, ``workspace()`` raises.
+        self.workspaces : Optional[Any] = workspaces
         #: How much of the archive ``start()`` pulls back into the session.
         self.recall   : int = recall
         #: How deeply asks may nest; a deeper question is answered with an error.
@@ -146,6 +151,12 @@ class ChatSession:
             # Not a peer, as a command is not: no id, nothing addressed to it,
             # in nobody's roster. It reads the room through what it declared.
             self._grant(router, TOOL)
+        if workspaces is not None:
+            if not declares(workspaces, HookProvision):
+                raise TypeError("%r does not declare %s: a workspace provider must @require(HookProvision)"
+                                % (workspaces, HookProvision))
+            # A role like the router's: no id, in no roster, and it hears nothing.
+            self._grant(workspaces, TOOL)
 
     # === Peers ===============================================================
 
@@ -171,6 +182,7 @@ class ChatSession:
         Raises:
             ValueError: If the id is already taken.
         """
+        self._refuse_a_provider(connector)
         if at is None:
             at = declared_id(connector)
         if at is None:
@@ -185,6 +197,19 @@ class ChatSession:
         self._connectors[at] = connector
         self._grant(connector, at)
         return at
+
+    def _refuse_a_provider(self, obj: Any) -> None:
+        """
+        Refuses a workspace provider arriving as a peer or a command.
+
+        A provider is a role, given once as ``workspaces=``: as a peer it would
+        get an id and a place in the roster for something nothing addresses,
+        and a second one would leave the session two answers to whose
+        workspace is whose.
+        """
+        if declares(obj, HookProvision):
+            raise ValueError("%r declares %s: a workspace provider is not a peer, and a session has one, "
+                             "given as ChatSession(workspaces=...)" % (obj, HookProvision))
 
     def _free_id(self) -> int:
         """
@@ -219,6 +244,7 @@ class ChatSession:
                 cannot execute is not a command, and registering it silently
                 would only surface as a missing ``/name`` much later.
         """
+        self._refuse_a_provider(cmd)
         if not declares(cmd, HookExecute):
             raise TypeError(
                 "%r does not declare %s: a command must @require(HookExecute)"
@@ -287,9 +313,9 @@ class ChatSession:
         """The first peer that declares *hook*, or None: the backend, for the hooks only it has."""
         return next((who for who in self._connectors.values() if declares(who, hook)), None)
 
-    def _routers(self) -> List[Any]:
-        """The router, as a list, for the lifecycle loops that run over peers and commands."""
-        return [self.router] if self.router is not None else []
+    def _roles(self) -> List[Any]:
+        """The router and the workspace provider, for the lifecycle loops that run over peers and commands."""
+        return [who for who in (self.router, self.workspaces) if who is not None]
 
     def _commands(self) -> Dict[str, Any]:
         """Every command registered, by name. Granted by ``HookCommands``."""
@@ -310,6 +336,7 @@ class ChatSession:
             peers   = lambda: self._peers,
             commands= lambda: self._commands,
             locate  = lambda: self.locate,
+            workspace = lambda: self._workspace_for(who, at),
         )
         for hook in hooks_of(who):
             for granted in hook.grants:
@@ -318,6 +345,30 @@ class ChatSession:
                     logger.warning("Hook %s asks for unknown grant %r", hook, granted)
                     continue
                 setattr(who, granted, build())
+
+    def _workspace_for(self, who: Any, at: int):
+        """
+        Builds the ``workspace`` granted to *who*, bound to its name.
+
+        The owner of a workspace is a peer's *name*, not its id: ids are
+        numbered per session, and the work must outlive one. A command owns
+        none, so it must name whose workspace it reads.
+        """
+        async def workspace(name: Optional[str] = None) -> Any:
+            provider = self.workspaces
+            if provider is None:
+                raise NoWorkspaceProvider(
+                    "This session has no workspace provider: give it ChatSession(workspaces=...)")
+            owner = None if at == TOOL else name_of(who)
+            if name is None:
+                if owner is None:
+                    raise ValueError("A command owns no workspace: name the peer whose workspace it reads")
+                name = owner
+            # A peer in the chat has a workspace, made when first asked for;
+            # any other name must be one that already exists.
+            create = name == owner or self.id_of(name) is not None
+            return await provider.provision(owner, name, create=create)
+        return workspace
 
     async def _initialize(self, obj: Any) -> None:
         """
@@ -669,7 +720,7 @@ class ChatSession:
         anything, or is initialized, at all. What was said to a peer before it
         started is delivered to it now, in the order it was said.
         """
-        for who in list(self._connectors.values()) + list(self.commands.values()) + self._routers():
+        for who in list(self._connectors.values()) + list(self.commands.values()) + self._roles():
             if id(who) not in self._initialized:
                 self._initialized.add(id(who))
                 await self._initialize(who)
@@ -735,7 +786,7 @@ class ChatSession:
         finish is cancelled with a warning, so it cannot hang the close.
         """
         pending : Dict["asyncio.Future[Any]", str] = {}
-        for who in list(self._connectors.values()) + list(self.commands.values()) + self._routers():
+        for who in list(self._connectors.values()) + list(self.commands.values()) + self._roles():
             shutdown = getattr(who, "shutdown", None)
             if not callable(shutdown):
                 continue

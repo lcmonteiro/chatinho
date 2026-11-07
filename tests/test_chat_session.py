@@ -793,3 +793,24 @@ def test_help_declares_only_what_it_uses():
     """It declared HookSay and never said anything: the answer is posted for it."""
     from chatinho import HelpCommand, HookCommands, HookPeers, hooks_of
     assert hooks_of(HelpCommand()) == {HookExecute, HookPeers, HookCommands}
+
+
+# === Workspaces through the builders ===============================================
+
+@pytest.mark.parametrize("build", ["chat", "mcp"])
+async def test_a_built_session_serves_workspaces(repo, build):
+    from chatinho import HookWorkspace, WorkspaceGrant, connector, require
+    from chatinho.builder import build_chat_session, build_mcp_session
+    from chatinho.workspaces import GitWorktrees, Workspace
+
+    @connector("dev")
+    @require(HookWorkspace)
+    class Worker:
+        workspace : WorkspaceGrant
+
+    worker   = Worker()
+    provider = GitWorktrees(repo)
+    session  = (build_chat_session(connectors=[worker], workspaces=provider) if build == "chat"
+                else build_mcp_session(connectors=[worker], workspaces=provider, token="t"))
+    assert session.workspaces is provider
+    assert isinstance(await worker.workspace(), Workspace)

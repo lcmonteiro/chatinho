@@ -83,6 +83,24 @@ def test_the_core_does_not_depend_on_a_frontend_or_the_builders(module):
     assert "builder" not in relative, "%s must never import the builders" % module
 
 
+#: The one module of chatinho.workspaces that may import a third party: the deep
+#: agents adapter, which must subclass deepagents' own ABC, behind its own extra.
+WORKSPACE_ADAPTERS = {"workspaces/deepagents.py"}
+
+
+def test_workspaces_use_only_the_standard_library():
+    """Workspaces are in the core, so `import chatinho` must not need anything to use one."""
+    found = {}
+    for path in sorted((SRC / "workspaces").rglob("*.py")):
+        relative = path.relative_to(SRC).as_posix()
+        if relative in WORKSPACE_ADAPTERS:
+            continue
+        outside = imported_roots(path) - set(sys.stdlib_module_names) - {"chatinho"}
+        if outside:
+            found[relative] = sorted(outside)
+    assert found == {}, "chatinho.workspaces must import only the standard library: %s" % found
+
+
 # === Names we must not take from Textual ========================================
 
 

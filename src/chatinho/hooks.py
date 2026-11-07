@@ -157,6 +157,38 @@ class Context(Protocol):
         ...
 
 
+class WorkspaceGrant(Protocol):
+    """
+    Granted by ``HookWorkspace``: a workspace, one's own or someone else's.
+
+    One writer per workspace. A peer's own comes back writable; anyone else's
+    comes back as a view, which has no operation that writes at all.
+    """
+
+    async def __call__(self, name: Optional[str] = None) -> Any:
+        """
+        Returns a workspace.
+
+        Args:
+            name: Whose; the caller's own when None. A command owns none, so it
+                must name the peer whose workspace it reads.
+
+        Returns:
+            Any: A ``Workspace`` for the caller's own, a ``WorkspaceView`` for
+            anyone else's (``chatinho.workspaces``; typed ``Any`` here so the
+            hooks need nothing beyond themselves).
+
+        Raises:
+            NoWorkspaceProvider: The session was given no ``workspaces``.
+            KeyError: *name* is no peer in the chat, and no workspace has it.
+        """
+        ...
+
+
+class NoWorkspaceProvider(RuntimeError):
+    """``workspace()`` was called in a session given no ``workspaces``."""
+
+
 @dataclass(frozen=True)
 class Hook:
     """
@@ -348,6 +380,29 @@ HookLocate = Hook(
     # None when nobody did. The terminal opens a message's relative links so.
 )
 
+# === Somewhere to work ==========================================================
+#
+# A workspace is a peer's own git worktree. The provider that keeps them is a
+# role, like the router: no id, in nobody's roster, granted what it declares.
+
+HookWorkspace = Hook(
+    name="HookWorkspace",
+    grants=("workspace",),
+    # await workspace(name=None) -> Workspace | WorkspaceView. With no name, the
+    # caller's own workspace, which it reads and writes; with another peer's
+    # name, that peer's, which it only reads. One writer per workspace, and
+    # the split is structural: a view has no `write` to call.
+)
+
+HookProvision = Hook(
+    name="HookProvision",
+    method="provision",
+    # async provision(owner, name, create=True) -> Workspace | WorkspaceView.
+    # What ChatSession(workspaces=) is given demands it, and the session calls
+    # it to serve every `workspace` grant: *owner* is the caller's name, or
+    # None for a command, and the owner of *name* gets the writable class.
+)
+
 ALL_HOOKS: Tuple[Hook, ...] = (
     HookSay,
     HookListen,
@@ -364,6 +419,8 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookKeep,
     HookLink,
     HookLocate,
+    HookWorkspace,
+    HookProvision,
 )
 
 # Lifecycle is not a hook: initialize() and shutdown() are optional, called

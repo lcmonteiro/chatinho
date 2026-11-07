@@ -108,3 +108,29 @@ async def chat():
     session, view = await driven()
     yield session, view
     await session.close()
+
+
+def _git(where, *args: str) -> str:
+    import subprocess
+    return subprocess.run(["git", *args], cwd=where, check=True, capture_output=True, text=True).stdout
+
+
+@pytest.fixture
+def repo(tmp_path, monkeypatch):
+    """
+    A git repository on ``main`` with one commit, for the workspace tests.
+
+    It configures no identity of its own on purpose: the provider must commit
+    in a repository that has none, which is what a fresh clone in CI is.
+    """
+    # No global or system config either, so this machine's identity cannot hide that.
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "no-global-gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "--quiet", "--initial-branch=main")
+    (root / "README.md").write_text("# repo\n")
+    (root / ".gitignore").write_text("ignored/\n*.log\n")
+    _git(root, "add", "-A")
+    _git(root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--quiet", "-m", "first")
+    return root

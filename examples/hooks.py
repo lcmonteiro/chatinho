@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-The fifteen hooks, one example each, in a chat with no terminal.
+The seventeen hooks, one example each, in a chat with no terminal.
 
 Every other example shows a chat. This one shows the *declarations* — what each
 hook demands, what it grants, and what actually arrives at each door — by
@@ -13,13 +13,18 @@ Run it::
     python examples/hooks.py
 
 Nothing here needs a terminal, a network or a database: the archive is a list,
-and what messages carry is kept in a dict.
+and what messages carry is kept in a dict. The workspaces need ``git``, in a
+throwaway repository made for the run.
 """
 
 import asyncio
+import subprocess
+import tempfile
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
+from chatinho.workspaces import GitWorktrees, WorkspaceView
 from chatinho import (
     LOCAL,
     TOOL,
@@ -41,7 +46,9 @@ from chatinho import (
     HookLocate,
     HookPeers,
     HookCommands,
+    HookProvision,
     HookRoute,
+    HookWorkspace,
     HookSay,
     Reply,
     Invoke,
@@ -50,6 +57,7 @@ from chatinho import (
     Peers,
     Commands,
     Say,
+    WorkspaceGrant,
     backend,
     connector,
     frontend,
@@ -297,6 +305,49 @@ class ListArchive:
         return "memory://%s" % key if key in self.files else None
 
 
+# === Somewhere to work ==========================================================
+#
+# A workspace is a peer's own git worktree. The provider that keeps them is a
+# role, like the router: given once, as ChatSession(workspaces=...), no id.
+
+
+@connector("scribe")
+@require(HookWorkspace)  # await workspace(name=None) -> its own, or someone's view
+class Scribe:
+    """Works in its own workspace, and reads someone else's."""
+
+    workspace : WorkspaceGrant
+
+    async def work(self) -> None:
+        mine = await self.workspace()
+        await mine.write("notes.md", "the weather is sunny\n")
+        note("HookWorkspace", "wrote notes.md in its own %s" % type(mine).__name__)
+        sha = await mine.commit("notes")
+        note("HookWorkspace", "committed %s on %s" % (sha[:7], mine.tree.branch))
+        theirs = await self.workspace("weather")
+        note("HookWorkspace", "reads weather's as a %s, which has write: %s"
+             % (type(theirs).__name__, hasattr(theirs, "write")))
+
+
+@require(HookProvision)  # async provision(owner, name, create) -> a workspace
+class LoudWorktrees(GitWorktrees):
+    """The provider shipped, saying when it is asked."""
+
+    async def provision(self, owner: Optional[str], name: str, create: bool = True) -> WorkspaceView:
+        got = await super().provision(owner, name, create)
+        note("HookProvision", "%s asked for %s's: a %s" % (owner, name, type(got).__name__))
+        return got
+
+
+def scratch_repository() -> Path:
+    """A throwaway repository with one commit, for the workspaces to branch from."""
+    root = Path(tempfile.mkdtemp(prefix="chatinho-hooks-"))
+    for args in (["init", "--quiet"], ["commit", "--quiet", "--allow-empty", "-m", "start"]):
+        subprocess.run(["git", "-c", "user.name=hooks", "-c", "user.email=hooks@example.invalid", *args],
+                       cwd=root, check=True)
+    return root
+
+
 # === Running the whole of it ====================================================
 
 
@@ -306,12 +357,14 @@ async def main() -> None:
     seeded    = [ChatMessage(id=MessageID.new(), text="said yesterday", frm=LOCAL, timestamp=yesterday)]
 
     screen  = Screen()
+    scribe  = Scribe()
     session = ChatSession(
-        connectors = [EchoConnector(), WeatherConnector(), ClockConnector()],
+        connectors = [EchoConnector(), WeatherConnector(), ClockConnector(), scribe],
         commands   = [UpperCommand()],
         frontend   = screen,
         backend    = ListArchive(seeded),
         router     = Triage(),
+        workspaces = LoudWorktrees(scratch_repository()),
     )
 
     print("\n-- start(): HookLoad runs before anyone can ask for context --")
@@ -355,6 +408,9 @@ async def main() -> None:
     await settle()
     print("   →", await screen.locate(noted, "notes.txt"))
     print("   →", await screen.locate(noted, "missing.txt"))
+
+    print("\n-- HookWorkspace: a peer works in its own worktree, and reads another's --")
+    await scribe.work()
 
     print("\n-- HookContext: one window over both tiers --")
     for msg in screen.context():

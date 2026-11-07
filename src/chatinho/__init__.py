@@ -14,7 +14,7 @@ each is a pair: the word you call, and the word the other side writes.
 
 Everything is a coroutine and every delivery is its own task, so a slow subsystem
 holds up nobody, and a peer may ask one that is asking it. ``docs/SPEC.md`` is the
-reference for all fifteen hooks, and ``examples/hooks.py`` is that document executable.
+reference for all seventeen hooks, and ``examples/hooks.py`` is that document executable.
 
 Headless — no terminal, and nothing to install beyond this package::
 
@@ -80,9 +80,11 @@ from .hooks import connector, tool, frontend, backend, require
 from .hooks import hooks_of, options_of, declares, declared_id, name_of
 from .hooks import Hook, HookSay, HookAsk, HookAnswer, HookInvoke, HookExecute, HookContext
 from .hooks import HookPeers, HookCommands, HookListen, HookLoad, HookForget, HookKeep, HookLink, HookLocate
-from .hooks import HookRoute
-from .hooks import Say, Ask, Invoke, Context, Peers, Commands, Locate
+from .hooks import HookRoute, HookWorkspace, HookProvision, NoWorkspaceProvider
+from .hooks import Say, Ask, Invoke, Context, Peers, Commands, Locate, WorkspaceGrant
 from .commands import HelpCommand, TestCommand
+from .workspaces import GitWorktrees, Lines, Match, Matches, Workspace, WorkspaceView
+from .workspaces import operation, operations_of
 from .routers import SimpleRouter
 
 __version__ = "0.1.0"
@@ -199,6 +201,10 @@ __all__ = [
     "HookKeep",
     "HookLink",
     "HookLocate",
+    # somewhere to work
+    "HookWorkspace",
+    "HookProvision",
+    "NoWorkspaceProvider",
     # what the grants look like
     "Say",
     "Ask",
@@ -207,6 +213,16 @@ __all__ = [
     "Peers",
     "Commands",
     "Locate",
+    "WorkspaceGrant",
+    # workspaces
+    "Workspace",
+    "WorkspaceView",
+    "operation",
+    "operations_of",
+    "Lines",
+    "Match",
+    "Matches",
+    "GitWorktrees",
     # batteries
     "OpenAIConnector",
     "AgentConnector",
