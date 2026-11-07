@@ -14,7 +14,7 @@ each is a pair: the word you call, and the word the other side writes.
 
 Everything is a coroutine and every delivery is its own task, so a slow subsystem
 holds up nobody, and a peer may ask one that is asking it. ``docs/SPEC.md`` is the
-reference for all fifteen hooks, and ``examples/hooks.py`` is that document executable.
+reference for all seventeen hooks, and ``examples/hooks.py`` is that document executable.
 
 Headless — no terminal, and nothing to install beyond this package::
 
@@ -40,20 +40,22 @@ Served over MCP, which needs ``pip install chatinho[mcp]``::
 Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both in
 :mod:`chatinho.frontends` — and either can be passed to ``ChatSession`` by hand.
 
-Nine names need an extra, and say so if it is missing:
+Eleven names need an extra, and say so if it is missing:
 
-    build_chat_session  chatinho[tui,mcp]    textual, fastmcp
-    build_mcp_session   chatinho[tui,mcp]    textual, fastmcp
-    ChatFrontend        chatinho[tui]        textual
-    ChatStyle           chatinho[tui]        textual
-    McpFrontend         chatinho[mcp]        fastmcp
-    McpConnector        chatinho[mcp]        fastmcp
-    OpenAIConnector     chatinho[openai]     openai
-    AgentConnector      chatinho[langchain]  langchain
-    DatabaseBackend     chatinho[sql]        sqlalchemy
+    build_chat_session  chatinho[tui,mcp]     textual, fastmcp
+    build_mcp_session   chatinho[tui,mcp]     textual, fastmcp
+    ChatFrontend        chatinho[tui]         textual
+    ChatStyle           chatinho[tui]         textual
+    McpFrontend         chatinho[mcp]         fastmcp
+    McpConnector        chatinho[mcp]         fastmcp
+    OpenAIConnector     chatinho[openai]      openai
+    AgentConnector      chatinho[langchain]   langchain
+    DeepAgentConnector  chatinho[deepagents]  deepagents
+    DatabaseBackend     chatinho[sql]         sqlalchemy
+    WorkspaceBackend    chatinho[deepagents]  deepagents
 
-Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand`` —
-imports nothing but the standard library.
+Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand``,
+the workspaces — imports nothing but the standard library.
 """
 
 from typing import TYPE_CHECKING, Any, Dict, Tuple
@@ -65,11 +67,13 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .backends import DatabaseBackend
     from .builder import build_chat_session, build_mcp_session
     from .connectors.agent import AgentConnector
+    from .connectors.deep import DeepAgentConnector
     from .connectors.mcp import McpConnector
     from .connectors.openai import OpenAIConnector
     from .frontends.chat import ChatFrontend
     from .frontends.chat.style import ChatStyle
     from .frontends.mcp import McpFrontend
+    from .workspaces.deepagents import WorkspaceBackend
 
 from .session import ChatSession
 from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
@@ -80,9 +84,11 @@ from .hooks import connector, tool, frontend, backend, require
 from .hooks import hooks_of, options_of, declares, declared_id, name_of
 from .hooks import Hook, HookSay, HookAsk, HookAnswer, HookInvoke, HookExecute, HookContext
 from .hooks import HookPeers, HookCommands, HookListen, HookLoad, HookForget, HookKeep, HookLink, HookLocate
-from .hooks import HookRoute
-from .hooks import Say, Ask, Invoke, Context, Peers, Commands, Locate
-from .commands import HelpCommand, TestCommand
+from .hooks import HookRoute, HookWorkspace, HookProvision, NoWorkspaceProvider
+from .hooks import Say, Ask, Invoke, Context, Peers, Commands, Locate, WorkspaceGrant
+from .commands import HelpCommand, TestCommand, WorkspaceCommand
+from .workspaces import GitWorktrees, Lines, Match, Matches, Workspace, WorkspaceView
+from .workspaces import operation, operations_of
 from .routers import SimpleRouter
 
 __version__ = "0.1.0"
@@ -91,15 +97,17 @@ __version__ = "0.1.0"
 _TUI = ("tui", "textual")
 _MCP = ("mcp", "fastmcp")
 _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
-    "build_chat_session" : (".builder",              (_TUI, _MCP)),
-    "build_mcp_session"  : (".builder",              (_TUI, _MCP)),
-    "ChatFrontend"       : (".frontends.chat",       (_TUI,)),
-    "ChatStyle"          : (".frontends.chat.style", (_TUI,)),
-    "McpFrontend"        : (".frontends.mcp",        (_MCP,)),
-    "McpConnector"       : (".connectors.mcp",       (_MCP,)),
-    "OpenAIConnector"    : (".connectors.openai",    (("openai", "openai"),)),
-    "AgentConnector"     : (".connectors.agent",     (("langchain", "langchain"),)),
-    "DatabaseBackend"    : (".backends",             (("sql", "sqlalchemy"),)),
+    "build_chat_session" : (".builder",               (_TUI, _MCP)),
+    "build_mcp_session"  : (".builder",               (_TUI, _MCP)),
+    "ChatFrontend"       : (".frontends.chat",        (_TUI,)),
+    "ChatStyle"          : (".frontends.chat.style",  (_TUI,)),
+    "McpFrontend"        : (".frontends.mcp",         (_MCP,)),
+    "McpConnector"       : (".connectors.mcp",        (_MCP,)),
+    "OpenAIConnector"    : (".connectors.openai",     (("openai", "openai"),)),
+    "AgentConnector"     : (".connectors.agent",      (("langchain", "langchain"),)),
+    "DeepAgentConnector" : (".connectors.deep",       (("deepagents", "deepagents"),)),
+    "DatabaseBackend"    : (".backends",              (("sql", "sqlalchemy"),)),
+    "WorkspaceBackend"   : (".workspaces.deepagents", (("deepagents", "deepagents"),)),
 }
 
 
@@ -199,6 +207,10 @@ __all__ = [
     "HookKeep",
     "HookLink",
     "HookLocate",
+    # somewhere to work
+    "HookWorkspace",
+    "HookProvision",
+    "NoWorkspaceProvider",
     # what the grants look like
     "Say",
     "Ask",
@@ -207,9 +219,21 @@ __all__ = [
     "Peers",
     "Commands",
     "Locate",
+    "WorkspaceGrant",
+    # workspaces
+    "Workspace",
+    "WorkspaceView",
+    "operation",
+    "operations_of",
+    "Lines",
+    "Match",
+    "Matches",
+    "GitWorktrees",
+    "WorkspaceBackend",
     # batteries
     "OpenAIConnector",
     "AgentConnector",
+    "DeepAgentConnector",
     "DatabaseBackend",
     "ChatFrontend",
     "ChatStyle",
@@ -217,5 +241,6 @@ __all__ = [
     "McpConnector",
     "HelpCommand",
     "TestCommand",
+    "WorkspaceCommand",
     "SimpleRouter",
 ]

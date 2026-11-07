@@ -125,7 +125,7 @@ own task, so a peer can answer several questions at once and asks may recurse, u
 said; and **everything that crosses is in the context**. Connectors keep no state of the
 conversation: they read it with `context()`, and the backend alone stores it.
 
-[`docs/SPEC.md`](docs/SPEC.md) is the reference for all fifteen hooks — what each demands, what it
+[`docs/SPEC.md`](docs/SPEC.md) is the reference for all seventeen hooks — what each demands, what it
 grants, an example, and what it costs. [`examples/hooks.py`](examples/hooks.py) is that document
 executable.
 
@@ -450,7 +450,7 @@ content: an HTML attachment runs its scripts when your browser opens it.
 | [`examples/lab_client.py`](examples/lab_client.py) | a chat asking that lab, lending it your key |
 | [`examples/lab_fastmcp_client.py`](examples/lab_fastmcp_client.py) | a plain FastMCP client asking the lab |
 | [`examples/inbox.py`](examples/inbox.py) | `POST /ask` from a script blocks until you answer in the chat |
-| [`examples/hooks.py`](examples/hooks.py) | one peer for each of the fifteen hooks, no terminal and no key |
+| [`examples/hooks.py`](examples/hooks.py) | one peer for each of the seventeen hooks, no terminal and no key |
 
 The LLM demos need `OPENAI_API_KEY`; see [`examples/README.md`](examples/README.md).
 

@@ -38,6 +38,7 @@ def build_chat_session(
     newline_escape  : Optional[str] = NEWLINE_ESCAPE,
     name            : Optional[str] = None,
     router          : Optional[Any] = None,
+    workspaces      : Optional[Any] = None,
 ) -> ChatSession:
     """
     Builds a chat with a terminal from peers and a backend.
@@ -77,6 +78,10 @@ def build_chat_session(
             separate binding and is left alone.
         router: The peer that decides who answers a say that names nobody;
             :class:`~chatinho.routers.SimpleRouter` when omitted.
+        workspaces: What keeps each peer's workspace, such as
+            :class:`~chatinho.workspaces.GitWorktrees`; none when omitted.
+            ``/ws`` is a command like any other: pass
+            ``WorkspaceCommand(workspaces)`` in *commands* to have it.
 
     Returns:
         ChatSession: The session, with the terminal as its ``frontend`` and so
@@ -102,6 +107,7 @@ def build_chat_session(
         frontend   = presentation,
         backend    = backend,
         router     = router if router is not None else SimpleRouter(),
+        workspaces = workspaces,
     )
 
 
@@ -116,6 +122,7 @@ def build_mcp_session(
     port        : int = 8000,
     credentials : Optional[Dict[str, str]] = None,
     router      : Optional[Any] = None,
+    workspaces  : Optional[Any] = None,
 ) -> ChatSession:
     """
     Builds a chat served over MCP from peers and a backend.
@@ -136,6 +143,10 @@ def build_mcp_session(
         credentials: Lent with every message to the peers that answer it.
         router: The peer that decides who answers a say that names nobody;
             :class:`~chatinho.routers.SimpleRouter` when omitted.
+        workspaces: What keeps each peer's workspace, such as
+            :class:`~chatinho.workspaces.GitWorktrees`; none when omitted.
+            ``/ws`` is a command like any other: pass
+            ``WorkspaceCommand(workspaces)`` in *commands* to have it.
 
     Returns:
         ChatSession: The session, with the MCP server as its ``frontend``.
@@ -157,4 +168,5 @@ def build_mcp_session(
         frontend   = presentation,
         backend    = backend,
         router     = router if router is not None else SimpleRouter(),
+        workspaces = workspaces,
     )

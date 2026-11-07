@@ -1,7 +1,7 @@
 # chatinho — the hook specification
 
-Everything a peer can do, and everything it can be asked to do, is one of **fifteen hooks**. This
-document is the reference for all fifteen: what each one demands, what it grants, and what actually
+Everything a peer can do, and everything it can be asked to do, is one of **seventeen hooks**. This
+document is the reference for all seventeen: what each one demands, what it grants, and what actually
 arrives at its door.
 
 Every claim here is executable. `examples/hooks.py` declares one peer per hook and runs a short
@@ -89,7 +89,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 
 ---
 
-## 2. The fifteen hooks at a glance
+## 2. The seventeen hooks at a glance
 
 | hook | demands | grants | declared by |
 |---|---|---|---|
@@ -108,6 +108,8 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 | [`HookKeep`](#hookkeep) | `keep` | — | a backend that keeps attachments |
 | [`HookLink`](#hooklink) | `link` | — | a backend that keeps attachments |
 | [`HookLocate`](#hooklocate) | — | `locate` | a presentation, a peer that opens attachments |
+| [`HookWorkspace`](#hookworkspace) | — | `workspace` | a peer that works on files, a command that reads them |
+| [`HookProvision`](#hookprovision) | `provision` | — | a workspace provider: `GitWorktrees` |
 
 **Every hook is one or the other**, never both.
 
@@ -475,6 +477,62 @@ url = await self.locate(msg.id, "revenue.html")
 
 The terminal uses it for a message's relative links: it opens what comes back, or says "Not found".
 
+### HookWorkspace
+
+> **grants** `await workspace(name: Optional[str] = None, *, create: bool = True) -> Workspace | WorkspaceView`
+
+Somewhere to work: a peer's own git worktree, on a branch of its own. With no name it is the
+caller's own workspace, a `Workspace` it reads and writes; with another peer's name it is that
+peer's, as a `WorkspaceView` it can only read.
+
+```python
+@connector("dev")
+@require(HookWorkspace)
+class Dev:
+    workspace : WorkspaceGrant
+
+    async def work(self) -> None:
+        mine = await self.workspace()
+        await mine.edit("app.py", "x = 1", "x = 2")
+        await mine.commit("x is two")
+        review = await self.workspace("reviewer")      # read-only
+        notes  = await review.read("notes.md")
+```
+
+**One writer per workspace, and the split is structural.** A view has no `write`, `edit`, `delete`
+or `commit` at all, so mypy refuses the call and so does Python — there is no access check to
+forget. Merging a workspace into the base is not an operation of either: only `/ws merge`, run by
+the user, does it.
+
+The owner of a workspace is a peer's **name**, not its id: ids are numbered per session, and the
+work must outlive one. A peer in the chat has a workspace from the first time anyone asks for it;
+a name that is no peer in the chat must be one that already exists, or it is a `KeyError`. With
+`create=False` nothing is made at all — a workspace that does not exist yet is a `KeyError` — so
+asking whether a peer has one changes nothing. A command owns none, so it must name the one it reads. In a session given no `workspaces`, calling
+it raises `NoWorkspaceProvider`: a missing workspace is a misconfigured chat, not a file that was
+not found, which is why it does not answer None the way `locate` does.
+
+What can be done is **declared, one method per operation** — `@operation` on a subclass of
+`WorkspaceView` or `Workspace` — and every consumer takes the set from `operations_of`, which is
+how an agent gets one tool per operation without a line of its own.
+
+### HookProvision
+
+> **demands** `async provision(owner: Optional[str], name: str, create: bool = True) -> WorkspaceView`
+
+Serves every `workspace` grant. *owner* is the caller's name, or None for a command; the owner of
+*name* gets the writable class, everyone else the view. With *create* False, a workspace that does
+not exist yet is a `KeyError`.
+
+**The provider is what `ChatSession(workspaces=…)` is given**, and like the router it is not a
+peer: no id, in nobody's `peers()`, hearing nothing. Its `initialize()` and `shutdown()` run with
+everyone else's. One that arrives as a connector or a command is refused, so a session has at most
+one.
+
+`GitWorktrees(repo)` is the provider shipped: a worktree per peer at
+`<repo>/.chatinho/worktrees/<name>` on branch `peer/<name>`, created from the base the repository
+had checked out when the provider started, reused after a restart and never removed by `close()`.
+
 ---
 
 ## 5. Composing them
@@ -560,6 +618,18 @@ deeper, and `max_depth` stops a loop.
 
 ---
 
+### A workspace is somewhere to work, and everyone can look
+
+A peer that declares `HookWorkspace` works in its own worktree and reads everyone else's; the
+provider keeps them, and `/ws` is how the user lists, diffs, merges and drops them.
+`AgentConnector(workspace=True)` turns the operations into tools — `ws_<op>` on its own workspace,
+`ws_<op>_of` on anyone else's — and `WorkspaceBackend` (`chatinho[deepagents]`) hands a workspace to
+a LangChain deep agent as its file backend. `DeepAgentConnector` (the same extra) is that deep agent
+as a peer: its own workspace at `/`, every other peer's that exists at `/peers/<name>/`, read-only,
+and only the `ws_` tools its file tools do not already reach.
+
+---
+
 ## 6. The session's own surface
 
 `ChatSession` exposes seven members. Everything about the conversation is reached by declaring a
@@ -607,6 +677,10 @@ Stated rather than hidden, because each one is a real trade:
 - **A router decides before the say is posted**, so a slow one delays it. The terminal sends in a
   worker so the input stays free, but the say appears only once the router has returned.
 - **A command cannot answer privately**, and `context()` cannot reach past the recall window.
+- **A workspace's operations are inherited**, against the rest of the library, where nothing has a
+  base class: there the base class is the behaviour being extended, not a label. And `Tree.resolve`
+  is the one door to a path only by convention — an operation that calls `open()` itself can still
+  reach outside its worktree.
 
 ---
 

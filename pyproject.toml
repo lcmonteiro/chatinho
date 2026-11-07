@@ -1,7 +1,7 @@
 [project]
 name = "chatinho"
 version = "0.1.0"
-description = "An extensible chat library: peers, three verbs, fifteen hooks — with an optional Textual TUI"
+description = "An extensible chat library: peers, three verbs, seventeen hooks — with an optional Textual TUI"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -48,8 +48,15 @@ mcp    = ["fastmcp>=4.0"]
 keyring = ["keyring>=24"]
 # A LangChain agent as a peer: chatinho.connectors.agent.AgentConnector.
 langchain = ["langchain>=1.0", "langchain-openai>=1.0"]
+# A workspace as a LangChain deep agents backend (chatinho.workspaces.deepagents.WorkspaceBackend),
+# and a deep agent as a peer (chatinho.connectors.deep.DeepAgentConnector).
+# Its own extra, not part of `langchain`: deepagents needs a newer langchain and always brings
+# langchain-anthropic and langchain-google-genai, which `langchain` users did not ask for.
+# DeepAgentConnector turns an Endpoint into a chat model as AgentConnector does, hence langchain-openai.
+deepagents = ["deepagents>=0.7.34,<0.8", "langchain-openai>=1.0"]
 all    = ["textual>=0.45.0", "markdown-it-py>=2.0.0", "openai>=1.0.0", "sqlalchemy>=2.0.0",
-          "fastmcp>=4.0", "keyring>=24", "langchain>=1.0", "langchain-openai>=1.0"]
+          "fastmcp>=4.0", "keyring>=24", "langchain>=1.0", "langchain-openai>=1.0",
+          "deepagents>=0.7.34,<0.8"]
 dev = [
     "textual>=0.45.0",
     "markdown-it-py>=2.0.0",
@@ -59,6 +66,7 @@ dev = [
     "keyring>=24",
     "langchain>=1.0",
     "langchain-openai>=1.0",
+    "deepagents>=0.7.34,<0.8",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.6",
