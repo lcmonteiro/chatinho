@@ -17,7 +17,7 @@ Gives each peer an isolated git worktree of its own to work in, which only that 
 - **THEN** adding it raises an error naming the hook
 
 ### Requirement: A peer reaches workspaces through one grant
-A peer or command that declares `HookWorkspace` SHALL be granted `workspace(name=None)`, a coroutine. Called with no name, it SHALL return the caller's own workspace, which can read and write. Called with another peer's name, it SHALL return that peer's workspace as a view that can only read. Calling it from a peer for its own name MUST return its own writable workspace. Calling it when the session has no provider MUST raise an error saying so. Naming no peer in the session and no workspace that exists MUST raise `KeyError` naming it. A command calling it with no name MUST raise an error, because a command owns no workspace.
+A peer or command that declares `HookWorkspace` SHALL be granted `workspace(name=None, *, create=True)`, a coroutine. Called with no name, it SHALL return the caller's own workspace, which can read and write. Called with another peer's name, it SHALL return that peer's workspace as a view that can only read. Calling it from a peer for its own name MUST return its own writable workspace. Calling it when the session has no provider MUST raise an error saying so. Naming no peer in the session and no workspace that exists MUST raise `KeyError` naming it. A command calling it with no name MUST raise an error, because a command owns no workspace. With `create=False`, a workspace that does not exist yet MUST raise `KeyError` naming it, and the call MUST create nothing, for the caller's own workspace as for anyone else's.
 
 #### Scenario: Its own workspace
 - **WHEN** peer `dev` calls `workspace()` and then `write("a.txt", "hi")`
@@ -34,6 +34,14 @@ A peer or command that declares `HookWorkspace` SHALL be granted `workspace(name
 #### Scenario: An unknown name
 - **WHEN** a peer calls `workspace("nobody")` and no peer or workspace is named `nobody`
 - **THEN** the call raises `KeyError` naming `nobody`
+
+#### Scenario: Asking without creating
+- **WHEN** peer `lead` calls `workspace("dev", create=False)` and `dev`, a peer in the chat, has never had a workspace
+- **THEN** the call raises `KeyError` naming `dev`, and no worktree or branch is created for it
+
+#### Scenario: Asking for one that exists
+- **WHEN** `dev` has a workspace and `lead` calls `workspace("dev", create=False)`
+- **THEN** it gets dev's workspace as a read-only view
 
 ### Requirement: One workspace per peer, keyed by its name
 Each peer SHALL have at most one workspace, identified by the peer's name and not by its id. It SHALL be created the first time it is asked for, as a git worktree on a branch named `peer/<name>` started from the provider's base branch. When a worktree and branch for that name already exist, from this session or an earlier one, they MUST be reused, with their files and commits as they were. `close()` MUST NOT remove a workspace. The worktrees MUST live under the repository and MUST NOT appear as untracked files of the repository, and the provider MUST NOT edit any tracked file to achieve that.
