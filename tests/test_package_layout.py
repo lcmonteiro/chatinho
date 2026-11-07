@@ -166,3 +166,12 @@ def test_the_workspaces_are_public():
     for name in ("HookWorkspace", "HookProvision", "NoWorkspaceProvider", "WorkspaceGrant",
                  "WorkspaceCommand", "WorkspaceBackend"):
         assert name in chatinho.__all__
+
+
+def test_the_deep_agent_connector_is_where_it_says():
+    import chatinho
+    from chatinho import connectors
+    from chatinho.connectors.deep import DeepAgentConnector
+    assert chatinho.DeepAgentConnector is DeepAgentConnector
+    assert connectors.DeepAgentConnector is DeepAgentConnector
+    assert "DeepAgentConnector" in chatinho.__all__ and "DeepAgentConnector" in connectors.__all__

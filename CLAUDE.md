@@ -313,8 +313,9 @@ command, and can look but not merge.
 
 **The owner is a name, not an id.** Ids are numbered per session; the work has to outlive one. A
 peer in the chat has a workspace from the first time anyone asks for it, and a name that is no peer
-must be a workspace that already exists, or it is a `KeyError`. A command owns none and must name
-the one it reads. With no provider, `workspace()` raises `NoWorkspaceProvider` instead of answering
+must be a workspace that already exists, or it is a `KeyError`. `workspace(name, create=False)`
+makes nothing at all — a workspace that does not exist yet is a `KeyError` — which is how a peer asks
+who has one without handing everyone a branch. A command owns none and must name the one it reads. With no provider, `workspace()` raises `NoWorkspaceProvider` instead of answering
 None the way `locate` does: a missing workspace is a misconfigured chat, not a missing file.
 `close()` removes nothing — a worktree holds work, not cache — and `/ws drop` is the only way one
 goes.
@@ -358,6 +359,26 @@ only** (the sync methods raise, rather than reach into the chat's loop from a th
 **answers writes with an error result**, because deep agents registers `write_file` whatever the
 backend; and it is **not a sandbox**, so `execute` gets deep agents' own "no shell". Its `grep` is
 literal, as the protocol says — `re.escape` over ours.
+
+**`DeepAgentConnector` (`chatinho[deepagents]`) is `AgentConnector` with `create_deep_agent`
+inside**, not a copy of it. `AgentConnector` carries the seam: `FACTORY` and `OPTIONS` on the
+class, and `_factory_options()`, awaited when the graph is built, for what can only be made with
+the chat running. The subclass swaps the first two and makes its **backend** in the third: a
+`CompositeBackend` whose `/` is its own workspace and whose `/peers/<name>/` is each other peer's,
+read-only, asked with `create=False` so routing makes nobody a worktree. Those peers are part of the
+shape the graph is rebuilt on, so a workspace that appears later is reachable from the next
+question. Its `COVERED` set leaves out the `ws_` tools deep agents' own file tools already reach —
+a model offered `read_file` and `ws_read` would have to guess — so it gets `ws_diff`, `ws_log`,
+`ws_commit`, their `_of` forms and whatever a project adds. Two option names are the chat's:
+`memory` stays the `Query`, so deep agents' own is `agent_memory`, and `backend` is refused, since
+taking one would let a peer step outside the one-writer rule unnoticed. `workspace=True` is its
+default. With no provider it runs on deep agents' in-memory default and says so once, and the
+paragraph telling it where `/peers/` is is left out of its prompt.
+
+**A run that stops for a decision ends as an `ERROR` reply.** `interrupt_on` pauses deep agents
+(and `create_agent`) for a human to approve a tool call, and nothing in the chat resumes a run: the
+graph comes back with `__interrupt__` and no answer. `AgentConnector._run` turns that into
+`Interrupted`, answered as "the run was interrupted", rather than the `KeyError` it used to be.
 
 ## The seventeen hooks
 
@@ -494,7 +515,8 @@ src/chatinho/
                    mcp.py (McpConnector: asking a remote session over MCP),
                    agent.py (AgentConnector: a LangChain create_agent agent, built lazily, with the
                    chat as tools: ask_<peer>, run_<command>, and ws_<op> with workspace=True;
-                   its memory is context())
+                   its memory is context(); FACTORY/OPTIONS are the seam a subclass swaps),
+                   deep.py (DeepAgentConnector: create_deep_agent, its workspace as its backend)
                    — plain classes, no base; each imported on first use, behind its own extra
   frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
     chat/          the terminal — the only package that imports Textual:
@@ -509,6 +531,7 @@ openspec/          specs/ (what the library promises), changes/ (in flight, then
 examples/          assistant.py, team.py, files.py (LLM demos: parts() + main()), lab_server.py / lab_client.py /
                    lab_fastmcp_client.py (a model over MCP, lent keys), inbox.py (HTTP, inbound), hooks.py (one peer per hook),
                    workspaces.py (two agents in git worktrees: dev commits, reviewer reads its diff)
+                   deep_agent.py (a DeepAgentConnector in its worktree, an AgentConnector reviewing it)
 tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_package_layout.py,
@@ -516,7 +539,8 @@ tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
                    test_lending.py, test_mcp_*.py, test_message_delivery.py,
                    test_context_query.py, test_openai_connector.py, test_agent_connector.py,
                    test_workspace_operations.py, test_git_worktrees.py, test_workspaces_in_session.py,
-                   test_workspace_command.py, test_workspace_backend.py (real git repos, no terminal)
+                   test_workspace_command.py, test_workspace_backend.py, test_deep_agent_connector.py
+                   (real git repos, no terminal)
                    and test_examples.py (no terminal)
   tests/fakes/     test doubles, never the real thing: llm.py (a stubbed AsyncOpenAI),
                    agent.py (a scripted LangChain chat model), mcp.py (a remote session
@@ -952,7 +976,7 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 `dependencies = []`. `ChatSession`, the seventeen hooks, `HelpCommand`, `TestCommand`, `SimpleRouter`
 and the workspaces import nothing but the standard library — which the fitness tests already
 enforced, so the packaging now says it too. Workspaces need `git` when a provider starts, never at
-import. Ten names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
+import. Eleven names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
 | name | extra | brings |
 |---|---|---|
@@ -962,7 +986,7 @@ import. Ten names live behind an extra and are resolved on first use with PEP 56
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `AgentConnector` | `chatinho[langchain]` | `langchain`, `langchain-openai` (langgraph with them) |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
-| `WorkspaceBackend` | `chatinho[deepagents]` | `deepagents`, which needs `langchain` 1.4.9+ and always brings `langchain-anthropic` and `langchain-google-genai` |
+| `WorkspaceBackend`, `DeepAgentConnector` | `chatinho[deepagents]` | `deepagents` and `langchain-openai`; deepagents needs `langchain` 1.4.9+ and always brings `langchain-anthropic` and `langchain-google-genai` |
 
 `chatinho[mcp]` brings pydantic, starlette and uvicorn with it, so it is the heavy one — on Termux
 especially, and `chatinho[langchain]` brings langgraph. `chatinho[deepagents]` is heavier than
@@ -980,14 +1004,14 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 81 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`__init__.py` exports 82 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
 `MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
 (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
 `declared_id`, `name_of`, `Hook`); the seventeen `Hook*` constants and `NoWorkspaceProvider`; the grant
 protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`, `Commands`, `Locate`, `WorkspaceGrant`); the
 workspaces (`Workspace`, `WorkspaceView`, `operation`, `operations_of`, `Lines`, `Match`, `Matches`,
 `GitWorktrees`, `WorkspaceBackend`); and the batteries
-(`OpenAIConnector`, `AgentConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`,
+(`OpenAIConnector`, `AgentConnector`, `DeepAgentConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`,
 `McpConnector`, `HelpCommand`, `TestCommand`, `WorkspaceCommand`, `SimpleRouter`), with the keys and endpoints (`Endpoint`, `KeySource`,
 `KeyUnavailable`, `Env`, `DotEnv`, `File`, `Keyring`, `Command`, `Literal`, `Chain`, `key`).
 

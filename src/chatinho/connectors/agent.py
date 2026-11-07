@@ -61,6 +61,10 @@ DIFF_SHOWN : int = 20000
 REMINDER = "Your answer does not link every file you made."
 
 
+class Interrupted(RuntimeError):
+    """The agent stopped to wait for a human decision (``interrupt_on``) nothing in the chat can give."""
+
+
 class AgentInput(TypedDict):
     """What the graph is given: the message to answer or respond to."""
 
@@ -262,9 +266,16 @@ class AgentConnector:
         config = ({"configurable": {"thread_id": str(msg.id)}}
                   if self.options.get("checkpointer") is not None else None)
         output = await graph.ainvoke({"question": msg}, config=config)
+        if output.get("__interrupt__"):
+            # The agent inside stopped for a decision; nothing in the chat resumes it.
+            raise Interrupted("the run stopped for a decision")
         return output["text"], list(output["attachments"])
 
     def _failed(self, exc: Exception) -> str:
+        if isinstance(exc, Interrupted):
+            logger.warning("%s: the run was interrupted", self.name)
+            return ("%s: the run was interrupted, waiting for a decision nobody in the chat can give"
+                    % self.name)
         if isinstance(exc, KeyUnavailable):
             logger.warning("%s: no key (%s)", self.name, exc)
             return "%s: %s" % (self.name, exc)

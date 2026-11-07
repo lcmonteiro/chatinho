@@ -16,6 +16,7 @@ _WHERE = {
     "OpenAIConnector" : "chatinho.connectors.openai",
     "McpConnector"    : "chatinho.connectors.mcp",
     "AgentConnector"  : "chatinho.connectors.agent",
+    "DeepAgentConnector" : "chatinho.connectors.deep",
 }
 
 __all__ = sorted(_WHERE)

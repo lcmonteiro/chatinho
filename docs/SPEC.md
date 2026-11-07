@@ -624,7 +624,9 @@ A peer that declares `HookWorkspace` works in its own worktree and reads everyon
 provider keeps them, and `/ws` is how the user lists, diffs, merges and drops them.
 `AgentConnector(workspace=True)` turns the operations into tools — `ws_<op>` on its own workspace,
 `ws_<op>_of` on anyone else's — and `WorkspaceBackend` (`chatinho[deepagents]`) hands a workspace to
-a LangChain deep agent as its file backend.
+a LangChain deep agent as its file backend. `DeepAgentConnector` (the same extra) is that deep agent
+as a peer: its own workspace at `/`, every other peer's that exists at `/peers/<name>/`, read-only,
+and only the `ws_` tools its file tools do not already reach.
 
 ---
 

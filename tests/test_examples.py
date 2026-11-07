@@ -216,6 +216,40 @@ async def test_dev_commits_and_the_reviewer_reads_its_diff(repo):
         await session.close()
 
 
+async def test_the_deep_agent_commits_and_the_reviewer_reads_it(repo):
+    import itertools
+    from langchain_core.messages import AIMessage, ToolMessage
+    from fakes.agent import fake, this_run
+
+    ids = itertools.count(1)
+
+    def steps(*calls, answer=lambda results: results[-1]):
+        def script(messages):
+            done = [str(m.content) for m in this_run(messages) if isinstance(m, ToolMessage)]
+            if len(done) < len(calls):
+                name, args = calls[len(done)]
+                call = {"name": name, "args": args, "id": "d%d" % next(ids)}
+                return AIMessage(content="", tool_calls=[call])
+            return AIMessage(content=answer(done))
+        return script
+
+    parts = example("deep_agent").parts(repo)
+    dev, reviewer = parts["connectors"]
+    dev.model = fake(steps(
+        ("edit_file", {"file_path": "/README.md", "old_string": "# repo", "new_string": "# repo\n\nSafe."}),
+        ("ws_commit", {"message": "say it is safe"}),
+        answer=lambda results: "Committed."))
+    reviewer.model = fake(steps(("ws_diff_of", {"workspace": "dev"}),
+                                answer=lambda results: "Reviewed:\n" + results[-1]))
+    session, view = await headless(parts)
+    try:
+        assert (await view.ask(dev.peer_id, "document it")).text == "Committed."
+        assert "+Safe." in (await view.ask(reviewer.peer_id, "review dev's work")).text
+        assert "edit_file" in dev.model.tools[-1] and "ws_read" not in dev.model.tools[-1]
+    finally:
+        await session.close()
+
+
 def test_the_workspaces_demo_makes_its_own_repository_without_one():
     made = example("workspaces").scratch_repository()
     assert (made / "calc.py").exists()
@@ -285,7 +319,8 @@ def _write(path: pathlib.Path, data: bytes) -> pathlib.Path:
 
 # === A missing key ================================================================
 
-@pytest.mark.parametrize("name", ["assistant", "team", "files", "lab_client", "agent", "workspaces"])
+@pytest.mark.parametrize("name", ["assistant", "team", "files", "lab_client", "agent", "workspaces",
+                                  "deep_agent"])
 def test_no_key_exits_with_a_hint(name, monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY")
     demo = example(name)

@@ -40,7 +40,7 @@ Served over MCP, which needs ``pip install chatinho[mcp]``::
 Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both in
 :mod:`chatinho.frontends` — and either can be passed to ``ChatSession`` by hand.
 
-Ten names need an extra, and say so if it is missing:
+Eleven names need an extra, and say so if it is missing:
 
     build_chat_session  chatinho[tui,mcp]    textual, fastmcp
     build_mcp_session   chatinho[tui,mcp]    textual, fastmcp
@@ -51,6 +51,7 @@ Ten names need an extra, and say so if it is missing:
     OpenAIConnector     chatinho[openai]     openai
     AgentConnector      chatinho[langchain]  langchain
     WorkspaceBackend    chatinho[deepagents] deepagents
+    DeepAgentConnector  chatinho[deepagents] deepagents
     DatabaseBackend     chatinho[sql]        sqlalchemy
 
 Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand``,
@@ -66,6 +67,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .backends import DatabaseBackend
     from .builder import build_chat_session, build_mcp_session
     from .connectors.agent import AgentConnector
+    from .connectors.deep import DeepAgentConnector
     from .connectors.mcp import McpConnector
     from .connectors.openai import OpenAIConnector
     from .frontends.chat import ChatFrontend
@@ -104,6 +106,7 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
     "OpenAIConnector"    : (".connectors.openai",    (("openai", "openai"),)),
     "AgentConnector"     : (".connectors.agent",     (("langchain", "langchain"),)),
     "WorkspaceBackend"   : (".workspaces.deepagents", (("deepagents", "deepagents"),)),
+    "DeepAgentConnector" : (".connectors.deep",       (("deepagents", "deepagents"),)),
     "DatabaseBackend"    : (".backends",             (("sql", "sqlalchemy"),)),
 }
 
@@ -230,6 +233,7 @@ __all__ = [
     # batteries
     "OpenAIConnector",
     "AgentConnector",
+    "DeepAgentConnector",
     "DatabaseBackend",
     "ChatFrontend",
     "ChatStyle",
