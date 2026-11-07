@@ -234,7 +234,8 @@ _WITHOUT_THE_EXTRAS = """
 import builtins, sys
 real = builtins.__import__
 def blocked(name, *a, **k):
-    if name.split(".")[0] in {"textual", "openai", "sqlalchemy", "requests", "mcp", "mcp_types", "fastmcp"}:
+    if name.split(".")[0] in {"textual", "openai", "sqlalchemy", "requests", "mcp", "mcp_types", "fastmcp",
+                                 "deepagents"}:
         raise ImportError("No module named %r" % name)
     return real(name, *a, **k)
 builtins.__import__ = blocked
@@ -325,3 +326,23 @@ def test_the_package_description_counts_the_hooks():
     said = [word for word in description.replace(",", " ").split() if word in _COUNTS]
     assert said[-1:] and description.split(said[-1])[1].lstrip().startswith("hooks"), description
     assert _COUNTS.index(said[-1]) == len(ALL_HOOKS)
+
+
+def test_using_a_workspace_does_not_import_deepagents(repo):
+    """The adapter is behind its extra: a workspace in a plain session must not pull it in."""
+    script = """
+import asyncio, sys
+from chatinho import ChatSession, GitWorktrees
+async def main():
+    session = ChatSession(workspaces=GitWorktrees(sys.argv[1]))
+    await session.start()
+    ws = await session.workspaces.provision("dev", "dev")
+    await ws.write("a.txt", "a")
+    await session.close()
+asyncio.run(main())
+print("deepagents" in sys.modules)
+"""
+    done = subprocess.run([sys.executable, "-c", script, str(repo)], capture_output=True, text=True,
+                          cwd=str(ROOT))
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "False"

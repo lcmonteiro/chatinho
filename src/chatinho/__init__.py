@@ -40,7 +40,7 @@ Served over MCP, which needs ``pip install chatinho[mcp]``::
 Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both in
 :mod:`chatinho.frontends` — and either can be passed to ``ChatSession`` by hand.
 
-Nine names need an extra, and say so if it is missing:
+Ten names need an extra, and say so if it is missing:
 
     build_chat_session  chatinho[tui,mcp]    textual, fastmcp
     build_mcp_session   chatinho[tui,mcp]    textual, fastmcp
@@ -50,10 +50,11 @@ Nine names need an extra, and say so if it is missing:
     McpConnector        chatinho[mcp]        fastmcp
     OpenAIConnector     chatinho[openai]     openai
     AgentConnector      chatinho[langchain]  langchain
+    WorkspaceBackend    chatinho[deepagents] deepagents
     DatabaseBackend     chatinho[sql]        sqlalchemy
 
-Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand`` —
-imports nothing but the standard library.
+Everything else — ``ChatSession``, the hooks, ``HelpCommand``, ``TestCommand``,
+the workspaces — imports nothing but the standard library.
 """
 
 from typing import TYPE_CHECKING, Any, Dict, Tuple
@@ -70,6 +71,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .frontends.chat import ChatFrontend
     from .frontends.chat.style import ChatStyle
     from .frontends.mcp import McpFrontend
+    from .workspaces.deepagents import WorkspaceBackend
 
 from .session import ChatSession
 from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
@@ -101,6 +103,7 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
     "McpConnector"       : (".connectors.mcp",       (_MCP,)),
     "OpenAIConnector"    : (".connectors.openai",    (("openai", "openai"),)),
     "AgentConnector"     : (".connectors.agent",     (("langchain", "langchain"),)),
+    "WorkspaceBackend"   : (".workspaces.deepagents", (("deepagents", "deepagents"),)),
     "DatabaseBackend"    : (".backends",             (("sql", "sqlalchemy"),)),
 }
 
@@ -223,6 +226,7 @@ __all__ = [
     "Match",
     "Matches",
     "GitWorktrees",
+    "WorkspaceBackend",
     # batteries
     "OpenAIConnector",
     "AgentConnector",
