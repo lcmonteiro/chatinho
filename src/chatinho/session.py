@@ -354,7 +354,7 @@ class ChatSession:
         numbered per session, and the work must outlive one. A command owns
         none, so it must name whose workspace it reads.
         """
-        async def workspace(name: Optional[str] = None) -> Any:
+        async def workspace(name: Optional[str] = None, *, create: bool = True) -> Any:
             provider = self.workspaces
             if provider is None:
                 raise NoWorkspaceProvider(
@@ -365,8 +365,9 @@ class ChatSession:
                     raise ValueError("A command owns no workspace: name the peer whose workspace it reads")
                 name = owner
             # A peer in the chat has a workspace, made when first asked for;
-            # any other name must be one that already exists.
-            create = name == owner or self.id_of(name) is not None
+            # any other name must be one that already exists. With create
+            # False nothing is made, so a caller can ask whether one exists.
+            create = create and (name == owner or self.id_of(name) is not None)
             return await provider.provision(owner, name, create=create)
         return workspace
 

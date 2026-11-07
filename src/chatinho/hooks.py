@@ -165,13 +165,15 @@ class WorkspaceGrant(Protocol):
     comes back as a view, which has no operation that writes at all.
     """
 
-    async def __call__(self, name: Optional[str] = None) -> Any:
+    async def __call__(self, name: Optional[str] = None, *, create: bool = True) -> Any:
         """
         Returns a workspace.
 
         Args:
             name: Whose; the caller's own when None. A command owns none, so it
                 must name the peer whose workspace it reads.
+            create: Whether a peer's workspace that does not exist yet is made;
+                with False it is a ``KeyError``, so asking changes nothing.
 
         Returns:
             Any: A ``Workspace`` for the caller's own, a ``WorkspaceView`` for
@@ -180,7 +182,8 @@ class WorkspaceGrant(Protocol):
 
         Raises:
             NoWorkspaceProvider: The session was given no ``workspaces``.
-            KeyError: *name* is no peer in the chat, and no workspace has it.
+            KeyError: *name* is no peer in the chat, and no workspace has it;
+                or, with *create* False, its workspace does not exist yet.
         """
         ...
 

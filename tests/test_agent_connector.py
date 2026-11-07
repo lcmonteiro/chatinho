@@ -788,3 +788,40 @@ def test_deep_agent_options_are_not_create_agents():
     """The factory seam must not widen what AgentConnector itself accepts."""
     with pytest.raises(TypeError, match="create_agent does not take 'subagents'"):
         AgentConnector("agent", fake(says("x")), subagents=[])
+
+
+async def test_a_workspace_that_appears_later_rebuilds_the_graph(repo):
+    built = []
+    real  = module.create_agent
+
+    def counting(*args, **kwargs):
+        built.append(1)
+        return real(*args, **kwargs)
+
+    provider = GitWorktrees(repo)
+    agent = AgentConnector("agent", fake(says("ok")), workspace=True)
+    agent.FACTORY = counting                                       # type: ignore[assignment]
+    lab = _Echo("lab")
+    session, view = await driven(connectors=[agent, lab], workspaces=provider)
+    await view.ask(agent.peer_id, "one")
+    await view.ask(agent.peer_id, "two")
+    assert len(built) == 1
+    await provider.provision("lab", "lab")
+    await view.ask(agent.peer_id, "three")
+    await session.close()
+    assert len(built) == 2
+    assert await provider.names() == ["agent", "lab"]              # asking made none for anyone else
+
+
+async def test_without_workspace_true_it_never_asks_for_one(repo):
+    agent = AgentConnector("agent", fake(says("ok")))
+    asked = []
+
+    async def spy(name=None, *, create=True):
+        asked.append(name)
+
+    session, view = await driven(connectors=[agent, _Echo("lab")], workspaces=GitWorktrees(repo))
+    agent.workspace = spy                                          # type: ignore[assignment]
+    await view.ask(agent.peer_id, "hello")
+    await session.close()
+    assert asked == []

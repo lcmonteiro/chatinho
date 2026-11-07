@@ -40,7 +40,10 @@ attachments, and answering the user's says.
 
 ### Modified Capabilities
 
-None. `AgentConnector`'s requirements are unchanged. The factory seam is internal.
+- `peer-workspaces`: the `workspace` grant takes `create=False`, which answers `KeyError` for a
+  workspace that does not exist yet instead of making it, so a peer can ask who has one without
+  giving everyone a worktree. `AgentConnector`'s requirements are unchanged; the factory seam is
+  internal.
 
 ## Impact
 

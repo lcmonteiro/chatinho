@@ -50,8 +50,9 @@ OPTIONS : FrozenSet[str] = frozenset(inspect.signature(create_agent).parameters)
 #: What a tool name may hold, for the OpenAI-compatible APIs.
 _UNSAFE = re.compile(r"[^A-Za-z0-9_-]")
 
-#: The shape of the chat the agent was built for: its peers (id, name) and commands.
-Shape = Tuple[Tuple[Tuple[int, str], ...], Tuple[str, ...]]
+#: The shape of the chat the agent was built for: its peers (id, name), its commands,
+#: and — for a connector that uses its workspace — the other peers that have one.
+Shape = Tuple[Tuple[Tuple[int, str], ...], Tuple[str, ...], Tuple[str, ...]]
 
 #: How much of a diff a ``ws_diff`` tool shows the model; the attachment holds all of it.
 DIFF_SHOWN : int = 20000
@@ -275,7 +276,7 @@ class AgentConnector:
 
     async def graph(self) -> Any:
         """The compiled graph for the chat as it is now, built or rebuilt as needed."""
-        shape = self._shape()
+        shape = self._shape() + (await self._workspaced(),)
         async with self._building:
             if self._built is None or self._built[0] != shape:
                 tools   = self.tools + self._chat_tools(shape) + await self._workspace_tools()
@@ -333,7 +334,7 @@ class AgentConnector:
         graph.add_edge("load", END)
         return graph.compile(checkpointer=self.options.get("checkpointer"), name=self.options.get("name"))
 
-    def _shape(self) -> Shape:
+    def _shape(self) -> Tuple[Tuple[Tuple[int, str], ...], Tuple[str, ...]]:
         """Which peers and commands become tools now, after the filters."""
         me    = getattr(self, "peer_id", None)
         peers = tuple(sorted(
@@ -362,7 +363,7 @@ class AgentConnector:
             found.append(StructuredTool.from_function(coroutine=coroutine, name=unique,
                                                       description=description))
 
-        peers, commands = shape
+        peers, commands, _ = shape
         for at, name in peers:
             add(_tool_name("ask_", name), self._asking(at, name),
                 "Ask %s, another participant in this chat, and get its answer." % name)
@@ -394,6 +395,29 @@ class AgentConnector:
         return run
 
     # === Its workspace, as tools ==================================================
+
+    async def _workspaced(self) -> Tuple[str, ...]:
+        """
+        The other peers in the chat that have a workspace, asked without making one.
+
+        Empty for a connector that does not use its workspace, which then never
+        calls ``workspace()`` at all, and in a session with no provider.
+        """
+        if not self.uses_workspace:
+            return ()
+        me    = getattr(self, "peer_id", None)
+        found : List[str] = []
+        for at, who in sorted(self.peers().items()):
+            if at in (me, LOCAL):
+                continue
+            try:
+                await self.workspace(name_of(who), create=False)
+            except NoWorkspaceProvider:
+                return ()
+            except (KeyError, ValueError):
+                continue                 # none yet, or a name no workspace can have
+            found.append(name_of(who))
+        return tuple(found)
 
     async def _workspace_tools(self) -> List[StructuredTool]:
         """

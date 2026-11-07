@@ -74,6 +74,12 @@ CompositeBackend(
 )
 ```
 
+Which other peers *have* a workspace is asked with `workspace(name, create=False)`, which this
+change adds to the grant. Without it the only door was `workspace(name)`, which makes a worktree
+for any peer in the chat, so routing every peer would have given every peer a branch it never
+asked for. The alternative, routing every peer lazily, would have needed a backend that defers
+opening its view, and the routes would no longer say whose work exists.
+
 The set of peers with a workspace becomes part of the shape that decides when the graph is rebuilt.
 A peer whose workspace appears later is routed from the next question on, just as a peer that
 joins later gets its `ask_` tool.

@@ -479,7 +479,7 @@ The terminal uses it for a message's relative links: it opens what comes back, o
 
 ### HookWorkspace
 
-> **grants** `await workspace(name: Optional[str] = None) -> Workspace | WorkspaceView`
+> **grants** `await workspace(name: Optional[str] = None, *, create: bool = True) -> Workspace | WorkspaceView`
 
 Somewhere to work: a peer's own git worktree, on a branch of its own. With no name it is the
 caller's own workspace, a `Workspace` it reads and writes; with another peer's name it is that
@@ -506,8 +506,9 @@ the user, does it.
 
 The owner of a workspace is a peer's **name**, not its id: ids are numbered per session, and the
 work must outlive one. A peer in the chat has a workspace from the first time anyone asks for it;
-a name that is no peer in the chat must be one that already exists, or it is a `KeyError`. A
-command owns none, so it must name the one it reads. In a session given no `workspaces`, calling
+a name that is no peer in the chat must be one that already exists, or it is a `KeyError`. With
+`create=False` nothing is made at all — a workspace that does not exist yet is a `KeyError` — so
+asking whether a peer has one changes nothing. A command owns none, so it must name the one it reads. In a session given no `workspaces`, calling
 it raises `NoWorkspaceProvider`: a missing workspace is a misconfigured chat, not a file that was
 not found, which is why it does not answer None the way `locate` does.
 

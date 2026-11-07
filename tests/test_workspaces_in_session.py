@@ -216,3 +216,17 @@ async def test_a_long_search_does_not_hold_up_the_chat(repo):
     finished = await searching
     await session.close()
     assert stamp.heard_at is not None and stamp.heard_at < finished
+
+
+async def test_asking_without_creating(repo):
+    dev, lead = Worker(), Worker()
+    lead.name = "lead"
+    session = await session_with(repo, dev, lead)
+    with pytest.raises(KeyError, match="dev"):
+        await lead.workspace("dev", create=False)
+    with pytest.raises(KeyError, match="lead"):
+        await lead.workspace(create=False)
+    assert await session.workspaces.names() == []          # nothing was made
+    await dev.workspace()
+    assert type(await lead.workspace("dev", create=False)) is WorkspaceView
+    await session.close()
