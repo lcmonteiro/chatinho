@@ -26,4 +26,4 @@
 
 ## 5. Integration check
 
-- [ ] 5.1 Run the four CI checks from the repo root: `ruff check src tests examples`, `mypy src/chatinho examples`, `pytest -q`, and `openspec validate --all --strict --no-interactive`. All must pass.
+- [x] 5.1 Run the four CI checks from the repo root: `ruff check src tests examples`, `mypy src/chatinho examples`, `pytest -q`, and `openspec validate --all --strict --no-interactive`. All must pass.
