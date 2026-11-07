@@ -129,20 +129,19 @@ async def test_what_it_refuses(repo, args, error):
     await session.close()
 
 
-async def test_the_builders_add_ws_and_help_lists_it(repo):
+async def test_the_builders_add_no_command_of_their_own(repo):
+    """/ws is chosen like any command: given workspaces, a builder adds nothing to the list."""
     from chatinho import HelpCommand
     from chatinho.builder import build_chat_session
 
-    with_ws    = build_chat_session(commands=[HelpCommand()], workspaces=GitWorktrees(repo))
-    without_ws = build_chat_session(commands=[HelpCommand()])
-    assert "ws" in with_ws.commands and "ws" not in without_ws.commands
-    assert "/ws - " in (await with_ws.commands["help"].execute()).text
-    assert "/ws" not in (await without_ws.commands["help"].execute()).text
+    session = build_chat_session(commands=[HelpCommand()], workspaces=GitWorktrees(repo))
+    assert list(session.commands) == ["help"]
 
 
-async def test_a_ws_of_ones_own_is_kept(repo):
+async def test_help_lists_ws_when_it_is_given(repo):
+    from chatinho import HelpCommand
     from chatinho.builder import build_chat_session
 
-    mine    = WorkspaceCommand(GitWorktrees(repo))
-    session = build_chat_session(commands=[mine], workspaces=GitWorktrees(repo))
-    assert session.commands["ws"] is mine
+    provider = GitWorktrees(repo)
+    session  = build_chat_session(commands=[HelpCommand(), WorkspaceCommand(provider)], workspaces=provider)
+    assert "/ws - " in (await session.commands["help"].execute()).text

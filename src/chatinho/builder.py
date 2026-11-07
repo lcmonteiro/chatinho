@@ -22,16 +22,7 @@ from .frontends.chat.style import ChatStyle
 from .frontends.mcp import McpFrontend
 from .keys import KeyLike
 from .routers import SimpleRouter
-from .commands import WorkspaceCommand
 from .session import ChatSession
-
-
-def _with_ws(commands: Optional[List[Any]], workspaces: Optional[Any]) -> List[Any]:
-    """*commands*, and ``/ws`` onto *workspaces* when there are workspaces and no ``/ws`` yet."""
-    given = list(commands or [])
-    if workspaces is not None and not any(getattr(c, "name", None) == "ws" for c in given):
-        given.append(WorkspaceCommand(workspaces))
-    return given
 
 
 def build_chat_session(
@@ -89,8 +80,8 @@ def build_chat_session(
             :class:`~chatinho.routers.SimpleRouter` when omitted.
         workspaces: What keeps each peer's workspace, such as
             :class:`~chatinho.workspaces.GitWorktrees`; none when omitted.
-            Given one, the session also gets ``/ws`` onto it, unless
-            *commands* already holds a command named ``ws``.
+            ``/ws`` is a command like any other: pass
+            ``WorkspaceCommand(workspaces)`` in *commands* to have it.
 
     Returns:
         ChatSession: The session, with the terminal as its ``frontend`` and so
@@ -112,7 +103,7 @@ def build_chat_session(
     )
     return ChatSession(
         connectors = connectors,
-        commands   = _with_ws(commands, workspaces),
+        commands   = commands,
         frontend   = presentation,
         backend    = backend,
         router     = router if router is not None else SimpleRouter(),
@@ -154,8 +145,8 @@ def build_mcp_session(
             :class:`~chatinho.routers.SimpleRouter` when omitted.
         workspaces: What keeps each peer's workspace, such as
             :class:`~chatinho.workspaces.GitWorktrees`; none when omitted.
-            Given one, the session also gets ``/ws`` onto it, unless
-            *commands* already holds a command named ``ws``.
+            ``/ws`` is a command like any other: pass
+            ``WorkspaceCommand(workspaces)`` in *commands* to have it.
 
     Returns:
         ChatSession: The session, with the MCP server as its ``frontend``.
@@ -173,7 +164,7 @@ def build_mcp_session(
     )
     return ChatSession(
         connectors = connectors,
-        commands   = _with_ws(commands, workspaces),
+        commands   = commands,
         frontend   = presentation,
         backend    = backend,
         router     = router if router is not None else SimpleRouter(),

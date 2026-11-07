@@ -26,7 +26,7 @@
 ## 4. The /ws command
 
 - [x] 4.1 Add `WorkspaceCommand` (`commands/workspace.py`) with `/ws`, `/ws diff <name>` (the diff as an attachment), `/ws merge <name>` and `/ws drop <name>`. `merge` and `drop` are refused unless `by == LOCAL`. Unknown names and subcommands fail. Verify every scenario of the `/ws` requirement, including a model's `run_ws merge` being refused.
-- [x] 4.2 Add `/ws` to what `build_chat_session` registers when a provider is given, and to `/help`. Verify `/help` lists it in a built session with workspaces and not in one without.
+- [x] 4.2 Leave `/ws` to the caller: the builders accept `workspaces=` and add no command of their own, so `/ws` is passed as `WorkspaceCommand(provider)` like any command. Verify a built session given workspaces holds only the commands it was given, and that `/help` lists `/ws` when it is. (It was registered automatically at first, and removed in review on #51; see design.md.)
 
 ## 5. Workspaces as agent tools
 

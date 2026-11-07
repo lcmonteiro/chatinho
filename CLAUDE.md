@@ -309,7 +309,9 @@ else a `WorkspaceView`, which has no `write`, `edit`, `delete` or `commit` to ca
 the call, and so does Python. Merging into the base is not an operation of either: only `/ws merge`
 does it, and `WorkspaceCommand` refuses unless `by == LOCAL`. That last refusal *is* a check, in a
 command, and it is written down so it is not taken for an oversight: an agent has `run_ws` like any
-command, and can look but not merge.
+command, and can look but not merge. `/ws` is passed like any command — `WorkspaceCommand(provider)` in `commands` — and
+the builders add none of their own: one that did, given `workspaces=`, was removed in review, for
+the reason the session holds no default router.
 
 **The owner is a name, not an id.** Ids are numbered per session; the work has to outlive one. A
 peer in the chat has a workspace from the first time anyone asks for it, and a name that is no peer

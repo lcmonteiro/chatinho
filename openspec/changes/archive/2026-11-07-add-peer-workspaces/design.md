@@ -138,6 +138,15 @@ branches nobody can name. Two peers cover that case.
 worktree in a session branches from the same point. `.chatinho/` is added to the repo's
 `.git/info/exclude` and not to `.gitignore`, so the provider never edits a tracked file.
 
+### `/ws` is chosen like any other command
+
+The builders take `workspaces=` and add nothing to the commands they were given: `/ws` is
+`WorkspaceCommand(provider)`, passed in `commands` by whoever wants it. It was registered
+automatically at first, unless a command named `ws` was already there, to spare passing the
+provider twice. That was removed in review: a builder that quietly adds a command to a list the
+caller wrote is a rule nobody chose, the same reason the session itself holds no default router.
+The cost is a provider named twice, and a chat whose user forgot `/ws` cannot merge from it.
+
 ### `grep`: Python's `re` over the files git lists
 
 `git grep` is line-oriented and cannot match across a newline, even with `-P`. `rg -U` can, but it
