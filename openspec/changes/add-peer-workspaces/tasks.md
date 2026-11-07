@@ -42,9 +42,9 @@
 
 ## 7. Public API and documentation
 
-- [ ] 7.1 Export `Workspace`, `WorkspaceView`, `operation`, `operations_of`, `Match`, `GitWorktrees`, `WorkspaceCommand`, `HookWorkspace` and `HookProvision` from `chatinho`. Update the exported-name count in CLAUDE.md. Verify `tests/test_package_layout.py`.
-- [ ] 7.2 Update CLAUDE.md: a "Workspaces" section (the role, one writer, one per peer, operations by subclassing, why the base class here, the adapter and its async-only cost), the reworded sentence that "the backend is the only thing that touches the file system", the layout tree, and the packaging table row for `chatinho[deepagents]`. Verify by reading it against the specs.
-- [ ] 7.3 Add `examples/workspaces.py`: two `AgentConnector`s, `dev` writing and committing and `reviewer` reading dev's diff, in a temporary repo. Wire it into `tests/test_examples.py` with the scripted model. Verify it runs under `pytest -q`.
+- [x] 7.1 Export `Workspace`, `WorkspaceView`, `operation`, `operations_of`, `Match`, `GitWorktrees`, `WorkspaceCommand`, `HookWorkspace` and `HookProvision` from `chatinho`. Update the exported-name count in CLAUDE.md. Verify `tests/test_package_layout.py`.
+- [x] 7.2 Update CLAUDE.md: a "Workspaces" section (the role, one writer, one per peer, operations by subclassing, why the base class here, the adapter and its async-only cost), the reworded sentence that "the backend is the only thing that touches the file system", the layout tree, and the packaging table row for `chatinho[deepagents]`. Verify by reading it against the specs.
+- [x] 7.3 Add `examples/workspaces.py`: two `AgentConnector`s, `dev` writing and committing and `reviewer` reading dev's diff, in a temporary repo. Wire it into `tests/test_examples.py` with the scripted model. Verify it runs under `pytest -q`.
 
 ## 8. Integration check
 

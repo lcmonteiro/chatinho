@@ -177,6 +177,52 @@ async def test_the_lead_responds_to_what_you_say():
         await session.close()
 
 
+# === workspaces.py ================================================================
+
+async def test_dev_commits_and_the_reviewer_reads_its_diff(repo):
+    import itertools
+    from langchain_core.messages import AIMessage, ToolMessage
+    from fakes.agent import fake, this_run
+
+    ids = itertools.count(1)
+
+    def steps(*calls, answer=lambda results: results[-1]):
+        def script(messages):
+            done = [str(m.content) for m in this_run(messages) if isinstance(m, ToolMessage)]
+            if len(done) < len(calls):
+                name, args = calls[len(done)]
+                call = {"name": name, "args": args, "id": "c%d" % next(ids)}
+                return AIMessage(content="", tool_calls=[call])
+            return AIMessage(content=answer(done))
+        return script
+
+    parts = example("workspaces").parts(repo)
+    dev, reviewer = parts["connectors"]
+    dev.model = fake(steps(
+        ("ws_edit", {"path": "README.md", "old": "# repo", "new": "# repo\n\nDivides safely."}),
+        ("ws_commit", {"message": "say what it does"}),
+        answer=lambda results: "Committed."))
+    reviewer.model = fake(steps(("ws_diff_of", {"workspace": "dev"}),
+                                answer=lambda results: "Reviewed:\n" + results[-1]))
+    session, view = await headless(parts)
+    try:
+        assert (await view.ask(dev.peer_id, "document it")).text == "Committed."
+        review = await view.ask(reviewer.peer_id, "review dev's work")
+        assert "+Divides safely." in review.text
+        assert "ws_commit" in dev.model.tools[-1] and "ws_diff_of" in reviewer.model.tools[-1]
+        assert await view.command("ws") == "Workspaces:\n  dev  peer/dev  1 commit ahead of main\n" \
+                                           "  reviewer  peer/reviewer  0 commits ahead of main"
+    finally:
+        await session.close()
+
+
+def test_the_workspaces_demo_makes_its_own_repository_without_one():
+    made = example("workspaces").scratch_repository()
+    assert (made / "calc.py").exists()
+    log = subprocess.run(["git", "log", "--format=%s"], cwd=made, capture_output=True, text=True)
+    assert log.stdout.split() == ["calc"]
+
+
 # === files.py =====================================================================
 
 async def test_read_sends_the_file_and_the_question(tmp_path):
@@ -239,7 +285,7 @@ def _write(path: pathlib.Path, data: bytes) -> pathlib.Path:
 
 # === A missing key ================================================================
 
-@pytest.mark.parametrize("name", ["assistant", "team", "files", "lab_client", "agent"])
+@pytest.mark.parametrize("name", ["assistant", "team", "files", "lab_client", "agent", "workspaces"])
 def test_no_key_exits_with_a_hint(name, monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY")
     demo = example(name)

@@ -286,9 +286,78 @@ message's id, **before** `_post` — so the link exists when the text arrives �
 alone. No keeper, and they are dropped; a keeper that raises is logged and the text posted anyway.
 
 Opening one is `locate(msg_id, name)` (`HookLocate`), which the session routes to the backend's
-`link` (`HookLink`). The backend is the only thing that stores attachments or touches the file
-system; the terminal only asks, then opens the answer or says "Not found". `DatabaseBackend` keeps
+`link` (`HookLink`). The backend is the only thing that stores attachments; the terminal only
+asks, then opens the answer or says "Not found". It used to be the only thing that touched the file
+system at all, and is not any more: a **workspace** is a directory on purpose (below). The two do
+not overlap — an attachment is something a message carries, a workspace is somewhere a peer works. `DatabaseBackend` keeps
 them as rows and writes a file on the first `link`, into a temp directory it removes at `shutdown`.
+
+## Workspaces: somewhere to work, and everyone can look
+
+A peer that declares `HookWorkspace` is granted `workspace(name=None)`: with no name, its own git
+worktree, which it reads and writes; with another peer's name, that peer's, which it only reads.
+**The provider is a sixth role**, what `ChatSession(workspaces=…)` is given, and like the router it
+is not a peer — no id, in nobody's roster, hearing nothing, granted what it declares
+(`HookProvision`, which demands `provision`). One arriving as a connector or a command is refused,
+so a session has at most one. `GitWorktrees(repo)` is the one shipped: a worktree per peer at
+`<repo>/.chatinho/worktrees/<name>` on branch `peer/<name>`, made from the base the repository had
+checked out when the provider started, and `.chatinho/` goes into `.git/info/exclude` rather than a
+tracked `.gitignore`, so `git status` stays clean without the provider editing your files.
+
+**One writer per workspace, and the split is structural.** The owner gets a `Workspace`; anyone
+else a `WorkspaceView`, which has no `write`, `edit`, `delete` or `commit` to call — mypy refuses
+the call, and so does Python. Merging into the base is not an operation of either: only `/ws merge`
+does it, and `WorkspaceCommand` refuses unless `by == LOCAL`. That last refusal *is* a check, in a
+command, and it is written down so it is not taken for an oversight: an agent has `run_ws` like any
+command, and can look but not merge.
+
+**The owner is a name, not an id.** Ids are numbered per session; the work has to outlive one. A
+peer in the chat has a workspace from the first time anyone asks for it, and a name that is no peer
+must be a workspace that already exists, or it is a `KeyError`. A command owns none and must name
+the one it reads. With no provider, `workspace()` raises `NoWorkspaceProvider` instead of answering
+None the way `locate` does: a missing workspace is a misconfigured chat, not a missing file.
+`close()` removes nothing — a worktree holds work, not cache — and `/ws drop` is the only way one
+goes.
+
+**An operation is a declared method, and extending is subclassing.** `@operation(description,
+writes=False)` on an `async def` of a `WorkspaceView` or `Workspace` subclass; `operations_of(cls)`
+is what every consumer reads, so `AgentConnector` gets `ws_symbols` for an operation a project
+added without a line of its own. A writing operation runs under the workspace's `asyncio.Lock`,
+taken by the decorator, so none has to remember to. `GitWorktrees(view=…, workspace=…)` refuses at
+construction a workspace class that does not subclass the view class (an operation added to the
+view would be invisible to its owner) and a view class with a writing operation. **This is the one
+base class in the library, deliberately**: elsewhere a base class would be a label, and here it is
+the behaviour being extended. The default set — `ls`, `read` with a line window, `glob`, `grep`,
+`diff`, `log`; `write`, `edit`, `delete`, `commit` — is deep agents' vocabulary on purpose: it is
+what models are trained to reach for, and it keeps the adapter below a translation.
+
+**`grep` is Python's `re`, not `git grep`.** `git grep` cannot match across a newline even with
+`-P`, and `rg` is a binary nothing guarantees, Termux included. The files are what
+`git ls-files --cached --others --exclude-standard` lists, so ignored files are out and new ones
+in; the search runs in a thread, stops at `limit` and says when it did, cuts a long match and says
+so, and skips what is not UTF-8. `diff` is the working tree against the merge base, uncommitted and
+new files included, read through an index of its own in a temporary file — `git add -N` would have
+been simpler, and would have written to the owner's staging area from a *reader's* call.
+
+**A `Tree` is the one door to a path.** Every operation reaches files and git through it, and
+`Tree.resolve` refuses an absolute path, `..`, a symbolic link out of the worktree and git's own
+`.git`. That is a door by convention: an operation that calls `open()` itself can still leave, the
+same honest limit `_say` has.
+
+**`AgentConnector(workspace=True)` turns the operations into tools**: `ws_<op>` on its own,
+`ws_<op>_of` (with a `workspace` argument) for each operation that reads, a `diff` attached to the
+answer. It is opt-in because hooks are declared by the class, so a per-instance choice cannot be a
+declaration — and an assistant that never touches a file should not get ten tools and a worktree on
+its first question.
+
+**`WorkspaceBackend` (`chatinho[deepagents]`) hands a workspace to a LangChain deep agent.**
+deep agents' `BackendProtocol` is an `abc.ABC` it checks with `isinstance`, so the adapter has to
+subclass it and cannot live in the core; `workspaces/deepagents.py` is the one module of the package
+the stdlib-only fitness test exempts. Three things to know before they surprise you: it is **async
+only** (the sync methods raise, rather than reach into the chat's loop from a thread); a view
+**answers writes with an error result**, because deep agents registers `write_file` whatever the
+backend; and it is **not a sandbox**, so `execute` gets deep agents' own "no shell". Its `grep` is
+literal, as the protocol says — `re.escape` over ours.
 
 ## The seventeen hooks
 
@@ -409,7 +478,13 @@ src/chatinho/
   keys.py          key sources: Env, DotEnv, File, Keyring, Command, Literal, Chain, key("env:…");
                    every key or token argument takes one (to_source), read late, always a Secret
   endpoint.py      Endpoint: base_url + model + key source; named profiles in a TOML file
-  commands/        help.py, test.py — commands: they run, they are not peers
+  commands/        help.py, test.py, workspace.py (/ws) — commands: they run, they are not peers
+  workspaces/      somewhere for a peer to work, stdlib-only but for the adapter:
+    tree.py        Tree: one worktree's files and git, and resolve(), the one door to a path
+    operations.py  @operation, operations_of: an operation is a declared method
+    views.py       WorkspaceView (reads) and Workspace (writes too); Lines, Match, Matches
+    git.py         GitWorktrees: the provider — one worktree per peer on peer/<name>; merge, drop
+    deepagents.py  WorkspaceBackend: a workspace as a deep agents backend, behind chatinho[deepagents]
   routers/         simple.py (SimpleRouter: the default router, stdlib-only — a reply to its author,
                    anything else to the lone peer that answers)
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
@@ -418,7 +493,8 @@ src/chatinho/
                    Query it hands to context(), HookPeers for who said what; a lent `llm` key wins),
                    mcp.py (McpConnector: asking a remote session over MCP),
                    agent.py (AgentConnector: a LangChain create_agent agent, built lazily, with the
-                   chat as tools: ask_<peer>, run_<command>; its memory is context())
+                   chat as tools: ask_<peer>, run_<command>, and ws_<op> with workspace=True;
+                   its memory is context())
                    — plain classes, no base; each imported on first use, behind its own extra
   frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
     chat/          the terminal — the only package that imports Textual:
@@ -431,13 +507,16 @@ src/chatinho/
 docs/              SPEC.md — the seventeen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          assistant.py, team.py, files.py (LLM demos: parts() + main()), lab_server.py / lab_client.py /
-                   lab_fastmcp_client.py (a model over MCP, lent keys), inbox.py (HTTP, inbound), hooks.py (one peer per hook)
+                   lab_fastmcp_client.py (a model over MCP, lent keys), inbox.py (HTTP, inbound), hooks.py (one peer per hook),
+                   workspaces.py (two agents in git worktrees: dev commits, reviewer reads its diff)
 tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_package_layout.py,
                    test_clipboard.py, test_answer_details.py,
                    test_lending.py, test_mcp_*.py, test_message_delivery.py,
-                   test_context_query.py, test_openai_connector.py, test_agent_connector.py
+                   test_context_query.py, test_openai_connector.py, test_agent_connector.py,
+                   test_workspace_operations.py, test_git_worktrees.py, test_workspaces_in_session.py,
+                   test_workspace_command.py, test_workspace_backend.py (real git repos, no terminal)
                    and test_examples.py (no terminal)
   tests/fakes/     test doubles, never the real thing: llm.py (a stubbed AsyncOpenAI),
                    agent.py (a scripted LangChain chat model), mcp.py (a remote session
@@ -870,9 +949,10 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 ## Packaging: the core installs nothing
 
-`dependencies = []`. `ChatSession`, the seventeen hooks, `HelpCommand`, `TestCommand` and `SimpleRouter` import nothing
-but the standard library — which the fitness tests already enforced, so the packaging now says it
-too. Nine names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
+`dependencies = []`. `ChatSession`, the seventeen hooks, `HelpCommand`, `TestCommand`, `SimpleRouter`
+and the workspaces import nothing but the standard library — which the fitness tests already
+enforced, so the packaging now says it too. Workspaces need `git` when a provider starts, never at
+import. Ten names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
 | name | extra | brings |
 |---|---|---|
@@ -882,9 +962,11 @@ too. Nine names live behind an extra and are resolved on first use with PEP 562 
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
 | `AgentConnector` | `chatinho[langchain]` | `langchain`, `langchain-openai` (langgraph with them) |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
+| `WorkspaceBackend` | `chatinho[deepagents]` | `deepagents`, which needs `langchain` 1.4.9+ and always brings `langchain-anthropic` and `langchain-google-genai` |
 
 `chatinho[mcp]` brings pydantic, starlette and uvicorn with it, so it is the heavy one — on Termux
-especially, and `chatinho[langchain]` brings langgraph. `chatinho[all]` is all of them; `chatinho[dev]` is those plus pytest, ruff and mypy, which is what CI
+especially, and `chatinho[langchain]` brings langgraph. `chatinho[deepagents]` is heavier than
+`langchain` and kept apart from it for that reason; `setup.sh` does not sync it on Termux. `chatinho[all]` is all of them; `chatinho[dev]` is those plus pytest, ruff and mypy, which is what CI
 installs and what `setup.sh` syncs. A missing extra raises an `ImportError` that names it, rather
 than surfacing as somebody else's `ModuleNotFoundError`.
 
@@ -898,13 +980,15 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 67 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`__init__.py` exports 81 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
 `MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
 (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
-`declared_id`, `name_of`, `Hook`); the seventeen `Hook*` constants; the grant protocols (`Say`, `Ask`,
-`Invoke`, `Context`, `Peers`, `Commands`, `Locate`); and the batteries
+`declared_id`, `name_of`, `Hook`); the seventeen `Hook*` constants and `NoWorkspaceProvider`; the grant
+protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`, `Commands`, `Locate`, `WorkspaceGrant`); the
+workspaces (`Workspace`, `WorkspaceView`, `operation`, `operations_of`, `Lines`, `Match`, `Matches`,
+`GitWorktrees`, `WorkspaceBackend`); and the batteries
 (`OpenAIConnector`, `AgentConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`,
-`McpConnector`, `HelpCommand`, `TestCommand`, `SimpleRouter`), with the keys and endpoints (`Endpoint`, `KeySource`,
+`McpConnector`, `HelpCommand`, `TestCommand`, `WorkspaceCommand`, `SimpleRouter`), with the keys and endpoints (`Endpoint`, `KeySource`,
 `KeyUnavailable`, `Env`, `DotEnv`, `File`, `Keyring`, `Command`, `Literal`, `Chain`, `key`).
 
 **Both frontends are public, and both have a builder.** `ChatFrontend` (in `chatinho.frontends.chat`)
