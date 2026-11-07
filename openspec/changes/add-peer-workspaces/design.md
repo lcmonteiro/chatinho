@@ -12,6 +12,10 @@ See proposal.md for why. What shapes the approach:
 - Nothing may block the loop: every peer, command and the terminal share one thread.
 - A peer may be called concurrently, so two `answer`s may reach the same workspace at once.
 - `AgentConnector` already derives tools from the chat (`ask_<peer>`, `run_<command>`).
+- LangChain deep agents (`deepagents`, read at 0.7.34) take a `backend` that implements
+  `BackendProtocol`: `ls`, `read`, `glob`, `grep`, `write`, `edit`, `delete`, `upload_files` and
+  `download_files`, each with an async twin. Paths are absolute, failures are results with an
+  `error`, and `grep` is literal.
 
 ## Goals / Non-Goals
 
@@ -20,6 +24,7 @@ See proposal.md for why. What shapes the approach:
 - A peer works in an isolated git worktree; everyone else can read what it did.
 - Adding an operation means writing one method, and every consumer (agent tools, `/ws`) picks it up.
 - The read-only view is enforced by structure, and type-checked for Python callers.
+- A workspace, or a view of one, can be passed to `create_deep_agent(backend=...)` as it is.
 
 **Non-Goals:**
 
@@ -28,6 +33,9 @@ See proposal.md for why. What shapes the approach:
 - Workspaces that are not git worktrees. The provider is a hook, so another kind can come later, but
   only the git one is designed here.
 - Exposing workspaces over MCP.
+- A chat peer built on deep agents. This change makes a workspace a deep agents backend. The peer
+  that uses one is `add-deep-agent-connector`.
+- Deep agents' sync backend methods (see below).
 
 ## Decisions
 
@@ -141,6 +149,56 @@ truncated past a fixed length. Results stop at `limit`. A file that does not dec
 skipped. A pattern that does not compile raises `ValueError` carrying `re`'s message, so a model
 can correct it.
 
+### The default operations follow the agent frameworks' vocabulary
+
+The operations are `ls`, `read`, `glob`, `grep`, `diff` and `log` on the view, and `write`, `edit`,
+`delete` and `commit` on the workspace. `read(path, offset=0, limit=2000)` returns a window of
+lines and the line it started at. `edit(path, old, new, replace_all=False)` replaces an exact
+string, and fails when `old` is missing or, without `replace_all`, is not unique.
+`glob(pattern, path=".")` returns files only. These are the names and shapes deep agents' backend
+uses, and the tools models are trained on. A model told to edit a file reaches for `edit`, not for
+reading the whole file and writing it back. Keeping the shapes alike also makes the adapter below
+a translation, not a reimplementation.
+
+`grep` keeps its regex and `multiline`, which deep agents' literal `grep` lacks. A literal search
+is the regex search of the escaped pattern, so ours is the superset.
+
+### `WorkspaceBackend`: an adapter, not a second implementation
+
+`deepagents.backends.BackendProtocol` is an `abc.ABC`, and deep agents checks it with
+`isinstance`, so a backend must subclass it. Subclassing it means importing `deepagents`, so the
+adapter cannot be in the core. It is a module behind `chatinho[deepagents]`, lazily exported like
+`AgentConnector`.
+
+`WorkspaceBackend(ws)` wraps one `Workspace` or `WorkspaceView` and translates each call:
+
+| deep agents | workspace | translation |
+|---|---|---|
+| `/a/b.py` (absolute, rooted) | `a/b.py` | strip the leading `/`; `FileInfo.path` given back absolute |
+| `als`, `aread`, `aglob` | `ls`, `read`, `glob` | the result shapes they expect |
+| `agrep(pattern, path, glob, max_count)` | `grep(re.escape(pattern), …, limit=max_count)` | literal, as the protocol says |
+| `awrite`, `aedit`, `adelete` | `write`, `edit`, `delete` | on a view: `Result(error="read-only …")` |
+| an exception | — | `Result(error=…)`: the protocol reports, it does not raise |
+| `aupload_files`, `adownload_files` | `write`/`read` of bytes | per-file responses |
+
+**Only the async methods are implemented.** deep agents' middleware calls the `a*` twins when the
+agent runs async, which is the only way a chat peer runs one. The sync methods keep the protocol's
+default, `NotImplementedError`. The alternatives were worse. One was running the coroutine on the
+chat's loop from a worker thread, which deadlocks when called from the loop itself. The other was
+a second, blocking implementation of every operation.
+
+**A view refuses writes with an error result, not by lacking the method.** deep agents registers
+`write_file` and `edit_file` whatever the backend, so a missing method would surface as a crash.
+The structural guarantee is still there underneath: the adapter holds a `WorkspaceView`, which has
+no `write`, so the refusal is the only thing it *can* do.
+
+**Not a `SandboxBackendProtocol`.** There is no `execute`, so deep agents answers its own `execute`
+tool with "no shell" — consistent with having no `run` operation.
+
+**Project operations do not reach a deep agent through the backend.** The protocol's methods are
+fixed. An added operation reaches a deep agent as a tool, which is the connector's business, in
+`add-deep-agent-connector`.
+
 ### What a view reads is the working tree
 
 `read`, `ls` and `grep` read the files as they are now, uncommitted changes included. `diff` is the
@@ -169,6 +227,13 @@ two from colliding: `ws_read` reads its own, `ws_read_of` someone else's. A `dif
   for `_say`.
 - [`/ws merge` conflicts] → The merge is aborted, the base branch is left as it was, and the
   command fails with the conflicting paths, which the terminal shows as an error toast.
+- [`chatinho[deepagents]` is heavy: it needs a newer `langchain` and brings `langchain-anthropic` and
+  `langchain-google-genai`] → It is its own extra, so `langchain` and `tui` stay as they are. On
+  Termux it may need Rust-built wheels, and `setup.sh` does not sync it there.
+- [deep agents' protocol moves (0.x)] → The extra pins a compatible range. The adapter's tests run
+  against the real ABC, not a copy of it, so a change in the protocol fails them.
+- [A deep agent can only `grep` literally] → Accepted. Exposing our regex `grep` as a second
+  tool beside deep agents' would give a model two greps to choose between.
 - [The hook count changes from fifteen to seventeen] → `docs/SPEC.md`, its fitness test,
   `examples/hooks.py` and CLAUDE.md change in the same task. The fitness test fails until they do.
 

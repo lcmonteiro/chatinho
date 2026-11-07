@@ -26,7 +26,7 @@ A peer or command that declares `HookWorkspace` SHALL be granted `workspace(name
 
 #### Scenario: Another peer's workspace is read-only
 - **WHEN** peer `reviewer` calls `workspace("dev")`
-- **THEN** it can `read`, `ls`, `grep`, `diff` and `log` dev's workspace, and the object it got has no `write`, `delete` or `commit`
+- **THEN** it can `ls`, `read`, `glob`, `grep`, `diff` and `log` dev's workspace, and the object it got has no `write`, `edit`, `delete` or `commit`
 
 #### Scenario: No provider
 - **WHEN** a peer declaring `HookWorkspace` calls `workspace()` in a session given no `workspaces`

@@ -11,7 +11,7 @@ Every operation of a workspace SHALL be a method declared as an operation, with 
 
 #### Scenario: Discovering the default operations
 - **WHEN** code calls `operations_of` on the read-only view class
-- **THEN** it gets `read`, `ls`, `grep`, `diff` and `log`, none of them writing
+- **THEN** it gets `ls`, `read`, `glob`, `grep`, `diff` and `log`, none of them writing
 
 #### Scenario: A non-coroutine operation
 - **WHEN** a class declares a plain `def` method as an operation
@@ -34,14 +34,23 @@ A project SHALL add operations by subclassing the read-only view, the writable w
 
 ### Requirement: The read operations
 A view, and so also a workspace, SHALL offer:
-- `read(path)`: the file's text as it is now in the working tree;
 - `ls(path=".")`: the entries of a directory, directories marked with a trailing `/`, and the repository's own metadata left out;
+- `read(path, offset=0, limit=2000)`: at most `limit` lines of the file as it is now in the working tree, starting at line `offset` (0-indexed), together with the 1-indexed number of the first line returned and whether lines remain after the window. A negative `offset` MUST read from the first line, and a `limit` of zero or less MUST return no lines rather than fail;
+- `glob(pattern, path=".")`: the files under `path`, never directories, whose path relative to `path` matches `pattern`, with `*`, `**` and `?`. A pattern without `/` MUST match the file's name at any depth. Files the repository ignores MUST be left out;
 - `diff()`: the working tree, uncommitted changes included, against the point where the workspace's branch left the base;
 - `log()`: the commits on the workspace's branch that are not on the base, newest first, each with its short id and subject.
 
 #### Scenario: Reading uncommitted work
 - **WHEN** `dev` writes `a.txt` without committing and `reviewer` reads it through dev's view
 - **THEN** `reviewer` gets the text `dev` wrote
+
+#### Scenario: Reading a window
+- **WHEN** a file has 10 lines and `read` is called with `offset=4` and `limit=3`
+- **THEN** it returns lines 5 to 7, says the window starts at line 5, and says lines remain
+
+#### Scenario: Finding files by name at any depth
+- **WHEN** the workspace has `a.py` and `src/app/main.py`, and `glob("*.py")` is called
+- **THEN** it returns both files
 
 #### Scenario: The diff shows all of the work
 - **WHEN** `dev` commits a change to `a.txt`, then changes `b.txt` without committing
@@ -88,6 +97,7 @@ Every operation that takes a path SHALL take it relative to the workspace's root
 ### Requirement: The write operations
 A workspace SHALL offer, besides the read operations:
 - `write(path, text)`: write the file, creating the directories it needs;
+- `edit(path, old, new, replace_all=False)`: replace the exact text `old` with `new` and return how many times it was replaced. When `old` does not occur, or occurs more than once without `replace_all`, it MUST fail saying which, and leave the file unchanged;
 - `delete(path)`: remove the file;
 - `commit(message)`: commit every change in the working tree on the workspace's branch and return the commit's id.
 
@@ -96,6 +106,14 @@ A commit with nothing to commit MUST raise an error saying so rather than creati
 #### Scenario: Write, commit, log
 - **WHEN** `dev` writes `a.txt`, commits "add a" and calls `log()`
 - **THEN** the log's newest entry is "add a" with the id `commit` returned
+
+#### Scenario: An exact edit
+- **WHEN** `a.txt` holds `x = 1` once and `dev` calls `edit("a.txt", "x = 1", "x = 2")`
+- **THEN** `a.txt` holds `x = 2`, and the edit returns 1
+
+#### Scenario: An ambiguous edit
+- **WHEN** `a.txt` holds `x = 1` twice and `dev` calls `edit("a.txt", "x = 1", "x = 2")`
+- **THEN** it fails saying the text is not unique, and `a.txt` is unchanged
 
 #### Scenario: Nothing to commit
 - **WHEN** `dev` calls `commit("x")` with no changes

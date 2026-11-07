@@ -7,7 +7,7 @@ When the connector declares `HookWorkspace` and its session has a workspace prov
 
 #### Scenario: Its own workspace as tools
 - **WHEN** the connector declares `HookWorkspace` and is asked a question
-- **THEN** the agent has `ws_read`, `ws_ls`, `ws_grep`, `ws_diff`, `ws_log`, `ws_write`, `ws_delete` and `ws_commit`
+- **THEN** the agent has `ws_ls`, `ws_read`, `ws_glob`, `ws_grep`, `ws_diff`, `ws_log`, `ws_write`, `ws_edit`, `ws_delete` and `ws_commit`
 
 #### Scenario: Reading another peer's workspace
 - **WHEN** the agent calls `ws_read_of` with `workspace="dev"` and `path="a.txt"`

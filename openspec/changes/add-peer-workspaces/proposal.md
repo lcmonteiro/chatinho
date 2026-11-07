@@ -21,8 +21,10 @@ isolated place of its own, a git worktree on a branch of its own, whose work the
 - **One workspace per peer**, keyed by the peer's *name* (ids change between sessions), created lazily
   on the first `workspace()` as a git worktree on branch `peer/<name>`, reused across restarts, and
   never removed by `close()`: it holds work, not cache.
-- **Operations are declared methods.** `WorkspaceView` (`read`, `ls`, `grep`, `diff`, `log`) and
-  `Workspace(WorkspaceView)` (`write`, `delete`, `commit`) mark each operation with `@operation`;
+- **Operations are declared methods.** `WorkspaceView` (`ls`, `read`, `glob`, `grep`, `diff`, `log`)
+  and `Workspace(WorkspaceView)` (`write`, `edit`, `delete`, `commit`) mark each operation with
+  `@operation`. The default set follows the vocabulary agent frameworks already use: `read` takes a
+  window of lines, `edit` replaces an exact string, and `glob` finds files;
   a writing one says `writes=True` and runs under the workspace's lock. Extending is subclassing:
   the provider takes the `view` and `workspace` classes, and refuses a workspace class that is not a
   subclass of the view class, or a view class that declares a writing operation.
@@ -35,9 +37,16 @@ isolated place of its own, a git worktree on a branch of its own, whose work the
   merges or drops one — merge and drop only when run by the user (`by == LOCAL`).
 - `AgentConnector` gets one `ws_<operation>` tool per operation the connector can reach, derived from
   the declarations, when it declares `HookWorkspace`.
+- `WorkspaceBackend(workspace)`: an adapter that makes a `Workspace` or a `WorkspaceView` a
+  LangChain deep agents backend (`deepagents.backends.BackendProtocol`), so it can be passed as
+  `create_deep_agent(backend=...)`, alone or as a route of a `CompositeBackend`. It lives behind a
+  new `chatinho[deepagents]` extra. A view's writing methods return a read-only error, as the
+  protocol expects, rather than being absent.
 
-Out of scope: an operation that runs arbitrary commands (`run`) and exposing workspaces through
-`McpFrontend`. Both fit the design and are left for their own changes.
+Out of scope: an operation that runs arbitrary commands (`run`, and so deep agents' `execute`), and
+exposing workspaces through `McpFrontend`. Both fit the design and are left for their own changes.
+A chat peer built on `create_deep_agent` is the follow-up change `add-deep-agent-connector`, which
+builds on the adapter.
 
 ## Capabilities
 
@@ -47,8 +56,10 @@ Out of scope: an operation that runs arbitrary commands (`run`) and exposing wor
   one-writer access model, one workspace per peer and its lifecycle, the `GitWorktrees` provider and
   the `/ws` command.
 - `workspace-operations`: operations declared as methods with `@operation`, the default read and
-  write operations (including multiline `grep`), how they are discovered, and how the set is
-  extended by subclassing `WorkspaceView` and `Workspace`.
+  write operations (including a line window on `read`, `edit`, `glob` and multiline `grep`), how
+  they are discovered, and how the set is extended by subclassing `WorkspaceView` and `Workspace`.
+- `workspace-backend`: a workspace or a view as a deep agents backend: how paths, results, errors,
+  the read-only view and the unsupported parts of the protocol behave, and the extra it needs.
 
 ### Modified Capabilities
 
@@ -65,7 +76,11 @@ Out of scope: an operation that runs arbitrary commands (`run`) and exposing wor
 - `builder.py`: `build_chat_session` and `build_mcp_session` accept `workspaces=`.
 - `connectors/agent.py`: the `ws_` tools.
 - `commands/`: `WorkspaceCommand`.
+- New module for the adapter, behind `chatinho[deepagents]`, which brings `deepagents`. That package
+  requires a newer `langchain` than the lock holds, and pulls in `langchain-anthropic` and
+  `langchain-google-genai` unconditionally, so `pyproject.toml` and `uv.lock` change, and the extra
+  is kept apart from `langchain` so that one stays light. `dev` and `all` include it.
 - Public API: `Workspace`, `WorkspaceView`, `operation`, `Match`, `GitWorktrees`, `WorkspaceCommand`,
-  `HookWorkspace`, `HookProvision`.
+  `HookWorkspace`, `HookProvision`, and `WorkspaceBackend` (lazy, behind its extra).
 - CLAUDE.md's "the backend is the only thing that touches the file system" stops being true, on
   purpose, and is reworded.
