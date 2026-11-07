@@ -2,7 +2,7 @@
 
 ## 1. The factory seam in AgentConnector
 
-- [ ] 1.1 Move the agent factory and its accepted options into class-level points of variation on `AgentConnector`: the factory (`create_agent`), the option set derived from its signature, and a coroutine method returning extra factory keyword arguments, empty by default. Verify the whole of `tests/test_agent_connector.py` still passes unchanged, and add a test that `AgentConnector("a", model, subagents=[...])` still raises `TypeError` naming `subagents`.
+- [x] 1.1 Move the agent factory and its accepted options into class-level points of variation on `AgentConnector`: the factory (`create_agent`), the option set derived from its signature, and a coroutine method returning extra factory keyword arguments, empty by default. Verify the whole of `tests/test_agent_connector.py` still passes unchanged, and add a test that `AgentConnector("a", model, subagents=[...])` still raises `TypeError` naming `subagents`.
 - [ ] 1.2 Make the set of peers that have a workspace part of the shape that decides when the graph is rebuilt, but only for a connector that uses its workspace. Verify a test where a workspace created after the first question changes the shape, and `AgentConnector` without `workspace=True` never calls `workspace()`, so no worktree appears.
 
 ## 2. Dependencies

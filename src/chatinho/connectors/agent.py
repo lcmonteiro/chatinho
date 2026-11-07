@@ -181,6 +181,12 @@ class AgentConnector:
     #: subclass whose framework already reaches a workspace leaves those out.
     COVERED : FrozenSet[str] = frozenset()
 
+    #: What builds the agent, and the options it takes besides the model and the
+    #: tools. A subclass swaps both to put another LangChain agent in the chat;
+    #: everything the chat does around the agent stays here.
+    FACTORY : Callable[..., Any] = staticmethod(create_agent)
+    OPTIONS : FrozenSet[str] = OPTIONS
+
     def __init__(
         self,
         name     : str,
@@ -195,9 +201,10 @@ class AgentConnector:
         workspace : bool = False,
         **agent_options: Any,
     ) -> None:
-        unknown = sorted(set(agent_options) - OPTIONS)
+        unknown = sorted(set(agent_options) - self.OPTIONS)
         if unknown:
-            raise TypeError("create_agent does not take %s" % ", ".join(repr(u) for u in unknown))
+            raise TypeError("%s does not take %s" % (getattr(self.FACTORY, "__name__", "the factory"),
+                                                     ", ".join(repr(u) for u in unknown)))
         self.name     = name
         self.model    = chat_model(model)
         self.tools    = list(tools)
@@ -275,9 +282,19 @@ class AgentConnector:
                 # The graph keeps the checkpoints; the agent inside it, run as
                 # its subgraph, saves under the same thread.
                 options = {k: v for k, v in self.options.items() if k != "checkpointer"}
-                inner   = create_agent(self.model, tools=tools, **options)
+                options.update(await self._factory_options())
+                inner   = self.FACTORY(self.model, tools=tools, **options)
                 self._built = (shape, self._compile(inner))
             return self._built[1]
+
+    async def _factory_options(self) -> Dict[str, Any]:
+        """
+        Options for the factory that can only be made when the graph is built; none here.
+
+        Called with the chat running, so a subclass may await its grants for
+        them — which is how a deep agent's backend is made from its workspace.
+        """
+        return {}
 
     def _compile(self, inner: Any) -> Any:
         """``extract -> agent -> verify -(retry)-> agent | -(done)-> load`` around *inner*."""

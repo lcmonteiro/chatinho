@@ -509,7 +509,8 @@ async def test_built_once_for_two_first_questions(monkeypatch):
         built.append(1)
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(module, "create_agent", counting)
+    # The factory is the class's seam, so a subclass can swap it; count through it.
+    monkeypatch.setattr(AgentConnector, "FACTORY", staticmethod(counting))
     agent = AgentConnector("agent", fake(says("ok")))
     session, view = await driven(connectors=[agent])
     await asyncio.gather(view.ask(agent.peer_id, "one"), view.ask(agent.peer_id, "two"))
@@ -781,3 +782,9 @@ async def test_the_diff_is_attached(repo):
     assert reply.text == "Here: [diff](agent.diff)"
     (attached,) = reply.attachments
     assert attached.name == "agent.diff" and b"+hello" in attached.data
+
+
+def test_deep_agent_options_are_not_create_agents():
+    """The factory seam must not widen what AgentConnector itself accepts."""
+    with pytest.raises(TypeError, match="create_agent does not take 'subagents'"):
+        AgentConnector("agent", fake(says("x")), subagents=[])
