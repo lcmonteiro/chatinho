@@ -151,8 +151,9 @@ reading it.
 ### Agent tools
 
 A connector that declares `HookWorkspace` gets one `ws_<op>` tool per operation of its own
-`Workspace`. It also gets one per operation of `WorkspaceView`, with a required `workspace`
-argument naming the peer, which reads another peer's workspace. A `diff` result is returned as an
+`Workspace`. It also gets one `ws_<op>_of` per operation of `WorkspaceView`, with a required
+`workspace` argument naming the peer, which reads another peer's workspace. The suffix keeps the
+two from colliding: `ws_read` reads its own, `ws_read_of` someone else's. A `diff` result is returned as an
 `Attachment`, which the connector already turns into an attachment of its answer.
 
 ## Risks / Trade-offs
