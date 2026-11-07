@@ -208,8 +208,11 @@ reading it.
 
 ### Agent tools
 
-A connector that declares `HookWorkspace` gets one `ws_<op>` tool per operation of its own
-`Workspace`. It also gets one `ws_<op>_of` per operation of `WorkspaceView`, with a required
+`AgentConnector` always declares `HookWorkspace`, and gets the tools only when created with
+`workspace=True`. Hooks are declared by the class, so a per-instance choice cannot be a
+declaration. Opting in keeps an assistant that never touches files from getting ten tools it does
+not need and a worktree on its first question. With it, the connector gets one `ws_<op>` tool per
+operation of its own `Workspace`. It also gets one `ws_<op>_of` per operation of `WorkspaceView`, with a required
 `workspace` argument naming the peer, which reads another peer's workspace. The suffix keeps the
 two from colliding: `ws_read` reads its own, `ws_read_of` someone else's. A `diff` result is returned as an
 `Attachment`, which the connector already turns into an attachment of its answer.

@@ -82,7 +82,7 @@ from .hooks import Hook, HookSay, HookAsk, HookAnswer, HookInvoke, HookExecute, 
 from .hooks import HookPeers, HookCommands, HookListen, HookLoad, HookForget, HookKeep, HookLink, HookLocate
 from .hooks import HookRoute, HookWorkspace, HookProvision, NoWorkspaceProvider
 from .hooks import Say, Ask, Invoke, Context, Peers, Commands, Locate, WorkspaceGrant
-from .commands import HelpCommand, TestCommand
+from .commands import HelpCommand, TestCommand, WorkspaceCommand
 from .workspaces import GitWorktrees, Lines, Match, Matches, Workspace, WorkspaceView
 from .workspaces import operation, operations_of
 from .routers import SimpleRouter
@@ -233,5 +233,6 @@ __all__ = [
     "McpConnector",
     "HelpCommand",
     "TestCommand",
+    "WorkspaceCommand",
     "SimpleRouter",
 ]

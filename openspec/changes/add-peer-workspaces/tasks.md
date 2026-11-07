@@ -25,13 +25,13 @@
 
 ## 4. The /ws command
 
-- [ ] 4.1 Add `WorkspaceCommand` (`commands/workspace.py`) with `/ws`, `/ws diff <name>` (the diff as an attachment), `/ws merge <name>` and `/ws drop <name>`. `merge` and `drop` are refused unless `by == LOCAL`. Unknown names and subcommands fail. Verify every scenario of the `/ws` requirement, including a model's `run_ws merge` being refused.
-- [ ] 4.2 Add `/ws` to what `build_chat_session` registers when a provider is given, and to `/help`. Verify `/help` lists it in a built session with workspaces and not in one without.
+- [x] 4.1 Add `WorkspaceCommand` (`commands/workspace.py`) with `/ws`, `/ws diff <name>` (the diff as an attachment), `/ws merge <name>` and `/ws drop <name>`. `merge` and `drop` are refused unless `by == LOCAL`. Unknown names and subcommands fail. Verify every scenario of the `/ws` requirement, including a model's `run_ws merge` being refused.
+- [x] 4.2 Add `/ws` to what `build_chat_session` registers when a provider is given, and to `/help`. Verify `/help` lists it in a built session with workspaces and not in one without.
 
 ## 5. Workspaces as agent tools
 
-- [ ] 5.1 In `connectors/agent.py`, derive the `ws_<op>` tools for the connector's own workspace and the `ws_<op>_of` tools for every read operation, from `operations_of`, when the connector declares `HookWorkspace`. The derivation takes a filter of operation names to leave out, for `add-deep-agent-connector`. Verify with the scripted model in `tests/fakes/agent.py`: the tool list scenario, reading another's workspace, an added `symbols` operation, a failing operation returned as text, and no tools when the hook is not declared.
-- [ ] 5.2 Return `diff` from its tool as an `Attachment`, so it becomes an attachment of the answer. Verify that a run calling `ws_diff` and linking the diff carries it as an attachment.
+- [x] 5.1 In `connectors/agent.py`, derive, when it is created with `workspace=True`, the `ws_<op>` tools for the connector's own workspace and the `ws_<op>_of` tools for every read operation, from `operations_of`. The derivation takes a filter of operation names to leave out, for `add-deep-agent-connector`. Verify with the scripted model in `tests/fakes/agent.py`: the tool list scenario, reading another's workspace, an added `symbols` operation, a failing operation returned as text, and no tools without `workspace=True` or without a provider.
+- [x] 5.2 Return `diff` from its tool as an `Attachment`, so it becomes an attachment of the answer. Verify that a run calling `ws_diff` and linking the diff carries it as an attachment.
 
 ## 6. The deep agents backend adapter
 

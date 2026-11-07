@@ -3,8 +3,9 @@ A LangChain agent as a chat peer, with the chat itself as its tools.
 
 :class:`AgentConnector` takes what LangChain's ``create_agent`` takes and builds
 the agent itself, adding the chat to its tools: one ``ask_<peer>`` per other
-peer that answers, one ``run_<command>`` per command. Each question it is asked
-is one run of the agent::
+peer that answers, one ``run_<command>`` per command, and — with
+``workspace=True`` — one ``ws_<operation>`` per operation of its workspace. Each
+question it is asked is one run of the agent::
 
     lead = AgentConnector("lead", Endpoint.load(), tools=[search_docs],
                           system_prompt="Plan the work and ask coder to write it.")
@@ -28,15 +29,18 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END, START, StateGraph
+from pydantic import create_model
 
 from ..endpoint import Endpoint
-from ..hooks import Ask, Commands, Context, Invoke, Peers, Say
+from ..hooks import Ask, Commands, Context, Invoke, Peers, Say, WorkspaceGrant
 from ..hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke, HookListen, HookPeers, HookSay
+from ..hooks import HookWorkspace, NoWorkspaceProvider
 from ..hooks import connector, declares, name_of, require
 from ..keys import KeyUnavailable, read_async
 from ..helpers.memory import MEMORY, earlier, speaker
 from ..message import LOCAL, Attachment, ChatMessage, Reply, ReplyStatus
 from ..query import Query
+from ..workspaces import Lines, Matches, Operation, operations_of
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +52,9 @@ _UNSAFE = re.compile(r"[^A-Za-z0-9_-]")
 
 #: The shape of the chat the agent was built for: its peers (id, name) and commands.
 Shape = Tuple[Tuple[Tuple[int, str], ...], Tuple[str, ...]]
+
+#: How much of a diff a ``ws_diff`` tool shows the model; the attachment holds all of it.
+DIFF_SHOWN : int = 20000
 
 #: How a link reminder starts; what follows names the missing links.
 REMINDER = "Your answer does not link every file you made."
@@ -128,6 +135,7 @@ def chat_model(model: Any) -> Any:
 @require(HookPeers)
 @require(HookCommands)
 @require(HookInvoke)
+@require(HookWorkspace)
 class AgentConnector:
     """
     A LangChain agent that answers in the chat, with the chat as its tools.
@@ -148,6 +156,11 @@ class AgentConnector:
             waits for the answer.
         link_retries: How many times one run sends the model back for a file
             its answer does not link; 0 never does.
+        workspace: Whether the agent gets its workspace as tools: one
+            ``ws_<operation>`` per operation of its own, and one
+            ``ws_<operation>_of`` per operation that reads, taking the name of
+            the peer whose workspace it reads. They need a session given
+            ``workspaces``; without one, the agent gets none and says so once.
         **agent_options: Anything else ``create_agent`` takes
             (``system_prompt``, ``middleware``, ``response_format``,
             ``checkpointer``, ...), passed through unchanged.
@@ -162,6 +175,11 @@ class AgentConnector:
     peers    : Peers
     commands : Commands
     invoke   : Invoke
+    workspace : WorkspaceGrant
+
+    #: Operations the agent gets no ``ws_`` tool for, by name: none here. A
+    #: subclass whose framework already reaches a workspace leaves those out.
+    COVERED : FrozenSet[str] = frozenset()
 
     def __init__(
         self,
@@ -174,6 +192,7 @@ class AgentConnector:
         commands : Optional[Iterable[str]] = None,
         ask_user : bool = False,
         link_retries : int = 1,
+        workspace : bool = False,
         **agent_options: Any,
     ) -> None:
         unknown = sorted(set(agent_options) - OPTIONS)
@@ -185,6 +204,10 @@ class AgentConnector:
         self.memory   = memory
         self.ask_user = ask_user
         self.link_retries = link_retries
+        #: Whether its workspace becomes tools. Not ``self.workspace``: that is the grant.
+        self.uses_workspace = workspace
+        #: Whether it already said it has no workspace provider, so it says it once.
+        self._said_no_workspace = False
         #: The peers and commands that may become tools; None for all.
         self.allowed_peers    : Optional[FrozenSet[str]] = None if peers is None else frozenset(peers)
         self.allowed_commands : Optional[FrozenSet[str]] = None if commands is None else frozenset(commands)
@@ -248,7 +271,7 @@ class AgentConnector:
         shape = self._shape()
         async with self._building:
             if self._built is None or self._built[0] != shape:
-                tools   = self.tools + self._chat_tools(shape)
+                tools   = self.tools + self._chat_tools(shape) + await self._workspace_tools()
                 # The graph keeps the checkpoints; the agent inside it, run as
                 # its subgraph, saves under the same thread.
                 options = {k: v for k, v in self.options.items() if k != "checkpointer"}
@@ -353,6 +376,66 @@ class AgentConnector:
             return answered if answered is not None else "(no answer)"
         return run
 
+    # === Its workspace, as tools ==================================================
+
+    async def _workspace_tools(self) -> List[StructuredTool]:
+        """
+        ``ws_<op>`` per operation of its own workspace, ``ws_<op>_of`` per one that reads.
+
+        Taken from the operations the provider's classes declare, so an
+        operation a project adds becomes a tool here without a line of its own.
+        """
+        if not self.uses_workspace:
+            return []
+        try:
+            mine = await self.workspace()
+        except NoWorkspaceProvider:
+            if not self._said_no_workspace:
+                self._said_no_workspace = True
+                logger.warning("%s: the session has no workspace provider, so no ws_ tools", self.name)
+            return []
+        theirs = {_named(t) for t in self.tools}
+        found  : List[StructuredTool] = []
+        for op in operations_of(mine):
+            if op.name not in self.COVERED:
+                found.append(self._operating(op, None))
+        for op in operations_of(mine.tree.view_class):
+            if op.name not in self.COVERED:
+                found.append(self._operating(op, "workspace"))
+        kept = [t for t in found if t.name not in theirs]
+        for hidden in sorted({t.name for t in found} - {t.name for t in kept}):
+            logger.warning("%s: its own tool %r hides the workspace's", self.name, hidden)
+        return kept
+
+    def _operating(self, op: Operation, whose: Optional[str]) -> StructuredTool:
+        """
+        A tool running *op*: on its own workspace, or, when *whose* names the
+        argument that says which, on that peer's.
+        """
+        fields : Dict[str, Any] = {}
+        if whose is not None:
+            fields[whose] = (str, ...)
+        for param in op.parameters:
+            kind = Any if param.annotation is inspect.Parameter.empty else param.annotation
+            fields[param.name] = (kind, ... if param.default is inspect.Parameter.empty else param.default)
+        name   = _tool_name("ws_", op.name + ("_of" if whose else ""))
+        schema = create_model("%s_args" % name, **fields)
+
+        async def run(**kwargs: Any) -> Tuple[str, Optional[Attachment]]:
+            owner = kwargs.pop(whose) if whose else None
+            try:
+                target = await self.workspace(owner)
+                result = await getattr(target, op.name)(**kwargs)
+            except Exception as exc:
+                return "%s failed: %s: %s" % (name, type(exc).__name__, exc), None
+            if op.name == "diff" and isinstance(result, str):
+                return _diffed(result, owner or self.name)
+            return _shown(result), None
+
+        described = op.description + ("; on another peer's workspace, which it only reads" if whose else "")
+        return StructuredTool.from_function(coroutine=run, name=name, description=described,
+                                            args_schema=schema, response_format="content_and_artifact")
+
     # === Memory =====================================================================
 
     def _history(self, msg: ChatMessage) -> List[BaseMessage]:
@@ -390,6 +473,35 @@ class AgentConnector:
         if not wanted:
             return {}
         return {wanted[m.id]: m for m in self.context(Query()) if m.id in wanted}
+
+
+def _shown(result: Any) -> str:
+    """What an operation returned, as the text a model reads."""
+    if result is None:
+        return "done"
+    if isinstance(result, Lines):
+        count = result.text.count("\n") + (0 if result.text.endswith("\n") or not result.text else 1)
+        span  = "lines %d-%d" % (result.start, result.start + count - 1) if count else "no lines"
+        return "[%s%s]\n%s" % (span, ", more follow" if result.more else "", result.text)
+    if isinstance(result, Matches):
+        if not result.matches:
+            return "no matches"
+        shown = ["%s:%d%s:\n%s" % (m.path, m.start, "" if m.end == m.start else "-%d" % m.end,
+                                    m.text.rstrip("\n")) for m in result.matches]
+        return "\n".join(shown) + ("\n[more matches were cut]" if result.truncated else "")
+    if isinstance(result, (list, tuple)):
+        return "\n".join(str(item) for item in result) or "(none)"
+    return str(result)
+
+
+def _diffed(diff: str, whose: str) -> Tuple[str, Optional[Attachment]]:
+    """A diff as the model reads it, and as the attachment its answer links."""
+    if not diff:
+        return "%s's workspace has no changes" % whose, None
+    name  = "%s.diff" % _UNSAFE.sub("_", whose)
+    shown = diff if len(diff) <= DIFF_SHOWN else diff[:DIFF_SHOWN] + "\n[the rest is in the attachment]"
+    return ("Attached as %s; link it as [%s's diff](%s).\n%s" % (name, whose, name, shown),
+            Attachment(name, "text/x-diff", diff.encode("utf-8")))
 
 
 def _turn(m: ChatMessage, me: Optional[int], roster: Dict[int, Any]) -> BaseMessage:

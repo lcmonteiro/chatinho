@@ -662,3 +662,122 @@ async def test_an_endpoint_without_a_key():
 
 def test_a_session_can_hold_it():
     assert isinstance(ChatSession(connectors=[AgentConnector("agent", fake(says("x")))]), ChatSession)
+
+
+# === Its workspace as tools =========================================================
+
+from chatinho.workspaces import GitWorktrees, Workspace, WorkspaceView, operation  # noqa: E402
+
+OWN_TOOLS = ["ws_ls", "ws_read", "ws_glob", "ws_grep", "ws_diff", "ws_log",
+             "ws_write", "ws_edit", "ws_delete", "ws_commit"]
+READ_TOOLS = ["ws_ls_of", "ws_read_of", "ws_glob_of", "ws_grep_of", "ws_diff_of", "ws_log_of"]
+
+
+def _ws_tools(model) -> List[str]:
+    """The ws_ tools the last run was given; a model given no tools at all is never bound."""
+    return [name for name in (model.tools[-1] if model.tools else []) if name.startswith("ws_")]
+
+
+async def test_its_own_workspace_as_tools(repo):
+    model = fake(says("ok"))
+    agent = AgentConnector("agent", model, workspace=True)
+    session, view = await driven(connectors=[agent], workspaces=GitWorktrees(repo))
+    await view.ask(agent.peer_id, "hello")
+    await session.close()
+    assert _ws_tools(model) == OWN_TOOLS + READ_TOOLS
+
+
+async def test_writing_through_a_tool(repo):
+    model = fake(calls("ws_write", path="a.txt", text="from the model\n"))
+    agent = AgentConnector("agent", model, workspace=True)
+    provider = GitWorktrees(repo)
+    session, view = await driven(connectors=[agent], workspaces=provider)
+    await view.ask(agent.peer_id, "write it")
+    await session.close()
+    ws = await provider.provision("agent", "agent")
+    assert (await ws.read("a.txt")).text == "from the model\n"
+
+
+async def test_reading_another_peers_workspace(repo):
+    provider = GitWorktrees(repo)
+    dev = await provider.provision("dev", "dev")
+    await dev.write("a.txt", "dev's work\n")                      # type: ignore[attr-defined]
+    model = fake(calls("ws_read_of", workspace="dev", path="a.txt"))
+    agent = AgentConnector("agent", model, workspace=True)
+    session, view = await driven(connectors=[agent], workspaces=provider)
+    reply = await view.ask(agent.peer_id, "what did dev write?")
+    await session.close()
+    assert reply.text == "[lines 1-1]\ndev's work\n"
+    assert not [t for t in model.tools[-1] if t.endswith("_of") and t[3:-3] in
+                ("write", "edit", "delete", "commit")]
+
+
+async def test_an_added_operation_becomes_tools(repo):
+    class MyView(WorkspaceView):
+        @operation("List the symbols in a file")
+        async def symbols(self, path: str) -> List[str]:
+            return ["C", "answer"]
+
+    class MyWorkspace(Workspace, MyView):
+        pass
+
+    model = fake(calls("ws_symbols_of", workspace="agent", path="x.py"))
+    agent = AgentConnector("agent", model, workspace=True)
+    session, view = await driven(connectors=[agent],
+                                 workspaces=GitWorktrees(repo, view=MyView, workspace=MyWorkspace))
+    reply = await view.ask(agent.peer_id, "symbols?")
+    await session.close()
+    assert "ws_symbols" in model.tools[-1] and "ws_symbols_of" in model.tools[-1]
+    assert reply.text == "C\nanswer"
+
+
+async def test_a_failing_operation_is_text(repo):
+    model = fake(calls("ws_read", then=lambda result: "saw: " + result, path="../secret"))
+    agent = AgentConnector("agent", model, workspace=True)
+    session, view = await driven(connectors=[agent], workspaces=GitWorktrees(repo))
+    reply = await view.ask(agent.peer_id, "read it")
+    await session.close()
+    assert reply.status == ReplyStatus.ANSWERED
+    assert reply.text.startswith("saw: ws_read failed: ValueError")
+
+
+async def test_no_ws_tools_unless_asked_for(repo):
+    model = fake(says("ok"))
+    agent = AgentConnector("agent", model)
+    session, view = await driven(connectors=[agent], workspaces=GitWorktrees(repo))
+    await view.ask(agent.peer_id, "hello")
+    await session.close()
+    assert _ws_tools(model) == []
+    assert await GitWorktrees(repo).names() == []                  # and no worktree was made
+
+
+async def test_no_ws_tools_without_a_provider(caplog):
+    model = fake(says("ok"))
+    agent = AgentConnector("agent", model, workspace=True)
+    session, view = await driven(connectors=[agent])
+    assert (await view.ask(agent.peer_id, "hello")).text == "ok"
+    await session.close()
+    assert _ws_tools(model) == []
+    assert "no workspace provider" in caplog.text
+
+
+async def test_the_diff_is_attached(repo):
+    def script(messages):
+        from langchain_core.messages import ToolMessage as Result
+        from fakes.agent import this_run
+        done = [m for m in this_run(messages) if isinstance(m, Result)]
+        if not done:
+            return AIMessage(content="", tool_calls=[{"name": "ws_diff", "args": {}, "id": "d1"}])
+        return AIMessage(content="Here: [diff](agent.diff)")
+
+    provider = GitWorktrees(repo)
+    mine = await provider.provision("agent", "agent")
+    await mine.write("a.txt", "hello\n")                          # type: ignore[attr-defined]
+    agent = AgentConnector("agent", fake(script), workspace=True)
+    session, view = await driven(connectors=[agent], workspaces=provider)
+    question = ChatMessage(id=session._store.new_id(), text="show me", frm=LOCAL, to=agent.peer_id)
+    reply = await agent.answer(question)
+    await session.close()
+    assert reply.text == "Here: [diff](agent.diff)"
+    (attached,) = reply.attachments
+    assert attached.name == "agent.diff" and b"+hello" in attached.data

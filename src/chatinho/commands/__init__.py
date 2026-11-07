@@ -7,8 +7,10 @@ A command is a plain class that declares what it can do with
 
 from .help import HelpCommand
 from .test import TestCommand
+from .workspace import WorkspaceCommand
 
 __all__ = [
     "HelpCommand",
     "TestCommand",
+    "WorkspaceCommand",
 ]
