@@ -339,7 +339,7 @@ def blocked(name, *a, **k):
     return real(name, *a, **k)
 builtins.__import__ = blocked
 from chatinho.helpers.agent import AgentFactory, AgentPeer, BasicAgent, Interrupted
-from chatinho.connectors.agents import AgentConnector
+from chatinho.connectors.agents import BasicAgentConnector
 try:
     from chatinho.helpers.agent import DeepAgent
 except ImportError:

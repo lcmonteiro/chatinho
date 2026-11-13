@@ -1,7 +1,7 @@
 """
 Two agents, each in a git worktree of its own: dev writes and commits, reviewer reads dev's work.
 
-Both are ``AgentConnector`` peers created with ``workspace=True``, so each gets
+Both are ``BasicAgentConnector`` peers created with ``workspace=True``, so each gets
 its workspace as tools: ``ws_read``, ``ws_edit``, ``ws_commit``… on its own, and
 ``ws_read_of``, ``ws_diff_of``… on anyone else's, which it can only read. Ask
 ``@dev`` for a change, then ``@reviewer`` to review dev's diff, then look
@@ -28,8 +28,8 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from chatinho import AgentConnector, Endpoint, GitWorktrees, HelpCommand, KeyUnavailable, WorkspaceCommand
-from chatinho import build_chat_session
+from chatinho import BasicAgentConnector, Endpoint, GitWorktrees, HelpCommand, KeyUnavailable
+from chatinho import WorkspaceCommand, build_chat_session
 
 DEV      = ("You are a developer working in your own git worktree. Read before you change, change with "
             "ws_edit or ws_write, and ws_commit when a change is complete. Say what you changed.")
@@ -73,8 +73,8 @@ def parts(repo: Optional[Path] = None) -> dict:
     provider = GitWorktrees(repo or scratch_repository())
     return dict(
         connectors = [
-            AgentConnector("dev", model, system_prompt=DEV, workspace=True, peers=[]),
-            AgentConnector("reviewer", model, system_prompt=REVIEWER, workspace=True, peers=[]),
+            BasicAgentConnector("dev", model, system_prompt=DEV, workspace=True, peers=[]),
+            BasicAgentConnector("reviewer", model, system_prompt=REVIEWER, workspace=True, peers=[]),
         ],
         commands   = [HelpCommand(), WorkspaceCommand(provider)],
         backend    = None,

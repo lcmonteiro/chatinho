@@ -13,10 +13,10 @@ from typing import Any
 
 #: name -> the module that defines it.
 _WHERE = {
-    "OpenAIConnector"    : "chatinho.connectors.openai",
-    "McpConnector"       : "chatinho.connectors.mcp",
-    "AgentConnector"     : "chatinho.connectors.agents.basic",
-    "DeepAgentConnector" : "chatinho.connectors.agents.deep",
+    "OpenAIConnector"     : "chatinho.connectors.openai",
+    "McpConnector"        : "chatinho.connectors.mcp",
+    "BasicAgentConnector" : "chatinho.connectors.agents.basic",
+    "DeepAgentConnector"  : "chatinho.connectors.agents.deep",
 }
 
 __all__ = sorted(_WHERE)

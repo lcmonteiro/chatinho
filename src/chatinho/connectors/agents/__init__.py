@@ -10,8 +10,8 @@ from typing import Any
 
 #: name -> the module that defines it.
 _WHERE = {
-    "AgentConnector"     : "chatinho.connectors.agents.basic",
-    "DeepAgentConnector" : "chatinho.connectors.agents.deep",
+    "BasicAgentConnector" : "chatinho.connectors.agents.basic",
+    "DeepAgentConnector"  : "chatinho.connectors.agents.deep",
 }
 
 __all__ = sorted(_WHERE)

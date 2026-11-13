@@ -1,14 +1,14 @@
 """
 A LangChain agent as a chat peer, with the chat itself as its tools.
 
-:class:`AgentConnector` takes what LangChain's ``create_agent`` takes and builds
+:class:`BasicAgentConnector` takes what LangChain's ``create_agent`` takes and builds
 the agent itself, adding the chat to its tools: one ``ask_<peer>`` per other
 peer that answers, one ``run_<command>`` per command, and — with
 ``workspace=True`` — one ``ws_<operation>`` per operation of its workspace. Each
 question it is asked is one run of the agent::
 
-    lead = AgentConnector("lead", Endpoint.load(), tools=[search_docs],
-                          system_prompt="Plan the work and ask coder to write it.")
+    lead = BasicAgentConnector("lead", Endpoint.load(), tools=[search_docs],
+                               system_prompt="Plan the work and ask coder to write it.")
 
 Its memory is the chat: earlier messages come from ``context()``, so the agent
 needs no checkpointer. A peer it asks may ask it back; the session bounds how
@@ -27,7 +27,7 @@ from ...hooks import connector
 
 
 @connector("agent")
-class AgentConnector(AgentPeer):
+class BasicAgentConnector(AgentPeer):
     """
     A LangChain ``create_agent`` agent that answers in the chat, with the chat as its tools.
 

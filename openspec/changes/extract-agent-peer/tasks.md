@@ -17,9 +17,9 @@
 
 ## 3. Rename AgentConnector to BasicAgentConnector
 
-- [ ] 3.1 Rename the class in `connectors/agents/basic.py`, `connectors/__init__.py`, `chatinho/__init__.py` (`__all__`, lazy table, `TYPE_CHECKING`), `helpers/memory.py` and the docstrings in `helpers/agent/`; verify `grep -rnw AgentConnector src` prints nothing
-- [ ] 3.2 Rename it in the tests (rename `test_agent_connector.py` to `test_basic_agent_connector.py`), and add the scenario that `chatinho.AgentConnector` raises `AttributeError`; verify `pytest -q` passes
-- [ ] 3.3 Rename it in `examples/agent.py`, `examples/workspaces.py`, `examples/deep_agent.py` and `examples/README.md`; verify `mypy src/chatinho examples` and `pytest -q tests/test_examples.py` pass
+- [x] 3.1 Rename the class in `connectors/agents/basic.py`, `connectors/__init__.py`, `chatinho/__init__.py` (`__all__`, lazy table, `TYPE_CHECKING`), `helpers/memory.py` and the docstrings in `helpers/agent/`; verify `grep -rnw AgentConnector src` prints nothing
+- [x] 3.2 Rename it in the tests (rename `test_agent_connector.py` to `test_basic_agent_connector.py`), and add the scenario that `chatinho.AgentConnector` raises `AttributeError`; verify `pytest -q` passes
+- [x] 3.3 Rename it in `examples/agent.py`, `examples/workspaces.py`, `examples/deep_agent.py` and `examples/README.md`; verify `mypy src/chatinho examples` and `pytest -q tests/test_examples.py` pass
 
 ## 4. Documentation
 

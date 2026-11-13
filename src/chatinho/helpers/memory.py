@@ -1,5 +1,5 @@
 """
-What ``OpenAIConnector`` and ``AgentConnector`` agree on: what a model remembers, and who said it.
+What ``OpenAIConnector`` and ``BasicAgentConnector`` agree on: what a model remembers, and who said it.
 
 Standard library only, so either connector can import it without the other's
 library.

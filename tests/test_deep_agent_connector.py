@@ -235,7 +235,7 @@ async def test_an_interrupted_say(repo):
     assert len(response) == 1 and "interrupted" in response[0].text
 
 
-# === The same peer as AgentConnector in the chat ====================================
+# === The same peer as BasicAgentConnector in the chat ====================================
 
 async def test_asking_another_peer(repo):
     model = fake(steps({"ask_coder": {"question": "Write a test"}}))

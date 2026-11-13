@@ -100,7 +100,7 @@ def blocked(name, *a, **k):
 builtins.__import__ = blocked
 
 import chatinho
-for name in ("build_chat_session", "build_mcp_session", "ChatFrontend", "McpFrontend", "AgentConnector"):
+for name in ("build_chat_session", "build_mcp_session", "ChatFrontend", "McpFrontend", "BasicAgentConnector"):
     try:
         getattr(chatinho, name)
     except ImportError as exc:
@@ -139,10 +139,10 @@ def test_each_frontend_needs_only_its_own_extra():
 
 
 def test_the_agent_connector_needs_its_extra():
-    status, message = _read_without("langchain")["AgentConnector"]
+    status, message = _read_without("langchain")["BasicAgentConnector"]
     assert status == "missing"
     assert "chatinho[langchain]" in message
-    assert _read_without("textual")["AgentConnector"] == ["ok"]
+    assert _read_without("textual")["BasicAgentConnector"] == ["ok"]
 
 
 def test_the_core_stays_light():
@@ -175,3 +175,27 @@ def test_the_deep_agent_connector_is_where_it_says():
     assert chatinho.DeepAgentConnector is DeepAgentConnector
     assert connectors.DeepAgentConnector is DeepAgentConnector
     assert "DeepAgentConnector" in chatinho.__all__ and "DeepAgentConnector" in connectors.__all__
+
+
+def test_the_basic_agent_connector_is_where_it_says():
+    import chatinho
+    from chatinho import connectors
+    from chatinho.connectors import agents
+    from chatinho.connectors.agents.basic import BasicAgentConnector
+    assert chatinho.BasicAgentConnector is BasicAgentConnector
+    assert connectors.BasicAgentConnector is BasicAgentConnector
+    assert agents.BasicAgentConnector is BasicAgentConnector
+    assert "BasicAgentConnector" in chatinho.__all__ and "BasicAgentConnector" in connectors.__all__
+
+
+def test_the_former_agent_connector_is_gone():
+    """Renamed BasicAgentConnector, with no alias; its modules moved under connectors/agents/."""
+    import importlib
+
+    import chatinho
+    with pytest.raises(AttributeError):
+        chatinho.AgentConnector
+    assert "AgentConnector" not in chatinho.__all__
+    for gone in ("chatinho.connectors.agent", "chatinho.connectors.deep"):
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(gone)
