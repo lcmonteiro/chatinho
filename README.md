@@ -322,8 +322,9 @@ What other peers say is only memory, so two agents never trade says.
 
 Both agent connectors are `AgentPeer` (`chatinho.helpers.agent`) with a factory: `BasicAgent` makes
 the agent with `create_agent`, `DeepAgent` with `create_deep_agent`. To put another kind of agent in
-the chat, write a factory — a `name`, the `options` it takes, the workspace operations its own tools cover (`covered`),
-and `async build(model, tools, options, peer)` — and pass it: `AgentPeer("planner", model, MyFactory())`.
+the chat, write a factory — a `name`, the `options` it takes, the workspace operations its own tools
+cover (`covered`), and `async build(model, tools, options, peer)` — and pass it:
+`AgentPeer("planner", model, MyFactory())`.
 
 ### Across machines — `pip install 'chatinho[mcp]'`
 

@@ -28,5 +28,5 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `ruff check src tests examples`, `mypy src/chatinho examples`, `pytest -q` and `openspec validate --all --strict --no-interactive`, and verify all four are green
+- [x] 5.1 Run `ruff check src tests examples`, `mypy src/chatinho examples`, `pytest -q` and `openspec validate --all --strict --no-interactive`, and verify all four are green
 - [ ] 5.2 After archive, retitle the scenario "AgentConnector is unchanged" to "BasicAgentConnector is unchanged" in `openspec/specs/deep-agent-connector/spec.md`, and verify `openspec validate --all --strict --no-interactive` still passes
