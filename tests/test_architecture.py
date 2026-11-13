@@ -328,6 +328,29 @@ def test_the_package_description_counts_the_hooks():
     assert _COUNTS.index(said[-1]) == len(ALL_HOOKS)
 
 
+def test_the_basic_agent_needs_no_deepagents():
+    """What the agent connectors share, and the basic one, import with deep agents blocked."""
+    script = """
+import builtins, sys
+real = builtins.__import__
+def blocked(name, *a, **k):
+    if name.split(".")[0] == "deepagents":
+        raise ImportError("No module named %r" % name)
+    return real(name, *a, **k)
+builtins.__import__ = blocked
+from chatinho.helpers.agent import AgentFactory, AgentPeer, BasicAgent, Interrupted
+from chatinho.connectors.agents import AgentConnector
+try:
+    from chatinho.helpers.agent import DeepAgent
+except ImportError:
+    print("deep-blocked")
+print("deepagents" in sys.modules)
+"""
+    done = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, cwd=str(ROOT))
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["deep-blocked", "False"]
+
+
 def test_using_a_workspace_does_not_import_deepagents(repo):
     """The adapter is behind its extra: a workspace in a plain session must not pull it in."""
     script = """

@@ -148,7 +148,7 @@ def test_the_agent_connector_needs_its_extra():
 def test_the_core_stays_light():
     done = subprocess.run(
         [sys.executable, "-c",
-         "import sys, chatinho, chatinho.connectors; "
+         "import sys, chatinho, chatinho.connectors, chatinho.connectors.agents; "
          "print(sorted(m for m in sys.modules if m.split('.')[0].startswith('lang')))"],
         capture_output=True, text=True, cwd=str(ROOT),
     )
@@ -171,7 +171,7 @@ def test_the_workspaces_are_public():
 def test_the_deep_agent_connector_is_where_it_says():
     import chatinho
     from chatinho import connectors
-    from chatinho.connectors.deep import DeepAgentConnector
+    from chatinho.connectors.agents.deep import DeepAgentConnector
     assert chatinho.DeepAgentConnector is DeepAgentConnector
     assert connectors.DeepAgentConnector is DeepAgentConnector
     assert "DeepAgentConnector" in chatinho.__all__ and "DeepAgentConnector" in connectors.__all__

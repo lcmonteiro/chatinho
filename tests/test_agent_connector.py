@@ -33,8 +33,8 @@ from chatinho import (
     connector,
     require,
 )
-from chatinho.connectors import agent as module
-from chatinho.connectors.agent import AgentConnector
+from chatinho.connectors.agents.basic import AgentConnector
+from chatinho.helpers.agent import basic as module
 from chatinho.keys import Env
 
 from fakes.agent import File, calls, fake, maker, makes, question, reminders, says
@@ -509,8 +509,8 @@ async def test_built_once_for_two_first_questions(monkeypatch):
         built.append(1)
         return real(*args, **kwargs)
 
-    # The factory is the class's seam, so a subclass can swap it; count through it.
-    monkeypatch.setattr(AgentConnector, "FACTORY", staticmethod(counting))
+    # BasicAgent builds with the module's create_agent; count through it.
+    monkeypatch.setattr(module, "create_agent", counting)
     agent = AgentConnector("agent", fake(says("ok")))
     session, view = await driven(connectors=[agent])
     await asyncio.gather(view.ask(agent.peer_id, "one"), view.ask(agent.peer_id, "two"))
@@ -790,7 +790,7 @@ def test_deep_agent_options_are_not_create_agents():
         AgentConnector("agent", fake(says("x")), subagents=[])
 
 
-async def test_a_workspace_that_appears_later_rebuilds_the_graph(repo):
+async def test_a_workspace_that_appears_later_rebuilds_the_graph(repo, monkeypatch):
     built = []
     real  = module.create_agent
 
@@ -800,7 +800,7 @@ async def test_a_workspace_that_appears_later_rebuilds_the_graph(repo):
 
     provider = GitWorktrees(repo)
     agent = AgentConnector("agent", fake(says("ok")), workspace=True)
-    agent.FACTORY = counting                                       # type: ignore[assignment]
+    monkeypatch.setattr(module, "create_agent", counting)
     lab = _Echo("lab")
     session, view = await driven(connectors=[agent, lab], workspaces=provider)
     await view.ask(agent.peer_id, "one")

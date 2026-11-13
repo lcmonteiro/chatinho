@@ -66,8 +66,8 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     # Importing them here restores that without importing anything at run time.
     from .backends import DatabaseBackend
     from .builder import build_chat_session, build_mcp_session
-    from .connectors.agent import AgentConnector
-    from .connectors.deep import DeepAgentConnector
+    from .connectors.agents.basic import AgentConnector
+    from .connectors.agents.deep import DeepAgentConnector
     from .connectors.mcp import McpConnector
     from .connectors.openai import OpenAIConnector
     from .frontends.chat import ChatFrontend
@@ -104,8 +104,8 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
     "McpFrontend"        : (".frontends.mcp",         (_MCP,)),
     "McpConnector"       : (".connectors.mcp",        (_MCP,)),
     "OpenAIConnector"    : (".connectors.openai",     (("openai", "openai"),)),
-    "AgentConnector"     : (".connectors.agent",      (("langchain", "langchain"),)),
-    "DeepAgentConnector" : (".connectors.deep",       (("deepagents", "deepagents"),)),
+    "AgentConnector"     : (".connectors.agents.basic",(("langchain", "langchain"),)),
+    "DeepAgentConnector" : (".connectors.agents.deep", (("deepagents", "deepagents"),)),
     "DatabaseBackend"    : (".backends",              (("sql", "sqlalchemy"),)),
     "WorkspaceBackend"   : (".workspaces.deepagents", (("deepagents", "deepagents"),)),
 }
