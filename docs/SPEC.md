@@ -609,12 +609,18 @@ both.
 
 ### An agent is a peer whose tools are the chat
 
-`AgentConnector` (`chatinho[langchain]`) declares `HookAnswer` and grants itself the rest of the
+`BasicAgentConnector` (`chatinho[langchain]`) declares `HookAnswer` and grants itself the rest of the
 chat: `HookPeers` and `HookAsk` become one `ask_<peer>` tool per other peer that answers, and
 `HookCommands` and `HookInvoke` become one `run_<command>` tool per command. `HookContext` is its
 memory. It answers each question with one run of a LangChain `create_agent` agent, built from the
 same parameters. A peer it asks through a tool may ask it back: the nested question is one level
 deeper, and `max_depth` stops a loop.
+
+Its hooks and everything above are `AgentPeer`'s (`chatinho.helpers.agent`), which receives the
+factory that makes the agent: `BasicAgent` (`create_agent`) here, `DeepAgent` (`create_deep_agent`)
+for `DeepAgentConnector`. Any object with a `name`, the `options` it takes, the workspace operations
+it `covers` and an `async build(model, tools, options, peer)` is a factory, so a third kind of agent
+is `AgentPeer(name, model, factory)` and declares the same hooks without a line of its own.
 
 ---
 
@@ -622,7 +628,7 @@ deeper, and `max_depth` stops a loop.
 
 A peer that declares `HookWorkspace` works in its own worktree and reads everyone else's; the
 provider keeps them, and `/ws` is how the user lists, diffs, merges and drops them.
-`AgentConnector(workspace=True)` turns the operations into tools — `ws_<op>` on its own workspace,
+`BasicAgentConnector(workspace=True)` turns the operations into tools — `ws_<op>` on its own workspace,
 `ws_<op>_of` on anyone else's — and `WorkspaceBackend` (`chatinho[deepagents]`) hands a workspace to
 a LangChain deep agent as its file backend. `DeepAgentConnector` (the same extra) is that deep agent
 as a peer: its own workspace at `/`, every other peer's that exists at `/peers/<name>/`, read-only,

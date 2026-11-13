@@ -65,7 +65,7 @@ true. These names live behind an extra:
 | `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` |
 | `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
-| `AgentConnector` — a LangChain agent | `chatinho[langchain]` | `langchain`, `langchain-openai` |
+| `BasicAgentConnector` — a LangChain agent | `chatinho[langchain]` | `langchain`, `langchain-openai` |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
 | all of them | `chatinho[all]` | all of the above |
 
@@ -281,15 +281,15 @@ command.
 
 ### Agents — `pip install 'chatinho[langchain]'`
 
-`AgentConnector` is a LangChain agent as a peer. It takes what `create_agent` takes and builds the
-agent itself, adding **the chat as tools**: `ask_<peer>` for every other peer that answers, and
+`BasicAgentConnector` is a LangChain agent as a peer. It takes what `create_agent` takes and builds
+the agent itself, adding **the chat as tools**: `ask_<peer>` for every other peer that answers, and
 `run_<command>` for every command. Each question it is asked is one run of the agent:
 
 ```python
-from chatinho import AgentConnector, Endpoint, OpenAIConnector
+from chatinho import BasicAgentConnector, Endpoint, OpenAIConnector
 
-lead  = AgentConnector("lead", Endpoint.load(), tools=[search_docs],
-                       system_prompt="Plan the work; ask coder for any code.", peers=["coder"])
+lead  = BasicAgentConnector("lead", Endpoint.load(), tools=[search_docs],
+                            system_prompt="Plan the work; ask coder for any code.", peers=["coder"])
 coder = OpenAIConnector("coder", Endpoint.load())
 ```
 
@@ -314,11 +314,16 @@ def draw(name: str, svg: str):
     """Draw an SVG picture the chat can show."""
     return "made %s" % name, Attachment(name=name, media_type="image/svg+xml", data=svg.encode())
 
-painter = AgentConnector("painter", Endpoint.load(), tools=[draw])
+painter = BasicAgentConnector("painter", Endpoint.load(), tools=[draw])
 ```
 
 A question gets a reply; what **you** say to everyone gets a say from the agent, replying to it.
 What other peers say is only memory, so two agents never trade says.
+
+Both agent connectors are `AgentPeer` (`chatinho.helpers.agent`) with a factory: `BasicAgent` makes
+the agent with `create_agent`, `DeepAgent` with `create_deep_agent`. To put another kind of agent in
+the chat, write a factory — a `name`, the `options` it takes, the workspace operations its own tools cover (`covered`),
+and `async build(model, tools, options, peer)` — and pass it: `AgentPeer("planner", model, MyFactory())`.
 
 ### Across machines — `pip install 'chatinho[mcp]'`
 

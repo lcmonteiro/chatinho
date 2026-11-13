@@ -23,8 +23,8 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Update `CLAUDE.md`: the Layout tree (`connectors/agents/`, `helpers/agent/`), the packaging table and export list (`BasicAgentConnector`, still 82 names), the Workspaces section's `AgentConnector`/`DeepAgentConnector` paragraphs (factory object instead of `FACTORY`/`OPTIONS`/`_factory_options`), and a sentence naming `AgentPeer` as the second deliberate base class after `WorkspaceView`; verify `grep -nw AgentConnector CLAUDE.md` prints nothing
-- [ ] 4.2 Update `README.md` and `docs/SPEC.md` to the new name and import paths; verify `grep -rnw AgentConnector README.md docs` prints nothing and `pytest -q tests/test_architecture.py` (the SPEC.md check) passes
+- [x] 4.1 Update `CLAUDE.md`: the Layout tree (`connectors/agents/`, `helpers/agent/`), the packaging table and export list (`BasicAgentConnector`, still 82 names), the Workspaces section's `AgentConnector`/`DeepAgentConnector` paragraphs (factory object instead of `FACTORY`/`OPTIONS`/`_factory_options`), and a sentence naming `AgentPeer` as the second deliberate base class after `WorkspaceView`; verify `grep -nw AgentConnector CLAUDE.md` prints nothing
+- [x] 4.2 Update `README.md` and `docs/SPEC.md` to the new name and import paths; verify `grep -rnw AgentConnector README.md docs` prints nothing and `pytest -q tests/test_architecture.py` (the SPEC.md check) passes
 
 ## 5. Integration
 
