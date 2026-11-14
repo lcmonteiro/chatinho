@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 from ..hooks import HookProvision, require
-from ..shared_parts.workspace.operations import operations_of
-from ..shared_parts.workspace.tree import GitError, Tree, run_git
-from ..shared_parts.workspace.views import Workspace, WorkspaceView
+from ..support.parts.workspace.operations import operations_of
+from ..support.parts.workspace.tree import GitError, Tree, run_git
+from ..support.parts.workspace.views import Workspace, WorkspaceView
 
 logger = logging.getLogger(__name__)
 

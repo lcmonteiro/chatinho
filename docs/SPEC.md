@@ -169,7 +169,7 @@ async def answer(self, msg) -> Reply:
 ```
 
 Whoever lends chooses where the key comes from: `McpConnector(delegate={"llm": source})` takes a
-value, a function, or a key source from `chatinho.shared_parts.keys` (`Env`, `File`, `Keyring`, `Command`,
+value, a function, or a key source from `chatinho.support.parts.keys` (`Env`, `File`, `Keyring`, `Command`,
 `Chain`, …), read for each question. A source that cannot yield its key answers that question with an
 `error` reply naming the reference, and nothing is sent.
 
@@ -616,7 +616,7 @@ memory. It answers each question with one run of a LangChain `create_agent` agen
 same parameters. A peer it asks through a tool may ask it back: the nested question is one level
 deeper, and `max_depth` stops a loop.
 
-Its hooks and everything above are `AgentPeer`'s (`chatinho.shared_kits.agent`), which receives the
+Its hooks and everything above are `AgentPeer`'s (`chatinho.support.kits.agent`), which receives the
 factory that makes the agent: `BasicAgent` (`create_agent`) here, `DeepAgent` (`create_deep_agent`)
 for `DeepAgentConnector`. Any object with a `name`, the `options` it takes, the workspace operations
 it `covers` and an `async build(model, tools, options, peer)` is a factory, so a third kind of agent

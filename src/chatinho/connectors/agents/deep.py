@@ -1,8 +1,8 @@
 """
 A LangChain deep agent as a chat peer, working in its own workspace.
 
-:class:`DeepAgentConnector` is :class:`~chatinho.shared_kits.agent.peer.AgentPeer`
-with :class:`~chatinho.shared_kits.agent.deep.DeepAgent` as its factory: the same
+:class:`DeepAgentConnector` is :class:`~chatinho.support.kits.agent.peer.AgentPeer`
+with :class:`~chatinho.support.kits.agent.deep.DeepAgent` as its factory: the same
 chat around the agent as the basic connector — ``ask_<peer>``, ``run_<command>``,
 memory from ``context()``, attachments, a say for what the user says — and deep
 agents' planning, subagents and file tools inside it. Its backend is its
@@ -16,8 +16,8 @@ Needs ``pip install 'chatinho[deepagents]'``.
 
 from typing import Any, List, Optional, Sequence
 
-from ...shared_kits.agent.deep import DeepAgent
-from ...shared_kits.agent.peer import AgentPeer
+from ...support.kits.agent.deep import DeepAgent
+from ...support.kits.agent.peer import AgentPeer
 from ...hooks import connector
 
 
@@ -26,7 +26,7 @@ class DeepAgentConnector(AgentPeer):
     """
     A deep agent that answers in the chat, working in its own workspace.
 
-    Takes what :class:`~chatinho.shared_kits.agent.peer.AgentPeer` takes but the
+    Takes what :class:`~chatinho.support.kits.agent.peer.AgentPeer` takes but the
     factory, and what ``create_deep_agent`` takes besides (``subagents``,
     ``skills``, ``permissions``, ``interrupt_on``, ``store``…), with two
     differences:

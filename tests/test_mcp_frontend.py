@@ -7,7 +7,7 @@ import pytest
 from chatinho import LOCAL, Attachment, HookAnswer, HookExecute, HookListen, HookSay, Reply, Say
 from chatinho import connector, declares, require, tool
 from chatinho.frontends.mcp import McpFrontend
-from chatinho.shared_parts.mcp import CREDENTIALS_KEY, decode
+from chatinho.support.parts.mcp import CREDENTIALS_KEY, decode
 from fakes.mcp import Agent, Files, Weather, ask, call, client, remote
 
 

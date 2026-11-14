@@ -12,7 +12,7 @@ from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
-from ...message import Attachment, ChatMessage
+from ....message import Attachment, ChatMessage
 from .results import REMINDER, files, text
 
 
