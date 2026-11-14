@@ -1,3 +1,4 @@
 name: restructure-packages
 created: '2026-11-14T00:44:17'
 phase: specify
+skip_specs: true
