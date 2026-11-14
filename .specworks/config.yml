@@ -56,7 +56,47 @@ docs_dir: docs
 #     description: Login, sessions and password reset
 #     prefix: AUTH          # optional: REQ-AUTH-001 instead of REQ-USER-AUTH-001
 #     tests: src/auth/tests # optional: its test folder instead of <tests_dir>/user-auth
-capabilities: {}
+capabilities:
+  framework:
+    path: src/chatinho
+    description: "The session, the hooks, messages and context: who hears, who answers, and the peers' lifecycle"
+    prefix: CORE
+  keys:
+    path: src/chatinho/support/parts/keys
+    description: "Key sources read late, and endpoint profiles"
+    prefix: KEYS
+  workspace-model:
+    path: src/chatinho/support/parts/workspace
+    description: "What a workspace is: the tree, declared operations, the reading view and the writing one"
+    prefix: WSM
+  agents:
+    path: src/chatinho/support/kits/agent
+    description: "The chat around an agent: AgentPeer, the factories, the tools and the workspace backend"
+    prefix: AGENT
+  connectors:
+    path: src/chatinho/connectors
+    description: "The peers that answer: OpenAI, a remote session over MCP, and the agents"
+    prefix: CONN
+  frontends:
+    path: src/chatinho/frontends
+    description: "Who speaks for the person: the terminal, and the session served over MCP"
+    prefix: FRONT
+  backends:
+    path: src/chatinho/backends
+    description: "The archive: keeping, loading and forgetting the conversation and its attachments"
+    prefix: BACK
+  commands:
+    path: src/chatinho/commands
+    description: "The commands /help, /test and /ws"
+    prefix: CMD
+  routers:
+    path: src/chatinho/routers
+    description: "Who answers a say that names nobody"
+    prefix: ROUTE
+  workspaces:
+    path: src/chatinho/workspaces
+    description: "The provider: one git worktree per peer, merge and drop"
+    prefix: WS
 
 # Modules: sub-projects with their own config (their own .specworks/config.yml),
 # like git submodules. Each one is a complete project (own context,
