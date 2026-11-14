@@ -7,14 +7,14 @@ Puts a LangChain agent into a chat as a peer: built from the same parameters as 
 ## Requirements
 
 ### Requirement: Built from create_agent's parameters
-`AgentConnector` SHALL take its name in the chat, a `model` and `tools`, plus any other keyword argument `create_agent` accepts (`system_prompt`, `middleware`, `response_format`, `checkpointer` and the rest). It SHALL pass those to `create_agent` unchanged, except that the chat's tools are added to `tools`. A keyword argument `create_agent` does not accept MUST raise `TypeError` when the connector is created, naming that argument. The agent's own `name`, when not given, SHALL be the connector's name. Creating the connector MUST NOT call the model.
+`BasicAgentConnector` SHALL take its name in the chat, a `model` and `tools`, plus any other keyword argument `create_agent` accepts (`system_prompt`, `middleware`, `response_format`, `checkpointer` and the rest). It SHALL pass those to `create_agent` unchanged, except that the chat's tools are added to `tools`. A keyword argument `create_agent` does not accept MUST raise `TypeError` when the connector is created, naming that argument. The agent's own `name`, when not given, SHALL be the connector's name. Creating the connector MUST NOT call the model.
 
 #### Scenario: Options reach create_agent
-- **WHEN** an `AgentConnector` is created with `system_prompt="Be brief."` and asked a question
+- **WHEN** a `BasicAgentConnector` is created with `system_prompt="Be brief."` and asked a question
 - **THEN** the model receives "Be brief." as its system prompt
 
 #### Scenario: An unknown option
-- **WHEN** an `AgentConnector` is created with `temprature=0.2`
+- **WHEN** a `BasicAgentConnector` is created with `temprature=0.2`
 - **THEN** creating it raises `TypeError` naming `temprature`
 
 ### Requirement: One question, one run of the agent
@@ -94,19 +94,23 @@ Before the question, the agent SHALL be given the messages `context()` returns f
 `model` SHALL accept what `create_agent` accepts (a model name or a chat model) and also an `Endpoint`. An `Endpoint` MUST become an OpenAI-compatible chat model for its URL and model (`gpt-4o` when it has none), whose key is read from the endpoint's key source each time it is needed, never when the connector is created, and never stored as plain text on the connector. A key that cannot be read MUST become an `ERROR` reply naming the reason.
 
 #### Scenario: Created without the key
-- **WHEN** an `AgentConnector` is created with an `Endpoint` whose key variable is not set
+- **WHEN** a `BasicAgentConnector` is created with an `Endpoint` whose key variable is not set
 - **THEN** creating it succeeds, and the first question gets an `ERROR` reply saying the variable is not set
 
 ### Requirement: Packaged behind its own extra
-`AgentConnector` SHALL be importable from `chatinho.connectors.agent`, `chatinho.connectors` and `chatinho`, and SHALL need the `langchain` extra. Importing `chatinho` or `chatinho.connectors` MUST NOT import LangChain. Reading `AgentConnector` off `chatinho` without the extra MUST raise `ImportError` naming `chatinho[langchain]`.
+`BasicAgentConnector` SHALL be importable from `chatinho.connectors.agents.basic`, `chatinho.connectors.agents`, `chatinho.connectors` and `chatinho`, and SHALL need the `langchain` extra. Importing `chatinho`, `chatinho.connectors` or `chatinho.connectors.agents` MUST NOT import LangChain. Reading `BasicAgentConnector` off `chatinho` without the extra MUST raise `ImportError` naming `chatinho[langchain]`. The former name `AgentConnector` MUST NOT be exported, and the module `chatinho.connectors.agent` MUST NOT exist.
 
 #### Scenario: Without the extra
-- **WHEN** LangChain is not installed and code reads `chatinho.AgentConnector`
+- **WHEN** LangChain is not installed and code reads `chatinho.BasicAgentConnector`
 - **THEN** it raises `ImportError` naming `chatinho[langchain]`
 
 #### Scenario: The core stays light
 - **WHEN** code imports `chatinho`
 - **THEN** no `langchain` module is imported
+
+#### Scenario: The former name is gone
+- **WHEN** code reads `chatinho.AgentConnector`
+- **THEN** it raises `AttributeError`
 
 ### Requirement: Files the agent made are attached
 A tool result of the run whose artifact is an `Attachment`, or any object with a `name`, a `media_type` and `data` (text or bytes), SHALL become an attachment of the result, in the order the tools returned them; text data MUST be encoded as UTF-8. Only the files of the current run MUST be attached, never those of earlier messages in memory. When two files of one run share a name, the later one MUST be kept. A tool result with no such artifact MUST add no attachment.
@@ -166,7 +170,7 @@ What the user says with `to` unset SHALL be responded to with a say from the con
 - **THEN** the router addresses the say to the connector, the model runs once, and the connector answers with one reply without also saying anything
 
 ### Requirement: Workspaces as tools
-`AgentConnector` SHALL declare `HookWorkspace` and SHALL take a `workspace` option, `False` by default. When it is created with `workspace=True` and its session has a workspace provider, the agent SHALL have, besides its other tools, one tool per operation of its own workspace, named `ws_` followed by the operation's name, described by the operation's description, and taking the operation's parameters. It SHALL also have one tool per read operation, named `ws_` followed by the operation's name and `_of`, that takes the name of the peer whose workspace it reads in a `workspace` parameter. The tools MUST be derived from the operations the provider's classes declare, so an operation a project adds becomes a tool with no change to the connector. A tool whose operation raises MUST return the failure as text naming the kind of error, never end the run. A `diff` result MUST become an attachment of the answer, as any tool's file does. A connector created without `workspace=True` MUST have no `ws_` tools and MUST NOT cause a workspace to be created. One whose session has no provider MUST have no `ws_` tools, MUST still answer, and SHALL log once that it has none.
+`BasicAgentConnector` SHALL declare `HookWorkspace` and SHALL take a `workspace` option, `False` by default. When it is created with `workspace=True` and its session has a workspace provider, the agent SHALL have, besides its other tools, one tool per operation of its own workspace, named `ws_` followed by the operation's name, described by the operation's description, and taking the operation's parameters. It SHALL also have one tool per read operation, named `ws_` followed by the operation's name and `_of`, that takes the name of the peer whose workspace it reads in a `workspace` parameter. The tools MUST be derived from the operations the provider's classes declare, so an operation a project adds becomes a tool with no change to the connector. A tool whose operation raises MUST return the failure as text naming the kind of error, never end the run. A `diff` result MUST become an attachment of the answer, as any tool's file does. A connector created without `workspace=True` MUST have no `ws_` tools and MUST NOT cause a workspace to be created. One whose session has no provider MUST have no `ws_` tools, MUST still answer, and SHALL log once that it has none.
 
 #### Scenario: Its own workspace as tools
 - **WHEN** the connector is created with `workspace=True` and is asked a question
