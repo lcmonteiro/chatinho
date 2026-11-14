@@ -78,7 +78,7 @@ Without `asked_of` that is the only thing keeping an answer out of its asker's `
 what tells a follow-up from an answer: the answer it replies to was addressed to nobody, so the
 follow-up is routed back to whoever gave it. The cost, stated plainly: **a listener that answers
 only what is owed by nobody (`msg.to is None`) stays quiet in a room with one answering peer**,
-because the router gave the user's say to that peer — which is what `AgentConnector` did by hand
+because the router gave the user's say to that peer — which is what `BasicAgentConnector` did by hand
 before. An archive from before this keeps its `asked_of` column, unread, and answers with `to` set;
 nothing is migrated.
 
@@ -324,13 +324,13 @@ goes.
 
 **An operation is a declared method, and extending is subclassing.** `@operation(description,
 writes=False)` on an `async def` of a `WorkspaceView` or `Workspace` subclass; `operations_of(cls)`
-is what every consumer reads, so `AgentConnector` gets `ws_symbols` for an operation a project
+is what every consumer reads, so `BasicAgentConnector` gets `ws_symbols` for an operation a project
 added without a line of its own. A writing operation runs under the workspace's `asyncio.Lock`,
 taken by the decorator, so none has to remember to. `GitWorktrees(view=…, workspace=…)` refuses at
 construction a workspace class that does not subclass the view class (an operation added to the
-view would be invisible to its owner) and a view class with a writing operation. **This is the one
-base class in the library, deliberately**: elsewhere a base class would be a label, and here it is
-the behaviour being extended. The default set — `ls`, `read` with a line window, `glob`, `grep`,
+view would be invisible to its owner) and a view class with a writing operation. **This is one of
+the library's two base classes, deliberately** — `AgentPeer`, below, is the other: elsewhere a base
+class would be a label, and here it is the behaviour being extended. The default set — `ls`, `read` with a line window, `glob`, `grep`,
 `diff`, `log`; `write`, `edit`, `delete`, `commit` — is deep agents' vocabulary on purpose: it is
 what models are trained to reach for, and it keeps the adapter below a translation.
 
@@ -347,7 +347,7 @@ been simpler, and would have written to the owner's staging area from a *reader'
 `.git`. That is a door by convention: an operation that calls `open()` itself can still leave, the
 same honest limit `_say` has.
 
-**`AgentConnector(workspace=True)` turns the operations into tools**: `ws_<op>` on its own,
+**`BasicAgentConnector(workspace=True)` turns the operations into tools**: `ws_<op>` on its own,
 `ws_<op>_of` (with a `workspace` argument) for each operation that reads, a `diff` attached to the
 answer. It is opt-in because hooks are declared by the class, so a per-instance choice cannot be a
 declaration — and an assistant that never touches a file should not get ten tools and a worktree on
@@ -362,24 +362,39 @@ only** (the sync methods raise, rather than reach into the chat's loop from a th
 backend; and it is **not a sandbox**, so `execute` gets deep agents' own "no shell". Its `grep` is
 literal, as the protocol says — `re.escape` over ours.
 
-**`DeepAgentConnector` (`chatinho[deepagents]`) is `AgentConnector` with `create_deep_agent`
-inside**, not a copy of it. `AgentConnector` carries the seam: `FACTORY` and `OPTIONS` on the
-class, and `_factory_options()`, awaited when the graph is built, for what can only be made with
-the chat running. The subclass swaps the first two and makes its **backend** in the third: a
-`CompositeBackend` whose `/` is its own workspace and whose `/peers/<name>/` is each other peer's,
-read-only, asked with `create=False` so routing makes nobody a worktree. Those peers are part of the
-shape the graph is rebuilt on, so a workspace that appears later is reachable from the next
-question. Its `COVERED` set leaves out the `ws_` tools deep agents' own file tools already reach —
-a model offered `read_file` and `ws_read` would have to guess — so it gets `ws_diff`, `ws_log`,
-`ws_commit`, their `_of` forms and whatever a project adds. Two option names are the chat's:
-`memory` stays the `Query`, so deep agents' own is `agent_memory`, and `backend` is refused, since
-taking one would let a peer step outside the one-writer rule unnoticed. `workspace=True` is its
-default. With no provider it runs on deep agents' in-memory default and says so once, and the
-paragraph telling it where `/peers/` is is left out of its prompt.
+**Both agent connectors are `AgentPeer` with a factory, and the factory is what differs.**
+`AgentPeer(name, model, factory, ...)` in `helpers/agent/` is the whole chat around an agent: the
+hooks, a run per question, the `ask_`/`run_`/`ws_` tools, memory, attachments and the link check. It
+**receives** an `AgentFactory` — anything with a `name`, the `options` it accepts, the workspace
+operations its own tools already `cover`, and `async build(model, tools, options, peer)` — and builds
+nothing until the first question, then again whenever the chat's shape changes.
+`BasicAgentConnector` is `AgentPeer` with `BasicAgent()` (`create_agent`); `DeepAgentConnector` is
+`AgentPeer` with `DeepAgent(agent_memory)` (`create_deep_agent`). Each is a constructor and nothing
+else. A third kind of agent is a factory passed to `AgentPeer`, not a subclass of a connector. The
+seam used to be class attributes (`FACTORY`, `OPTIONS`, `COVERED`) and an overridden
+`_factory_options()` on the basic connector, so the deep one subclassed a concrete connector and
+spread what makes it deep across four overrides; now all of it is in `helpers/agent/deep.py`.
+
+**`AgentPeer` is the library's second base class, deliberately, for `WorkspaceView`'s reason**: what
+a subclass reuses is the behaviour itself, and a connector only picks a factory and its defaults. Two
+methods are there for factories, documented as such: `own_workspace()` (None without one, the
+missing provider logged once) and `others_workspaces()` (asked with `create=False`).
+
+**`DeepAgent` makes its backend from the peer's workspace**: a `CompositeBackend` whose `/` is its
+own workspace and whose `/peers/<name>/` is each other peer's, read-only, asked with `create=False`
+so routing makes nobody a worktree. Those peers are part of the shape the graph is rebuilt on, so a
+workspace that appears later is reachable from the next question. Its `covered` set leaves out the
+`ws_` tools deep agents' own file tools already reach — a model offered `read_file` and `ws_read`
+would have to guess — so it gets `ws_diff`, `ws_log`, `ws_commit`, their `_of` forms and whatever a
+project adds. Two option names are the chat's: `memory` stays the `Query`, so deep agents' own is
+`agent_memory`, and `backend` is refused by `DeepAgentConnector`, since taking one would let a peer
+step outside the one-writer rule unnoticed. `workspace=True` is its default. With no provider it
+runs on deep agents' in-memory default and says so once, and the paragraph telling it where
+`/peers/` is is left out of its prompt.
 
 **A run that stops for a decision ends as an `ERROR` reply.** `interrupt_on` pauses deep agents
 (and `create_agent`) for a human to approve a tool call, and nothing in the chat resumes a run: the
-graph comes back with `__interrupt__` and no answer. `AgentConnector._run` turns that into
+graph comes back with `__interrupt__` and no answer. `AgentPeer._run` turns that into
 `Interrupted`, answered as "the run was interrupted", rather than the `KeyError` it used to be.
 
 ## The seventeen hooks
@@ -423,7 +438,8 @@ called it.
 
 ## Everything declares what it does
 
-A peer or a command is a **plain class**. No base class, no `isinstance` anywhere in the library.
+A peer or a command is a **plain class**. No base class, no `isinstance` anywhere in the library —
+but for two, each for what a subclass reuses: `WorkspaceView` and `AgentPeer`, under Workspaces.
 
 ```python
 @connector("weather")
@@ -515,11 +531,10 @@ src/chatinho/
   connectors/      openai.py (OpenAIConnector: AsyncOpenAI, any compatible base_url; its `memory` is a
                    Query it hands to context(), HookPeers for who said what; a lent `llm` key wins),
                    mcp.py (McpConnector: asking a remote session over MCP),
-                   agent.py (AgentConnector: a LangChain create_agent agent, built lazily, with the
-                   chat as tools: ask_<peer>, run_<command>, and ws_<op> with workspace=True;
-                   its memory is context(); FACTORY/OPTIONS are the seam a subclass swaps),
-                   deep.py (DeepAgentConnector: create_deep_agent, its workspace as its backend)
                    — plain classes, no base; each imported on first use, behind its own extra
+    agents/        the agent connectors, each AgentPeer with a factory and nothing else:
+      basic.py     BasicAgentConnector: BasicAgent (create_agent)
+      deep.py      DeepAgentConnector: DeepAgent (create_deep_agent, its workspace as its backend)
   frontends/       mcp.py (McpFrontend: the session served over MCP, speaking for every client)
     chat/          the terminal — the only package that imports Textual:
       __init__.py  ChatFrontend — Textual presentation only, no session of its own
@@ -527,19 +542,31 @@ src/chatinho/
       composer.py  CommandInput (a multi-line TextArea) + CommandSuggestions
       clipboard.py OSC 52's second route: a clipboard helper, if the system has one
       style.py     ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
-  helpers/         mcp.py (what McpFrontend and McpConnector share: credentials key, names, attachments)
+  helpers/         mcp.py (what McpFrontend and McpConnector share: credentials key, names, attachments),
+                   memory.py (what a model remembers, for OpenAIConnector and AgentPeer) — stdlib only
+    agent/         what the agent connectors share, behind chatinho[langchain] (plural connectors/agents/
+                   holds the connectors, singular helpers/agent/ what they share):
+      peer.py      AgentPeer: the hooks, answer/listen, graph(), memory; built lazily, rebuilt on shape
+      factory.py   AgentFactory: name, options, covered, async build(model, tools, options, peer)
+      basic.py     BasicAgent: create_agent
+      deep.py      DeepAgent: create_deep_agent, CompositeBackend, WHERE — behind chatinho[deepagents],
+                   imported lazily so AgentPeer never pulls deepagents in
+      graph.py     extract -> agent -> verify -> load around the agent
+      tools.py     ask_<peer>, run_<command>, ask_user, ws_<op>/ws_<op>_of
+      results.py   the answer's text and files, an operation's result as text, a diff as attachment
 docs/              SPEC.md — the seventeen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          assistant.py, team.py, files.py (LLM demos: parts() + main()), lab_server.py / lab_client.py /
                    lab_fastmcp_client.py (a model over MCP, lent keys), inbox.py (HTTP, inbound), hooks.py (one peer per hook),
                    workspaces.py (two agents in git worktrees: dev commits, reviewer reads its diff)
-                   deep_agent.py (a DeepAgentConnector in its worktree, an AgentConnector reviewing it)
+                   deep_agent.py (a DeepAgentConnector in its worktree, a BasicAgentConnector reviewing it)
 tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
                    test_chat_session.py, test_database_backend.py, test_message_store.py,
                    test_require.py, test_architecture.py, test_package_layout.py,
                    test_clipboard.py, test_answer_details.py,
                    test_lending.py, test_mcp_*.py, test_message_delivery.py,
-                   test_context_query.py, test_openai_connector.py, test_agent_connector.py,
+                   test_context_query.py, test_openai_connector.py, test_basic_agent_connector.py,
+                   test_agent_peer.py,
                    test_workspace_operations.py, test_git_worktrees.py, test_workspaces_in_session.py,
                    test_workspace_command.py, test_workspace_backend.py, test_deep_agent_connector.py
                    (real git repos, no terminal)
@@ -986,7 +1013,7 @@ import. Eleven names live behind an extra and are resolved on first use with PEP
 | `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` (4.0+, on the official `mcp` SDK) |
 | `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
 | `OpenAIConnector` | `chatinho[openai]` | `openai` |
-| `AgentConnector` | `chatinho[langchain]` | `langchain`, `langchain-openai` (langgraph with them) |
+| `BasicAgentConnector` | `chatinho[langchain]` | `langchain`, `langchain-openai` (langgraph with them) |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
 | `WorkspaceBackend`, `DeepAgentConnector` | `chatinho[deepagents]` | `deepagents` and `langchain-openai`; deepagents needs `langchain` 1.4.9+ and always brings `langchain-anthropic` and `langchain-google-genai` |
 
@@ -1013,7 +1040,7 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`, `Commands`, `Locate`, `WorkspaceGrant`); the
 workspaces (`Workspace`, `WorkspaceView`, `operation`, `operations_of`, `Lines`, `Match`, `Matches`,
 `GitWorktrees`, `WorkspaceBackend`); and the batteries
-(`OpenAIConnector`, `AgentConnector`, `DeepAgentConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`,
+(`OpenAIConnector`, `BasicAgentConnector`, `DeepAgentConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`,
 `McpConnector`, `HelpCommand`, `TestCommand`, `WorkspaceCommand`, `SimpleRouter`), with the keys and endpoints (`Endpoint`, `KeySource`,
 `KeyUnavailable`, `Env`, `DotEnv`, `File`, `Keyring`, `Command`, `Literal`, `Chain`, `key`).
 

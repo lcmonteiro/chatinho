@@ -15,7 +15,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import StructuredTool
 
-from chatinho.connectors.agent import REMINDER
+from chatinho.helpers.agent.results import REMINDER
 
 Script = Callable[[List[BaseMessage]], AIMessage]
 

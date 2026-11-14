@@ -4,7 +4,7 @@ A deep agent working in its own git worktree, and a reviewer who reads its work.
 ``dev`` is a ``DeepAgentConnector``: a LangChain deep agent (``create_deep_agent``)
 whose files are its workspace. Its own ``read_file``, ``edit_file`` and ``grep``
 work in its worktree, ``ws_commit`` commits there, and everyone else's work is
-under ``/peers/<name>/``, read-only. ``reviewer`` is an ``AgentConnector`` that
+under ``/peers/<name>/``, read-only. ``reviewer`` is a ``BasicAgentConnector`` that
 reads dev's diff with ``ws_diff_of`` and cannot change it.
 
 Ask ``@dev`` for a change, ``@reviewer`` for a review, then ``/ws diff dev`` to
@@ -28,7 +28,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from chatinho import AgentConnector, DeepAgentConnector, Endpoint, GitWorktrees, HelpCommand
+from chatinho import BasicAgentConnector, DeepAgentConnector, Endpoint, GitWorktrees, HelpCommand
 from chatinho import KeyUnavailable, WorkspaceCommand, build_chat_session
 
 DEV      = "You are a careful developer. Read before you change, keep changes small, and commit each one."
@@ -70,7 +70,7 @@ def parts(repo: Optional[Path] = None) -> dict:
     return dict(
         connectors = [
             DeepAgentConnector("dev", model, system_prompt=DEV, peers=[]),
-            AgentConnector("reviewer", model, system_prompt=REVIEWER, workspace=True, peers=[]),
+            BasicAgentConnector("reviewer", model, system_prompt=REVIEWER, workspace=True, peers=[]),
         ],
         commands   = [HelpCommand(), WorkspaceCommand(provider)],
         backend    = None,

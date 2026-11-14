@@ -16,7 +16,8 @@ pytest.importorskip("deepagents")
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolMessage  # noqa: E402
 
 from chatinho import ChatMessage, HookAnswer, Query, Reply, ReplyStatus, require  # noqa: E402
-from chatinho.connectors.deep import WHERE, DeepAgentConnector                  # noqa: E402
+from chatinho.connectors.agents.deep import DeepAgentConnector                  # noqa: E402
+from chatinho.helpers.agent.deep import WHERE                                    # noqa: E402
 from chatinho.workspaces import GitWorktrees, WorkspaceView, operation           # noqa: E402
 
 from conftest import driven                                                      # noqa: E402
@@ -234,7 +235,7 @@ async def test_an_interrupted_say(repo):
     assert len(response) == 1 and "interrupted" in response[0].text
 
 
-# === The same peer as AgentConnector in the chat ====================================
+# === The same peer as BasicAgentConnector in the chat ====================================
 
 async def test_asking_another_peer(repo):
     model = fake(steps({"ask_coder": {"question": "Write a test"}}))
