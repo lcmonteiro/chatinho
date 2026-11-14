@@ -6,6 +6,30 @@ specworks: 1
 # context: free text the agent reads before every phase (stack, conventions,
 # constraints). Keep it short; it is guidance, not documentation.
 context: |
+  chatinho: a chat library where everyone is a peer (Python 3.12+, managed with
+  uv; the terminal frontend is built on Textual). The core installs nothing:
+  every battery sits behind an extra and is imported on first use.
+
+  Four layers, each importing only what is below it, enforced by
+  tests/test_architecture.py: the framework (session.py, hooks.py, message.py,
+  query.py), support/parts (stdlib only, no part imports another), support/kits
+  (may need an extra), and the specializations (connectors, frontends, backends,
+  commands, routers, workspaces), which never import one another. Only
+  builder.py and __init__.py see all four.
+
+  A peer or a command is a plain class that declares its hooks with @require;
+  no base class but WorkspaceView and AgentPeer. Everything is a coroutine and
+  nothing may block the loop.
+
+  Tests in tests/<capability>/ (pytest, asyncio_mode auto); what crosses
+  capabilities stays in tests/, with conftest.py and fakes/. No two test files
+  share a name.
+
+  Conventions (CLAUDE.md has the full list and the reasons): typing.List /
+  Optional, not PEP 585/604; no `from __future__ import annotations`; %-style
+  logging; aligned `=` and `:`; line length 110; Google-style docstrings. A
+  pyproject.toml change needs `uv lock` beside it. docs/SPEC.md is the
+  reference for the hooks and is checked against the code.
 
 # Name of the folder, inside each capability's code path, that holds its
 # living docs (spec.md, requirements.md, design.md and its diagrams).
@@ -47,8 +71,8 @@ modules: {}
 # documentation (.md, .rst, .txt, ...): a tag quoted in a doc is not code or a test.
 # In a glob * and ? stay within one folder and ** spans any number of folders,
 # e.g. test_globs: ["tests/**/*.py"] or source_globs: ["src/**"].
-test_globs: []
-source_globs: []
+test_globs: ["tests/**/*.py"]
+source_globs: ["src/**/*.py"]
 
 # Commands the skills run, in this project's own tooling (any language).
 # A module's commands override the top level's, key by key.
