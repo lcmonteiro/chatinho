@@ -29,7 +29,7 @@ import tomllib
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from .keys import Env, KeyLike, KeySource, KeyUnavailable, key, to_source
+from .sources import Env, KeyLike, KeySource, KeyUnavailable, key, to_source
 
 #: The fields a profile may set.
 FIELDS = ("base_url", "model", "api_key")

@@ -26,7 +26,8 @@ from chatinho import (
 from chatinho.hooks import HookExecute, WorkspaceGrant, tool
 from chatinho.message import LOCAL
 from chatinho.session import ChatSession
-from chatinho.workspaces import GitWorktrees, Workspace, WorkspaceView
+from chatinho.shared.workspace import Workspace, WorkspaceView
+from chatinho.workspaces import GitWorktrees
 
 from conftest import driven
 

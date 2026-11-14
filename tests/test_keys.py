@@ -11,8 +11,8 @@ import types
 import pytest
 
 from chatinho import Secret
-from chatinho.keys import Chain, Command, DotEnv, Env, File, Keyring, KeyUnavailable, Literal
-from chatinho.keys import key, read_async, to_source
+from chatinho.shared.keys import Chain, Command, DotEnv, Env, File, Keyring, KeyUnavailable, Literal
+from chatinho.shared.keys import key, read_async, to_source
 
 posix = pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
 

@@ -13,14 +13,8 @@ from typing import List
 
 import pytest
 
-from chatinho.workspaces import (
-    GitWorktrees,
-    Lines,
-    Workspace,
-    WorkspaceView,
-    operation,
-    operations_of,
-)
+from chatinho.shared.workspace import Lines, Workspace, WorkspaceView, operation, operations_of
+from chatinho.workspaces import GitWorktrees
 
 
 async def own(repo, name: str = "dev") -> Workspace:

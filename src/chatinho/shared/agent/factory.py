@@ -1,9 +1,9 @@
 """
-``AgentFactory``: what makes the agent an :class:`~chatinho.helpers.agent.peer.AgentPeer` runs.
+``AgentFactory``: what makes the agent an :class:`~chatinho.shared.agent.peer.AgentPeer` runs.
 
 A factory is any object with these four members; there is nothing to subclass.
-:class:`~chatinho.helpers.agent.basic.BasicAgent` and
-:class:`~chatinho.helpers.agent.deep.DeepAgent` are the two shipped.
+:class:`~chatinho.shared.agent.basic.BasicAgent` and
+:class:`~chatinho.shared.agent.deep.DeepAgent` are the two shipped.
 """
 
 from typing import Any, Dict, FrozenSet, List, Protocol
@@ -38,7 +38,7 @@ class AgentFactory(Protocol):
             tools: The peer's own tools, then the chat's.
             options: What the peer was given, ``name`` defaulting to the peer's
                 and without ``checkpointer``, which the peer's own graph keeps.
-            peer: The :class:`~chatinho.helpers.agent.peer.AgentPeer`, so the
+            peer: The :class:`~chatinho.shared.agent.peer.AgentPeer`, so the
                 factory can await its grants.
 
         Returns:

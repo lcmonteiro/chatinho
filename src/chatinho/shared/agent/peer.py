@@ -1,7 +1,7 @@
 """
 ``AgentPeer``: a LangChain agent as a chat peer, with the chat itself as its tools.
 
-The agent is made by a factory (:class:`~chatinho.helpers.agent.factory.AgentFactory`)
+The agent is made by a factory (:class:`~chatinho.shared.agent.factory.AgentFactory`)
 the peer is given; everything the chat does around it is here: one run per
 question, ``ask_<peer>``/``run_<command>``/``ws_<operation>`` tools, memory from
 ``context()``, attachments and the link check. The connectors are subclasses
@@ -23,15 +23,15 @@ from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tup
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-from ...endpoint import Endpoint
+from ..keys.endpoint import Endpoint
 from ...hooks import Ask, Commands, Context, Invoke, Peers, Say, WorkspaceGrant
 from ...hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke, HookListen, HookPeers
 from ...hooks import HookSay, HookWorkspace, NoWorkspaceProvider
 from ...hooks import declares, name_of, require
-from ...keys import KeyUnavailable, read_async
+from ..keys import KeyUnavailable, read_async
 from ...message import LOCAL, Attachment, ChatMessage, Reply, ReplyStatus
 from ...query import Query
-from ...workspaces import Workspace, WorkspaceView
+from ..workspace import Workspace, WorkspaceView
 from ..memory import MEMORY, earlier, speaker
 from .factory import AgentFactory
 from .graph import compile_graph
@@ -83,9 +83,9 @@ class AgentPeer:
         name: Its name in the chat; also the agent's ``name`` unless one is given.
         model: What the factory takes (for LangChain, a model name such as
             ``"openai:gpt-4o"``, or a chat model), or an
-            :class:`~chatinho.endpoint.Endpoint`.
+            :class:`~chatinho.shared.keys.endpoint.Endpoint`.
         factory: What makes the agent: an
-            :class:`~chatinho.helpers.agent.factory.AgentFactory`.
+            :class:`~chatinho.shared.agent.factory.AgentFactory`.
         tools: The agent's own tools. The chat's are added to them; on a clash
             of names the caller's tool wins.
         memory: Which earlier messages the agent is given, as a

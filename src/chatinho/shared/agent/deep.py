@@ -23,7 +23,7 @@ from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import BackendProtocol
 from langchain_core.messages import SystemMessage
 
-from ...workspaces.deepagents import WorkspaceBackend
+from .workspace_backend import WorkspaceBackend
 
 logger = logging.getLogger(__name__)
 

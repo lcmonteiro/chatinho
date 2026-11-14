@@ -355,15 +355,15 @@ its first question.
 
 **`WorkspaceBackend` (`chatinho[deepagents]`) hands a workspace to a LangChain deep agent.**
 deep agents' `BackendProtocol` is an `abc.ABC` it checks with `isinstance`, so the adapter has to
-subclass it and cannot live in the core; `workspaces/deepagents.py` is the one module of the package
-the stdlib-only fitness test exempts. Three things to know before they surprise you: it is **async
+subclass it and cannot live in the core; it is `shared/agent/workspace_backend.py`, beside the one
+thing that uses it, so the stdlib-only fitness test for the workspaces exempts nothing. Three things to know before they surprise you: it is **async
 only** (the sync methods raise, rather than reach into the chat's loop from a thread); a view
 **answers writes with an error result**, because deep agents registers `write_file` whatever the
 backend; and it is **not a sandbox**, so `execute` gets deep agents' own "no shell". Its `grep` is
 literal, as the protocol says — `re.escape` over ours.
 
 **Both agent connectors are `AgentPeer` with a factory, and the factory is what differs.**
-`AgentPeer(name, model, factory, ...)` in `helpers/agent/` is the whole chat around an agent: the
+`AgentPeer(name, model, factory, ...)` in `shared/agent/` is the whole chat around an agent: the
 hooks, a run per question, the `ask_`/`run_`/`ws_` tools, memory, attachments and the link check. It
 **receives** an `AgentFactory` — anything with a `name`, the `options` it accepts, the workspace
 operations its own tools already `cover`, and `async build(model, tools, options, peer)` — and builds
@@ -373,7 +373,7 @@ nothing until the first question, then again whenever the chat's shape changes.
 else. A third kind of agent is a factory passed to `AgentPeer`, not a subclass of a connector. The
 seam used to be class attributes (`FACTORY`, `OPTIONS`, `COVERED`) and an overridden
 `_factory_options()` on the basic connector, so the deep one subclassed a concrete connector and
-spread what makes it deep across four overrides; now all of it is in `helpers/agent/deep.py`.
+spread what makes it deep across four overrides; now all of it is in `shared/agent/deep.py`.
 
 **`AgentPeer` is the library's second base class, deliberately, for `WorkspaceView`'s reason**: what
 a subclass reuses is the behaviour itself, and a connector only picks a factory and its defaults. Two
@@ -508,22 +508,44 @@ src/chatinho/
   __init__.py      public API
   builder.py       build_chat_session, build_mcp_session — a ChatSession with its frontend;
                    imports both frontends, so it needs chatinho[tui,mcp]
+
+  -- 1. the framework: the session and the definition of the hooks
   session.py       ChatSession: run, peers, commands, delivery, routing, context
   hooks.py         Hook, the seventeen constants, @require, the grant protocols
   query.py         Query (peer/thread/errors/since/limit) and SELF: which part of the conversation
                    context() returns; plain data, so a backend could answer it one day
   message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
                    Attachment, Reply (what peers attach; the backend keeps it)
-  keys.py          key sources: Env, DotEnv, File, Keyring, Command, Literal, Chain, key("env:…");
-                   every key or token argument takes one (to_source), read late, always a Secret
-  endpoint.py      Endpoint: base_url + model + key source; named profiles in a TOML file
+
+  -- 2. shared: what more than one specialization uses, a package per domain
+  shared/
+    keys/          sources.py (key sources: Env, DotEnv, File, Keyring, Command, Literal, Chain,
+                   key("env:…"); every key or token argument takes one (to_source), read late, always
+                   a Secret), endpoint.py (Endpoint: base_url + model + key source; named profiles in
+                   a TOML file) — stdlib only
+    workspace/     what a workspace is, whoever provides it — stdlib only:
+      tree.py        Tree: one worktree's files and git, and resolve(), the one door to a path
+      operations.py  @operation, operations_of: an operation is a declared method
+      views.py       WorkspaceView (reads) and Workspace (writes too); Lines, Match, Matches
+    mcp.py         what McpFrontend and McpConnector share: credentials key, names, attachments
+    memory.py      what a model remembers, for OpenAIConnector and AgentPeer — stdlib only
+    agent/         what the agent connectors share, behind chatinho[langchain] (connectors/agents/
+                   holds the connectors, shared/agent/ what they share):
+      peer.py      AgentPeer: the hooks, answer/listen, graph(), memory; built lazily, rebuilt on shape
+      factory.py   AgentFactory: name, options, covered, async build(model, tools, options, peer)
+      basic.py     BasicAgent: create_agent
+      deep.py      DeepAgent: create_deep_agent, CompositeBackend, WHERE — behind chatinho[deepagents],
+                   imported lazily so AgentPeer never pulls deepagents in
+      workspace_backend.py  WorkspaceBackend: a workspace as a deep agents backend, behind
+                   chatinho[deepagents]
+      graph.py     extract -> agent -> verify -> load around the agent
+      tools.py     ask_<peer>, run_<command>, ask_user, ws_<op>/ws_<op>_of
+      results.py   the answer's text and files, an operation's result as text, a diff as attachment
+
+  -- 3. the specializations: what implements the hooks
   commands/        help.py, test.py, workspace.py (/ws) — commands: they run, they are not peers
-  workspaces/      somewhere for a peer to work, stdlib-only but for the adapter:
-    tree.py        Tree: one worktree's files and git, and resolve(), the one door to a path
-    operations.py  @operation, operations_of: an operation is a declared method
-    views.py       WorkspaceView (reads) and Workspace (writes too); Lines, Match, Matches
-    git.py         GitWorktrees: the provider — one worktree per peer on peer/<name>; merge, drop
-    deepagents.py  WorkspaceBackend: a workspace as a deep agents backend, behind chatinho[deepagents]
+  workspaces/      git.py (GitWorktrees: the provider — one worktree per peer on peer/<name>; merge,
+                   drop) — stdlib only
   routers/         simple.py (SimpleRouter: the default router, stdlib-only — a reply to its author,
                    anything else to the lone peer that answers)
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
@@ -542,18 +564,6 @@ src/chatinho/
       composer.py  CommandInput (a multi-line TextArea) + CommandSuggestions
       clipboard.py OSC 52's second route: a clipboard helper, if the system has one
       style.py     ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
-  helpers/         mcp.py (what McpFrontend and McpConnector share: credentials key, names, attachments),
-                   memory.py (what a model remembers, for OpenAIConnector and AgentPeer) — stdlib only
-    agent/         what the agent connectors share, behind chatinho[langchain] (plural connectors/agents/
-                   holds the connectors, singular helpers/agent/ what they share):
-      peer.py      AgentPeer: the hooks, answer/listen, graph(), memory; built lazily, rebuilt on shape
-      factory.py   AgentFactory: name, options, covered, async build(model, tools, options, peer)
-      basic.py     BasicAgent: create_agent
-      deep.py      DeepAgent: create_deep_agent, CompositeBackend, WHERE — behind chatinho[deepagents],
-                   imported lazily so AgentPeer never pulls deepagents in
-      graph.py     extract -> agent -> verify -> load around the agent
-      tools.py     ask_<peer>, run_<command>, ask_user, ws_<op>/ws_<op>_of
-      results.py   the answer's text and files, an operation's result as text, a diff as attachment
 docs/              SPEC.md — the seventeen hooks, with an example and a cost for each
 openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
 examples/          assistant.py, team.py, files.py (LLM demos: parts() + main()), lab_server.py / lab_client.py /
@@ -578,6 +588,13 @@ tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
 
 The split follows one rule: **anything that does not need Textual moves out**, because that is
 what makes it testable without a terminal.
+
+**Three layers, and each imports only what is below it.** The framework is the session and the
+definition of the hooks, and imports nothing of chatinho but itself. The shared code imports the
+framework and its own other domains. A specialization imports the framework and the shared code,
+and **never another specialization** — which is why what a workspace *is* (`shared/workspace/`)
+sits apart from the provider that makes one (`workspaces/git.py`): the agents use the first and
+must not need the second. Only `builder.py` and `__init__.py` see all three.
 
 ## The chat is drawn as outlines
 
@@ -977,6 +994,9 @@ is a boundary that rots. It parses the core modules and fails if:
 - `textual` appears in their imports, or `openai`, `sqlalchemy`, `httpx`, `mcp`, `fastmcp`;
 - anything but the presentation layer imports Textual;
 - the session imports the app;
+- **a layer imports one above it** — the framework anything but the framework, the shared code a
+  specialization, a specialization another one — or a file or folder at the root of the package
+  belongs to no layer;
 - **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
   it assigns it, or is *granted* it;
 - **a lazily resolved name loses its type** — every entry in `_BEHIND_AN_EXTRA` needs a matching

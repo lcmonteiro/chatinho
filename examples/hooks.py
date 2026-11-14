@@ -24,7 +24,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
-from chatinho.workspaces import GitWorktrees, WorkspaceView
+from chatinho.shared.workspace import WorkspaceView
+from chatinho.workspaces import GitWorktrees
 from chatinho import (
     LOCAL,
     TOOL,

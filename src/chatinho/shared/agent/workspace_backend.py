@@ -1,8 +1,8 @@
 """
 A workspace as a LangChain deep agents backend.
 
-:class:`WorkspaceBackend` wraps a :class:`~chatinho.workspaces.Workspace`, or a
-:class:`~chatinho.workspaces.WorkspaceView` of someone else's, so that
+:class:`WorkspaceBackend` wraps a :class:`~chatinho.shared.workspace.Workspace`, or a
+:class:`~chatinho.shared.workspace.WorkspaceView` of someone else's, so that
 ``create_deep_agent(backend=...)`` works in it with the file tools the agent
 already has::
 
@@ -48,7 +48,7 @@ from deepagents.backends.protocol import (
     WriteResult,
 )
 
-from .views import Workspace, WorkspaceView
+from ..workspace.views import Workspace, WorkspaceView
 
 #: The cap on matches when the caller sets none: the protocol's "every match".
 _EVERY_MATCH : int = 10 ** 9

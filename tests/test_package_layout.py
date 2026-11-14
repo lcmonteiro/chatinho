@@ -160,9 +160,10 @@ def test_the_workspaces_are_public():
     """What a peer works with, what declares an operation, and what keeps them, all from the root."""
     import chatinho
     from chatinho import workspaces
-    for name in ("Workspace", "WorkspaceView", "operation", "operations_of", "Lines", "Match", "Matches",
-                 "GitWorktrees"):
-        assert getattr(chatinho, name) is getattr(workspaces, name)
+    from chatinho.shared import workspace
+    for name in ("Workspace", "WorkspaceView", "operation", "operations_of", "Lines", "Match", "Matches"):
+        assert getattr(chatinho, name) is getattr(workspace, name)
+    assert chatinho.GitWorktrees is workspaces.GitWorktrees
     for name in ("HookWorkspace", "HookProvision", "NoWorkspaceProvider", "WorkspaceGrant",
                  "WorkspaceCommand", "WorkspaceBackend"):
         assert name in chatinho.__all__

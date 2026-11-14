@@ -14,15 +14,15 @@ Its memory is the chat: earlier messages come from ``context()``, so the agent
 needs no checkpointer. A peer it asks may ask it back; the session bounds how
 deep that goes (``ChatSession(max_depth=...)``).
 
-It is :class:`~chatinho.helpers.agent.peer.AgentPeer` with
-:class:`~chatinho.helpers.agent.basic.BasicAgent` as its factory.
+It is :class:`~chatinho.shared.agent.peer.AgentPeer` with
+:class:`~chatinho.shared.agent.basic.BasicAgent` as its factory.
 
 Needs ``pip install 'chatinho[langchain]'``.
 """
 
 from typing import Any, Sequence
 
-from ...helpers.agent import AgentPeer, BasicAgent
+from ...shared.agent import AgentPeer, BasicAgent
 from ...hooks import connector
 
 
@@ -31,7 +31,7 @@ class BasicAgentConnector(AgentPeer):
     """
     A LangChain ``create_agent`` agent that answers in the chat, with the chat as its tools.
 
-    Takes what :class:`~chatinho.helpers.agent.peer.AgentPeer` takes but the
+    Takes what :class:`~chatinho.shared.agent.peer.AgentPeer` takes but the
     factory, and what ``create_agent`` takes besides the model and the tools
     (``system_prompt``, ``middleware``, ``response_format``, ``checkpointer``…).
 
