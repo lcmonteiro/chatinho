@@ -1,0 +1,77 @@
+specworks: 1
+# specworks configuration. It always lives in .specworks/config.yml, and
+# .specworks/ is the workflow folder: .specworks/changes/active/ (in-flight
+# changes) and .specworks/changes/archive/. Every module has the same layout.
+#
+# context: free text the agent reads before every phase (stack, conventions,
+# constraints). Keep it short; it is guidance, not documentation.
+context: |
+
+# Name of the folder, inside each capability's code path, that holds its
+# living docs (spec.md, requirements.md, design.md and its diagrams).
+docs_dir: docs
+
+# Name of the folder, inside this project's folder, that holds a test folder
+# per capability (<tests_dir>/<capability>/); a capability's own `tests:`
+# overrides it. The review gate runs only the touched capabilities' folders
+# with commands.test_scoped.
+# tests_dir: tests
+
+# Whether `specworks new` creates and switches to a branch for each change
+# (true, the default). Set it to false to stay on the current branch, e.g.
+# when the branch is chosen for you; `new --branch` / `--no-branch` override it.
+# branch_per_change: false
+
+# Capabilities: durable behaviours of the system and the code folder that owns
+# each one. `close` writes the capability's living docs into <path>/<docs_dir>/.
+# Requirement IDs are REQ-<prefix>-NNN; the prefix defaults to the capability
+# name in upper case (with the module name in front inside a module).
+# capabilities:
+#   user-auth:
+#     path: src/auth
+#     description: Login, sessions and password reset
+#     prefix: AUTH          # optional: REQ-AUTH-001 instead of REQ-USER-AUTH-001
+#     tests: src/auth/tests # optional: its test folder instead of <tests_dir>/user-auth
+capabilities: {}
+
+# Modules: sub-projects with their own config (their own .specworks/config.yml),
+# like git submodules. Each one is a complete project (own context,
+# capabilities and changes) linked to this one. Add them with `specworks module add <path>`.
+# modules:
+#   billing: services/billing
+modules: {}
+
+# Globs used by `specworks trace` to find tests and source files, relative to
+# the project folder (the one holding .specworks/); they apply to this project's files, not to its modules'.
+# Empty means "scan everything that is not in the workflow folder", except
+# documentation (.md, .rst, .txt, ...): a tag quoted in a doc is not code or a test.
+# In a glob * and ? stay within one folder and ** spans any number of folders,
+# e.g. test_globs: ["tests/**/*.py"] or source_globs: ["src/**"].
+test_globs: []
+source_globs: []
+
+# Commands the skills run, in this project's own tooling (any language).
+# A module's commands override the top level's, key by key.
+#   test: uv run pytest            # or: npm test, go test ./..., cargo test, ctest
+#   lint: uv run ruff check .
+# test_scoped runs only the test folders of the capabilities a change touches,
+# in the review gate ({paths} is replaced by them); validate runs test.
+#   test_scoped: uv run pytest {paths}
+commands:
+  test:
+  lint:
+
+# Design diagrams are written in D2 (https://d2lang.com) and rendered to SVG
+# by `specworks diagrams`. Only the top-level settings are used, so every
+# diagram in the workspace shares one look (modules ignore theirs).
+# Themes by name or number - `specworks diagrams --themes` lists them, e.g.
+# neutral-default, neutral-grey, cool-classics, colorblind-clear, c4, origami;
+# dark mode: dark-mauve, dark-flagship-terrastruct, or none (same as theme).
+diagrams:
+  theme: neutral-default
+  dark_theme: dark-mauve
+  layout: elk           # elk or dagre
+  sketch: false         # true for a hand-drawn look
+
+# AI tools the skills are installed for (`specworks skills --tools` changes it).
+tools: [claude]
