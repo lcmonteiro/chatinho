@@ -98,15 +98,19 @@ def test_workspaces_use_only_the_standard_library():
     assert found == {}, "the workspaces must import only the standard library: %s" % found
 
 
-# === The three layers ===========================================================
+# === The four layers ============================================================
 
 #: The session and the definition of the hooks. Imports nothing of chatinho but itself.
 FRAMEWORK = {"session", "hooks", "message", "query"}
 
-#: Code more than one specialization uses, a package per domain. Imports the framework.
+#: Code more than one specialization uses, a package per domain. Imports the framework,
+#: and nothing but the standard library.
 SHARED = "shared"
 
-#: What implements the hooks. Imports the framework and the shared code, never one another.
+#: What a specialization is built from. Imports the framework and the shared code.
+DEVKITS = "devkits"
+
+#: What implements the hooks. Imports everything above, never one another.
 SPECIALIZATIONS = {"connectors", "frontends", "backends", "commands", "routers", "workspaces"}
 
 #: What puts the three together, and so may import all of them.
@@ -140,7 +144,7 @@ def layer_files(top: str) -> list:
 def test_every_part_of_the_package_belongs_to_a_layer():
     """A new file or folder at the root has to be given a layer, or the rules below skip it."""
     tops = {path.name for path in SRC.iterdir() if path.suffix == ".py" or (path / "__init__.py").exists()}
-    known = {name + ".py" for name in FRAMEWORK} | {SHARED} | SPECIALIZATIONS | ASSEMBLY
+    known = {name + ".py" for name in FRAMEWORK} | {SHARED, DEVKITS} | SPECIALIZATIONS | ASSEMBLY
     assert tops == known
 
 
@@ -150,13 +154,59 @@ def test_the_framework_imports_only_the_framework(module):
     assert outside == set(), "%s.py is the framework and must not import %s" % (module, sorted(outside))
 
 
-def test_the_shared_code_imports_no_specialization():
+def shared_domain(path: pathlib.Path) -> str:
+    """Returns the domain of the shared code *path* is in: ``keys``, ``workspace``, ``memory``…"""
+    return path.relative_to(SRC / SHARED).parts[0].removesuffix(".py")
+
+
+def test_the_shared_code_imports_only_the_framework():
+    """Not a devkit, not a specialization, and not another domain of its own."""
     found = {}
     for path in layer_files(SHARED):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        outside = imported_parts(path) - FRAMEWORK - {SHARED}
+        domains = imported_domains(path, tree) - {shared_domain(path)}
+        if outside or domains:
+            found[path.relative_to(SRC).as_posix()] = sorted(outside | domains)
+    assert found == {}, "shared code must import only the framework: %s" % found
+
+
+def imported_domains(path: pathlib.Path, tree: ast.AST) -> set:
+    """Returns the domains of the shared code that *path*, itself shared code, imports."""
+    package = ("chatinho",) + path.relative_to(SRC).parts[:-1]
+    domains = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        base   = package[:len(package) - node.level + 1] if node.level else ()
+        module = tuple(node.module.split(".")) if node.module else ()
+        for alias in node.names:
+            target = base + module + (alias.name,)
+            if target[:2] == ("chatinho", SHARED) and len(target) > 2:
+                domains.add(target[2])
+    return domains - {"__init__"}
+
+
+#: What the shared code imports inside a function, behind an extra of its own: the OS keychain.
+SHARED_ON_FIRST_USE = {"keyring"}
+
+
+def test_the_shared_code_uses_only_the_standard_library():
+    found = {}
+    for path in layer_files(SHARED):
+        outside = imported_roots(path) - set(sys.stdlib_module_names) - {"chatinho"} - SHARED_ON_FIRST_USE
+        if outside:
+            found[path.relative_to(SRC).as_posix()] = sorted(outside)
+    assert found == {}, "shared code must import only the standard library: %s" % found
+
+
+def test_a_devkit_imports_no_specialization():
+    found = {}
+    for path in layer_files(DEVKITS):
         above = imported_parts(path) & (SPECIALIZATIONS | {"builder"})
         if above:
             found[path.relative_to(SRC).as_posix()] = sorted(above)
-    assert found == {}, "shared code must not import what specializes it: %s" % found
+    assert found == {}, "a devkit must not import what is built from it: %s" % found
 
 
 @pytest.mark.parametrize("specialization", sorted(SPECIALIZATIONS))
@@ -406,10 +456,10 @@ def blocked(name, *a, **k):
         raise ImportError("No module named %r" % name)
     return real(name, *a, **k)
 builtins.__import__ = blocked
-from chatinho.shared.agent import AgentFactory, AgentPeer, BasicAgent, Interrupted
+from chatinho.devkits.agent import AgentFactory, AgentPeer, BasicAgent, Interrupted
 from chatinho.connectors.agents import BasicAgentConnector
 try:
-    from chatinho.shared.agent import DeepAgent
+    from chatinho.devkits.agent import DeepAgent
 except ImportError:
     print("deep-blocked")
 print("deepagents" in sys.modules)

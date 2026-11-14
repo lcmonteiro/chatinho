@@ -13,7 +13,7 @@ import pytest
 from langchain.agents import create_agent
 
 from chatinho import ChatMessage, HookAnswer, Reply, require
-from chatinho.shared.agent import AgentPeer
+from chatinho.devkits.agent import AgentPeer
 from chatinho.workspaces import GitWorktrees
 
 from conftest import driven

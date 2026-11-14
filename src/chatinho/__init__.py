@@ -73,7 +73,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .frontends.chat import ChatFrontend
     from .frontends.chat.style import ChatStyle
     from .frontends.mcp import McpFrontend
-    from .shared.agent.workspace_backend import WorkspaceBackend
+    from .devkits.agent.workspace_backend import WorkspaceBackend
 
 from .session import ChatSession
 from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
@@ -108,7 +108,7 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
     "BasicAgentConnector" : (".connectors.agents.basic", (("langchain", "langchain"),)),
     "DeepAgentConnector"  : (".connectors.agents.deep",  (("deepagents", "deepagents"),)),
     "DatabaseBackend"     : (".backends",                (("sql", "sqlalchemy"),)),
-    "WorkspaceBackend"    : (".shared.agent.workspace_backend",   (("deepagents", "deepagents"),)),
+    "WorkspaceBackend"    : (".devkits.agent.workspace_backend",   (("deepagents", "deepagents"),)),
 }
 
 

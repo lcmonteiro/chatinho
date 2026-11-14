@@ -355,7 +355,7 @@ its first question.
 
 **`WorkspaceBackend` (`chatinho[deepagents]`) hands a workspace to a LangChain deep agent.**
 deep agents' `BackendProtocol` is an `abc.ABC` it checks with `isinstance`, so the adapter has to
-subclass it and cannot live in the core; it is `shared/agent/workspace_backend.py`, beside the one
+subclass it and cannot live in the core; it is `devkits/agent/workspace_backend.py`, beside the one
 thing that uses it, so the stdlib-only fitness test for the workspaces exempts nothing. Three things to know before they surprise you: it is **async
 only** (the sync methods raise, rather than reach into the chat's loop from a thread); a view
 **answers writes with an error result**, because deep agents registers `write_file` whatever the
@@ -363,7 +363,7 @@ backend; and it is **not a sandbox**, so `execute` gets deep agents' own "no she
 literal, as the protocol says — `re.escape` over ours.
 
 **Both agent connectors are `AgentPeer` with a factory, and the factory is what differs.**
-`AgentPeer(name, model, factory, ...)` in `shared/agent/` is the whole chat around an agent: the
+`AgentPeer(name, model, factory, ...)` in `devkits/agent/` is the whole chat around an agent: the
 hooks, a run per question, the `ask_`/`run_`/`ws_` tools, memory, attachments and the link check. It
 **receives** an `AgentFactory` — anything with a `name`, the `options` it accepts, the workspace
 operations its own tools already `cover`, and `async build(model, tools, options, peer)` — and builds
@@ -373,7 +373,7 @@ nothing until the first question, then again whenever the chat's shape changes.
 else. A third kind of agent is a factory passed to `AgentPeer`, not a subclass of a connector. The
 seam used to be class attributes (`FACTORY`, `OPTIONS`, `COVERED`) and an overridden
 `_factory_options()` on the basic connector, so the deep one subclassed a concrete connector and
-spread what makes it deep across four overrides; now all of it is in `shared/agent/deep.py`.
+spread what makes it deep across four overrides; now all of it is in `devkits/agent/deep.py`.
 
 **`AgentPeer` is the library's second base class, deliberately, for `WorkspaceView`'s reason**: what
 a subclass reuses is the behaviour itself, and a connector only picks a factory and its defaults. Two
@@ -517,7 +517,7 @@ src/chatinho/
   message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
                    Attachment, Reply (what peers attach; the backend keeps it)
 
-  -- 2. shared: what more than one specialization uses, a package per domain
+  -- 2. shared: what more than one specialization uses, a package per domain — stdlib only
   shared/
     keys/          sources.py (key sources: Env, DotEnv, File, Keyring, Command, Literal, Chain,
                    key("env:…"); every key or token argument takes one (to_source), read late, always
@@ -529,8 +529,11 @@ src/chatinho/
       views.py       WorkspaceView (reads) and Workspace (writes too); Lines, Match, Matches
     mcp.py         what McpFrontend and McpConnector share: credentials key, names, attachments
     memory.py      what a model remembers, for OpenAIConnector and AgentPeer — stdlib only
-    agent/         what the agent connectors share, behind chatinho[langchain] (connectors/agents/
-                   holds the connectors, shared/agent/ what they share):
+
+  -- 3. devkits: what a specialization is built from, on the shared code and behind an extra
+  devkits/
+    agent/         what the agent connectors are built from, behind chatinho[langchain]
+                   (connectors/agents/ holds the connectors, devkits/agent/ the chat around an agent):
       peer.py      AgentPeer: the hooks, answer/listen, graph(), memory; built lazily, rebuilt on shape
       factory.py   AgentFactory: name, options, covered, async build(model, tools, options, peer)
       basic.py     BasicAgent: create_agent
@@ -542,7 +545,7 @@ src/chatinho/
       tools.py     ask_<peer>, run_<command>, ask_user, ws_<op>/ws_<op>_of
       results.py   the answer's text and files, an operation's result as text, a diff as attachment
 
-  -- 3. the specializations: what implements the hooks
+  -- 4. the specializations: what implements the hooks
   commands/        help.py, test.py, workspace.py (/ws) — commands: they run, they are not peers
   workspaces/      git.py (GitWorktrees: the provider — one worktree per peer on peer/<name>; merge,
                    drop) — stdlib only
@@ -589,12 +592,15 @@ tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
 The split follows one rule: **anything that does not need Textual moves out**, because that is
 what makes it testable without a terminal.
 
-**Three layers, and each imports only what is below it.** The framework is the session and the
+**Four layers, and each imports only what is below it.** The framework is the session and the
 definition of the hooks, and imports nothing of chatinho but itself. The shared code imports the
-framework and its own other domains. A specialization imports the framework and the shared code,
+framework and the standard library, and **not another domain of its own**: `keys`, `workspace`,
+`memory` and `mcp` stand alone, so taking one never brings a second. A devkit is what a
+specialization is built from: it imports the framework and the shared code, and may sit behind an
+extra, which is the whole reason `agent/` is not shared code. A specialization imports all three,
 and **never another specialization** — which is why what a workspace *is* (`shared/workspace/`)
 sits apart from the provider that makes one (`workspaces/git.py`): the agents use the first and
-must not need the second. Only `builder.py` and `__init__.py` see all three.
+must not need the second. Only `builder.py` and `__init__.py` see all four.
 
 ## The chat is drawn as outlines
 
@@ -995,8 +1001,9 @@ is a boundary that rots. It parses the core modules and fails if:
 - anything but the presentation layer imports Textual;
 - the session imports the app;
 - **a layer imports one above it** — the framework anything but the framework, the shared code a
-  specialization, a specialization another one — or a file or folder at the root of the package
-  belongs to no layer;
+  devkit, a specialization or another of its own domains, a devkit a specialization, a
+  specialization another one — or the shared code imports a library, or a file or folder at the
+  root of the package belongs to no layer;
 - **any Textual subclass of ours takes a name that is a method on its Textual parent** — whether
   it assigns it, or is *granted* it;
 - **a lazily resolved name loses its type** — every entry in `_BEHIND_AN_EXTRA` needs a matching

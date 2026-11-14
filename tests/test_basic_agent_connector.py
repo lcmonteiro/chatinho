@@ -34,7 +34,7 @@ from chatinho import (
     require,
 )
 from chatinho.connectors.agents.basic import BasicAgentConnector
-from chatinho.shared.agent import basic as module
+from chatinho.devkits.agent import basic as module
 from chatinho.shared.keys import Env
 
 from fakes.agent import File, calls, fake, maker, makes, question, reminders, says

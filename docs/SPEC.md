@@ -616,7 +616,7 @@ memory. It answers each question with one run of a LangChain `create_agent` agen
 same parameters. A peer it asks through a tool may ask it back: the nested question is one level
 deeper, and `max_depth` stops a loop.
 
-Its hooks and everything above are `AgentPeer`'s (`chatinho.shared.agent`), which receives the
+Its hooks and everything above are `AgentPeer`'s (`chatinho.devkits.agent`), which receives the
 factory that makes the agent: `BasicAgent` (`create_agent`) here, `DeepAgent` (`create_deep_agent`)
 for `DeepAgentConnector`. Any object with a `name`, the `options` it takes, the workspace operations
 it `covers` and an `async build(model, tools, options, peer)` is a factory, so a third kind of agent

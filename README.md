@@ -320,7 +320,7 @@ painter = BasicAgentConnector("painter", Endpoint.load(), tools=[draw])
 A question gets a reply; what **you** say to everyone gets a say from the agent, replying to it.
 What other peers say is only memory, so two agents never trade says.
 
-Both agent connectors are `AgentPeer` (`chatinho.shared.agent`) with a factory: `BasicAgent` makes
+Both agent connectors are `AgentPeer` (`chatinho.devkits.agent`) with a factory: `BasicAgent` makes
 the agent with `create_agent`, `DeepAgent` with `create_deep_agent`. To put another kind of agent in
 the chat, write a factory — a `name`, the `options` it takes, the workspace operations its own tools
 cover (`covered`), and `async build(model, tools, options, peer)` — and pass it:

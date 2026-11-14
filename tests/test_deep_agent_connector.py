@@ -17,7 +17,7 @@ from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolM
 
 from chatinho import ChatMessage, HookAnswer, Query, Reply, ReplyStatus, require  # noqa: E402
 from chatinho.connectors.agents.deep import DeepAgentConnector                  # noqa: E402
-from chatinho.shared.agent.deep import WHERE                                    # noqa: E402
+from chatinho.devkits.agent.deep import WHERE                                    # noqa: E402
 from chatinho.shared.workspace import WorkspaceView, operation  # noqa: E402
 from chatinho.workspaces import GitWorktrees  # noqa: E402
 

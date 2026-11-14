@@ -3,7 +3,7 @@ The agent connectors: LangChain agents as chat peers.
 
 Each needs its own extra, so they are imported on first use (PEP 562): asking
 for the basic connector must not need deep agents. What they share is
-:mod:`chatinho.shared.agent`.
+:mod:`chatinho.devkits.agent`.
 """
 
 from typing import Any

@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 
 from ...message import Attachment
-from ..workspace import Lines, Matches
+from ...shared.workspace import Lines, Matches
 
 #: What a tool or file name may hold, for the OpenAI-compatible APIs.
 UNSAFE = re.compile(r"[^A-Za-z0-9_-]")

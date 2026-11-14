@@ -21,7 +21,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage        
 
 from chatinho.shared.workspace import Workspace, operation  # noqa: E402
 from chatinho.workspaces import GitWorktrees  # noqa: E402
-from chatinho.shared.agent.workspace_backend import WorkspaceBackend                      # noqa: E402
+from chatinho.devkits.agent.workspace_backend import WorkspaceBackend                      # noqa: E402
 
 from fakes.agent import fake                                                     # noqa: E402
 

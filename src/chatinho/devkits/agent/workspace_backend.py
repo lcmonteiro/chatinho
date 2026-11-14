@@ -48,7 +48,7 @@ from deepagents.backends.protocol import (
     WriteResult,
 )
 
-from ..workspace.views import Workspace, WorkspaceView
+from ...shared.workspace.views import Workspace, WorkspaceView
 
 #: The cap on matches when the caller sets none: the protocol's "every match".
 _EVERY_MATCH : int = 10 ** 9

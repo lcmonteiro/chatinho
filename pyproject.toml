@@ -48,7 +48,7 @@ mcp    = ["fastmcp>=4.0"]
 keyring = ["keyring>=24"]
 # A LangChain agent as a peer: chatinho.connectors.agent.AgentConnector.
 langchain = ["langchain>=1.0", "langchain-openai>=1.0"]
-# A workspace as a LangChain deep agents backend (chatinho.shared.agent.workspace_backend.WorkspaceBackend),
+# A workspace as a LangChain deep agents backend (chatinho.devkits.agent.workspace_backend.WorkspaceBackend),
 # and a deep agent as a peer (chatinho.connectors.deep.DeepAgentConnector).
 # Its own extra, not part of `langchain`: deepagents needs a newer langchain and always brings
 # langchain-anthropic and langchain-google-genai, which `langchain` users did not ask for.
