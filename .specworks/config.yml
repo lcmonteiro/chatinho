@@ -58,8 +58,9 @@ source_globs: []
 # in the review gate ({paths} is replaced by them); validate runs test.
 #   test_scoped: uv run pytest {paths}
 commands:
-  test:
-  lint:
+  test: uv run pytest -q
+  lint: uv run ruff check src tests examples
+  typecheck: uv run mypy src/chatinho examples
 
 # Design diagrams are written in D2 (https://d2lang.com) and rendered to SVG
 # by `specworks diagrams`. Only the top-level settings are used, so every
@@ -75,3 +76,5 @@ diagrams:
 
 # AI tools the skills are installed for (`specworks skills --tools` changes it).
 tools: [claude]
+
+branch_per_change: false
