@@ -59,6 +59,7 @@ async def session_with(repo, *peers: Any, commands: Optional[List[Any]] = None) 
 
 # === The provider is a role =========================================================
 
+# @ac AC-CORE-026.1
 async def test_the_provider_is_in_no_roster(repo):
     worker  = Worker()
     session = await session_with(repo, worker)
@@ -67,6 +68,7 @@ async def test_the_provider_is_in_no_roster(repo):
     await session.close()
 
 
+# @ac AC-CORE-026.2
 async def test_the_provider_is_started_and_hears_nothing(repo):
     provider = GitWorktrees(repo)
     session, view = await driven(workspaces=provider)
@@ -76,12 +78,14 @@ async def test_the_provider_is_started_and_hears_nothing(repo):
     assert not hasattr(provider, "listen")
 
 
+# @ac AC-CORE-026.3
 async def test_two_providers(repo):
     session = ChatSession(workspaces=GitWorktrees(repo))
     with pytest.raises(ValueError, match="HookProvision"):
         session.add_connector(GitWorktrees(repo))
 
 
+# @ac AC-CORE-026.4
 async def test_a_provider_is_not_a_command_either(repo):
     @tool("ws2")
     @require(HookExecute)
@@ -94,6 +98,7 @@ async def test_a_provider_is_not_a_command_either(repo):
         ChatSession(commands=[Both(repo)])
 
 
+# @ac AC-CORE-026.5
 def test_a_provider_that_declares_nothing():
     with pytest.raises(TypeError, match="HookProvision"):
         ChatSession(workspaces=object())
@@ -101,6 +106,7 @@ def test_a_provider_that_declares_nothing():
 
 # === The grant ======================================================================
 
+# @ac AC-CORE-027.1
 async def test_its_own_workspace(repo):
     worker  = Worker()
     session = await session_with(repo, worker)
@@ -111,6 +117,7 @@ async def test_its_own_workspace(repo):
     await session.close()
 
 
+# @ac AC-CORE-027.1
 async def test_its_own_name_is_its_own_workspace(repo):
     worker  = Worker()
     session = await session_with(repo, worker)
@@ -118,6 +125,7 @@ async def test_its_own_name_is_its_own_workspace(repo):
     await session.close()
 
 
+# @ac AC-CORE-027.2
 async def test_another_peers_workspace_is_read_only(repo):
     dev, reviewer = Worker(), Worker()
     reviewer.name = "reviewer"
@@ -134,6 +142,7 @@ async def test_another_peers_workspace_is_read_only(repo):
     await session.close()
 
 
+# @ac AC-CORE-027.3
 async def test_a_peer_in_the_chat_has_a_workspace_before_it_asks(repo):
     dev, reviewer = Worker(), Worker()
     reviewer.name = "reviewer"
@@ -143,6 +152,7 @@ async def test_a_peer_in_the_chat_has_a_workspace_before_it_asks(repo):
     await session.close()
 
 
+# @ac AC-CORE-027.4
 async def test_no_provider():
     worker = Worker()
     session, _ = await driven(connectors=[worker])
@@ -151,6 +161,7 @@ async def test_no_provider():
     await session.close()
 
 
+# @ac AC-CORE-027.5
 async def test_an_unknown_name(repo):
     worker  = Worker()
     session = await session_with(repo, worker)
@@ -159,6 +170,7 @@ async def test_an_unknown_name(repo):
     await session.close()
 
 
+# @ac AC-CORE-027.6
 async def test_a_workspace_that_outlived_its_peer_is_still_readable(repo):
     await GitWorktrees(repo).provision("gone", "gone")
     worker  = Worker()
@@ -167,6 +179,7 @@ async def test_a_workspace_that_outlived_its_peer_is_still_readable(repo):
     await session.close()
 
 
+# @ac AC-CORE-027.7
 async def test_a_command_reads_a_named_workspace(repo):
     worker  = Worker()
     session, view = await driven(connectors=[worker], commands=[Peek()], workspaces=GitWorktrees(repo))
@@ -174,6 +187,7 @@ async def test_a_command_reads_a_named_workspace(repo):
     await session.close()
 
 
+# @ac AC-CORE-027.7
 async def test_a_command_owns_no_workspace(repo):
     session, view = await driven(commands=[Peek()], workspaces=GitWorktrees(repo))
     with pytest.raises(ValueError, match="A command owns no workspace"):
@@ -219,6 +233,7 @@ async def test_a_long_search_does_not_hold_up_the_chat(repo):
     assert stamp.heard_at is not None and stamp.heard_at < finished
 
 
+# @ac AC-CORE-027.8
 async def test_asking_without_creating(repo):
     dev, lead = Worker(), Worker()
     lead.name = "lead"

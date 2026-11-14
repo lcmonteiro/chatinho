@@ -8,7 +8,7 @@ The framework is the chat itself: a session that registers peers and commands by
 
 ### Requirement: REQ-CORE-001 Every peer has its own id
 
-The session SHALL give every peer it registers a distinct integer id. The frontend is peer zero (`LOCAL`); a peer whose id the session chooses MUST get the lowest free id from one upwards, skipping any id already taken; a peer MAY declare the id it answers to (`@connector(name, id=...)`), and the caller MAY pin a different one when registering it. Registering a peer at an id already taken MUST raise `ValueError`, and a declared id that is `TOOL` or not an integer MUST be refused with `ValueError` when the class is declared. A command has no id.
+The session SHALL give every peer it registers a distinct integer id. The frontend is peer zero (`LOCAL`); a peer whose id the session chooses MUST get the next id the session would hand out, counting from one and skipping any id already taken; a peer MAY declare the id it answers to (`@connector(name, id=...)`), and the caller MAY pin a different one when registering it. Registering a peer at an id already taken MUST raise `ValueError`, and a declared id that is `TOOL` or not an integer MUST be refused with `ValueError` when the class is declared. A command has no id.
 
 #### Scenario: AC-CORE-001.1 The user is zero and connectors are numbered
 

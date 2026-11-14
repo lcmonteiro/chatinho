@@ -1,5 +1,60 @@
 name: baseline-framework
 created: '2026-11-14T18:46:38'
-phase: specify
+phase: review
+specified:
+  REQ-CORE-001: 596491f8dc41
+  REQ-CORE-002: 4566ed5c2a69
+  REQ-CORE-003: 2716a717c01b
+  REQ-CORE-004: c74d8cdf0c04
+  REQ-CORE-005: 5910bbcabcb9
+  REQ-CORE-006: 7c5dd37172f0
+  REQ-CORE-007: e6fde3e3f06e
+  REQ-CORE-008: b4a51e181058
+  REQ-CORE-009: ebb994d6482a
+  REQ-CORE-010: 84e184d2c6cb
+  REQ-CORE-011: 1dfda4dc2560
+  REQ-CORE-012: 1557fc861319
+  REQ-CORE-013: ace215e48c24
+  REQ-CORE-014: cf5b5f0cb2eb
+  REQ-CORE-015: c064be0d6e77
+  REQ-CORE-016: 9f76a65ebd80
+  REQ-CORE-017: 2901e06f605a
+  REQ-CORE-018: 154b97eaea8d
+  REQ-CORE-019: 5b5bce09d291
+  REQ-CORE-020: 3137c0b2fe90
+  REQ-CORE-021: e25a695c5b0c
+  REQ-CORE-022: 9a08251c665e
+  REQ-CORE-023: de138c36c680
+  REQ-CORE-024: 2fdda6f516c6
+  REQ-CORE-025: 2bccb26713a1
+  REQ-CORE-026: 4016b848bd8e
+  REQ-CORE-027: 3f5af64eaccc
+  REQ-CORE-028: 380f133cd4d2
+  REQ-CORE-029: ca131edeb637
 dirty:
-  .specworks/changes/active/baseline-framework/.change.yaml: 2abfeda960c74243af5df9e6054790d3c678934d7e4dc1aece89a0c81bda7480
+  .specworks/changes/active/baseline-framework/.change.yaml: 2ea755bbb95e6e12e92bfe640334ad9dec3fa116b595a8be98f280952c2a76b0
+  .specworks/changes/active/baseline-framework/design.md: be46c3b5617ef91903a56844ad75dae8c78b5b0f0d5c6b4e4950d4e079422a9c
+  .specworks/changes/active/baseline-framework/diagrams/framework-blocks.d2: 841e445fe44f70396c0d6965bee5d990d04eaad045356eac805fc485c311d78d
+  .specworks/changes/active/baseline-framework/diagrams/framework-blocks.svg: 3660654f16d9a1f67b6155dce09d2f29a6e94b777285814507b27d3fe15e3be1
+  .specworks/changes/active/baseline-framework/proposal.md: fa72bbc20c252b7b1814574501486b8459eeb7560c8fcb89f7def88d5adbd2bf
+  .specworks/changes/active/baseline-framework/tasks.md: 0bfbba7460a874a59f73e41c00cd81a1d8e6437e626d675d2a21b105e1c1def5
+  .specworks/changes/active/baseline-framework/traceability.md: 490aaffe4b3d46b828d8bc7187a741564f5f282a06cd5f88f88e8b8b4c4b3db2
+  .specworks/changes/active/fix-ask-failure-reply/.change.yaml: 31fb60be2d3987a6c829fcf2d5d84beeab9dfa26e4dd14db88e1a99a94a37c38
+  .specworks/changes/active/fix-ask-failure-reply/refinement.md: 3272d56f4d097c640fe12c1dc36012fe8bb1deba314ee0b826ea85c8e7a344e9
+  src/chatinho/__init__.py: c43c4f068cec8a5e9947df397c6e319342b529823613669fdf6e8d811c3d6fb3
+  src/chatinho/builder.py: 81f425d4e5ed450b696d9c0d5f0bab8fb8bc1882c11b9c53423f5a172a89f248
+  src/chatinho/hooks.py: 4168f04869a2711a31d9541bd660fc1e23a48ffd33e3aa0c90474ac33557dc82
+  src/chatinho/message.py: eb35ddc4a864b01f60e1abcd739d6bb62bc81c44f216dc0e74ad23acfcab9d0a
+  src/chatinho/query.py: 303670843ac034268e0c788f164c38c18c8d2857b4584b405df652d1516c4c5f
+  src/chatinho/session.py: db34b01cd4d8a4d3630ce85879ff6a8d9f1154f4587fbe3d2ab0ea616c34aa72
+  tests/framework/test_answer_details.py: 100c65a92db85faf3923dbad9a72c334c6935c934249d99af597b48cbd028207
+  tests/framework/test_attachments.py: 53caf5d62206ab92dde7b3f7c6b6398e955722e5c40eb01d78993a668047efe1
+  tests/framework/test_chat_session.py: 3385b2650b0b18dfe2430bf2a944033c1ae2dd4fb2f7b090a4e5c3a9feed72f1
+  tests/framework/test_context_query.py: 3b36aa2c80425bb7b3f571654c96ae28c3f0d8dceda2b50b04619672f8bd0fd7
+  tests/framework/test_lending.py: 4efa731cdcf401428f1704166d0895fef880240d6b7b39b4112ab7a15b0b6b18
+  tests/framework/test_message_delivery.py: 7be8471fb35f2ce84d29b3fca24b24e63682cd011937798ff86654ed25ebf959
+  tests/framework/test_message_store.py: df55db8da7bc77c01de9f2cc78197a8a6b03ac50e6f125860b00e037cd428320
+  tests/framework/test_require.py: e8552b4c28f69269634807ae758a7db0e0345d6d0622f49b7106de0ef6301851
+  tests/framework/test_workspaces_in_session.py: 72f0a3813ba558ec279f7ad21c46c13160ae9ca63007079e4358d0d6cebf8502
+  tests/test_architecture.py: ef69844a974f33eeffbfc559d06b0ec193ca4f2b999798cb07be6bdf60bd567b
+  tests/test_package_layout.py: 723b0e81b92bba80ef70635670f9d7447ca7a2b1b43558a612ab50a30525e85d

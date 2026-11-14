@@ -24,6 +24,7 @@ def texts(msgs):
 
 # === Query on its own =============================================================
 
+# @ac AC-CORE-018.1
 def test_last_twenty_without_errors():
     msgs = [msg(n, status=ReplyStatus.ERROR if n in (3, 7) else ReplyStatus.ANSWERED) for n in range(30)]
     got  = Query(errors=False).last(20).select(msgs)
@@ -31,16 +32,19 @@ def test_last_twenty_without_errors():
     assert texts(got) == texts(kept[-20:])
 
 
+# @ac AC-CORE-018.2
 def test_a_thread():
     a, b, c, d = msg(1), msg(2, reply_to=1), msg(3, reply_to=2), msg(4)
     assert texts(Query(thread=c.id).select([a, b, c, d])) == ["m1", "m2", "m3"]
 
 
+# @ac AC-CORE-018.3
 def test_a_thread_includes_replies_to_its_chain():
     a, b, c, d = msg(1), msg(2, reply_to=1), msg(3, reply_to=1), msg(4, reply_to=3)
     assert texts(Query(thread=b.id).select([a, b, c, d])) == ["m1", "m2", "m3"]
 
 
+# @ac AC-CORE-018.4
 def test_a_peer_and_the_replies_to_it():
     said    = msg(1, frm=3)
     answer  = msg(2, frm=1, reply_to=1)     # a reply to peer 3's message
@@ -49,6 +53,7 @@ def test_a_peer_and_the_replies_to_it():
     assert texts(Query(peer=3).select([said, answer, to_it, other])) == ["m1", "m2", "m3"]
 
 
+# @ac AC-CORE-018.4
 def test_what_a_peer_was_asked_is_its_own():
     """A say the router addressed to peer 1 is in its memory."""
     asked = msg(1, to=1)
@@ -56,6 +61,7 @@ def test_what_a_peer_was_asked_is_its_own():
     assert texts(Query(peer=1).select([asked, other])) == ["m1"]
 
 
+# @ac AC-CORE-018.4
 def test_an_answer_to_a_peer_is_its_own():
     """An answer goes to nobody, and is still in the asker's memory: it replies to its question."""
     asked  = msg(1, frm=2, to=3)
@@ -64,23 +70,27 @@ def test_an_answer_to_a_peer_is_its_own():
     assert texts(Query(peer=2).select([asked, answer, other])) == ["m1", "m2"]
 
 
+# @ac AC-CORE-018.5
 def test_self_is_whoever_asks():
     mine  = [msg(1, frm=LOCAL, to=2), msg(2, frm=2, reply_to=1)]
     other = [msg(3, frm=LOCAL, to=3), msg(4, frm=3, reply_to=3)]
     assert texts(Query(peer=SELF).select(mine + other, asker=2)) == ["m1", "m2"]
 
 
+# @ac AC-CORE-018.6
 def test_self_with_nobody_asking_is_refused():
     with pytest.raises(ValueError):
         Query(peer=SELF).select([msg(1)])
 
 
+# @ac AC-CORE-018.7
 def test_since():
     early, late = datetime(2026, 1, 1), datetime(2026, 1, 2)
     msgs = [msg(1, at=early), msg(2, at=late)]
     assert texts(Query(since=late - timedelta(hours=1)).select(msgs)) == ["m2"]
 
 
+# @ac AC-CORE-018.8
 def test_last_makes_a_copy():
     query = Query(errors=False)
     assert query.last(5).limit == 5 and query.limit is None
@@ -88,6 +98,7 @@ def test_last_makes_a_copy():
 
 # === Through the grant ============================================================
 
+# @ac AC-CORE-019.5
 async def test_the_grant_resolves_self_to_the_asker(chat):
     session, view = chat
     await view.say("to everyone")
@@ -95,6 +106,7 @@ async def test_the_grant_resolves_self_to_the_asker(chat):
     assert view.context(Query(peer=5)) == []
 
 
+# @ac AC-CORE-019.1
 async def test_unchanged_without_a_query(chat):
     session, view = chat
     for n in range(7):
@@ -103,6 +115,7 @@ async def test_unchanged_without_a_query(chat):
     assert texts(view.context(Query().last(5))) == ["m2", "m3", "m4", "m5", "m6"]
 
 
+# @ac AC-CORE-019.3
 async def test_a_keyword_is_refused(chat):
     """A Query is the one way to narrow, so each filter has one spelling."""
     session, view = chat

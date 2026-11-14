@@ -39,6 +39,7 @@ _FULL   : int = 16
 _HEX    = re.compile(r"[0-9a-f]+")
 
 
+# @req REQ-CORE-023
 @dataclass(frozen=True)
 class Attachment:
     """
@@ -76,6 +77,7 @@ class ReplyStatus(str, Enum):
     ERROR    = "error"
 
 
+# @req REQ-CORE-010
 @dataclass(frozen=True)
 class Reply:
     """
@@ -113,6 +115,7 @@ class Reply:
         return "%s: %s" % (self.status.value, self.text)
 
 
+# @req REQ-CORE-025
 class Secret:
     """
     A value that must never be shown: a credential lent for one question.
@@ -136,6 +139,7 @@ class Secret:
     __str__ = __repr__
 
 
+# @req REQ-CORE-021
 @dataclass(frozen=True)
 class MessageID:
     """
@@ -213,6 +217,7 @@ class MessageID:
         return _PREFIX + self.hex
 
 
+# @req REQ-CORE-025
 @dataclass
 class ChatMessage:
     """
@@ -253,6 +258,7 @@ class ChatMessage:
         return self.frm == LOCAL
 
 
+# @req REQ-CORE-022
 class MessageStore:
     """
     The chat's message history: ids, lookup and reply threading.

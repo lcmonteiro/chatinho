@@ -31,6 +31,7 @@ class _Agent:
 
 # === Import paths =================================================================
 
+# @ac AC-CORE-028.1
 def test_the_core_imports_by_its_new_names():
     from chatinho.hooks import HookSay
     from chatinho.message import ChatMessage
@@ -39,6 +40,7 @@ def test_the_core_imports_by_its_new_names():
     assert HookSay is chatinho.HookSay
 
 
+# @ac AC-CORE-028.2
 @pytest.mark.parametrize("old", [
     "chat_session", "chat_message", "chat_hooks", "chat_app", "chat_log",
     "chat_input", "chat_style", "chat_clipboard", "chat_builder",
@@ -48,6 +50,7 @@ def test_the_old_module_names_are_gone(old):
         importlib.import_module("chatinho." + old)
 
 
+# @ac AC-CORE-028.3
 def test_the_terminal_is_the_chat_frontend_wherever_it_is_read():
     from chatinho.frontends import ChatFrontend as from_frontends
     assert chatinho.ChatFrontend is ChatFrontend is from_frontends
@@ -55,6 +58,7 @@ def test_the_terminal_is_the_chat_frontend_wherever_it_is_read():
     assert not hasattr(chatinho, "build_chat")
 
 
+# @ac AC-CORE-028.3
 def test_the_terminal_style_lives_with_the_terminal():
     from chatinho.frontends.chat.style import ChatStyle
     assert chatinho.ChatStyle is ChatStyle
@@ -62,6 +66,7 @@ def test_the_terminal_style_lives_with_the_terminal():
 
 # === Builders =====================================================================
 
+# @ac AC-CORE-029.1
 def test_a_chat_with_a_terminal():
     session = build_chat_session(commands=[HelpCommand()], title="Demo")
     assert isinstance(session, ChatSession)
@@ -71,6 +76,7 @@ def test_a_chat_with_a_terminal():
     assert "help" in session._commands()
 
 
+# @ac AC-CORE-029.2
 def test_a_chat_served_over_mcp():
     agent   = _Agent()
     session = build_mcp_session(connectors=[agent], token="t", port=9000)
@@ -82,6 +88,7 @@ def test_a_chat_served_over_mcp():
     assert agent in session._peers().values()
 
 
+# @ac AC-CORE-029.3
 def test_an_mcp_chat_without_a_token():
     with pytest.raises(ValueError):
         build_mcp_session(token="")
@@ -119,6 +126,7 @@ def _read_without(root: str) -> dict:
     return {line.split()[0]: line.split()[1:] for line in done.stdout.splitlines()}
 
 
+# @ac AC-CORE-029.4
 @pytest.mark.parametrize("library", ["textual", "fastmcp"])
 def test_either_builder_needs_both_extras(library):
     read = _read_without(library)
@@ -128,6 +136,7 @@ def test_either_builder_needs_both_extras(library):
         assert "chatinho[tui,mcp]" in message
 
 
+# @ac AC-CORE-029.5, AC-CORE-028.5
 def test_each_frontend_needs_only_its_own_extra():
     without_mcp = _read_without("fastmcp")
     assert without_mcp["ChatFrontend"] == ["ok"]
@@ -138,6 +147,7 @@ def test_each_frontend_needs_only_its_own_extra():
     assert "chatinho[tui]" in without_tui["ChatFrontend"][1]
 
 
+# @ac AC-CORE-028.5
 def test_the_agent_connector_needs_its_extra():
     status, message = _read_without("langchain")["BasicAgentConnector"]
     assert status == "missing"
@@ -145,6 +155,7 @@ def test_the_agent_connector_needs_its_extra():
     assert _read_without("textual")["BasicAgentConnector"] == ["ok"]
 
 
+# @ac AC-CORE-028.4
 def test_the_core_stays_light():
     done = subprocess.run(
         [sys.executable, "-c",
@@ -156,6 +167,7 @@ def test_the_core_stays_light():
     assert done.stdout.strip() == "[]"
 
 
+# @ac AC-CORE-028.6
 def test_the_workspaces_are_public():
     """What a peer works with, what declares an operation, and what keeps them, all from the root."""
     import chatinho
@@ -169,6 +181,7 @@ def test_the_workspaces_are_public():
         assert name in chatinho.__all__
 
 
+# @ac AC-CORE-028.7
 def test_the_deep_agent_connector_is_where_it_says():
     import chatinho
     from chatinho import connectors
@@ -178,6 +191,7 @@ def test_the_deep_agent_connector_is_where_it_says():
     assert "DeepAgentConnector" in chatinho.__all__ and "DeepAgentConnector" in connectors.__all__
 
 
+# @ac AC-CORE-028.7
 def test_the_basic_agent_connector_is_where_it_says():
     import chatinho
     from chatinho import connectors
@@ -189,6 +203,7 @@ def test_the_basic_agent_connector_is_where_it_says():
     assert "BasicAgentConnector" in chatinho.__all__ and "BasicAgentConnector" in connectors.__all__
 
 
+# @ac AC-CORE-028.7
 def test_the_former_agent_connector_is_gone():
     """Renamed BasicAgentConnector, with no alias; its modules moved under connectors/agents/."""
     import importlib

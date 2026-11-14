@@ -32,4 +32,4 @@ Comment tags in `src/chatinho/session.py`, `hooks.py`, `message.py`, `query.py`,
 - What the OpenSpec specs absorbed here say about the terminal (welcome and notices, `@name`, short ids, opening links), the database backend (archiving ids, status and attachments) and MCP (declaring and delegating credentials): each is recorded by the baseline of `frontends`, `backends` or `connectors`.
 - The layer rules `tests/test_architecture.py` enforces: they constrain the code's structure, not its behaviour, and stay in `docs/architecture.md`.
 - Two statements in `openspec/specs/message-attachments` that the code no longer follows and later specs replaced: that `answer` may return a plain string, and that `ask` returns text. The baseline records what the code does (REQ-CORE-011, REQ-CORE-007).
-- No suspected bug was found in the behaviour read.
+- A failing `answer` raises in a waiting `ask` and posts no reply, while an addressed say gets an `error` reply: recorded as it is (AC-CORE-007.5, AC-CORE-011.4), and left to the change `fix-ask-failure-reply`.

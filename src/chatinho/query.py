@@ -17,6 +17,7 @@ from .message import ChatMessage, MessageID, ReplyStatus
 SELF : int = -2
 
 
+# @req REQ-CORE-018
 @dataclass(frozen=True)
 class Query:
     """

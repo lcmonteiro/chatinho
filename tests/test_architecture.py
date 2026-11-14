@@ -376,6 +376,7 @@ for name in sorted(chatinho._BEHIND_AN_EXTRA):
 """
 
 
+# @ac AC-CORE-028.4
 def test_the_core_imports_with_none_of_the_batteries_installed():
     """
     ``import chatinho`` must not need a terminal, an HTTP client and an ORM.

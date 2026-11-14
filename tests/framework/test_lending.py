@@ -26,6 +26,7 @@ class _Lender:
     pass
 
 
+# @ac AC-CORE-025.1
 async def test_each_message_brings_its_own_key():
     peer, lender = _Pensador(), _Lender()
     session, _ = await driven(connectors=[peer, lender])
@@ -37,6 +38,7 @@ async def test_each_message_brings_its_own_key():
     await session.close()
 
 
+# @ac AC-CORE-025.2
 async def test_the_message_keeps_the_lenders_mapping_so_it_can_be_cleared():
     peer, lender = _Pensador(), _Lender()
     session, view = await driven(connectors=[peer, lender])
@@ -49,6 +51,7 @@ async def test_the_message_keeps_the_lenders_mapping_so_it_can_be_cleared():
     await session.close()
 
 
+# @ac AC-CORE-025.3
 async def test_a_key_never_shows():
     peer, lender = _Pensador(), _Lender()
     session, view = await driven(connectors=[peer, lender])
@@ -59,6 +62,7 @@ async def test_a_key_never_shows():
     await session.close()
 
 
+# @ac AC-CORE-025.3
 def test_a_secret_never_shows_itself():
     secret = Secret("sk-test")
     assert "sk-test" not in repr(secret) and "sk-test" not in str(secret)
