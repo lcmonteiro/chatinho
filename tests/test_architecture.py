@@ -84,7 +84,7 @@ def test_the_core_does_not_depend_on_a_frontend_or_the_builders(module):
 
 
 #: What a workspace is, and the provider that makes them: both in the core.
-WORKSPACE_PACKAGES = ("shared/workspace", "workspaces")
+WORKSPACE_PACKAGES = ("shared_parts/workspace", "workspaces")
 
 
 def test_workspaces_use_only_the_standard_library():
@@ -103,12 +103,12 @@ def test_workspaces_use_only_the_standard_library():
 #: The session and the definition of the hooks. Imports nothing of chatinho but itself.
 FRAMEWORK = {"session", "hooks", "message", "query"}
 
-#: Code more than one specialization uses, a package per domain. Imports the framework,
+#: The parts more than one specialization uses, a package per domain. Imports the framework,
 #: and nothing but the standard library.
-SHARED = "shared"
+SHARED = "shared_parts"
 
 #: What a specialization is built from. Imports the framework and the shared code.
-DEVKITS = "devkits"
+KITS = "shared_kits"
 
 #: What implements the hooks. Imports everything above, never one another.
 SPECIALIZATIONS = {"connectors", "frontends", "backends", "commands", "routers", "workspaces"}
@@ -118,7 +118,7 @@ ASSEMBLY = {"__init__.py", "builder.py"}
 
 
 def imported_parts(path: pathlib.Path) -> set:
-    """Returns the top-level parts of chatinho that *path* imports: ``hooks``, ``shared``, ``connectors``…"""
+    """Returns the top-level parts of chatinho that *path* imports: ``hooks``, ``connectors``…"""
     package = ("chatinho",) + path.relative_to(SRC).parts[:-1]
     parts   = set()
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -144,7 +144,7 @@ def layer_files(top: str) -> list:
 def test_every_part_of_the_package_belongs_to_a_layer():
     """A new file or folder at the root has to be given a layer, or the rules below skip it."""
     tops = {path.name for path in SRC.iterdir() if path.suffix == ".py" or (path / "__init__.py").exists()}
-    known = {name + ".py" for name in FRAMEWORK} | {SHARED, DEVKITS} | SPECIALIZATIONS | ASSEMBLY
+    known = {name + ".py" for name in FRAMEWORK} | {SHARED, KITS} | SPECIALIZATIONS | ASSEMBLY
     assert tops == known
 
 
@@ -160,7 +160,7 @@ def shared_domain(path: pathlib.Path) -> str:
 
 
 def test_the_shared_code_imports_only_the_framework():
-    """Not a devkit, not a specialization, and not another domain of its own."""
+    """Not a kit, not a specialization, and not another domain of its own."""
     found = {}
     for path in layer_files(SHARED):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -200,13 +200,13 @@ def test_the_shared_code_uses_only_the_standard_library():
     assert found == {}, "shared code must import only the standard library: %s" % found
 
 
-def test_a_devkit_imports_no_specialization():
+def test_a_kit_imports_no_specialization():
     found = {}
-    for path in layer_files(DEVKITS):
+    for path in layer_files(KITS):
         above = imported_parts(path) & (SPECIALIZATIONS | {"builder"})
         if above:
             found[path.relative_to(SRC).as_posix()] = sorted(above)
-    assert found == {}, "a devkit must not import what is built from it: %s" % found
+    assert found == {}, "a kit must not import what is built from it: %s" % found
 
 
 @pytest.mark.parametrize("specialization", sorted(SPECIALIZATIONS))
@@ -456,10 +456,10 @@ def blocked(name, *a, **k):
         raise ImportError("No module named %r" % name)
     return real(name, *a, **k)
 builtins.__import__ = blocked
-from chatinho.devkits.agent import AgentFactory, AgentPeer, BasicAgent, Interrupted
+from chatinho.shared_kits.agent import AgentFactory, AgentPeer, BasicAgent, Interrupted
 from chatinho.connectors.agents import BasicAgentConnector
 try:
-    from chatinho.devkits.agent import DeepAgent
+    from chatinho.shared_kits.agent import DeepAgent
 except ImportError:
     print("deep-blocked")
 print("deepagents" in sys.modules)

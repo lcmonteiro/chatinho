@@ -22,9 +22,9 @@ from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
 from chatinho.hooks import HookAnswer
 from chatinho.hooks import connector, require
-from chatinho.shared.keys import KeyLike, KeySource, KeyUnavailable, read_async, to_source
+from chatinho.shared_parts.keys import KeyLike, KeySource, KeyUnavailable, read_async, to_source
 from chatinho.message import ChatMessage, Reply, ReplyStatus
-from chatinho.shared.mcp import CREDENTIALS_KEY, decode
+from chatinho.shared_parts.mcp import CREDENTIALS_KEY, decode
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class McpConnector:
     Args:
         url: The Streamable HTTP endpoint, e.g. ``https://lab.example/mcp``.
         token: The bearer token the server requires; needed with *url*. A
-            string is the token itself; a key source (:mod:`chatinho.shared.keys`) or a
+            string is the token itself; a key source (:mod:`chatinho.shared_parts.keys`) or a
             function is read whenever the client is built.
         server: An in-process server, for tests and embedding.
         name: Its name in the chat, and the client name the server sees; the

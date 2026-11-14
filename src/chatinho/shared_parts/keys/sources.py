@@ -6,7 +6,7 @@ private file, the OS keychain, a password manager's command — instead of
 carrying the value. Every argument that takes a key or token accepts one, and a
 plain string there still means the value itself::
 
-    >>> from chatinho.shared.keys import Chain, Env, File
+    >>> from chatinho.shared_parts.keys import Chain, Env, File
     >>> key = Chain(Env("OPENAI_API_KEY"), File("~/.config/chatinho/openai.key"))
 
 Reading may block (a keychain, a command), so :meth:`KeySource.read` is

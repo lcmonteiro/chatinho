@@ -10,7 +10,7 @@ from typing import List
 
 import pytest
 
-from chatinho.shared.workspace import Workspace, WorkspaceView, operation
+from chatinho.shared_parts.workspace import Workspace, WorkspaceView, operation
 from chatinho.workspaces import GitWorktrees, MergeConflict
 
 

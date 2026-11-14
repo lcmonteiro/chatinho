@@ -801,7 +801,7 @@ def test_help_declares_only_what_it_uses():
 async def test_a_built_session_serves_workspaces(repo, build):
     from chatinho import HookWorkspace, WorkspaceGrant, connector, require
     from chatinho.builder import build_chat_session, build_mcp_session
-    from chatinho.shared.workspace import Workspace
+    from chatinho.shared_parts.workspace import Workspace
     from chatinho.workspaces import GitWorktrees
 
     @connector("dev")

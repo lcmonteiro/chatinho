@@ -34,8 +34,8 @@ from chatinho import (
     require,
 )
 from chatinho.connectors.agents.basic import BasicAgentConnector
-from chatinho.devkits.agent import basic as module
-from chatinho.shared.keys import Env
+from chatinho.shared_kits.agent import basic as module
+from chatinho.shared_parts.keys import Env
 
 from fakes.agent import File, calls, fake, maker, makes, question, reminders, says
 from conftest import driven
@@ -671,7 +671,7 @@ def test_a_session_can_hold_it():
 
 # === Its workspace as tools =========================================================
 
-from chatinho.shared.workspace import Workspace, WorkspaceView, operation  # noqa: E402
+from chatinho.shared_parts.workspace import Workspace, WorkspaceView, operation  # noqa: E402
 from chatinho.workspaces import GitWorktrees  # noqa: E402
 
 OWN_TOOLS = ["ws_ls", "ws_read", "ws_glob", "ws_grep", "ws_diff", "ws_log",

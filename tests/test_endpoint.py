@@ -8,8 +8,8 @@ import os
 
 import pytest
 
-from chatinho.shared.keys.endpoint import Endpoint, profiles_file
-from chatinho.shared.keys import Env, KeyUnavailable, Literal
+from chatinho.shared_parts.keys.endpoint import Endpoint, profiles_file
+from chatinho.shared_parts.keys import Env, KeyUnavailable, Literal
 
 posix = pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
 

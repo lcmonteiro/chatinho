@@ -20,7 +20,7 @@ from .frontends.chat import ChatFrontend
 from .frontends.chat.composer import NEWLINE_ESCAPE
 from .frontends.chat.style import ChatStyle
 from .frontends.mcp import McpFrontend
-from .shared.keys import KeyLike
+from .shared_parts.keys import KeyLike
 from .routers import SimpleRouter
 from .session import ChatSession
 
@@ -137,7 +137,7 @@ def build_mcp_session(
         backend: The peer that keeps the conversation and gives it back at start.
         name: The frontend's name in the session, and the server's name.
         token: The bearer token every request must carry: the token itself, or a
-            key source (:mod:`chatinho.shared.keys`) read once, at startup.
+            key source (:mod:`chatinho.shared_parts.keys`) read once, at startup.
         host: Where the server listens.
         port: The port it listens on.
         credentials: Lent with every message to the peers that answer it.

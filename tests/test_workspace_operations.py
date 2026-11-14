@@ -13,7 +13,7 @@ from typing import List
 
 import pytest
 
-from chatinho.shared.workspace import Lines, Workspace, WorkspaceView, operation, operations_of
+from chatinho.shared_parts.workspace import Lines, Workspace, WorkspaceView, operation, operations_of
 from chatinho.workspaces import GitWorktrees
 
 
