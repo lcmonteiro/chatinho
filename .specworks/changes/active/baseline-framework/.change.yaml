@@ -1,6 +1,6 @@
 name: baseline-framework
 created: '2026-11-14T18:46:38'
-phase: validate
+phase: close
 specified:
   REQ-CORE-001: 596491f8dc41
   REQ-CORE-002: 4566ed5c2a69
