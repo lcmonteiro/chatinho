@@ -83,22 +83,147 @@ def test_the_core_does_not_depend_on_a_frontend_or_the_builders(module):
     assert "builder" not in relative, "%s must never import the builders" % module
 
 
-#: The one module of chatinho.workspaces that may import a third party: the deep
-#: agents adapter, which must subclass deepagents' own ABC, behind its own extra.
-WORKSPACE_ADAPTERS = {"workspaces/deepagents.py"}
+#: What a workspace is, and the provider that makes them: both in the core.
+WORKSPACE_PACKAGES = ("support/parts/workspace", "workspaces")
 
 
 def test_workspaces_use_only_the_standard_library():
     """Workspaces are in the core, so `import chatinho` must not need anything to use one."""
     found = {}
-    for path in sorted((SRC / "workspaces").rglob("*.py")):
-        relative = path.relative_to(SRC).as_posix()
-        if relative in WORKSPACE_ADAPTERS:
+    for package in WORKSPACE_PACKAGES:
+        for path in sorted((SRC / package).rglob("*.py")):
+            outside = imported_roots(path) - set(sys.stdlib_module_names) - {"chatinho"}
+            if outside:
+                found[path.relative_to(SRC).as_posix()] = sorted(outside)
+    assert found == {}, "the workspaces must import only the standard library: %s" % found
+
+
+# === The four layers ============================================================
+
+#: The session and the definition of the hooks. Imports nothing of chatinho but itself.
+FRAMEWORK = {"session", "hooks", "message", "query"}
+
+#: What supports the specializations: the parts and the kits, below.
+SUPPORT = "support"
+
+#: The parts more than one specialization uses, a package per domain. Imports the framework,
+#: and nothing but the standard library.
+PARTS = SUPPORT + "/parts"
+
+#: What a specialization is built from. Imports the framework and the parts.
+KITS = SUPPORT + "/kits"
+
+#: What implements the hooks. Imports everything above, never one another.
+SPECIALIZATIONS = {"connectors", "frontends", "backends", "commands", "routers", "workspaces"}
+
+#: What puts the three together, and so may import all of them.
+ASSEMBLY = {"__init__.py", "builder.py"}
+
+
+def imported_parts(path: pathlib.Path) -> set:
+    """Returns the parts of chatinho that *path* imports: ``hooks``, ``connectors``, ``support/kits``…"""
+    package = ("chatinho",) + path.relative_to(SRC).parts[:-1]
+    parts   = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            targets = [alias.name.split(".") for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            base   = package[:len(package) - node.level + 1] if node.level else ()
+            module = tuple(node.module.split(".")) if node.module else ()
+            # ``from . import x`` names the module in the alias, not in ``module``.
+            targets = [list(base + module + (alias.name,)) for alias in node.names]
+        else:
             continue
-        outside = imported_roots(path) - set(sys.stdlib_module_names) - {"chatinho"}
+        for target in targets:
+            if target[0] != "chatinho" or len(target) < 2:
+                continue
+            # ``support`` is two layers, so what is imported from it is named by the layer.
+            parts.add("/".join(target[1:3]) if target[1] == SUPPORT and len(target) > 2 else target[1])
+    return parts
+
+
+def layer_files(top: str) -> list:
+    """Returns every module of the top-level part *top*, a file or a package."""
+    single = SRC / (top + ".py")
+    return [single] if single.exists() else sorted((SRC / top).rglob("*.py"))
+
+
+def test_every_part_of_the_package_belongs_to_a_layer():
+    """A new file or folder at the root has to be given a layer, or the rules below skip it."""
+    tops = {path.name for path in SRC.iterdir() if path.suffix == ".py" or (path / "__init__.py").exists()}
+    known = {name + ".py" for name in FRAMEWORK} | {SUPPORT} | SPECIALIZATIONS | ASSEMBLY
+    assert tops == known
+
+
+@pytest.mark.parametrize("module", sorted(FRAMEWORK))
+def test_the_framework_imports_only_the_framework(module):
+    outside = imported_parts(SRC / (module + ".py")) - FRAMEWORK
+    assert outside == set(), "%s.py is the framework and must not import %s" % (module, sorted(outside))
+
+
+def domain_of(path: pathlib.Path) -> str:
+    """Returns the domain the part *path* is in: ``keys``, ``workspace``, ``memory``…"""
+    return path.relative_to(SRC / PARTS).parts[0].removesuffix(".py")
+
+
+def test_a_part_imports_only_the_framework():
+    """Not a kit, not a specialization, and not another part."""
+    found = {}
+    for path in layer_files(PARTS):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        outside = imported_parts(path) - FRAMEWORK - {PARTS}
+        domains = imported_domains(path, tree) - {domain_of(path)}
+        if outside or domains:
+            found[path.relative_to(SRC).as_posix()] = sorted(outside | domains)
+    assert found == {}, "a part must import only the framework: %s" % found
+
+
+def imported_domains(path: pathlib.Path, tree: ast.AST) -> set:
+    """Returns the domains of the parts that *path*, itself a part, imports."""
+    package = ("chatinho",) + path.relative_to(SRC).parts[:-1]
+    domains = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        base   = package[:len(package) - node.level + 1] if node.level else ()
+        module = tuple(node.module.split(".")) if node.module else ()
+        for alias in node.names:
+            target = base + module + (alias.name,)
+            if target[:3] == ("chatinho", SUPPORT, "parts") and len(target) > 3:
+                domains.add(target[3])
+    return domains - {"__init__"}
+
+
+#: What a part imports inside a function, behind an extra of its own: the OS keychain.
+PARTS_ON_FIRST_USE = {"keyring"}
+
+
+def test_the_parts_use_only_the_standard_library():
+    found = {}
+    for path in layer_files(PARTS):
+        outside = imported_roots(path) - set(sys.stdlib_module_names) - {"chatinho"} - PARTS_ON_FIRST_USE
         if outside:
-            found[relative] = sorted(outside)
-    assert found == {}, "chatinho.workspaces must import only the standard library: %s" % found
+            found[path.relative_to(SRC).as_posix()] = sorted(outside)
+    assert found == {}, "a part must import only the standard library: %s" % found
+
+
+def test_a_kit_imports_no_specialization():
+    found = {}
+    for path in layer_files(KITS):
+        above = imported_parts(path) & (SPECIALIZATIONS | {"builder"})
+        if above:
+            found[path.relative_to(SRC).as_posix()] = sorted(above)
+    assert found == {}, "a kit must not import what is built from it: %s" % found
+
+
+@pytest.mark.parametrize("specialization", sorted(SPECIALIZATIONS))
+def test_a_specialization_imports_no_other(specialization):
+    found = {}
+    for path in layer_files(specialization):
+        others = imported_parts(path) & ((SPECIALIZATIONS - {specialization}) | {"builder"})
+        if others:
+            found[path.relative_to(SRC).as_posix()] = sorted(others)
+    assert found == {}, "%s must not import another specialization: %s" % (specialization, found)
 
 
 # === Names we must not take from Textual ========================================
@@ -338,10 +463,10 @@ def blocked(name, *a, **k):
         raise ImportError("No module named %r" % name)
     return real(name, *a, **k)
 builtins.__import__ = blocked
-from chatinho.helpers.agent import AgentFactory, AgentPeer, BasicAgent, Interrupted
+from chatinho.support.kits.agent import AgentFactory, AgentPeer, BasicAgent, Interrupted
 from chatinho.connectors.agents import BasicAgentConnector
 try:
-    from chatinho.helpers.agent import DeepAgent
+    from chatinho.support.kits.agent import DeepAgent
 except ImportError:
     print("deep-blocked")
 print("deepagents" in sys.modules)

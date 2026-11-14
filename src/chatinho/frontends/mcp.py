@@ -37,9 +37,9 @@ from chatinho.hooks import Commands, Invoke, Locate, Peers, Say
 # FastMCP has a Context of its own, which the tools take as ``ctx``.
 from chatinho.hooks import Context as ChatContext
 from chatinho.hooks import declares, frontend, name_of, require
-from chatinho.keys import KeyLike, to_source
+from chatinho.support.parts.keys import KeyLike, to_source
 from chatinho.message import LOCAL, Attachment, ChatMessage, MessageID, ReplyStatus, Secret
-from chatinho.helpers.mcp import CREDENTIALS_KEY, encode, media_type_of
+from chatinho.support.parts.mcp import CREDENTIALS_KEY, encode, media_type_of
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class McpFrontend:
     Args:
         name: Its name in the session, and the server's name; ``master`` by default.
         token: The bearer token every request must carry; required. A string is
-            the token itself; a key source (:mod:`chatinho.keys`) or a function
+            the token itself; a key source (:mod:`chatinho.support.parts.keys`) or a function
             is read once, here, so a missing token fails at startup.
         host: Where the server listens.
         port: The server's port.

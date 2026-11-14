@@ -231,7 +231,7 @@ kind of failure, never the key.
 ### Keys and endpoints
 
 A key or token argument takes the value itself (a string), or **where the value lives**: a key
-source from `chatinho.keys`, read when it is needed and never kept in plain text. Errors name the
+source from `chatinho.support.parts.keys`, read when it is needed and never kept in plain text. Errors name the
 reference — the variable, the file, the command — never a value.
 
 ```python
@@ -320,7 +320,7 @@ painter = BasicAgentConnector("painter", Endpoint.load(), tools=[draw])
 A question gets a reply; what **you** say to everyone gets a say from the agent, replying to it.
 What other peers say is only memory, so two agents never trade says.
 
-Both agent connectors are `AgentPeer` (`chatinho.helpers.agent`) with a factory: `BasicAgent` makes
+Both agent connectors are `AgentPeer` (`chatinho.support.kits.agent`) with a factory: `BasicAgent` makes
 the agent with `create_agent`, `DeepAgent` with `create_deep_agent`. To put another kind of agent in
 the chat, write a factory — a `name`, the `options` it takes, the workspace operations its own tools
 cover (`covered`), and `async build(model, tools, options, peer)` — and pass it:

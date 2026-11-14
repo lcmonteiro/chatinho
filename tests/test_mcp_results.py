@@ -5,7 +5,7 @@ import mcp_types as types
 from chatinho import Attachment, Reply, ReplyStatus
 from chatinho.connectors import mcp as connector
 from chatinho.frontends import mcp as frontend
-from chatinho.helpers import mcp as helpers
+from chatinho.support.parts import mcp as helpers
 
 
 def _sent(answer):

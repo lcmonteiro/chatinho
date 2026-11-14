@@ -35,10 +35,10 @@ With `workspace=True` and a workspace provider, the peer SHALL have `ws_` tools,
 - **THEN** the agent has no `ws_read` and no `ws_read_of`, and has `ws_write` and `ws_diff_of`
 
 ### Requirement: Where the base and the factories are imported from
-`AgentPeer`, `AgentFactory` and `BasicAgent` SHALL be importable from `chatinho.helpers.agent` with the `langchain` extra. `DeepAgent` SHALL be importable from there with the `deepagents` extra. Importing `AgentPeer` or `BasicAgent` MUST NOT import `deepagents`. None of them SHALL be exported from `chatinho`.
+`AgentPeer`, `AgentFactory` and `BasicAgent` SHALL be importable from `chatinho.support.kits.agent` with the `langchain` extra. `DeepAgent` SHALL be importable from there with the `deepagents` extra. Importing `AgentPeer` or `BasicAgent` MUST NOT import `deepagents`. None of them SHALL be exported from `chatinho`.
 
 #### Scenario: The basic pieces do not need deep agents
-- **WHEN** code imports `AgentPeer` and `BasicAgent` from `chatinho.helpers.agent`
+- **WHEN** code imports `AgentPeer` and `BasicAgent` from `chatinho.support.kits.agent`
 - **THEN** no `deepagents` module is imported
 
 #### Scenario: Not in the top-level API

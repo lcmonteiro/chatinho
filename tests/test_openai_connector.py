@@ -15,8 +15,8 @@ from chatinho import SELF, ChatMessage, HookListen, HookSay, Query, ReplyStatus,
 from chatinho import connector, require
 from chatinho.connectors import openai as module
 from chatinho.connectors.openai import OpenAIConnector
-from chatinho.endpoint import Endpoint
-from chatinho.keys import Env, File, Literal
+from chatinho.support.parts.keys.endpoint import Endpoint
+from chatinho.support.parts.keys import Env, File, Literal
 
 from conftest import driven
 from fakes.llm import FakeOpenAI, failure, requests, sent

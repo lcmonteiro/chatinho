@@ -17,8 +17,9 @@ from langchain_core.messages import AIMessage, BaseMessage, SystemMessage, ToolM
 
 from chatinho import ChatMessage, HookAnswer, Query, Reply, ReplyStatus, require  # noqa: E402
 from chatinho.connectors.agents.deep import DeepAgentConnector                  # noqa: E402
-from chatinho.helpers.agent.deep import WHERE                                    # noqa: E402
-from chatinho.workspaces import GitWorktrees, WorkspaceView, operation           # noqa: E402
+from chatinho.support.kits.agent.deep import WHERE                                    # noqa: E402
+from chatinho.support.parts.workspace import WorkspaceView, operation  # noqa: E402
+from chatinho.workspaces import GitWorktrees  # noqa: E402
 
 from conftest import driven                                                      # noqa: E402
 from fakes.agent import fake, says, this_run                                     # noqa: E402
@@ -181,7 +182,7 @@ async def test_a_project_operation(repo):
         async def symbols(self, path: str) -> List[str]:
             return ["C"]
 
-    from chatinho.workspaces import Workspace
+    from chatinho.support.parts.workspace import Workspace
 
     class MyWorkspace(Workspace, MyView):
         pass

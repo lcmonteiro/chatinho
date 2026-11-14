@@ -10,9 +10,9 @@ from openai import AsyncOpenAI
 from ..hooks import HookAnswer, HookContext, HookPeers
 from ..hooks import Context, Peers
 from ..hooks import connector, require
-from ..endpoint import Endpoint
-from ..keys import KeyUnavailable, read_async
-from ..helpers.memory import MEMORY, earlier, speaker
+from ..support.parts.keys.endpoint import Endpoint
+from ..support.parts.keys import KeyUnavailable, read_async
+from ..support.parts.memory import MEMORY, earlier, speaker
 from ..message import ChatMessage, Reply, ReplyStatus
 from ..query import Query
 
@@ -32,7 +32,7 @@ class OpenAIConnector:
     lent on the message when there is one, else with its own.
 
     Where to ask, which model, and with which key all come from one
-    :class:`~chatinho.endpoint.Endpoint` — usually a named profile::
+    :class:`~chatinho.support.parts.keys.endpoint.Endpoint` — usually a named profile::
 
         OpenAIConnector("assistant", Endpoint.load())
         OpenAIConnector("local", Endpoint(base_url="http://localhost:11434/v1", model="qwen"))

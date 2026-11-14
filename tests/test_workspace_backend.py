@@ -19,8 +19,9 @@ from deepagents.backends import CompositeBackend                                
 from deepagents.backends.protocol import BackendProtocol, SandboxBackendProtocol  # noqa: E402
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage          # noqa: E402
 
-from chatinho.workspaces import GitWorktrees, Workspace, operation               # noqa: E402
-from chatinho.workspaces.deepagents import WorkspaceBackend                      # noqa: E402
+from chatinho.support.parts.workspace import Workspace, operation  # noqa: E402
+from chatinho.workspaces import GitWorktrees  # noqa: E402
+from chatinho.support.kits.agent.workspace_backend import WorkspaceBackend                      # noqa: E402
 
 from fakes.agent import fake                                                     # noqa: E402
 

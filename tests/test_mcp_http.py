@@ -11,7 +11,7 @@ from fastmcp import Client
 from chatinho import ChatSession
 from chatinho.connectors.mcp import McpConnector
 from chatinho.frontends.mcp import McpFrontend
-from chatinho.keys import Env, KeyUnavailable
+from chatinho.support.parts.keys import Env, KeyUnavailable
 from conftest import driven
 from fakes.mcp import Weather
 

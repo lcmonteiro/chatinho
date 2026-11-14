@@ -73,13 +73,14 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .frontends.chat import ChatFrontend
     from .frontends.chat.style import ChatStyle
     from .frontends.mcp import McpFrontend
-    from .workspaces.deepagents import WorkspaceBackend
+    from .support.kits.agent.workspace_backend import WorkspaceBackend
 
 from .session import ChatSession
 from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
 from .query import SELF, Query
-from .keys import KeySource, KeyUnavailable, Env, DotEnv, File, Keyring, Command, Literal, Chain, key
-from .endpoint import Endpoint
+from .support.parts.keys import KeySource, KeyUnavailable, Env, DotEnv, File, Keyring, Command, Literal
+from .support.parts.keys import Chain, key
+from .support.parts.keys.endpoint import Endpoint
 from .hooks import connector, tool, frontend, backend, require
 from .hooks import hooks_of, options_of, declares, declared_id, name_of
 from .hooks import Hook, HookSay, HookAsk, HookAnswer, HookInvoke, HookExecute, HookContext
@@ -87,8 +88,9 @@ from .hooks import HookPeers, HookCommands, HookListen, HookLoad, HookForget, Ho
 from .hooks import HookRoute, HookWorkspace, HookProvision, NoWorkspaceProvider
 from .hooks import Say, Ask, Invoke, Context, Peers, Commands, Locate, WorkspaceGrant
 from .commands import HelpCommand, TestCommand, WorkspaceCommand
-from .workspaces import GitWorktrees, Lines, Match, Matches, Workspace, WorkspaceView
-from .workspaces import operation, operations_of
+from .workspaces import GitWorktrees
+from .support.parts.workspace import Lines, Match, Matches, Workspace, WorkspaceView
+from .support.parts.workspace import operation, operations_of
 from .routers import SimpleRouter
 
 __version__ = "0.1.0"
@@ -107,7 +109,7 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
     "BasicAgentConnector" : (".connectors.agents.basic", (("langchain", "langchain"),)),
     "DeepAgentConnector"  : (".connectors.agents.deep",  (("deepagents", "deepagents"),)),
     "DatabaseBackend"     : (".backends",                (("sql", "sqlalchemy"),)),
-    "WorkspaceBackend"    : (".workspaces.deepagents",   (("deepagents", "deepagents"),)),
+    "WorkspaceBackend"    : (".support.kits.agent.workspace_backend",   (("deepagents", "deepagents"),)),
 }
 
 

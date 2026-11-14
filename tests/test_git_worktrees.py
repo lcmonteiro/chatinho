@@ -10,7 +10,8 @@ from typing import List
 
 import pytest
 
-from chatinho.workspaces import GitWorktrees, MergeConflict, Workspace, WorkspaceView, operation
+from chatinho.support.parts.workspace import Workspace, WorkspaceView, operation
+from chatinho.workspaces import GitWorktrees, MergeConflict
 
 
 def git(where, *args: str) -> str:

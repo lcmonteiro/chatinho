@@ -1,8 +1,8 @@
 """
 What can be done in a workspace, declared one method at a time.
 
-An operation is an ``async def`` on :class:`~chatinho.workspaces.views.WorkspaceView`
-or :class:`~chatinho.workspaces.views.Workspace` marked with :func:`operation`.
+An operation is an ``async def`` on :class:`~chatinho.support.parts.workspace.views.WorkspaceView`
+or :class:`~chatinho.support.parts.workspace.views.Workspace` marked with :func:`operation`.
 Every consumer — an agent's tools, ``/ws`` — takes the set from
 :func:`operations_of`, so adding one is writing one method::
 

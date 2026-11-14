@@ -2,7 +2,7 @@
 The chat as an agent's tools: ``ask_<peer>``, ``run_<command>``, ``ask_user`` and ``ws_<operation>``.
 
 Each builder takes the peer the tools work for, an
-:class:`~chatinho.helpers.agent.peer.AgentPeer`, and uses its grants.
+:class:`~chatinho.support.kits.agent.peer.AgentPeer`, and uses its grants.
 """
 
 import inspect
@@ -12,8 +12,8 @@ from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 from langchain_core.tools import StructuredTool
 from pydantic import create_model
 
-from ...message import LOCAL, Attachment, Reply, ReplyStatus
-from ...workspaces import Operation, Workspace, operations_of
+from ....message import LOCAL, Attachment, Reply, ReplyStatus
+from ...parts.workspace import Operation, Workspace, operations_of
 from .results import UNSAFE, diffed, shown
 
 logger = logging.getLogger(__name__)
