@@ -6,6 +6,19 @@ specworks: 1
 # context: free text the agent reads before every phase (stack, conventions,
 # constraints). Keep it short; it is guidance, not documentation.
 context: |
+  chatinho is a Python 3.12+ TUI chat library on Textual (see CLAUDE.md for the
+  model: peers, the three verbs, hooks, roles; docs/SPEC.md for the hooks).
+  The core (session, hooks, message, query, workspaces, routers, commands) is
+  stdlib-only; everything else is a battery behind an extra, enforced by
+  tests/test_architecture.py.
+  All artifacts are written in English.
+  Code conventions: typing.List/Optional/Dict, never PEP 585/604 builtins; no
+  `from __future__ import annotations`; %-style logging args; align `:` and `=`
+  in related blocks; Google-style docstrings; catch specific exceptions;
+  line length 110; ruff selects only E,F (don't "fix" the aligned style).
+  A pyproject.toml change needs `uv lock` beside it.
+  A bug fix starts with a test that fails on the current code. When behaviour
+  changes, update CLAUDE.md and docs/SPEC.md in the same task.
 
 # Name of the folder, inside each capability's code path, that holds its
 # living docs (spec.md, requirements.md, design.md and its diagrams).
@@ -47,8 +60,8 @@ modules: {}
 # documentation (.md, .rst, .txt, ...): a tag quoted in a doc is not code or a test.
 # In a glob * and ? stay within one folder and ** spans any number of folders,
 # e.g. test_globs: ["tests/**/*.py"] or source_globs: ["src/**"].
-test_globs: []
-source_globs: []
+test_globs: ["tests/**/*.py"]
+source_globs: ["src/**/*.py"]
 
 # Commands the skills run, in this project's own tooling (any language).
 # A module's commands override the top level's, key by key.
