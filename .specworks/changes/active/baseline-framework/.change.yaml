@@ -1,0 +1,5 @@
+name: baseline-framework
+created: '2026-11-14T18:46:38'
+phase: specify
+dirty:
+  .specworks/changes/active/baseline-framework/.change.yaml: 2abfeda960c74243af5df9e6054790d3c678934d7e4dc1aece89a0c81bda7480
