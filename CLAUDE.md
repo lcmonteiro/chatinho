@@ -8,7 +8,7 @@ Extracted from the `lcmonteiro/mcking-codespace` monorepo (`python/chatinho`).
 ## Checks
 
 The three CI runs are under **Workflow** below, and all of them pass on `main`. Most tests run
-without mounting anything; only `test_chat_frontend.py` and `test_command_suggestions.py` need a
+without mounting anything; only `test_chat_frontend.py` and `test_command_suggestions.py` (in `tests/frontends/`) need a
 Textual app. That ratio is the point of the layout below, not an accident of it.
 
 ---
@@ -573,17 +573,26 @@ examples/          assistant.py, team.py, files.py (LLM demos: parts() + main())
                    lab_fastmcp_client.py (a model over MCP, lent keys), inbox.py (HTTP, inbound), hooks.py (one peer per hook),
                    workspaces.py (two agents in git worktrees: dev commits, reviewer reads its diff)
                    deep_agent.py (a DeepAgentConnector in its worktree, a BasicAgentConnector reviewing it)
-tests/             test_chat_frontend.py, test_command_suggestions.py (mounted)
-                   test_chat_session.py, test_database_backend.py, test_message_store.py,
-                   test_require.py, test_architecture.py, test_package_layout.py,
-                   test_clipboard.py, test_answer_details.py,
-                   test_lending.py, test_mcp_*.py, test_message_delivery.py,
-                   test_context_query.py, test_openai_connector.py, test_basic_agent_connector.py,
-                   test_agent_peer.py,
-                   test_workspace_operations.py, test_git_worktrees.py, test_workspaces_in_session.py,
-                   test_workspace_command.py, test_workspace_backend.py, test_deep_agent_connector.py
-                   (real git repos, no terminal)
-                   and test_examples.py (no terminal)
+tests/             one folder per layer part, like the package; real git repos, no terminal but for
+                   frontends/test_chat_frontend.py and frontends/test_command_suggestions.py (mounted)
+  tests/framework/        test_chat_session.py, test_message_delivery.py, test_message_store.py,
+                          test_require.py, test_context_query.py, test_answer_details.py,
+                          test_attachments.py, test_lending.py, test_workspaces_in_session.py
+  tests/keys/             test_keys.py, test_endpoint.py
+  tests/workspace-model/  test_workspace_operations.py
+  tests/agents/           test_agent_peer.py, test_workspace_backend.py
+  tests/connectors/       test_openai_connector.py, test_mcp_connector.py,
+                          test_basic_agent_connector.py, test_deep_agent_connector.py
+  tests/frontends/        test_chat_frontend.py, test_command_suggestions.py, test_clipboard.py,
+                          test_mcp_frontend.py, test_mcp_http.py
+  tests/backends/         test_database_backend.py
+  tests/commands/         test_workspace_command.py
+  tests/routers/          test_message_routing.py
+  tests/workspaces/       test_git_worktrees.py
+  tests/                  what crosses them stays at the root: test_architecture.py,
+                          test_package_layout.py, test_examples.py, test_mcp_end_to_end.py,
+                          test_mcp_results.py; conftest.py is here too, so every folder imports it.
+                          The folders hold no __init__.py, so no two test files share a name
   tests/fakes/     test doubles, never the real thing: llm.py (a stubbed AsyncOpenAI),
                    agent.py (a scripted LangChain chat model), mcp.py (a remote session
                    served over MCP, a client onto it, and peers to ask)
