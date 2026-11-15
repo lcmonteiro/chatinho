@@ -1,6 +1,6 @@
 name: baseline-agents
 created: '2026-11-15T08:49:29'
-phase: validate
+phase: close
 specified:
   REQ-AGENT-001: b933f688a394
   REQ-AGENT-002: 4ca6464f84b7
