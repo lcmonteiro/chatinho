@@ -1,0 +1,41 @@
+direction: down
+
+session: session {
+  shape: page
+}
+connectors: connectors {
+  openai: openai.py {
+    tooltip: "OpenAIConnector: any OpenAI-compatible endpoint"
+  }
+  mcp: mcp.py {
+    tooltip: "McpConnector: asks a remote session over MCP"
+  }
+  agents: agents/ {
+    tooltip: "BasicAgentConnector and DeepAgentConnector: AgentPeer with a factory"
+  }
+}
+kit: agents kit {
+  shape: page
+}
+keys: keys {
+  shape: page
+}
+shared: memory.py and mcp.py {
+  shape: page
+}
+model: model API {
+  shape: cloud
+}
+remote: remote session {
+  shape: cloud
+}
+
+session -> connectors: questions, and what the user says
+connectors -> session: replies, context, asks of other peers
+connectors.openai -> keys: Endpoint, its key read late
+connectors.openai -> shared: what to remember
+connectors.openai -> model: chat completions
+connectors.mcp -> shared: names and attachments
+connectors.mcp -> keys: token and lent keys
+connectors.mcp -> remote: one ask per question
+connectors.agents -> kit: a factory and its defaults

@@ -1,6 +1,6 @@
 name: baseline-connectors
 created: '2026-11-15T11:59:51'
-phase: close
+phase: done
 specified:
   REQ-CONN-001: 4ac017508f68
   REQ-CONN-002: d83d0d86e4ac
