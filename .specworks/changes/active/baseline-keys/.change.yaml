@@ -1,6 +1,6 @@
 name: baseline-keys
 created: '2026-11-14T19:53:38'
-phase: validate
+phase: close
 specified:
   REQ-KEYS-001: 8c3c7d24bc6f
   REQ-KEYS-002: 8f8fcb642ac4
