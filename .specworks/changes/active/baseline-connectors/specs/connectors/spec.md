@@ -492,7 +492,7 @@ On a question the agent SHALL have, besides its own tools, an `ask_<peer>` tool 
 
 ### Requirement: REQ-CONN-017 The agent's memory comes from the chat
 
-Before the question, the agent SHALL be given the messages `context()` returns for the connector's `memory` query, oldest first, with the same default as the OpenAI connector. Its own messages are assistant messages, the user's are user messages, and other peers' are user messages prefixed with the peer's name. A say of the user it responded to MUST be in its memory before its response. The questions it asked through its tools, and their answers, MUST be left out. With a `checkpointer`, each question MUST run on its own thread.
+Before the question, the agent SHALL be given the messages `context()` returns for the connector's `memory` query, oldest first, with the same default as the OpenAI connector. Its own messages are assistant messages, the user's are user messages, and other peers' are user messages prefixed with the peer's name. The message each of its own replies answers MUST be in its memory just before that reply, even when the `memory` query does not select it: a say of the user it responded to, or a question that fell out of the query's limit. The questions it asked through its tools, and their answers, MUST be left out. With a `checkpointer`, each question MUST run on its own thread.
 
 #### Scenario: AC-CONN-017.1 It remembers the conversation
 
@@ -593,13 +593,13 @@ An agent connector created with `workspace=True` in a session with a workspace p
 
 #### Scenario: AC-CONN-020.1 Deep agents' options reach the agent
 
-- **WHEN** a connector is created with `subagents=[...]` and asked
-- **THEN** the deep agent is built with that subagent
+- **WHEN** a connector is created with deep agents' `subagents` option and asked
+- **THEN** creating it is accepted, it answers, and the agent has deep agents' `task` tool
 
 #### Scenario: AC-CONN-020.2 memory and agent_memory
 
 - **WHEN** a connector is created with `memory=Query().last(5)` and `agent_memory=["/AGENTS.md"]`
-- **THEN** the run is given at most the chat's last five messages before the question, and the model's system prompt holds what `/AGENTS.md` says in the connector's workspace
+- **THEN** the question comes last, the oldest messages of a longer conversation are not sent, and the model's system prompt holds what `/AGENTS.md` says in the connector's workspace
 
 #### Scenario: AC-CONN-020.3 A backend is refused
 
