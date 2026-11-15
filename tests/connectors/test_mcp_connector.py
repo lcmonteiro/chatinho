@@ -40,6 +40,7 @@ async def _replies(view, count: int, timeout: float = 5.0):
     return view.context()
 
 
+# @ac AC-CONN-007.1
 def test_exactly_one_server():
     with pytest.raises(ValueError):
         McpConnector()
@@ -51,6 +52,7 @@ def test_exactly_one_server():
 
 # === Naming ========================================================================
 
+# @ac AC-CONN-007.2
 async def test_named_by_the_connector():
     remote_session, front = await remote(Weather())
     lab = McpConnector(server=front.server, name="lab")
@@ -61,6 +63,7 @@ async def test_named_by_the_connector():
     await remote_session.close()
 
 
+# @ac AC-CONN-007.3
 async def test_named_by_the_server_when_not_given():
     remote_session, front = await remote(Weather(), name="office")
     office = McpConnector(server=front.server)
@@ -75,6 +78,7 @@ async def test_named_by_the_server_when_not_given():
 
 # === Being asked ==================================================================
 
+# @ac AC-CONN-008.1
 @pytest.mark.parametrize("said", ["@lab will it rain?", "will it rain?"])
 async def test_what_is_said_to_the_room_is_not_taken(said):
     weather = Weather()
@@ -87,6 +91,7 @@ async def test_what_is_said_to_the_room_is_not_taken(said):
     await remote_session.close()
 
 
+# @ac AC-CONN-008.2
 async def test_the_only_peer_here_gets_everything_said():
     weather = Weather()
     remote_session, front = await remote(weather)
@@ -98,6 +103,7 @@ async def test_the_only_peer_here_gets_everything_said():
     await remote_session.close()
 
 
+# @ac AC-CONN-008.3
 async def test_asked_directly():
     remote_session, front = await remote(Weather("sunny"))
     lab = McpConnector(server=front.server, name="lab")
@@ -117,6 +123,7 @@ class _SlowEcho:
         return Reply("echo: %s" % msg.text)
 
 
+# @ac AC-CONN-008.5
 async def test_three_questions_at_once():
     """The connector may be inside answer() three times over: each gets its own reply."""
     remote_session, front = await remote(_SlowEcho())
@@ -134,6 +141,7 @@ async def test_three_questions_at_once():
 
 # === One reply per question ========================================================
 
+# @ac AC-CONN-009.1
 async def test_an_answer_with_an_attachment_is_kept_here(tmp_path):
     chart = Attachment("chart.svg", "image/svg+xml", b"<svg/>")
     remote_session, front = await remote(Agent(attach=chart), backend=Files(tmp_path / "there"))
@@ -147,6 +155,7 @@ async def test_an_answer_with_an_attachment_is_kept_here(tmp_path):
     await remote_session.close()
 
 
+# @ac AC-CONN-009.2
 async def test_a_question_back_is_marked():
     remote_session, front = await remote(Weather(Reply("which city?", status="asked")))
     lab = McpConnector(server=front.server, name="lab")
@@ -157,6 +166,7 @@ async def test_a_question_back_is_marked():
     await remote_session.close()
 
 
+# @ac AC-CONN-009.3
 async def test_no_remote_peer_is_said_briefly():
     remote_session, front = await remote()
     lab = McpConnector(server=front.server, name="lab")
@@ -167,6 +177,7 @@ async def test_no_remote_peer_is_said_briefly():
     await remote_session.close()
 
 
+# @ac AC-CONN-009.5
 async def test_an_unreachable_server_still_gets_a_reply():
     lab = McpConnector(url="http://127.0.0.1:9/mcp", token="t", name="lab")
     session, view = await _local(lab)
@@ -178,6 +189,7 @@ async def test_an_unreachable_server_still_gets_a_reply():
 
 # === Lending credentials ===========================================================
 
+# @ac AC-CONN-010.1
 async def test_a_credential_is_sent_with_the_question():
     agent = Agent(key=True)
     remote_session, front = await remote(agent, credentials={"llm": "key"})
@@ -190,6 +202,7 @@ async def test_a_credential_is_sent_with_the_question():
     await remote_session.close()
 
 
+# @ac AC-CONN-010.2
 async def test_not_declared_not_sent():
     agent = Agent(key=True)
     remote_session, front = await remote(agent)
@@ -202,6 +215,7 @@ async def test_not_declared_not_sent():
     await remote_session.close()
 
 
+# @ac AC-CONN-010.3
 async def test_a_token_per_question():
     minted = []
 
@@ -220,6 +234,7 @@ async def test_a_token_per_question():
     await remote_session.close()
 
 
+# @ac AC-CONN-010.4
 async def test_nothing_is_lent_without_delegate():
     agent = Agent(key=True)
     remote_session, front = await remote(agent, credentials={"llm": "key"})
@@ -232,6 +247,7 @@ async def test_nothing_is_lent_without_delegate():
     await remote_session.close()
 
 
+# @ac AC-CONN-008.6
 async def test_no_link_stays_open_between_questions():
     remote_session, front = await remote(Weather())
     lab = McpConnector(server=front.server, name="lab")
@@ -242,6 +258,7 @@ async def test_no_link_stays_open_between_questions():
     await remote_session.close()
 
 
+# @ac AC-CONN-008.5
 async def test_two_questions_at_once():
     remote_session, front = await remote(Weather("sunny", delay=0.2))
     lab = McpConnector(server=front.server, name="lab")
@@ -252,6 +269,7 @@ async def test_two_questions_at_once():
     await remote_session.close()
 
 
+# @ac AC-CONN-008.4
 async def test_with_several_remote_peers_one_is_named():
     weather = Weather("sunny")
     remote_session, front = await remote(Agent(), weather)
@@ -266,6 +284,7 @@ async def test_with_several_remote_peers_one_is_named():
     await remote_session.close()
 
 
+# @ac AC-CONN-009.4
 async def test_a_remote_error_is_said_briefly():
     remote_session, front = await remote(Weather(Reply("the service is down", status="error")))
     lab = McpConnector(server=front.server, name="lab")
@@ -276,6 +295,7 @@ async def test_a_remote_error_is_said_briefly():
     await remote_session.close()
 
 
+# @ac AC-CONN-010.5
 async def test_lent_from_a_key_source(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
     agent = Agent(key=True)
@@ -288,6 +308,7 @@ async def test_lent_from_a_key_source(monkeypatch):
     await remote_session.close()
 
 
+# @ac AC-CONN-010.6
 async def test_a_lent_source_that_cannot_read(monkeypatch):
     monkeypatch.delenv("UNSET", raising=False)
     agent = Agent(key=True)

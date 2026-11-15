@@ -57,6 +57,7 @@ class Bystander:
 
 # === Answering never blocks the chat ==============================================
 
+# @ac AC-CONN-001.1
 async def test_the_models_text_is_the_answer():
     session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="sk-own"))])
     try:
@@ -66,6 +67,7 @@ async def test_the_models_text_is_the_answer():
         await session.close()
 
 
+# @ac AC-CONN-001.2
 async def test_the_chat_keeps_moving_while_the_model_thinks():
     FakeOpenAI.gate = asyncio.Event()
     coder, bystander = Coder(), Bystander()
@@ -91,6 +93,7 @@ async def test_the_chat_keeps_moving_while_the_model_thinks():
 
 # === Endpoint, model and system prompt ============================================
 
+# @ac AC-CONN-002.1
 async def test_a_system_prompt_leads():
     gpt = OpenAIConnector("gpt", Endpoint(api_key="k"), system="You review code.")
     session, view = await driven(connectors=[gpt])
@@ -101,6 +104,7 @@ async def test_a_system_prompt_leads():
         await session.close()
 
 
+# @ac AC-CONN-002.2
 async def test_model_temperature_max_tokens_and_endpoint():
     gpt = OpenAIConnector("gpt", Endpoint(base_url="http://localhost:11434/v1", model="m-1", api_key="k"),
                           temperature=0.1, max_tokens=50)
@@ -116,6 +120,7 @@ async def test_model_temperature_max_tokens_and_endpoint():
 
 # === The conversation is remembered ===============================================
 
+# @ac AC-CONN-003.1
 async def test_a_follow_up_question():
     session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="k"))])
     try:
@@ -137,6 +142,7 @@ def room(reviewer: OpenAIConnector, coder: Coder) -> list:
     return [reviewer, OpenAIConnector("other", Endpoint(api_key="k")), coder]
 
 
+# @ac AC-CONN-003.2
 async def test_another_peer_is_named():
     coder    = Coder()
     reviewer = OpenAIConnector("reviewer", Endpoint(api_key="k"), memory=Query(errors=False))
@@ -152,6 +158,7 @@ async def test_another_peer_is_named():
         await session.close()
 
 
+# @ac AC-CONN-003.3
 async def test_only_its_own_exchanges_by_default():
     coder    = Coder()
     reviewer = OpenAIConnector("reviewer", Endpoint(api_key="k"))
@@ -164,6 +171,7 @@ async def test_only_its_own_exchanges_by_default():
         await session.close()
 
 
+# @ac AC-CONN-003.4
 async def test_no_memory():
     session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="k"), memory=None)])
     try:
@@ -174,6 +182,7 @@ async def test_no_memory():
         await session.close()
 
 
+# @ac AC-CONN-003.5
 async def test_memory_is_bounded_and_skips_errors():
     gpt = OpenAIConnector("gpt", Endpoint(api_key="k"), memory=Query(peer=SELF, errors=False).last(2))
     session, view = await driven(connectors=[gpt])
@@ -192,6 +201,7 @@ async def test_memory_is_bounded_and_skips_errors():
 
 # === A lent key wins over the configured one ======================================
 
+# @ac AC-CONN-004.1
 async def test_answered_with_the_askers_key():
     session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="sk-own"))])
     try:
@@ -205,6 +215,7 @@ async def test_answered_with_the_askers_key():
         await session.close()
 
 
+# @ac AC-CONN-004.2
 async def test_no_key_at_all():
     session, view = await driven(connectors=[OpenAIConnector("gpt")])
     try:
@@ -218,6 +229,7 @@ async def test_no_key_at_all():
 
 # === Failures are answers, and starting needs no network ==========================
 
+# @ac AC-CONN-005.1
 async def test_starting_without_a_key_makes_no_request():
     session, _ = await driven(connectors=[OpenAIConnector("gpt")])
     try:
@@ -226,6 +238,7 @@ async def test_starting_without_a_key_makes_no_request():
         await session.close()
 
 
+# @ac AC-CONN-004.6
 async def test_a_lent_key_never_reaches_the_reply_or_the_logs(caplog):
     FakeOpenAI.error = failure("AuthenticationError", "bad key sk-lent")
     session, view = await driven(connectors=[OpenAIConnector("gpt")])
@@ -239,6 +252,7 @@ async def test_a_lent_key_never_reaches_the_reply_or_the_logs(caplog):
         await session.close()
 
 
+# @ac AC-CONN-005.2
 async def test_the_endpoint_refuses(caplog):
     FakeOpenAI.error = failure("AuthenticationError", "bad key sk-secret")
     session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="sk-secret"))])
@@ -254,6 +268,7 @@ async def test_the_endpoint_refuses(caplog):
 
 # === Keys from sources, and endpoints =============================================
 
+# @ac AC-CONN-002.3
 async def test_from_an_endpoint():
     local = Endpoint(base_url="http://localhost:11434/v1", model="qwen", api_key=Literal("ollama"))
     session, view = await driven(connectors=[OpenAIConnector("gpt", local)])
@@ -266,6 +281,7 @@ async def test_from_an_endpoint():
         await session.close()
 
 
+# @ac AC-CONN-002.4
 async def test_another_model_same_endpoint():
     local = Endpoint(base_url="http://localhost:11434/v1", model="qwen", api_key=Literal("ollama"))
     session, view = await driven(connectors=[OpenAIConnector("gpt", local.with_model("llama"))])
@@ -277,11 +293,13 @@ async def test_another_model_same_endpoint():
         await session.close()
 
 
+# @ac AC-CONN-002.5
 def test_no_endpoint_asks_openai():
     gpt = OpenAIConnector("gpt")
     assert (gpt.model, gpt.base_url) == ("gpt-4o", None)
 
 
+# @ac AC-CONN-004.3
 async def test_a_source_that_cannot_read(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     session, view = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key=Env("OPENAI_API_KEY")))])
@@ -293,6 +311,7 @@ async def test_a_source_that_cannot_read(monkeypatch):
         await session.close()
 
 
+# @ac AC-CONN-004.4
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
 async def test_a_rotated_key_is_used(tmp_path):
     path = tmp_path / "openai.key"
@@ -310,12 +329,14 @@ async def test_a_rotated_key_is_used(tmp_path):
         await session.close()
 
 
+# @ac AC-CONN-004.5
 def test_the_key_is_not_shown():
     gpt = OpenAIConnector("gpt", Endpoint(api_key="sk-own"))
     assert "sk-own" not in repr(gpt) and "sk-own" not in repr(vars(gpt))
     assert not hasattr(gpt, "api_key")
 
 
+# @ac AC-CONN-006.2
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
 async def test_a_rotated_out_client_closes_only_when_idle(tmp_path):
     path = tmp_path / "openai.key"
@@ -338,6 +359,7 @@ async def test_a_rotated_out_client_closes_only_when_idle(tmp_path):
     assert old.closed and not new.closed
 
 
+# @ac AC-CONN-006.1
 async def test_three_questions_at_once_share_one_client():
     """Asked three times at once: three requests in flight together, on one client."""
     FakeOpenAI.gate = asyncio.Event()
@@ -360,6 +382,7 @@ async def test_three_questions_at_once_share_one_client():
 
 # === Its client closes with the chat ==============================================
 
+# @ac AC-CONN-006.3
 async def test_asked_then_closed():
     gpt = OpenAIConnector("gpt", Endpoint(api_key="sk-own"), memory=None)
     session, view = await driven(connectors=[gpt])
@@ -370,6 +393,7 @@ async def test_asked_then_closed():
     assert own.closed
 
 
+# @ac AC-CONN-006.4
 async def test_never_asked():
     session, _ = await driven(connectors=[OpenAIConnector("gpt", Endpoint(api_key="sk-own"))])
     await session.close()

@@ -162,7 +162,7 @@ The connector SHALL build one client for its key and share it between questions 
 #### Scenario: AC-CONN-007.2 Named by the connector
 
 - **WHEN** `McpConnector(..., name="lab")` is added to a session
-- **THEN** it appears in the chat as `lab`, and the server sees a client named `lab`
+- **THEN** it appears in the chat as `lab`, and answers with what the remote session answered
 
 #### Scenario: AC-CONN-007.3 Named by the server
 
@@ -585,7 +585,7 @@ An agent connector created with `workspace=True` in a session with a workspace p
 #### Scenario: AC-CONN-019.9 A workspace that appears later
 
 - **WHEN** another peer's workspace is made after the agent answered once
-- **THEN** the agent is rebuilt for the next question
+- **THEN** the agent is rebuilt for the next question, and was not rebuilt between the questions before
 
 ### Requirement: REQ-CONN-020 DeepAgentConnector is built from create_deep_agent's parameters
 
@@ -599,7 +599,7 @@ An agent connector created with `workspace=True` in a session with a workspace p
 #### Scenario: AC-CONN-020.2 memory and agent_memory
 
 - **WHEN** a connector is created with `memory=Query().last(5)` and `agent_memory=["/AGENTS.md"]`
-- **THEN** the run is given the chat's last five messages, and the deep agent is built with `memory=["/AGENTS.md"]`
+- **THEN** the run is given at most the chat's last five messages before the question, and the model's system prompt holds what `/AGENTS.md` says in the connector's workspace
 
 #### Scenario: AC-CONN-020.3 A backend is refused
 

@@ -19,6 +19,7 @@ from ..query import Query
 logger = logging.getLogger(__name__)
 
 
+# @req REQ-CONN-001, REQ-CONN-002
 @connector("openai")
 @require(HookAnswer)
 @require(HookContext)
@@ -89,6 +90,7 @@ class OpenAIConnector:
     def __repr__(self) -> str:
         return "OpenAIConnector(name=%r, model=%r, base_url=%r)" % (self.name, self.model, self.base_url)
 
+    # @req REQ-CONN-006
     async def shutdown(self) -> None:
         """
         Closes the client kept for its own key, so its connections do not outlive the chat.
@@ -100,6 +102,7 @@ class OpenAIConnector:
             client, self._client = self._client[1], None
             await client.close()
 
+    # @req REQ-CONN-004, REQ-CONN-005
     async def answer(self, msg: ChatMessage) -> Reply:
         """Asks the model, with the conversation so far, and answers with its text."""
         lent = msg.credentials.get(self.credential)
@@ -133,6 +136,7 @@ class OpenAIConnector:
                 if self._client is None or self._client[1] is not client:
                     await client.close()
 
+    # @req REQ-CONN-006
     async def _own_client(self) -> AsyncOpenAI:
         """The client for its own key, rebuilt when the key it reads has changed."""
         assert self._key is not None
@@ -146,6 +150,7 @@ class OpenAIConnector:
         self._client = (digest, client)
         return client
 
+    # @req REQ-CONN-005
     async def _complete(self, client: AsyncOpenAI, messages: List[Dict[str, str]]) -> Reply:
         params: Dict[str, Any] = dict(model=self.model, messages=messages, temperature=self.temperature)
         if self.max_tokens is not None:
@@ -153,6 +158,7 @@ class OpenAIConnector:
         response = await client.chat.completions.create(**params)
         return Reply(response.choices[0].message.content or "")
 
+    # @req REQ-CONN-003
     def _messages_for(self, msg: ChatMessage) -> List[Dict[str, str]]:
         """The system prompt, what ``memory`` selects, then the question."""
         messages: List[Dict[str, str]] = []

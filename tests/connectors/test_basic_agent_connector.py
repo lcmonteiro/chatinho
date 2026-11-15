@@ -72,6 +72,7 @@ def weather(city: str) -> str:
 
 # === Built from create_agent's parameters ==========================================
 
+# @ac AC-CONN-011.1
 async def test_options_reach_create_agent():
     model = fake(says("Hi."))
     agent = BasicAgentConnector("agent", model, system_prompt="Be brief.")
@@ -83,11 +84,13 @@ async def test_options_reach_create_agent():
     await session.close()
 
 
+# @ac AC-CONN-011.2
 def test_an_unknown_option():
     with pytest.raises(TypeError, match="temprature"):
         BasicAgentConnector("agent", fake(says("x")), temprature=0.2)
 
 
+# @ac AC-CONN-011.3
 def test_the_key_is_not_on_the_connector():
     agent = BasicAgentConnector("agent", fake(says("x")))
     assert "api_key" not in vars(agent) and repr(agent) == "BasicAgentConnector(name='agent')"
@@ -95,6 +98,7 @@ def test_the_key_is_not_on_the_connector():
 
 # === One question, one run of the agent ============================================
 
+# @ac AC-CONN-012.1
 async def test_the_last_message_is_the_answer():
     model = fake(calls("weather", city="Porto", then=lambda result: "It is %s." % result))
     agent = BasicAgentConnector("agent", model, tools=[weather])
@@ -103,6 +107,7 @@ async def test_the_last_message_is_the_answer():
     await session.close()
 
 
+# @ac AC-CONN-012.2
 async def test_text_blocks_are_joined():
     blocks = [{"type": "text", "text": "Hello, "}, {"type": "text", "text": "Ana."}]
     agent = BasicAgentConnector("agent", fake(lambda messages: AIMessage(content=blocks)))
@@ -111,6 +116,7 @@ async def test_text_blocks_are_joined():
     await session.close()
 
 
+# @ac AC-CONN-012.3
 async def test_a_structured_answer():
     class Forecast(BaseModel):
         city : str
@@ -123,6 +129,7 @@ async def test_a_structured_answer():
     await session.close()
 
 
+# @ac AC-CONN-012.4
 async def test_the_model_fails():
     model = fake(says("never"))
     model.error = RuntimeError("the prompt was secret")
@@ -134,6 +141,7 @@ async def test_the_model_fails():
     await session.close()
 
 
+# @ac AC-CONN-012.5
 async def test_two_questions_at_once():
     model = fake(lambda messages: AIMessage(content="re: " + question(messages)))
     agent = BasicAgentConnector("agent", model)
@@ -145,6 +153,7 @@ async def test_two_questions_at_once():
 
 # === The graph =====================================================================
 
+# @ac AC-CONN-012.6
 async def test_the_graph_has_the_four_steps():
     agent = BasicAgentConnector("agent", fake(says("x")))
     session, view = await driven(connectors=[agent])
@@ -184,6 +193,7 @@ async def _responses(view, agent, count: int) -> List[ChatMessage]:
     raise AssertionError("the agent said %d of %d messages" % (len(said), count))
 
 
+# @ac AC-CONN-013.1
 async def test_a_tool_makes_a_diagram():
     model = fake(makes("flow.svg", answers=["Here: [Flow](flow.svg)"]))
     agent = BasicAgentConnector("agent", model, tools=[maker()])
@@ -195,6 +205,7 @@ async def test_a_tool_makes_a_diagram():
     await session.close()
 
 
+# @ac AC-CONN-013.2
 async def test_an_attachment_is_kept_as_it_is():
     from chatinho import Attachment
     from langchain_core.tools import StructuredTool
@@ -209,6 +220,7 @@ async def test_an_attachment_is_kept_as_it_is():
     await session.close()
 
 
+# @ac AC-CONN-013.3
 async def test_a_plain_answer_has_no_attachments():
     agent = BasicAgentConnector("agent", fake(says("just text")), tools=[maker()])
     session, view = await driven(connectors=[agent])
@@ -217,6 +229,7 @@ async def test_a_plain_answer_has_no_attachments():
     await session.close()
 
 
+# @ac AC-CONN-013.4
 async def test_only_this_runs_files():
     def script(messages):
         if question(messages) == "draw":
@@ -231,6 +244,7 @@ async def test_only_this_runs_files():
     await session.close()
 
 
+# @ac AC-CONN-013.5
 async def test_the_last_file_of_a_name_is_kept():
     first, second = File("a.svg", "image/svg+xml", "<one/>"), File("a.svg", "image/svg+xml", "<two/>")
     files = iter([first, second])
@@ -244,6 +258,7 @@ async def test_the_last_file_of_a_name_is_kept():
     await session.close()
 
 
+# @ac AC-CONN-013.6
 async def test_the_files_reach_the_backend():
     keeper = _Keeper()
     agent  = BasicAgentConnector("agent", fake(makes("flow.svg", answers=["[Flow](flow.svg)"])),
@@ -257,6 +272,7 @@ async def test_the_files_reach_the_backend():
 
 # === The answer links its files ====================================================
 
+# @ac AC-CONN-014.1
 async def test_a_missing_link_is_asked_for():
     model = fake(makes("report.svg", answers=["Ready.", "Here: [Report](report.svg)."]))
     agent = BasicAgentConnector("agent", model, tools=[maker()])
@@ -270,6 +286,7 @@ async def test_a_missing_link_is_asked_for():
     await session.close()
 
 
+# @ac AC-CONN-014.2
 async def test_sent_back_at_most_link_retries_times():
     model = fake(makes("report.svg", answers=["Ready.", "Still ready."]))
     agent = BasicAgentConnector("agent", model, tools=[maker()])
@@ -280,6 +297,7 @@ async def test_sent_back_at_most_link_retries_times():
     await session.close()
 
 
+# @ac AC-CONN-014.3
 async def test_more_retries_when_asked_for():
     model = fake(makes("report.svg", answers=["Ready.", "Still ready.", "[Report](report.svg)"]))
     agent = BasicAgentConnector("agent", model, tools=[maker()], link_retries=2)
@@ -289,6 +307,7 @@ async def test_more_retries_when_asked_for():
     await session.close()
 
 
+# @ac AC-CONN-014.4
 async def test_verify_turned_off():
     model = fake(makes("report.svg", answers=["Ready.", "never"]))
     agent = BasicAgentConnector("agent", model, tools=[maker()], link_retries=0)
@@ -299,6 +318,7 @@ async def test_verify_turned_off():
     await session.close()
 
 
+# @ac AC-CONN-014.5
 async def test_linked_the_first_time():
     model = fake(makes("flow.svg", answers=["Here: [Flow](flow.svg)"]))
     agent = BasicAgentConnector("agent", model, tools=[maker()])
@@ -310,6 +330,7 @@ async def test_linked_the_first_time():
 
 # === The user's says are responded to with a say ===================================
 
+# @ac AC-CONN-015.1
 async def test_the_user_says_something_to_everyone():
     keeper = _Keeper()
     model  = fake(makes("login.svg", answers=["Here: [Login](login.svg)"]))
@@ -323,6 +344,7 @@ async def test_the_user_says_something_to_everyone():
     assert keeper.kept[response.id] == ["login.svg"]
 
 
+# @ac AC-CONN-015.2
 async def test_another_peer_says_something_to_everyone():
     @connector("lab")
     @require(HookSay)
@@ -338,6 +360,7 @@ async def test_another_peer_says_something_to_everyone():
     assert not [m for m in view.context() if m.frm == agent.peer_id]
 
 
+# @ac AC-CONN-015.3
 async def test_asked_directly():
     model = fake(says("once"))
     agent = BasicAgentConnector("agent", model)
@@ -348,6 +371,7 @@ async def test_asked_directly():
     assert [m.text for m in view.context() if m.frm == agent.peer_id] == ["once"]
 
 
+# @ac AC-CONN-015.4
 async def test_the_only_answering_peer_answers_once():
     """Alone, the agent is asked the user's say, which is still a broadcast: one run, one reply."""
     model = fake(says("once"))
@@ -360,6 +384,7 @@ async def test_the_only_answering_peer_answers_once():
     assert [(m.text, m.reply_to, m.to) for m in mine] == [("once", said, None)]
 
 
+# @ac AC-CONN-015.5
 async def test_the_run_fails_on_a_say():
     model = fake(says("never"))
     model.error = RuntimeError("the prompt was secret")
@@ -373,6 +398,7 @@ async def test_the_run_fails_on_a_say():
 
 # === The chat as tools =============================================================
 
+# @ac AC-CONN-016.1
 async def test_asking_another_peer():
     model = fake(calls("ask_coder", question="Write a test"))
     agent = BasicAgentConnector("agent", model)
@@ -384,6 +410,7 @@ async def test_asking_another_peer():
     await session.close()
 
 
+# @ac AC-CONN-016.2
 async def test_running_a_command():
     model = fake(calls("run_help"))
     agent = BasicAgentConnector("agent", model)
@@ -392,6 +419,7 @@ async def test_running_a_command():
     await session.close()
 
 
+# @ac AC-CONN-016.3
 async def test_never_itself_never_the_user_by_default():
     model = fake(says("ok"))
     agent = BasicAgentConnector("agent", model)
@@ -401,6 +429,7 @@ async def test_never_itself_never_the_user_by_default():
     await session.close()
 
 
+# @ac AC-CONN-016.4
 async def test_ask_user_when_asked_for():
     model = fake(calls("ask_user", question="Which city?", then=lambda result: "In " + result))
     agent = BasicAgentConnector("agent", model, ask_user=True)
@@ -411,6 +440,7 @@ async def test_ask_user_when_asked_for():
     await session.close()
 
 
+# @ac AC-CONN-016.5
 async def test_limited_to_the_listed_peers_and_commands():
     model = fake(says("ok"))
     agent = BasicAgentConnector("agent", model, peers=["coder"], commands=[])
@@ -421,6 +451,7 @@ async def test_limited_to_the_listed_peers_and_commands():
     await session.close()
 
 
+# @ac AC-CONN-016.6
 async def test_a_peer_joins_later():
     model = fake(says("ok"))
     agent = BasicAgentConnector("agent", model)
@@ -433,6 +464,7 @@ async def test_a_peer_joins_later():
     await session.close()
 
 
+# @ac AC-CONN-016.7
 async def test_names_are_made_safe_and_kept_apart():
     model = fake(says("ok"))
     agent = BasicAgentConnector("agent", model)
@@ -442,6 +474,7 @@ async def test_names_are_made_safe_and_kept_apart():
     await session.close()
 
 
+# @ac AC-CONN-016.8
 async def test_the_callers_tool_wins(caplog):
     def ask_coder(question: str) -> str:
         """The caller's own coder."""
@@ -463,6 +496,7 @@ class _OutOfQuota:
         return Reply("quota exceeded", status=ReplyStatus.ERROR)
 
 
+# @ac AC-CONN-016.9
 async def test_a_peers_error_reply_reaches_the_model_as_a_failure():
     """An error reply is the peer's own words, so the model is told them, as a failure."""
     model = fake(calls("ask_quota", question="x", then=lambda result: "It said: " + result))
@@ -477,6 +511,7 @@ def _tool_results(model: Any) -> List[str]:
     return [str(m.content) for m in model.sent[-1] if isinstance(m, ToolMessage)]
 
 
+# @ac AC-CONN-016.10
 async def test_the_model_reads_an_answer_as_its_text():
     model = fake(calls("ask_coder", question="Write a test"))
     agent = BasicAgentConnector("agent", model)
@@ -486,6 +521,7 @@ async def test_the_model_reads_an_answer_as_its_text():
     await session.close()
 
 
+# @ac AC-CONN-016.9
 async def test_the_model_reads_an_error_reply_as_one():
     model = fake(calls("ask_quota", question="x"))
     agent = BasicAgentConnector("agent", model)
@@ -495,6 +531,7 @@ async def test_the_model_reads_an_error_reply_as_one():
     await session.close()
 
 
+# @ac AC-CONN-016.11
 async def test_a_failing_peer():
     model = fake(calls("ask_broken", question="x", then=lambda result: "It said: " + result))
     agent = BasicAgentConnector("agent", model)
@@ -503,6 +540,7 @@ async def test_a_failing_peer():
     await session.close()
 
 
+# @ac AC-CONN-012.7
 async def test_built_once_for_two_first_questions(monkeypatch):
     built = []
     real  = module.create_agent
@@ -523,6 +561,7 @@ async def test_built_once_for_two_first_questions(monkeypatch):
 
 # === Recursion through tools =======================================================
 
+# @ac AC-CONN-016.12
 async def test_asked_back():
     @connector("coder")
     @require(HookAnswer)
@@ -546,6 +585,7 @@ async def test_asked_back():
     await session.close()
 
 
+# @ac AC-CONN-016.13
 async def test_a_loop_of_agents_stops_at_max_depth():
     ping = BasicAgentConnector("ping", fake(calls("ask_pong", question="again")), peers=["pong"])
     pong = BasicAgentConnector("pong", fake(calls("ask_ping", question="again")), peers=["ping"])
@@ -558,6 +598,7 @@ async def test_a_loop_of_agents_stops_at_max_depth():
 
 # === Memory comes from the chat ====================================================
 
+# @ac AC-CONN-017.1
 async def test_it_remembers_the_conversation():
     model = fake(lambda messages: AIMessage(content="noted: " + question(messages)))
     agent = BasicAgentConnector("agent", model)
@@ -570,6 +611,7 @@ async def test_it_remembers_the_conversation():
     await session.close()
 
 
+# @ac AC-CONN-017.2
 async def test_its_tool_calls_are_not_memory():
     def script(messages):
         if question(messages) == "first":
@@ -586,6 +628,7 @@ async def test_its_tool_calls_are_not_memory():
     await session.close()
 
 
+# @ac AC-CONN-017.3
 async def test_other_peers_are_named():
     @connector("lab")
     @require(HookAsk)
@@ -601,6 +644,7 @@ async def test_other_peers_are_named():
     await session.close()
 
 
+# @ac AC-CONN-017.4
 async def test_it_remembers_what_the_user_said_to_everyone():
     model = fake(lambda messages: AIMessage(content="noted: " + question(messages)))
     agent = BasicAgentConnector("agent", model)
@@ -615,6 +659,7 @@ async def test_it_remembers_what_the_user_said_to_everyone():
     assert [m.content for m in second] == ["My name is Ana", "noted: My name is Ana", "What is my name?"]
 
 
+# @ac AC-CONN-017.5
 async def test_one_thread_per_question():
     saver = InMemorySaver()
     agent = BasicAgentConnector("agent", fake(says("ok")), checkpointer=saver)
@@ -629,6 +674,7 @@ async def test_one_thread_per_question():
 
 # === The model may be an Endpoint ==================================================
 
+# @ac AC-CONN-018.1
 async def test_created_without_the_key(monkeypatch):
     monkeypatch.delenv("AGENT_TEST_KEY", raising=False)
     agent = BasicAgentConnector("agent",
@@ -640,6 +686,7 @@ async def test_created_without_the_key(monkeypatch):
     await session.close()
 
 
+# @ac AC-CONN-018.2
 async def test_the_key_is_read_when_the_model_is_called():
     reads: List[int] = []
 
@@ -657,6 +704,7 @@ async def test_the_key_is_read_when_the_model_is_called():
     await session.close()
 
 
+# @ac AC-CONN-018.3
 async def test_an_endpoint_without_a_key():
     agent = BasicAgentConnector("agent", Endpoint(base_url="http://127.0.0.1:9/v1"))
     session, view = await driven(connectors=[agent])
@@ -665,6 +713,7 @@ async def test_an_endpoint_without_a_key():
     await session.close()
 
 
+# @ac AC-CONN-011.4
 def test_a_session_can_hold_it():
     assert isinstance(ChatSession(connectors=[BasicAgentConnector("agent", fake(says("x")))]), ChatSession)
 
@@ -684,6 +733,7 @@ def _ws_tools(model) -> List[str]:
     return [name for name in (model.tools[-1] if model.tools else []) if name.startswith("ws_")]
 
 
+# @ac AC-CONN-019.1
 async def test_its_own_workspace_as_tools(repo):
     model = fake(says("ok"))
     agent = BasicAgentConnector("agent", model, workspace=True)
@@ -693,6 +743,7 @@ async def test_its_own_workspace_as_tools(repo):
     assert _ws_tools(model) == OWN_TOOLS + READ_TOOLS
 
 
+# @ac AC-CONN-019.2
 async def test_writing_through_a_tool(repo):
     model = fake(calls("ws_write", path="a.txt", text="from the model\n"))
     agent = BasicAgentConnector("agent", model, workspace=True)
@@ -704,6 +755,7 @@ async def test_writing_through_a_tool(repo):
     assert (await ws.read("a.txt")).text == "from the model\n"
 
 
+# @ac AC-CONN-019.3
 async def test_reading_another_peers_workspace(repo):
     provider = GitWorktrees(repo)
     dev = await provider.provision("dev", "dev")
@@ -718,6 +770,7 @@ async def test_reading_another_peers_workspace(repo):
                 ("write", "edit", "delete", "commit")]
 
 
+# @ac AC-CONN-019.4
 async def test_an_added_operation_becomes_tools(repo):
     class MyView(WorkspaceView):
         @operation("List the symbols in a file")
@@ -737,6 +790,7 @@ async def test_an_added_operation_becomes_tools(repo):
     assert reply.text == "C\nanswer"
 
 
+# @ac AC-CONN-019.5
 async def test_a_failing_operation_is_text(repo):
     model = fake(calls("ws_read", then=lambda result: "saw: " + result, path="../secret"))
     agent = BasicAgentConnector("agent", model, workspace=True)
@@ -747,6 +801,7 @@ async def test_a_failing_operation_is_text(repo):
     assert reply.text.startswith("saw: ws_read failed: ValueError")
 
 
+# @ac AC-CONN-019.6
 async def test_no_ws_tools_unless_asked_for(repo):
     model = fake(says("ok"))
     agent = BasicAgentConnector("agent", model)
@@ -757,6 +812,7 @@ async def test_no_ws_tools_unless_asked_for(repo):
     assert await GitWorktrees(repo).names() == []                  # and no worktree was made
 
 
+# @ac AC-CONN-019.7
 async def test_no_ws_tools_without_a_provider(caplog):
     model = fake(says("ok"))
     agent = BasicAgentConnector("agent", model, workspace=True)
@@ -767,6 +823,7 @@ async def test_no_ws_tools_without_a_provider(caplog):
     assert "no workspace provider" in caplog.text
 
 
+# @ac AC-CONN-019.8
 async def test_the_diff_is_attached(repo):
     def script(messages):
         from langchain_core.messages import ToolMessage as Result
@@ -789,12 +846,14 @@ async def test_the_diff_is_attached(repo):
     assert attached.name == "agent.diff" and b"+hello" in attached.data
 
 
+# @ac AC-CONN-011.2
 def test_deep_agent_options_are_not_create_agents():
     """The factory seam must not widen what BasicAgentConnector itself accepts."""
     with pytest.raises(TypeError, match="create_agent does not take 'subagents'"):
         BasicAgentConnector("agent", fake(says("x")), subagents=[])
 
 
+# @ac AC-CONN-019.9
 async def test_a_workspace_that_appears_later_rebuilds_the_graph(repo, monkeypatch):
     built = []
     real  = module.create_agent
@@ -818,6 +877,7 @@ async def test_a_workspace_that_appears_later_rebuilds_the_graph(repo, monkeypat
     assert await provider.names() == ["agent", "lab"]              # asking made none for anyone else
 
 
+# @ac AC-CONN-019.6
 async def test_without_workspace_true_it_never_asks_for_one(repo):
     agent = BasicAgentConnector("agent", fake(says("ok")))
     asked = []

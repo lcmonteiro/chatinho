@@ -63,6 +63,7 @@ async def deep(repo, model, *others, provider=None, **options):
 
 # === Built from create_deep_agent's parameters ======================================
 
+# @ac AC-CONN-020.1
 async def test_deep_agents_options_reach_the_agent(repo):
     model = fake(says("ok"))
     agent, _, session, view = await deep(
@@ -73,6 +74,7 @@ async def test_deep_agents_options_reach_the_agent(repo):
     assert "task" in model.tools[-1]                     # subagents are reached through `task`
 
 
+# @ac AC-CONN-020.2
 async def test_memory_and_agent_memory(repo):
     model = fake(says("ok"))
     agent, provider, session, view = await deep(repo, model, memory=Query().last(5),
@@ -90,22 +92,26 @@ async def test_memory_and_agent_memory(repo):
     assert "question 0" not in remembered and len(remembered) <= 7
 
 
+# @ac AC-CONN-020.3
 def test_a_backend_is_refused():
     with pytest.raises(TypeError, match="its workspace is its backend"):
         DeepAgentConnector("dev", fake(says("x")), backend=object())
 
 
+# @ac AC-CONN-020.4
 def test_an_unknown_option():
     with pytest.raises(TypeError, match="create_deep_agent does not take 'temprature'"):
         DeepAgentConnector("dev", fake(says("x")), temprature=0.2)
 
 
+# @ac AC-CONN-020.5
 def test_it_works_in_its_workspace_by_default():
     assert DeepAgentConnector("dev", fake(says("x"))).uses_workspace
 
 
 # === Its workspace is its backend ===================================================
 
+# @ac AC-CONN-021.1
 async def test_working_in_its_own_workspace(repo):
     model = fake(steps({"write_file": {"file_path": "/src/fix.py", "content": "fixed = True\n"}}))
     agent, provider, session, view = await deep(repo, model)
@@ -115,6 +121,7 @@ async def test_working_in_its_own_workspace(repo):
     assert (await mine.read("src/fix.py")).text == "fixed = True\n"
 
 
+# @ac AC-CONN-021.2
 async def test_reading_and_not_writing_another_peers_work(repo):
     provider = GitWorktrees(repo)
     reviewer = await provider.provision("reviewer", "reviewer")
@@ -130,6 +137,7 @@ async def test_reading_and_not_writing_another_peers_work(repo):
     assert (reviewer.tree.root / "notes.md").read_text() == "looks good\n"
 
 
+# @ac AC-CONN-021.3
 async def test_a_workspace_that_appears_later(repo):
     provider = GitWorktrees(repo)
     model = fake(steps({"read_file": {"file_path": "/peers/lab/result.txt"}}))
@@ -143,6 +151,7 @@ async def test_a_workspace_that_appears_later(repo):
     assert "42" in second.text
 
 
+# @ac AC-CONN-021.4
 async def test_asking_who_has_a_workspace_makes_none(repo):
     provider = GitWorktrees(repo)
     agent, _, session, view = await deep(repo, fake(says("ok")), _Echo("lab"), provider=provider)
@@ -151,6 +160,7 @@ async def test_asking_who_has_a_workspace_makes_none(repo):
     assert await provider.names() == ["dev"]
 
 
+# @ac AC-CONN-021.5
 async def test_a_chat_without_workspaces(caplog):
     model = fake(steps({"write_file": {"file_path": "/a.txt", "content": "kept in state"}}))
     agent = DeepAgentConnector("dev", model)
@@ -165,6 +175,7 @@ async def test_a_chat_without_workspaces(caplog):
 
 # === Only the ws_ tools its backend does not cover ==================================
 
+# @ac AC-CONN-022.1
 async def test_the_default_ws_tools(repo):
     model = fake(says("ok"))
     agent, _, session, view = await deep(repo, model)
@@ -176,6 +187,7 @@ async def test_the_default_ws_tools(repo):
         assert own in model.tools[-1]
 
 
+# @ac AC-CONN-022.2
 async def test_a_project_operation(repo):
     class MyView(WorkspaceView):
         @operation("List the symbols in a file")
@@ -195,6 +207,7 @@ async def test_a_project_operation(repo):
     assert "ws_symbols" in model.tools[-1] and "ws_symbols_of" in model.tools[-1]
 
 
+# @ac AC-CONN-022.3
 async def test_committing_through_ws_commit(repo):
     model = fake(steps({"write_file": {"file_path": "/a.txt", "content": "a\n"}},
                        {"ws_commit": {"message": "add a"}}))
@@ -206,6 +219,7 @@ async def test_committing_through_ws_commit(repo):
 
 # === It is told where things are ====================================================
 
+# @ac AC-CONN-023.1
 async def test_the_users_prompt_is_kept(repo):
     model = fake(says("ok"))
     agent, _, session, view = await deep(repo, model, system_prompt="Be brief.")
@@ -218,6 +232,7 @@ async def test_the_users_prompt_is_kept(repo):
 
 # === Interrupted runs ===============================================================
 
+# @ac AC-CONN-024.3
 async def test_an_interrupted_question(repo):
     model = fake(steps({"write_file": {"file_path": "/a.txt", "content": "x"}}))
     agent, _, session, view = await deep(repo, model, interrupt_on={"write_file": True})
@@ -227,6 +242,7 @@ async def test_an_interrupted_question(repo):
     assert "interrupted" in reply.text
 
 
+# @ac AC-CONN-024.4
 async def test_an_interrupted_say(repo):
     model = fake(steps({"write_file": {"file_path": "/a.txt", "content": "x"}}))
     agent, _, session, view = await deep(repo, model, _Echo("other"), interrupt_on={"write_file": True})
@@ -238,6 +254,7 @@ async def test_an_interrupted_say(repo):
 
 # === The same peer as BasicAgentConnector in the chat ====================================
 
+# @ac AC-CONN-024.1
 async def test_asking_another_peer(repo):
     model = fake(steps({"ask_coder": {"question": "Write a test"}}))
     agent, _, session, view = await deep(repo, model, _Echo("coder"))
@@ -246,6 +263,7 @@ async def test_asking_another_peer(repo):
     assert reply.text == "done|coder: Write a test"
 
 
+# @ac AC-CONN-024.2
 async def test_the_users_say(repo):
     agent, _, session, view = await deep(repo, fake(says("On it.")))
     said = await view.say("Fix the login bug")

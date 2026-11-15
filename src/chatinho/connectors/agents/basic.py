@@ -26,6 +26,7 @@ from ...support.kits.agent import AgentPeer, BasicAgent
 from ...hooks import connector
 
 
+# @req REQ-CONN-011
 @connector("agent")
 class BasicAgentConnector(AgentPeer):
     """

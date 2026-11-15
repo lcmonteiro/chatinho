@@ -36,6 +36,7 @@ WHERE = ("Your files are your own git worktree, at '/': read, edit and write the
          "'%s<name>/', which you can read and cannot change." % PEERS)
 
 
+# @req REQ-CONN-021, REQ-CONN-022
 class DeepAgent:
     """
     Makes the agent with ``create_deep_agent``, its workspace as its backend.
@@ -82,6 +83,7 @@ class DeepAgent:
         return create_deep_agent(model, tools=tools, **options)
 
 
+# @req REQ-CONN-023
 def _told(given: Any) -> Any:
     """*given* system prompt, with where things are said first."""
     if given is None:

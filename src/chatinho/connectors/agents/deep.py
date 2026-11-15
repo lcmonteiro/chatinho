@@ -21,6 +21,7 @@ from ...support.kits.agent.peer import AgentPeer
 from ...hooks import connector
 
 
+# @req REQ-CONN-020, REQ-CONN-024
 @connector("deep")
 class DeepAgentConnector(AgentPeer):
     """
