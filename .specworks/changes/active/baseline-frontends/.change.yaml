@@ -1,0 +1,5 @@
+name: baseline-frontends
+created: '2026-11-15T23:37:52'
+phase: specify
+dirty:
+  .specworks/changes/active/baseline-frontends/.change.yaml: f72a08849967efcd6084753c729ceeca30ff47f044b06ad3cc93717cca19112c
