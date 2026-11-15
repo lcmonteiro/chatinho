@@ -35,6 +35,7 @@ from .sources import Env, KeyLike, KeySource, KeyUnavailable, key, to_source
 FIELDS = ("base_url", "model", "api_key")
 
 
+# @req REQ-KEYS-008
 @dataclass(frozen=True)
 class Endpoint:
     """
@@ -69,6 +70,7 @@ class Endpoint:
         """The same endpoint and model, with no key: for a server that answers with lent keys."""
         return dataclasses.replace(self, api_key=None)
 
+    # @req REQ-KEYS-012
     def check(self) -> None:
         """
         Reads the key once, so a program can stop before it starts its interface.
@@ -87,6 +89,7 @@ class Endpoint:
 
     # === Building one ===============================================================
 
+    # @req REQ-KEYS-011
     @classmethod
     def from_env(cls, prefix: str = "OPENAI") -> "Endpoint":
         """From ``<prefix>_API_KEY`` (read when needed), ``<prefix>_BASE_URL`` and ``<prefix>_MODEL``."""
@@ -94,6 +97,7 @@ class Endpoint:
                    model    = os.environ.get("%s_MODEL" % prefix) or None,
                    api_key  = Env("%s_API_KEY" % prefix))
 
+    # @req REQ-KEYS-010
     @classmethod
     def load(cls, profile: Optional[str] = None) -> "Endpoint":
         """
@@ -137,11 +141,13 @@ def _candidates() -> List[pathlib.Path]:
     return found + [pathlib.Path(".chatinho.toml"), pathlib.Path(config) / "chatinho" / "profiles.toml"]
 
 
+# @req REQ-KEYS-009
 def profiles_file() -> Optional[pathlib.Path]:
     """The profiles file in use: the first of the candidates that exists, or None."""
     return next((path for path in _candidates() if path.is_file()), None)
 
 
+# @req REQ-KEYS-009
 def _read(path: pathlib.Path) -> Dict[str, Any]:
     if os.name == "posix" and stat.S_IMODE(path.stat().st_mode) & 0o022:
         raise ValueError("%s is writable by others, and a profile may run a command; "
@@ -153,6 +159,7 @@ def _read(path: pathlib.Path) -> Dict[str, Any]:
         raise ValueError("%s is not valid TOML: %s" % (path, exc)) from None
 
 
+# @req REQ-KEYS-009
 def _profile(path: pathlib.Path, table: Dict[str, Any], name: str) -> Endpoint:
     profiles = {k: v for k, v in table.items() if isinstance(v, dict)}
     if name not in profiles:

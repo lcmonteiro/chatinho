@@ -48,6 +48,7 @@ def profiles(monkeypatch, tmp_path, text: str = PROFILES, mode: int = 0o600):
 
 # === The value ====================================================================
 
+# @ac AC-KEYS-008.1
 def test_another_model_same_provider():
     base = Endpoint(base_url="https://example/v1", model="gpt-4o-mini", api_key=Literal("k"))
     copy = base.with_model("gpt-4o")
@@ -56,11 +57,13 @@ def test_another_model_same_provider():
     assert base.without_key().api_key is None
 
 
+# @ac AC-KEYS-008.2
 def test_never_shows_the_key():
     shown = repr(Endpoint(model="m", api_key=Literal("sk-1")))
     assert "sk-1" not in shown and "api_key" not in shown
 
 
+# @ac AC-KEYS-012.1
 def test_check_finds_a_missing_key_early():
     with pytest.raises(KeyUnavailable, match="OPENAI_API_KEY"):
         Endpoint(api_key=Env("OPENAI_API_KEY")).check()
@@ -68,6 +71,7 @@ def test_check_finds_a_missing_key_early():
         Endpoint().check()
 
 
+# @ac AC-KEYS-011.1
 def test_from_prefixed_variables(monkeypatch):
     monkeypatch.setenv("ORBE_OPENAI_API_KEY", "sk-orbe")
     monkeypatch.setenv("ORBE_OPENAI_BASE_URL", "https://x/v1")
@@ -82,6 +86,7 @@ def test_from_prefixed_variables(monkeypatch):
 
 # === Profiles =====================================================================
 
+# @ac AC-KEYS-009.1
 def test_a_profile_with_a_key_reference(monkeypatch, tmp_path):
     profiles(monkeypatch, tmp_path)
     monkeypatch.setenv("ORBE_OPENAI_API_KEY", "sk-nv")
@@ -91,11 +96,13 @@ def test_a_profile_with_a_key_reference(monkeypatch, tmp_path):
     assert got.api_key.read().reveal() == "sk-nv"
 
 
+# @ac AC-KEYS-010.1
 def test_the_default_profile(monkeypatch, tmp_path):
     profiles(monkeypatch, tmp_path)
     assert Endpoint.load().profile == "nvidia"
 
 
+# @ac AC-KEYS-010.2
 def test_chosen_by_the_environment(monkeypatch, tmp_path):
     profiles(monkeypatch, tmp_path)
     monkeypatch.setenv("CHATINHO_PROFILE", "local")
@@ -103,6 +110,7 @@ def test_chosen_by_the_environment(monkeypatch, tmp_path):
     assert Endpoint.load("nvidia").profile == "nvidia"            # the argument wins
 
 
+# @ac AC-KEYS-010.3
 def test_field_overrides(monkeypatch, tmp_path):
     profiles(monkeypatch, tmp_path)
     monkeypatch.setenv("CHATINHO_MODEL", "small")
@@ -111,6 +119,7 @@ def test_field_overrides(monkeypatch, tmp_path):
     assert (got.model, got.base_url, got.api_key.read().reveal()) == ("small", "http://other/v1", "ollama")
 
 
+# @ac AC-KEYS-010.4
 def test_an_unknown_profile(monkeypatch, tmp_path):
     profiles(monkeypatch, tmp_path)
     with pytest.raises(ValueError) as refused:
@@ -118,18 +127,21 @@ def test_an_unknown_profile(monkeypatch, tmp_path):
     assert "nvdia" in str(refused.value) and "local, nvidia" in str(refused.value)
 
 
+# @ac AC-KEYS-009.3
 def test_a_misspelled_field(monkeypatch, tmp_path):
     profiles(monkeypatch, tmp_path, '[x]\nmodle = "m"\n')
     with pytest.raises(ValueError, match="profile 'x' has an unknown field 'modle'"):
         Endpoint.load("x")
 
 
+# @ac AC-KEYS-009.4
 def test_a_bad_key_reference(monkeypatch, tmp_path):
     profiles(monkeypatch, tmp_path, '[x]\napi_key = "evn:K"\n')
     with pytest.raises(ValueError, match="api_key"):
         Endpoint.load("x")
 
 
+# @ac AC-KEYS-009.5
 @posix
 def test_writable_by_others(monkeypatch, tmp_path):
     path = profiles(monkeypatch, tmp_path, mode=0o666)
@@ -137,6 +149,7 @@ def test_writable_by_others(monkeypatch, tmp_path):
         Endpoint.load("local")
 
 
+# @ac AC-KEYS-009.2
 def test_the_projects_file_wins(monkeypatch, tmp_path):
     user = tmp_path / "config" / "chatinho" / "profiles.toml"
     user.parent.mkdir(parents=True)
@@ -152,6 +165,7 @@ def test_the_projects_file_wins(monkeypatch, tmp_path):
         Endpoint.load("only_user")
 
 
+# @ac AC-KEYS-010.5
 def test_a_profile_but_no_file(monkeypatch):
     monkeypatch.setenv("CHATINHO_PROFILE", "nvidia")
     with pytest.raises(ValueError) as refused:
@@ -159,6 +173,7 @@ def test_a_profile_but_no_file(monkeypatch):
     assert "nvidia" in str(refused.value) and "profiles.toml" in str(refused.value)
 
 
+# @ac AC-KEYS-010.6
 def test_no_profiles_file(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://compat/v1")
@@ -168,6 +183,7 @@ def test_no_profiles_file(monkeypatch):
     assert got.api_key.read().reveal() == "sk-env"
 
 
+# @ac AC-KEYS-008.3
 def test_a_plain_string_key_is_the_value(monkeypatch):
     monkeypatch.setenv("X", "from-env")
     endpoint = Endpoint(api_key="env:X")

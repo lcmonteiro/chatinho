@@ -25,18 +25,21 @@ def private(path, text: str):
 
 # === Each source yields a Secret ==================================================
 
+# @ac AC-KEYS-001.1
 def test_from_the_environment(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", " sk-env\n")
     got = Env("OPENAI_API_KEY").read()
     assert isinstance(got, Secret) and got.reveal() == "sk-env"
 
 
+# @ac AC-KEYS-003.1
 def test_an_unset_variable(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     with pytest.raises(KeyUnavailable, match="OPENAI_API_KEY is not set"):
         Env("OPENAI_API_KEY").read()
 
 
+# @ac AC-KEYS-001.2, AC-KEYS-003.2
 def test_a_dotenv_variable(tmp_path):
     env = tmp_path / ".env"
     env.write_text('# settings\nexport OTHER=1\nOPENAI_API_KEY="sk-dot"\nPLAIN=v # note\n')
@@ -46,6 +49,7 @@ def test_a_dotenv_variable(tmp_path):
         DotEnv(env, "MISSING").read()
 
 
+# @ac AC-KEYS-001.3
 @posix
 def test_a_private_file_and_a_rotated_key(tmp_path):
     path = private(tmp_path / "openai.key", "sk-one\n")
@@ -55,6 +59,7 @@ def test_a_private_file_and_a_rotated_key(tmp_path):
     assert source.read().reveal() == "sk-two"
 
 
+# @ac AC-KEYS-004.1
 @posix
 def test_a_file_others_can_read_is_refused(tmp_path):
     path = tmp_path / "openai.key"
@@ -66,6 +71,7 @@ def test_a_file_others_can_read_is_refused(tmp_path):
     assert "sk-shared" not in str(refused.value)
 
 
+# @ac AC-KEYS-003.3
 def test_a_missing_file(tmp_path):
     with pytest.raises(KeyUnavailable, match="does not exist"):
         File(tmp_path / "nope").read()
@@ -79,6 +85,7 @@ def script(tmp_path, body: str):
     return [sys.executable, str(path)]
 
 
+# @ac AC-KEYS-002.1
 def test_a_command_runs_once(tmp_path):
     count = tmp_path / "count"
     argv  = script(tmp_path, "import pathlib\np = pathlib.Path(%r)\n"
@@ -89,6 +96,7 @@ def test_a_command_runs_once(tmp_path):
     assert count.read_text() == "x"
 
 
+# @ac AC-KEYS-003.4
 def test_a_failing_command_hides_its_output(tmp_path):
     argv = script(tmp_path, "import sys\nprint('sk-partial')\nsys.exit(3)\n")
     with pytest.raises(KeyUnavailable) as failed:
@@ -96,17 +104,20 @@ def test_a_failing_command_hides_its_output(tmp_path):
     assert "exited 3" in str(failed.value) and "sk-partial" not in str(failed.value)
 
 
+# @ac AC-KEYS-003.5
 def test_a_missing_program():
     with pytest.raises(KeyUnavailable, match="not installed"):
         Command("no-such-program-for-chatinho").read()
 
 
+# @ac AC-KEYS-003.6
 def test_keyring_without_the_extra(monkeypatch):
     monkeypatch.setitem(sys.modules, "keyring", None)          # import keyring -> ImportError
     with pytest.raises(KeyUnavailable, match=r"chatinho\[keyring\]"):
         Keyring("chatinho", "openai").read()
 
 
+# @ac AC-KEYS-002.2
 def test_keyring_reads_once(monkeypatch):
     calls = []
     fake  = types.SimpleNamespace(get_password=lambda s, u: calls.append((s, u)) or "sk-ring")
@@ -116,6 +127,7 @@ def test_keyring_reads_once(monkeypatch):
     assert calls == [("chatinho", "openai")]
 
 
+# @ac AC-KEYS-003.7
 def test_keyring_without_the_entry(monkeypatch):
     monkeypatch.setitem(sys.modules, "keyring", types.SimpleNamespace(get_password=lambda s, u: None))
     with pytest.raises(KeyUnavailable, match="chatinho/openai: no such entry"):
@@ -124,6 +136,7 @@ def test_keyring_without_the_entry(monkeypatch):
 
 # === A chain tries each in turn ===================================================
 
+# @ac AC-KEYS-005.1
 @posix
 def test_the_first_that_yields(tmp_path, monkeypatch):
     monkeypatch.delenv("MISSING", raising=False)
@@ -131,6 +144,7 @@ def test_the_first_that_yields(tmp_path, monkeypatch):
     assert Chain(Env("MISSING"), File(path)).read().reveal() == "sk-file"
 
 
+# @ac AC-KEYS-005.2
 def test_every_source_failed(monkeypatch):
     monkeypatch.delenv("A", raising=False)
     monkeypatch.delenv("B", raising=False)
@@ -141,11 +155,13 @@ def test_every_source_failed(monkeypatch):
 
 # === Normalising what an argument was given =======================================
 
+# @ac AC-KEYS-007.1
 def test_a_plain_string_is_the_value(monkeypatch):
     monkeypatch.setenv("X", "from-env")
     assert to_source("env:X").read().reveal() == "env:X"
 
 
+# @ac AC-KEYS-007.2
 def test_a_function_and_a_secret():
     assert to_source(lambda: "sk-fn").read().reveal() == "sk-fn"
     assert to_source(Secret("sk-s")).read().reveal() == "sk-s"
@@ -154,10 +170,12 @@ def test_a_function_and_a_secret():
         to_source(42)
 
 
+# @ac AC-KEYS-001.4
 def test_a_literal_never_shows():
     assert "sk-lit" not in repr(Literal("sk-lit"))
 
 
+# @ac AC-KEYS-007.3
 async def test_read_async(tmp_path, monkeypatch):
     monkeypatch.setenv("K", "sk-a")
     assert (await read_async(Env("K"))).reveal() == "sk-a"
@@ -167,6 +185,7 @@ async def test_read_async(tmp_path, monkeypatch):
 
 # === Reference strings ============================================================
 
+# @ac AC-KEYS-006.1
 @pytest.mark.parametrize("reference, kind, fields", [
     ("env:OPENAI_API_KEY",        Env,     {"name": "OPENAI_API_KEY"}),
     ("dotenv:conf/.env#KEY",      DotEnv,  {"name": "KEY"}),
@@ -180,12 +199,14 @@ def test_references(reference, kind, fields):
     assert {name: getattr(parsed, name) for name in fields} == fields
 
 
+# @ac AC-KEYS-006.2
 def test_file_and_literal_references(tmp_path):
     assert key("dotenv:#KEY").path.name == ".env"
     assert key("file:~/k").path == key("file:~/k").path.expanduser()
     assert key("literal:ollama").read().reveal() == "ollama"
 
 
+# @ac AC-KEYS-006.3
 @pytest.mark.parametrize("reference", ["evn:OPENAI_API_KEY", "sk-abcdef", "keyring:only", "env:"])
 def test_a_typo_is_not_a_key(reference):
     with pytest.raises(ValueError) as refused:

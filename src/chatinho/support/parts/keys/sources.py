@@ -51,6 +51,7 @@ def _clean(value: str, where: str) -> Secret:
     return Secret(value)
 
 
+# @req REQ-KEYS-001
 class Literal:
     """A fixed value. What a plain string becomes wherever a key is accepted."""
 
@@ -64,6 +65,7 @@ class Literal:
         return "Literal('***')"
 
 
+# @req REQ-KEYS-001, REQ-KEYS-003
 class Env:
     """An environment variable, read anew each time, so a changed value is used."""
 
@@ -99,6 +101,7 @@ def _dotenv(text: str) -> Dict[str, str]:
     return found
 
 
+# @req REQ-KEYS-001, REQ-KEYS-003
 class DotEnv:
     """
     One variable of a dotenv file, read anew each time.
@@ -128,6 +131,7 @@ class DotEnv:
         return "DotEnv(%r, %r)" % (str(self.path), self.name)
 
 
+# @req REQ-KEYS-001, REQ-KEYS-003, REQ-KEYS-004
 class File:
     """
     A whole file holding one key, read anew each time.
@@ -172,6 +176,7 @@ class _Once:
             return self._value
 
 
+# @req REQ-KEYS-002, REQ-KEYS-003
 class Keyring:
     """
     An entry of the operating system's keychain, read once and kept.
@@ -205,6 +210,7 @@ class Keyring:
         return "Keyring(%r, %r)" % (self.service, self.user)
 
 
+# @req REQ-KEYS-002, REQ-KEYS-003
 class Command:
     """
     What a command prints, run once (without a shell) and kept.
@@ -245,6 +251,7 @@ class Command:
         return "Command(%r)" % shlex.join(self.argv)
 
 
+# @req REQ-KEYS-005
 class Chain:
     """
     The first of several sources that yields a key, tried in order.
@@ -291,6 +298,7 @@ class _Called:
 KeyLike = Union[str, Secret, Callable[[], str], KeySource]
 
 
+# @req REQ-KEYS-007
 def to_source(value: Optional[KeyLike]) -> Optional[KeySource]:
     """Normalises a key argument: a string or Secret is the value itself, never a reference."""
     if value is None:
@@ -305,6 +313,7 @@ def to_source(value: Optional[KeyLike]) -> Optional[KeySource]:
                     % type(value).__name__)
 
 
+# @req REQ-KEYS-007
 async def read_async(source: KeySource) -> Secret:
     """Reads *source* without blocking the event loop."""
     if isinstance(source, (Literal, Env)):
@@ -315,6 +324,7 @@ async def read_async(source: KeySource) -> Secret:
 PREFIXES = ("env:", "dotenv:", "file:", "keyring:", "cmd:", "literal:")
 
 
+# @req REQ-KEYS-006
 def key(reference: str) -> KeySource:
     """
     Parses a reference string into a key source.
