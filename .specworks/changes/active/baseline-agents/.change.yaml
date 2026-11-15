@@ -1,6 +1,6 @@
 name: baseline-agents
 created: '2026-11-15T08:49:29'
-phase: review
+phase: validate
 specified:
   REQ-AGENT-001: b933f688a394
   REQ-AGENT-002: 4ca6464f84b7
@@ -13,18 +13,3 @@ specified:
   REQ-AGENT-009: 8dd4b80a1067
   REQ-AGENT-010: c502d1579bb5
   REQ-AGENT-011: d48128b5cd84
-dirty:
-  .specworks/changes/active/baseline-agents/.change.yaml: b0a1a3ba8219492b49b37dfc7b1df488a23c6764d9eadf6c14af2edd1d553fcc
-  .specworks/changes/active/baseline-agents/design.md: 32bae8a03ed08b5627dc01c7b715ea51566e27d86c6efa3a35b10c35781b01c0
-  .specworks/changes/active/baseline-agents/diagrams/agents-blocks.d2: 92081225c0aee460d29d28874363403d807fb662a336e3259e3ad7d7646948f9
-  .specworks/changes/active/baseline-agents/diagrams/agents-blocks.svg: d42425880b14d471aaf1b427906d558ea7a00392b7638bccb6ff434af29c1ff9
-  .specworks/changes/active/baseline-agents/tasks.md: a06ef49b19de494b83c66828ac91ffd81198f37234a9fe50f955faef57af57f5
-  .specworks/changes/active/baseline-agents/traceability.md: a3729d29f468ef094aba81646df0111ce6353c541a0030a2eb353915241cf499
-  src/chatinho/support/kits/agent/__init__.py: e44c333debe9f9a0407f17845ca9ea50dde5c022754b62fc52f531118a6677a7
-  src/chatinho/support/kits/agent/factory.py: d3ccccfd470d255e9d8282e3450cd7165ced5c6bfb87da9c663cb0d8b6614a46
-  src/chatinho/support/kits/agent/peer.py: 708c7f741cc2cc5919e7e832675a913f23e6c2aebca35aa142b2302c1805c832
-  src/chatinho/support/kits/agent/tools.py: 6dea8cef9e76641af7d8e2a0dcd5ff6a5d4c534dd8f5975fb4d6c8de8defe20a
-  src/chatinho/support/kits/agent/workspace_backend.py: 42c96cf34302f09b8588a2d8827072e4f9f7f78dbb44278830ff1c75f4b3b54c
-  tests/agents/test_agent_peer.py: 52499720dcfae1fa7956bc61a497609b552e3b4231abe2b0a07aef1e4948e033
-  tests/agents/test_workspace_backend.py: 6e482ba7a1954dc842871915289dd2aa977c2f2bfc21c030e82af6265719a21e
-  tests/test_architecture.py: c225f0746fe546a032c036236e2af8851ea1a45963051bc46cdc3b57bd9c3409
