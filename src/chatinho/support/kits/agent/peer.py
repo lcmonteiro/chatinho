@@ -66,6 +66,7 @@ def chat_model(model: Any) -> Any:
     return ChatOpenAI(model=model.model or "gpt-4o", base_url=model.base_url, api_key=api_key)
 
 
+# @req REQ-AGENT-001
 @require(HookAnswer)
 @require(HookListen)
 @require(HookSay)
@@ -116,6 +117,7 @@ class AgentPeer:
     invoke    : Invoke
     workspace : WorkspaceGrant
 
+    # @req REQ-AGENT-002
     def __init__(
         self,
         name         : str,
@@ -210,6 +212,7 @@ class AgentPeer:
 
     # === The graph ==================================================================
 
+    # @req REQ-AGENT-001
     async def graph(self) -> Any:
         """The compiled graph for the chat as it is now, built or rebuilt as needed."""
         shape = self._shape() + (await self._workspaced(),)
@@ -269,6 +272,7 @@ class AgentPeer:
         """
         return {name: await self.workspace(name, create=False) for name in await self._workspaced()}
 
+    # @req REQ-AGENT-003
     async def _workspaced(self) -> Tuple[str, ...]:
         """
         The other peers in the chat that have a workspace, asked without making one.

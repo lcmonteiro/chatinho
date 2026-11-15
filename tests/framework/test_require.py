@@ -32,6 +32,7 @@ from conftest import driven
 # === Validation at class-definition time ========================================
 
 
+# @ac AC-CORE-004.1
 def test_a_declared_method_that_exists_is_accepted():
     @require(HookListen)
     class Fine:
@@ -41,6 +42,7 @@ def test_a_declared_method_that_exists_is_accepted():
     assert declares(Fine(), HookListen)
 
 
+# @ac AC-CORE-004.2
 def test_a_declared_method_that_is_missing_is_an_import_error():
     with pytest.raises(TypeError, match="does not implement listen"):
 
@@ -49,6 +51,7 @@ def test_a_declared_method_that_is_missing_is_an_import_error():
             pass
 
 
+# @ac AC-CORE-004.2
 def test_a_misspelled_method_is_caught_the_same_way():
     with pytest.raises(TypeError, match="answer"):
 
@@ -58,6 +61,7 @@ def test_a_misspelled_method_is_caught_the_same_way():
                 pass
 
 
+# @ac AC-CORE-004.3
 def test_a_grant_only_hook_validates_nothing():
     """HookSay hands say() over; there is nothing on the class to check."""
 
@@ -71,6 +75,7 @@ def test_a_grant_only_hook_validates_nothing():
 # === Stacking ===================================================================
 
 
+# @ac AC-CORE-004.4
 def test_hooks_stack_and_are_all_remembered():
     @require(HookListen)
     @require(HookAsk)
@@ -81,6 +86,7 @@ def test_hooks_stack_and_are_all_remembered():
     assert hooks_of(Both()) == frozenset({HookAsk, HookListen})
 
 
+# @ac AC-CORE-004.5
 def test_two_hooks_in_one_require_says_to_stack_instead():
     with pytest.raises(TypeError, match="stack decorators"):
 
@@ -90,6 +96,7 @@ def test_two_hooks_in_one_require_says_to_stack_instead():
                 pass
 
 
+# @ac AC-CORE-004.6
 def test_require_refuses_something_that_is_not_a_hook():
     with pytest.raises(TypeError, match="takes a Hook"):
 
@@ -98,6 +105,7 @@ def test_require_refuses_something_that_is_not_a_hook():
             pass
 
 
+# @ac AC-CORE-005.2
 def test_declaring_nothing_is_allowed_and_means_nothing_fires():
     class Quiet:
         name = "quiet"
@@ -108,6 +116,7 @@ def test_declaring_nothing_is_allowed_and_means_nothing_fires():
     assert hooks_of(Quiet()) == frozenset()
 
 
+# @ac AC-CORE-005.2
 async def test_an_undeclared_hook_is_never_dispatched_to():
     """The methods are there; without the declaration nothing reaches them."""
 
@@ -132,6 +141,7 @@ async def test_an_undeclared_hook_is_never_dispatched_to():
 # === Options ====================================================================
 
 
+# @ac AC-CORE-004.7
 def test_options_ride_along_with_the_hook_that_owns_them():
     @require(HookAsk, timeout=30)
     @require(HookListen, batch=5)
@@ -145,6 +155,7 @@ def test_options_ride_along_with_the_hook_that_owns_them():
     assert options_of(tuned, HookContext) == {}
 
 
+# @ac AC-CORE-004.8
 def test_options_of_hands_back_a_copy():
     @require(HookAsk, timeout=30)
     class Tuned:
@@ -155,6 +166,7 @@ def test_options_of_hands_back_a_copy():
     assert options_of(tuned, HookAsk) == {"timeout": 30}
 
 
+# @ac AC-CORE-004.9
 def test_declaring_the_same_hook_twice_merges_the_options():
     """Decorators apply bottom-up, so the one written highest wins."""
 
@@ -166,6 +178,7 @@ def test_declaring_the_same_hook_twice_merges_the_options():
     assert options_of(Tuned(), HookAsk) == {"timeout": 1, "retries": 2}
 
 
+# @ac AC-CORE-004.10
 def test_a_subclass_does_not_write_into_its_parents_declaration():
     @require(HookAsk)
     class Parent:
@@ -183,6 +196,7 @@ def test_a_subclass_does_not_write_into_its_parents_declaration():
 # === Names ======================================================================
 
 
+# @ac AC-CORE-002.2
 def test_connector_names_the_class_and_an_instance_may_override_it():
     @connector("weather")
     class Weather:
@@ -194,6 +208,7 @@ def test_connector_names_the_class_and_an_instance_may_override_it():
     assert name_of(other) == "weather-eu"
 
 
+# @ac AC-CORE-003.5
 def test_frontend_is_a_connector_that_already_knows_it_is_peer_zero():
     """
     Which is the whole of what it adds: ``@connector(name, id=LOCAL)``,
@@ -206,6 +221,7 @@ def test_frontend_is_a_connector_that_already_knows_it_is_peer_zero():
     assert (name_of(Terminal()), declared_id(Terminal())) == ("terminal", LOCAL)
 
 
+# @ac AC-CORE-003.5
 def test_a_frontend_that_does_not_name_itself_is_called_chat():
     """``build_chat_session(name="me")`` is how a chat you are in reads better."""
 
@@ -216,6 +232,7 @@ def test_a_frontend_that_does_not_name_itself_is_called_chat():
     assert name_of(Anonymous()) == "chat"
 
 
+# @ac AC-CORE-003.6
 def test_frontend_without_its_parentheses_is_refused():
     """
     The class arrives where the name belongs, and nothing is decorated —
@@ -227,6 +244,7 @@ def test_frontend_without_its_parentheses_is_refused():
             pass
 
 
+# @ac AC-CORE-002.3
 def test_a_tool_carries_the_text_the_popup_shows():
     @tool("deploy", "Ship it")
     class Deploy:
@@ -235,6 +253,7 @@ def test_a_tool_carries_the_text_the_popup_shows():
     assert (name_of(Deploy()), Deploy().description) == ("deploy", "Ship it")
 
 
+# @ac AC-CORE-002.4
 def test_an_undecorated_class_falls_back_to_its_class_name():
     class Anonymous:
         pass
@@ -242,6 +261,7 @@ def test_an_undecorated_class_falls_back_to_its_class_name():
     assert name_of(Anonymous()) == "Anonymous"
 
 
+# @ac AC-CORE-002.5
 @pytest.mark.parametrize("naming", [connector, tool, backend, frontend])
 @pytest.mark.parametrize("bad", ["", "   ", None, 7])
 def test_an_empty_name_is_refused(naming, bad):

@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 __all__ = ["AgentFactory", "AgentPeer", "BasicAgent", "DeepAgent", "Interrupted"]
 
 
+# @req REQ-AGENT-004
 def __getattr__(name: str) -> Any:
     """Imports ``DeepAgent`` only when it is asked for."""
     if name != "DeepAgent":

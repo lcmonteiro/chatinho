@@ -115,11 +115,13 @@ class _Export:
         return Reply("[export](data.csv)", (item("data.csv"),))
 
 
+# @ac AC-CORE-023.1
 def test_an_attachment_cannot_be_changed_after_it_is_made():
     with pytest.raises(AttributeError):
         item("a.html").name = "b.html"          # type: ignore[misc]
 
 
+# @ac AC-CORE-023.1
 def test_a_message_has_no_attachments_field():
     from chatinho import ChatMessage
 
@@ -128,6 +130,7 @@ def test_a_message_has_no_attachments_field():
 
 # === Keeping ========================================================================
 
+# @ac AC-CORE-023.2
 async def test_attachments_are_kept_before_anyone_hears_the_message():
     keeper = _Keeper()
     ear    = _Listener(keeper)
@@ -138,6 +141,7 @@ async def test_attachments_are_kept_before_anyone_hears_the_message():
     assert ear.seen == [[(msg_id, "revenue.html")]]
 
 
+# @ac AC-CORE-023.3
 async def test_listeners_and_context_get_text_only():
     keeper = _Keeper()
     ear    = _Listener()
@@ -148,6 +152,7 @@ async def test_listeners_and_context_get_text_only():
     assert not any(hasattr(m, "attachments") for m in ear.heard + view.context())
 
 
+# @ac AC-CORE-023.4
 async def test_without_a_keeper_the_text_is_posted_and_attachments_dropped():
     session, view = await driven()
     await view.say("See the [chart](revenue.html)", attachments=[item("revenue.html")])
@@ -155,6 +160,7 @@ async def test_without_a_keeper_the_text_is_posted_and_attachments_dropped():
     assert view.texts() == ["See the [chart](revenue.html)"]
 
 
+# @ac AC-CORE-023.5
 async def test_a_keeper_that_fails_is_logged_and_the_text_still_posted(caplog):
     session, view = await driven(backend=_Broken())
     with caplog.at_level(logging.ERROR):
@@ -164,6 +170,7 @@ async def test_a_keeper_that_fails_is_logged_and_the_text_still_posted(caplog):
     assert "Keeping the attachments" in caplog.text
 
 
+# @ac AC-CORE-023.6
 async def test_ask_keeps_under_the_question():
     keeper = _Keeper()
     session, view = await driven(connectors=[_Plain()], backend=keeper)
@@ -173,6 +180,7 @@ async def test_ask_keeps_under_the_question():
     assert set(keeper.kept) == {(question.id, "draft.md")}
 
 
+# @ac AC-CORE-023.7
 async def test_an_answer_keeps_under_the_answer_and_ask_returns_its_text():
     keeper = _Keeper()
     session, view = await driven(connectors=[_Reporter()], backend=keeper)
@@ -182,6 +190,7 @@ async def test_an_answer_keeps_under_the_answer_and_ask_returns_its_text():
     assert (answer.frm, set(keeper.kept)) == (1, {(answer.id, "report.html")})
 
 
+# @ac AC-CORE-023.7
 async def test_a_plain_string_answer_keeps_nothing():
     keeper = _Keeper()
     session, view = await driven(connectors=[_Plain()], backend=keeper)
@@ -190,6 +199,7 @@ async def test_a_plain_string_answer_keeps_nothing():
     assert keeper.kept == {}
 
 
+# @ac AC-CORE-023.8
 async def test_a_command_result_keeps_under_the_result_not_the_invocation():
     keeper = _Keeper()
     session, view = await driven(commands=[_Export()], backend=keeper)
@@ -200,6 +210,7 @@ async def test_a_command_result_keeps_under_the_result_not_the_invocation():
     assert all(key[0] != invocation.id for key in keeper.kept)
 
 
+# @ac AC-CORE-023.7
 async def test_a_reply_built_with_a_list_is_kept_as_given():
     keeper = _Keeper()
 
@@ -215,6 +226,7 @@ async def test_a_reply_built_with_a_list_is_kept_as_given():
     assert list(keeper.kept.values()) == [item("report.html")]
 
 
+# @ac AC-CORE-013.6
 async def test_a_command_that_returns_a_string_is_refused():
     session, view = await driven(commands=[_Text()])
     with pytest.raises(TypeError, match="must return a Reply"):
@@ -225,6 +237,7 @@ async def test_a_command_that_returns_a_string_is_refused():
 
 # === Locating =======================================================================
 
+# @ac AC-CORE-024.1
 async def test_a_peer_locates_through_the_backend():
     keeper = _Keeper()
     looker = _Looker()
@@ -235,6 +248,7 @@ async def test_a_peer_locates_through_the_backend():
     await session.close()
 
 
+# @ac AC-CORE-024.2
 async def test_without_a_linking_backend_locate_is_none():
     looker = _Looker()
     session, view = await driven(connectors=[looker])
@@ -243,6 +257,7 @@ async def test_without_a_linking_backend_locate_is_none():
     await session.close()
 
 
+# @ac AC-CORE-024.3
 async def test_a_backend_that_fails_to_link_is_logged_and_none(caplog):
     session, view = await driven(backend=_Broken())
     with caplog.at_level(logging.ERROR):

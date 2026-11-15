@@ -84,6 +84,7 @@ def _relays(session: ChatSession, *names: str) -> List[_Relay]:
 
 # === Every delivery runs on its own ================================================
 
+# @ac AC-CORE-014.1
 async def test_a_peer_answers_two_questions_at_once():
     session, view = await driven(connectors=[_Slow()])
     started = time.perf_counter()
@@ -94,6 +95,7 @@ async def test_a_peer_answers_two_questions_at_once():
     await session.close()
 
 
+# @ac AC-CORE-014.3
 async def test_order_is_the_order_said():
     ear = _Ear(pause=0.1)
     session, view = await driven(connectors=[ear])
@@ -104,6 +106,7 @@ async def test_order_is_the_order_said():
     assert view.texts() == ["first", "second"]
 
 
+# @ac AC-CORE-014.4
 async def test_say_returns_before_anyone_heard():
     ear = _Ear(pause=0.3)
     session, view = await driven(connectors=[ear])
@@ -117,6 +120,7 @@ async def test_say_returns_before_anyone_heard():
 
 # === Delivery waits for start and finishes at close ================================
 
+# @ac AC-CORE-016.2
 async def test_said_before_start_is_heard_after():
     ear     = _Ear()
     view    = Driver()
@@ -129,6 +133,7 @@ async def test_said_before_start_is_heard_after():
     assert ear.heard == ["early"]
 
 
+# @ac AC-CORE-016.3
 async def test_a_peer_added_after_start_hears_once_started_again():
     session, view = await driven()
     ear = _Ear()
@@ -141,6 +146,7 @@ async def test_a_peer_added_after_start_hears_once_started_again():
     assert ear.heard == ["hello"]
 
 
+# @ac AC-CORE-016.7
 async def test_close_lets_a_listener_finish():
     ear = _Ear(pause=0.1)
     session, view = await driven(connectors=[ear])
@@ -149,6 +155,7 @@ async def test_close_lets_a_listener_finish():
     assert ear.heard == ["first"]
 
 
+# @ac AC-CORE-016.8
 async def test_close_does_not_hang(caplog):
     @connector("stuck")
     @require(HookAnswer)
@@ -172,6 +179,7 @@ async def test_close_does_not_hang(caplog):
 
 # === Asks may recurse ==============================================================
 
+# @ac AC-CORE-015.1
 async def test_a_asks_b_and_b_asks_a_back():
     @connector("a")
     @require(HookAnswer)
@@ -202,6 +210,7 @@ async def test_a_asks_b_and_b_asks_a_back():
 
 # === Nested asks are bounded =======================================================
 
+# @ac AC-CORE-015.2
 async def test_a_loop_stops_at_the_limit():
     session, view = await driven()
     ping, pong = _relays(session, "ping", "pong")
@@ -214,6 +223,7 @@ async def test_a_loop_stops_at_the_limit():
     await session.close()
 
 
+# @ac AC-CORE-015.3
 async def test_the_limit_is_configurable():
     session, view = await driven(max_depth=2)
     a, b, c = _relays(session, "a", "b", "c")
@@ -224,6 +234,7 @@ async def test_the_limit_is_configurable():
     await session.close()
 
 
+# @ac AC-CORE-015.4
 async def test_the_asker_of_a_question_past_the_limit_gets_an_error_reply():
     session, view = await driven(max_depth=0)
     a, b = _relays(session, "a", "b")
@@ -233,6 +244,7 @@ async def test_the_asker_of_a_question_past_the_limit_gets_an_error_reply():
     await session.close()
 
 
+# @ac AC-CORE-015.5
 async def test_unrelated_questions_are_not_nested():
     session, view = await driven(connectors=[_Slow()], max_depth=1)
     assert (await view.ask(1, "one")).text == "slow: one"
@@ -240,6 +252,7 @@ async def test_unrelated_questions_are_not_nested():
     await session.close()
 
 
+# @ac AC-CORE-015.6
 async def test_listening_is_not_nesting():
     """
     A peer that asks from listen() asks at depth 1, even hearing an answer.
@@ -267,6 +280,7 @@ async def test_listening_is_not_nesting():
     assert curious.answers == ["slow: from listen"]
 
 
+# @ac AC-CORE-015.7
 async def test_replies_traded_past_the_limit_are_dropped():
     """
     Two peers that answer by saying a reply stop at the limit, without trading errors.
@@ -321,6 +335,7 @@ class _Chatty:
         self.heard.append(msg.text)
 
 
+# @ac AC-CORE-012.2
 async def test_an_answer_to_an_addressed_say_is_heard_not_answered():
     session, view = await driven()
     first, second = _Chatty("first"), _Chatty("second")
@@ -334,6 +349,7 @@ async def test_an_answer_to_an_addressed_say_is_heard_not_answered():
     assert "second: re hi" in first.heard
 
 
+# @ac AC-CORE-012.3
 async def test_two_answering_peers_do_not_trade_answers():
     """One unprompted say between the only two answering peers costs one answer."""
     session, view = await driven()
@@ -347,6 +363,7 @@ async def test_two_answering_peers_do_not_trade_answers():
     assert view.texts() == ["a note", "b: re a note"]
 
 
+# @ac AC-CORE-012.4
 async def test_a_frontend_that_does_not_answer_is_not_asked(caplog):
     @frontend("screen")
     @require(HookSay)
@@ -372,6 +389,7 @@ async def test_a_frontend_that_does_not_answer_is_not_asked(caplog):
 
 # === A resolved reply is heard, not answered ======================================
 
+# @ac AC-CORE-012.1
 async def test_a_reply_to_ones_own_ask_is_heard_not_answered():
     """A peer that listens and answers gets the reply to its ask only as a listener."""
     @connector("curious")
@@ -402,6 +420,7 @@ async def test_a_reply_to_ones_own_ask_is_heard_not_answered():
 
 # === An answer is addressed to nobody =============================================
 
+# @ac AC-CORE-011.3
 async def test_an_answer_is_addressed_to_nobody():
     session, view = await driven(connectors=[_Slow()])
     await view.ask(1, "rain?")
@@ -411,6 +430,7 @@ async def test_an_answer_is_addressed_to_nobody():
     assert answer.to is None and answer.reply_to == question.id
 
 
+# @ac AC-CORE-011.4
 async def test_an_error_reply_is_addressed_to_nobody():
     @connector("broken")
     @require(HookAnswer)
@@ -426,6 +446,7 @@ async def test_an_error_reply_is_addressed_to_nobody():
     assert error.to is None and error.reply_to == said.id
 
 
+# @ac AC-CORE-012.5
 async def test_a_late_answer_is_not_put_to_the_asker():
     """The asked peer says its reply later; the asker also answers, and is not asked it."""
     @connector("late")
@@ -461,6 +482,7 @@ async def test_a_late_answer_is_not_put_to_the_asker():
     assert late.to is None
 
 
+# @ac AC-CORE-008.2, AC-CORE-012.6
 async def test_the_users_answer_to_a_question_is_addressed_to_nobody():
     @connector("curious")
     @require(HookAsk)

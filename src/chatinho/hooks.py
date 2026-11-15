@@ -431,6 +431,7 @@ ALL_HOOKS: Tuple[Hook, ...] = (
 # neither, and making it declare that it holds nothing is ceremony.
 
 
+# @req REQ-CORE-001, REQ-CORE-002
 def connector(name: str, id: Optional[int] = None) -> Callable[[type], type]:
     """
     Names a connector class, and optionally pins the id it answers to.
@@ -488,6 +489,7 @@ def declared_id(obj: Any) -> Optional[int]:
     return declared if isinstance(declared, int) else None
 
 
+# @req REQ-CORE-002
 def tool(name: str, description: str = "") -> Callable[[type], type]:
     """
     Names a tool and gives it the text the UI shows.
@@ -517,6 +519,7 @@ def tool(name: str, description: str = "") -> Callable[[type], type]:
     return decorator
 
 
+# @req REQ-CORE-003
 def frontend(name: str = "chat") -> Callable[[type], type]:
     """
     Names the presentation, and pins it to :data:`~chatinho.message.LOCAL`.
@@ -552,6 +555,7 @@ def frontend(name: str = "chat") -> Callable[[type], type]:
     return connector(name, id=LOCAL)
 
 
+# @req REQ-CORE-002
 def backend(name: str) -> Callable[[type], type]:
     """
     Names a backend class.
@@ -577,6 +581,7 @@ def backend(name: str) -> Callable[[type], type]:
     return decorator
 
 
+# @req REQ-CORE-004
 def require(hook: Hook, *extra: Any, **options: Any) -> Callable[[type], type]:
     """
     Declares one hook a connector implements, and checks that it does.
@@ -637,6 +642,7 @@ def hooks_of(obj: Any) -> FrozenSet[Hook]:
     return frozenset(getattr(obj, "_hooks", {}))
 
 
+# @req REQ-CORE-004
 def options_of(obj: Any, hook: Hook) -> Dict[str, Any]:
     """
     Returns the options *obj* declared for *hook*, empty when it gave none.
@@ -656,6 +662,7 @@ def declares(obj: Any, hook: Hook) -> bool:
     return hook in hooks_of(obj)
 
 
+# @req REQ-CORE-002
 def name_of(obj: Any) -> str:
     """Returns a peer's visible name, falling back to its class name."""
     return str(getattr(obj, "name", type(obj).__name__))

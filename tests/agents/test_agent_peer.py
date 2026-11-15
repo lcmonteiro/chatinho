@@ -44,6 +44,7 @@ class _Echo:
         return Reply("%s: %s" % (self.name, msg.text))
 
 
+# @ac AC-AGENT-001.1
 async def test_a_custom_factory():
     factory = Counting()
     peer    = AgentPeer("helper", fake(says("It is sunny.")), factory)
@@ -54,12 +55,14 @@ async def test_a_custom_factory():
     assert len(factory.builds) == 1 and "ask_coder" in factory.builds[0]
 
 
+# @ac AC-AGENT-001.2
 def test_not_built_when_created():
     factory = Counting()
     AgentPeer("helper", fake(says("x")), factory)
     assert factory.builds == []
 
 
+# @ac AC-AGENT-001.3
 async def test_rebuilt_for_a_new_peer():
     factory = Counting()
     peer    = AgentPeer("helper", fake(says("ok")), factory)
@@ -72,11 +75,13 @@ async def test_rebuilt_for_a_new_peer():
     assert "ask_lab" not in factory.builds[0] and "ask_lab" in factory.builds[1]
 
 
+# @ac AC-AGENT-002.1
 def test_an_option_the_factory_does_not_take():
     with pytest.raises(TypeError, match="counting_factory does not take 'temperature'"):
         AgentPeer("helper", fake(says("x")), Counting(), temperature=0.2)
 
 
+# @ac AC-AGENT-003.1
 async def test_covered_operations_get_no_tools(repo):
     model = fake(says("ok"))
     peer  = AgentPeer("helper", model, Counting(covered=frozenset({"read"})), workspace=True)
@@ -88,6 +93,7 @@ async def test_covered_operations_get_no_tools(repo):
     assert "ws_write" in tools and "ws_diff_of" in tools
 
 
+# @ac AC-AGENT-004.1
 def test_not_in_the_top_level_api():
     import chatinho
     with pytest.raises(AttributeError):

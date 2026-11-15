@@ -35,6 +35,7 @@ def named(tool: Any) -> Optional[str]:
     return getattr(tool, "name", None) or getattr(tool, "__name__", None)
 
 
+# @req REQ-AGENT-001
 def chat_tools(peer: Any, shape: Shape) -> List[StructuredTool]:
     """The chat as tools: ask_<peer>, run_<command> and, when wanted, ask_user."""
     theirs = {named(t) for t in peer.tools}
@@ -86,6 +87,7 @@ def _running(peer: Any, name: str) -> Callable[..., Any]:
     return run
 
 
+# @req REQ-AGENT-003
 def workspace_tools(peer: Any, mine: Workspace, covered: FrozenSet[str]) -> List[StructuredTool]:
     """
     ``ws_<op>`` per operation of *mine*, ``ws_<op>_of`` per one that reads, less *covered*.

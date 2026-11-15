@@ -1,0 +1,27 @@
+direction: down
+
+callers: connectors, frontends and agents {
+  shape: page
+}
+keys: keys {
+  endpoint: endpoint.py {
+    tooltip: "Endpoint: base_url, model and key source; profiles in a TOML file"
+  }
+  sources: sources.py {
+    tooltip: "Env, DotEnv, File, Keyring, Command, Literal, Chain; key(), to_source(), read_async()"
+  }
+  endpoint -> sources: a profile's api_key reference
+}
+places: where a key lives {
+  shape: cylinder
+  tooltip: "the environment, a dotenv file, a private file, the keychain, a command"
+}
+profiles: profiles file (TOML) {
+  shape: page
+}
+
+callers -> keys.endpoint: Endpoint.load, check
+callers -> keys.sources: a key or token argument
+keys.sources -> places: reads when asked
+keys.endpoint -> profiles: reads the chosen profile
+keys.sources -> callers: a Secret

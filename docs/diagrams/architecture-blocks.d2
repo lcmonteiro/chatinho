@@ -1,0 +1,67 @@
+direction: down
+
+assembly: builder.py and __init__.py (no capability) {
+  shape: page
+  tooltip: "the public API and the two builders; the only files that see all four layers"
+}
+
+specializations: 4. specializations {
+  connectors: connectors {
+    tooltip: "src/chatinho/connectors: OpenAIConnector, McpConnector, the agent connectors"
+  }
+  frontends: frontends {
+    tooltip: "src/chatinho/frontends: ChatFrontend (Textual), McpFrontend"
+  }
+  backends: backends {
+    tooltip: "src/chatinho/backends: DatabaseBackend"
+  }
+  commands: commands {
+    tooltip: "src/chatinho/commands: /help, /test, /ws"
+  }
+  routers: routers {
+    tooltip: "src/chatinho/routers: SimpleRouter"
+  }
+  workspaces: workspaces {
+    tooltip: "src/chatinho/workspaces: GitWorktrees"
+  }
+}
+
+kits: 3. support/kits {
+  agents: agents {
+    tooltip: "src/chatinho/support/kits/agent: AgentPeer, the factories, the tools, WorkspaceBackend"
+  }
+}
+
+parts: 2. support/parts {
+  keys: keys {
+    tooltip: "src/chatinho/support/parts/keys: key sources, Endpoint"
+  }
+  workspace-model: workspace-model {
+    tooltip: "src/chatinho/support/parts/workspace: Tree, @operation, WorkspaceView, Workspace"
+  }
+  shared: memory.py and mcp.py (no capability) {
+    shape: page
+  }
+}
+
+framework: 1. framework {
+  tooltip: "src/chatinho: session.py, hooks.py, message.py, query.py"
+}
+
+assembly -> specializations: builds a session from
+assembly -> framework: ChatSession
+
+specializations.connectors -> kits.agents: AgentPeer with a factory
+specializations.connectors -> parts.keys: Endpoint, key sources
+specializations.connectors -> parts.shared: memory, MCP names
+specializations.frontends -> parts.keys: bearer token
+specializations.frontends -> parts.shared: MCP names
+specializations.workspaces -> parts.workspace-model: Tree, the views
+specializations -> framework: declare hooks, receive grants
+
+kits.agents -> parts.workspace-model: operations as tools
+kits.agents -> parts.keys: Endpoint
+kits.agents -> parts.shared: memory
+kits.agents -> framework: hooks, messages, Query
+
+parts.keys -> framework: Secret

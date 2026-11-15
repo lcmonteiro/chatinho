@@ -25,6 +25,7 @@ from .routers import SimpleRouter
 from .session import ChatSession
 
 
+# @req REQ-CORE-029
 def build_chat_session(
     connectors      : Optional[List[Any]] = None,
     commands        : Optional[List[Any]] = None,
@@ -111,6 +112,7 @@ def build_chat_session(
     )
 
 
+# @req REQ-CORE-029
 def build_mcp_session(
     connectors  : Optional[List[Any]] = None,
     commands    : Optional[List[Any]] = None,

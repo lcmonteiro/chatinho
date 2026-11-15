@@ -49,23 +49,27 @@ async def _settle():
 
 # === Statuses ======================================================================
 
+# @ac AC-CORE-010.1
 def test_a_reply_is_answered_unless_it_says_otherwise():
     assert Reply("sunny").status == "answered"
     assert Reply("Which login flow?", status="asked").status == "asked"
     assert Reply("the service is down", status="error").status == "error"
 
 
+# @ac AC-CORE-010.2
 def test_a_status_is_an_enum_and_its_value_is_accepted():
     assert Reply("x", status=ReplyStatus.ASKED).status is ReplyStatus.ASKED
     assert Reply("x", status="asked").status is ReplyStatus.ASKED
     assert ReplyStatus.ERROR == "error"
 
 
+# @ac AC-CORE-010.3
 def test_an_unknown_status_is_refused():
     with pytest.raises(ValueError):
         Reply("x", status="maybe")
 
 
+# @ac AC-CORE-010.4
 def test_a_reply_reads_as_what_it_says():
     """An answer reads as its text; anything else says what it is first."""
     assert str(Reply("sunny")) == "sunny"
@@ -73,11 +77,13 @@ def test_a_reply_reads_as_what_it_says():
     assert str(Reply("quota exceeded", status="error")) == "error: quota exceeded"
 
 
+# @ac AC-CORE-010.5
 def test_its_repr_is_still_the_dataclasss():
     told = repr(Reply("sunny"))
     assert "text=" in told and "attachments=" in told and "status=" in told
 
 
+# @ac AC-CORE-011.2
 @pytest.mark.parametrize("reply, status", [
     ("sunny", "answered"),
     (Reply("Which login flow?", status="asked"), "asked"),
@@ -90,6 +96,7 @@ async def test_the_answer_message_carries_the_status(reply, status):
     await session.close()
 
 
+# @ac AC-CORE-007.1
 async def test_ask_still_returns_the_text():
     session, view = await driven(connectors=[_Eco("sunny")])
     assert (await view.ask(view.id_of("eco"), "weather?")).text == "sunny"
@@ -99,6 +106,7 @@ async def test_ask_still_returns_the_text():
 # === A say addressed to one peer ===================================================
 
 
+# @ac AC-CORE-009.1
 async def test_an_addressed_say_is_asked_of_that_peer():
     one, two, falador = _Eco("sunny"), _Eco("rainy"), _Falador()
     session, view = await driven(connectors=[one, two, falador])
@@ -111,6 +119,7 @@ async def test_an_addressed_say_is_asked_of_that_peer():
     await session.close()
 
 
+# @ac AC-CORE-009.2
 async def test_a_say_to_nobody_is_refused():
     falador = _Falador()
     session, view = await driven(connectors=[_Eco(), falador])
@@ -130,6 +139,7 @@ class _Antigo:
         return "sunny"
 
 
+# @ac AC-CORE-011.1
 async def test_an_answer_must_be_a_reply():
     falador = _Falador()
     session, view = await driven(connectors=[_Antigo(), _Eco(), falador])
@@ -145,6 +155,7 @@ async def test_an_answer_must_be_a_reply():
 # === What ask returns ===========================================================
 
 
+# @ac AC-CORE-007.6
 async def test_ask_returns_a_question_back_with_its_status():
     eco = _Eco(Reply("which city?", status="asked"))
     session, view = await driven(connectors=[eco])
@@ -152,6 +163,7 @@ async def test_ask_returns_a_question_back_with_its_status():
     await session.close()
 
 
+# @ac AC-CORE-007.6
 async def test_ask_returns_an_error_answer_with_its_status():
     """The status tells the asker a failure from an answer; the text alone could not."""
     eco = _Eco(Reply("quota exceeded", status="error"))

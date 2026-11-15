@@ -9,6 +9,7 @@ A factory is any object with these four members; there is nothing to subclass.
 from typing import Any, Dict, FrozenSet, List, Protocol
 
 
+# @req REQ-AGENT-001
 class AgentFactory(Protocol):
     """
     How one kind of agent is made.

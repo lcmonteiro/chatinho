@@ -113,6 +113,7 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
 }
 
 
+# @req REQ-CORE-028, REQ-CORE-029
 def __getattr__(name: str) -> Any:
     """
     Imports the batteries only when one is asked for (PEP 562).

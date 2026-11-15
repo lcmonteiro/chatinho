@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 COMMAND_PREFIX : str = "/"
 
 
+# @req REQ-CORE-011
 def _checked(reply: Any, what: str) -> Optional[Reply]:
     """*reply* itself if it is a Reply or None; anything else, a bare string most often, raises TypeError."""
     if reply is not None and not isinstance(reply, Reply):
@@ -74,6 +75,7 @@ class ChatSession:
     #: How long :meth:`close` waits for the deliveries in flight, in seconds.
     CLOSE_TIMEOUT : float = 5.0
 
+    # @req REQ-CORE-003, REQ-CORE-026
     def __init__(
         self,
         connectors : Optional[List[Any]] = None,
@@ -160,6 +162,7 @@ class ChatSession:
 
     # === Peers ===============================================================
 
+    # @req REQ-CORE-001
     def add_connector(self, connector: Any, at: Optional[int] = None) -> int:
         """
         Registers *connector*, hands over its grants and returns its id.
@@ -198,6 +201,7 @@ class ChatSession:
         self._grant(connector, at)
         return at
 
+    # @req REQ-CORE-026
     def _refuse_a_provider(self, obj: Any) -> None:
         """
         Refuses a workspace provider arriving as a peer or a command.
@@ -211,6 +215,7 @@ class ChatSession:
             raise ValueError("%r declares %s: a workspace provider is not a peer, and a session has one, "
                              "given as ChatSession(workspaces=...)" % (obj, HookProvision))
 
+    # @req REQ-CORE-001
     def _free_id(self) -> int:
         """
         Takes the next id no peer holds.
@@ -224,6 +229,7 @@ class ChatSession:
         self._next_id += 1
         return at
 
+    # @req REQ-CORE-013
     def add_command(self, cmd: Any) -> str:
         """
         Registers a command under its declared name and returns it.
@@ -255,6 +261,7 @@ class ChatSession:
         self._grant(cmd, TOOL)
         return name
 
+    # @req REQ-CORE-013
     def _invoke_for(self, frm: int):
         """
         Builds the ``invoke`` granted to a peer, bound to that peer.
@@ -292,6 +299,7 @@ class ChatSession:
             return reply.text
         return invoke
 
+    # @req REQ-CORE-002
     def id_of(self, name: str) -> Optional[int]:
         """
         Returns the id of the peer with that visible name, or None.
@@ -321,6 +329,7 @@ class ChatSession:
         """Every command registered, by name. Granted by ``HookCommands``."""
         return dict(self.commands)
 
+    # @req REQ-CORE-005
     def _grant(self, who: Any, at: int) -> None:
         """
         Sets the attributes *who*'s declared hooks ask for.
@@ -346,6 +355,7 @@ class ChatSession:
                     continue
                 setattr(who, granted, build())
 
+    # @req REQ-CORE-027
     def _workspace_for(self, who: Any, at: int):
         """
         Builds the ``workspace`` granted to *who*, bound to its name.
@@ -371,6 +381,7 @@ class ChatSession:
             return await provider.provision(owner, name, create=create)
         return workspace
 
+    # @req REQ-CORE-016
     async def _initialize(self, obj: Any) -> None:
         """
         Calls ``initialize()`` when the object has one, from :meth:`start`.
@@ -388,6 +399,7 @@ class ChatSession:
 
     # === The three verbs, bound to one speaker ======================================
 
+    # @req REQ-CORE-006, REQ-CORE-009, REQ-CORE-025
     def _say_for(self, frm: int):
         async def say(
             text        : str,
@@ -438,6 +450,7 @@ class ChatSession:
             return None
         return at
 
+    # @req REQ-CORE-007
     def _ask_for(self, frm: int):
         async def ask(
             to          : int,
@@ -461,6 +474,7 @@ class ChatSession:
             return Reply(answered.text, status=answered.status)
         return ask
 
+    # @req REQ-CORE-023
     async def _kept(self, msg: ChatMessage, attachments: Sequence[Attachment]) -> None:
         """
         Hands what *msg* carries to the backend, before *msg* is posted.
@@ -485,6 +499,7 @@ class ChatSession:
         except Exception:
             logger.error("Keeping the attachments of %s failed", msg.id, exc_info=True)
 
+    # @req REQ-CORE-006, REQ-CORE-008, REQ-CORE-014
     async def _post(self, msg: ChatMessage) -> MessageID:
         """
         Keeps *msg* and starts delivering it to everyone it is for.
@@ -521,6 +536,7 @@ class ChatSession:
             self._dispatch(at, msg, at in audience)
         return msg.id
 
+    # @req REQ-CORE-014, REQ-CORE-016
     def _dispatch(self, at: int, msg: ChatMessage, asked: bool) -> None:
         """Delivers *msg* to peer *at* now, or once it has started; *asked* if it is put to *at*."""
         if self._closed:
@@ -532,6 +548,7 @@ class ChatSession:
         else:
             self._held.append((at, msg, asked))
 
+    # @req REQ-CORE-014
     async def _delivery(self, at: int, msg: ChatMessage, asked: bool) -> None:
         """
         One message, to one peer, on its own task.
@@ -547,6 +564,7 @@ class ChatSession:
             if asked:
                 self._depth.pop(msg.id, None)
 
+    # @req REQ-CORE-005, REQ-CORE-007, REQ-CORE-011, REQ-CORE-012, REQ-CORE-015
     async def _deliver(self, who: Any, msg: ChatMessage, asked: bool) -> None:
         """
         Hands one message to one peer, every way it declared to get it.
@@ -601,6 +619,7 @@ class ChatSession:
         if reply is not None:
             await self._answered(at, msg, reply)
 
+    # @req REQ-CORE-011
     async def _answered(self, at: int, msg: ChatMessage, reply: Reply) -> None:
         """Posts *reply* in the name of peer *at*, as its answer to *msg*."""
         # Addressed to nobody: an answer is owed no answer, and `to` set
@@ -618,6 +637,7 @@ class ChatSession:
             return self._context(query, asker=at)
         return context
 
+    # @req REQ-CORE-019
     def _context(
         self,
         query : Optional[Query] = None,
@@ -674,6 +694,7 @@ class ChatSession:
         except KeyboardInterrupt:
             pass
 
+    # @req REQ-CORE-016
     async def _serve(self) -> None:
         """Starts everything, waits for it to be over, and closes."""
         await self.start()
@@ -702,6 +723,7 @@ class ChatSession:
             # ``run`` turns the Ctrl-C case into a quiet exit itself.
             await self.close()
 
+    # @req REQ-CORE-016
     async def start(self) -> None:
         """
         Initializes every peer and command, then starts delivering to them.
@@ -735,6 +757,7 @@ class ChatSession:
         for at, msg, asked in held:
             self._dispatch(at, msg, asked)
 
+    # @req REQ-CORE-016
     async def close(self) -> None:
         """
         Lets the deliveries in flight finish, then shuts every peer down.
@@ -778,6 +801,7 @@ class ChatSession:
         self._pending.clear()
         await self._shutdown()
 
+    # @req REQ-CORE-017
     async def _shutdown(self) -> None:
         """
         Calls every ``shutdown()``, then awaits the ones that are coroutines.
@@ -812,6 +836,7 @@ class ChatSession:
 
     # === The older tier =============================================================
 
+    # @req REQ-CORE-019
     async def _recall(self) -> None:
         """
         Pulls the tail of the archive back into the session.
@@ -829,6 +854,7 @@ class ChatSession:
         except Exception:
             logger.error("Loading the older context failed; starting empty", exc_info=True)
 
+    # @req REQ-CORE-024
     async def locate(self, msg_id: MessageID, name: str) -> Optional[str]:
         """
         Where attachment *name* of message *msg_id* can be opened, or None.
@@ -852,6 +878,7 @@ class ChatSession:
             logger.error("Linking %s of %s failed", name, msg_id, exc_info=True)
             return None
 
+    # @req REQ-CORE-020
     async def forget(self, before: Optional[datetime] = None) -> int:
         """
         Drops the messages older than *before*, or all of them, here and in the archive.

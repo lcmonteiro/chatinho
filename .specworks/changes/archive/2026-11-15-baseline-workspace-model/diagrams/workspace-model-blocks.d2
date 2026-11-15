@@ -1,0 +1,25 @@
+direction: down
+
+consumers: provider, agent tools and /ws {
+  shape: page
+}
+model: workspace-model {
+  operations: operations.py {
+    tooltip: "@operation, operations_of, Operation"
+  }
+  views: views.py {
+    tooltip: "WorkspaceView (reads), Workspace (writes too); Lines, Match, Matches"
+  }
+  tree: tree.py {
+    tooltip: "Tree: resolve(), files and git of one worktree"
+  }
+  views -> operations: declares each operation
+  views -> tree: every path and git call
+}
+worktree: one git worktree {
+  shape: cylinder
+}
+
+consumers -> model.operations: operations_of a class
+consumers -> model.views: calls operations
+model.tree -> worktree: files and git, inside the root only

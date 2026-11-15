@@ -54,6 +54,7 @@ from ...parts.workspace.views import Workspace, WorkspaceView
 _EVERY_MATCH : int = 10 ** 9
 
 
+# @req REQ-AGENT-006
 def _relative(path: Optional[str]) -> str:
     """A protocol path (absolute, ``/`` the workspace's root) as a workspace one."""
     if path is None:
@@ -61,6 +62,7 @@ def _relative(path: Optional[str]) -> str:
     return path.lstrip("/") or "."
 
 
+# @req REQ-AGENT-006
 def _absolute(path: str) -> str:
     """A workspace path as the protocol shows it: rooted at ``/``."""
     return "/" if path in ("", ".") else "/" + path.lstrip("/")
@@ -80,6 +82,7 @@ def _download_error(exc: Exception) -> str:
     return _failed(exc)
 
 
+# @req REQ-AGENT-005, REQ-AGENT-007, REQ-AGENT-011
 class WorkspaceBackend(BackendProtocol):
     """
     One workspace, or a view of one, as a deep agents backend.
@@ -100,6 +103,7 @@ class WorkspaceBackend(BackendProtocol):
     def _writable(self) -> Optional[Workspace]:
         return self.workspace if isinstance(self.workspace, Workspace) else None
 
+    # @req REQ-AGENT-009
     def _read_only(self) -> str:
         return "read-only: this is %s's workspace, and only %s writes to it" % (
             self.workspace.name, self.workspace.name)
@@ -118,6 +122,7 @@ class WorkspaceBackend(BackendProtocol):
             {"path": _absolute(base + name), "is_dir": name.endswith("/")} for name in names]
         return LsResult(entries=entries)
 
+    # @req REQ-AGENT-008
     async def aread(self, file_path: str, offset: int = 0, limit: int = 2000) -> ReadResult:
         """A window of a file's lines, with the line it starts at."""
         try:
@@ -146,6 +151,7 @@ class WorkspaceBackend(BackendProtocol):
             return GlobResult(error=_failed(exc))
         return GlobResult(matches=[{"path": _absolute(name), "is_dir": False} for name in found])
 
+    # @req REQ-AGENT-008
     async def agrep(
         self,
         pattern   : str,
@@ -181,6 +187,7 @@ class WorkspaceBackend(BackendProtocol):
 
     # === Writing ====================================================================
 
+    # @req REQ-AGENT-008
     async def awrite(self, file_path: str, content: str) -> WriteResult:
         """Writes a file, creating it or replacing what it held."""
         ws = self._writable()
@@ -233,6 +240,7 @@ class WorkspaceBackend(BackendProtocol):
 
     # === The sync half: not here ====================================================
 
+    # @req REQ-AGENT-010
     def _sync(self, name: str) -> Any:
         raise NotImplementedError("WorkspaceBackend is async only: call a%s, not %s" % (name, name))
 

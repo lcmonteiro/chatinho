@@ -111,6 +111,7 @@ class _Archive:
 # === Ids and names ==============================================================
 
 
+# @ac AC-CORE-001.1
 async def test_the_user_is_peer_zero_and_connectors_are_numbered():
     """Commands are not among them: they have no id at all."""
     session, view = await driven(connectors=[_Lento(), _Rapido()], commands=[_Eco()])
@@ -123,6 +124,7 @@ async def test_the_user_is_peer_zero_and_connectors_are_numbered():
     await session.close()
 
 
+# @ac AC-CORE-001.2
 async def test_a_taken_id_is_refused():
     session, _ = await driven()
     with pytest.raises(ValueError, match="already taken"):
@@ -130,6 +132,7 @@ async def test_a_taken_id_is_refused():
     await session.close()
 
 
+# @ac AC-CORE-002.1
 async def test_renaming_does_not_change_the_address():
     """The id routes; the name is only what the chat shows."""
     session, view = await driven(connectors=[_Rapido()])
@@ -143,6 +146,7 @@ async def test_renaming_does_not_change_the_address():
 # === say ========================================================================
 
 
+# @ac AC-CORE-006.1
 async def test_a_say_reaches_everyone_but_the_speaker():
     ouvinte = _Ouvinte()
     session, view = await driven(connectors=[ouvinte])
@@ -152,6 +156,7 @@ async def test_a_say_reaches_everyone_but_the_speaker():
     assert view.heard == []            # the speaker does not hear itself
 
 
+# @ac AC-CORE-006.2
 async def test_a_reply_to_a_say_is_another_say():
     session, view = await driven(connectors=[_Ouvinte()])
     first = await view.say("uma pergunta ao ar")
@@ -163,12 +168,14 @@ async def test_a_reply_to_a_say_is_another_say():
 # === ask / answer ===============================================================
 
 
+# @ac AC-CORE-007.1
 async def test_ask_returns_the_answer():
     session, view = await driven(connectors=[_Rapido()])
     assert (await view.ask(1, "ola")).text == "eco: ola"
     await session.close()
 
 
+# @ac AC-CORE-013.1
 async def test_running_a_command_answers_the_peer_that_ran_it():
     """
     The answer goes back to whoever ran it, and the whole of it is recorded.
@@ -188,12 +195,14 @@ async def test_running_a_command_answers_the_peer_that_ran_it():
     await session.close()
 
 
+# @ac AC-CORE-013.2
 async def test_running_a_command_that_does_not_exist_answers_nothing():
     session, view = await driven()
     assert await view.command("nao-existe") is None
     await session.close()
 
 
+# @ac AC-CORE-013.3
 async def test_a_command_that_says_writes_and_still_answers():
     @tool("relata", "escreve enquanto trabalha")
     @require(HookExecute)
@@ -211,6 +220,7 @@ async def test_a_command_that_says_writes_and_still_answers():
     await session.close()
 
 
+# @ac AC-CORE-013.4
 async def test_a_command_is_told_which_peer_ran_it():
     seen: list = []
 
@@ -227,6 +237,7 @@ async def test_a_command_is_told_which_peer_ran_it():
     await session.close()
 
 
+# @ac AC-CORE-013.5
 async def test_registering_something_that_cannot_execute_is_refused():
     class NotACommand:
         name = "nope"
@@ -237,6 +248,7 @@ async def test_registering_something_that_cannot_execute_is_refused():
     await session.close()
 
 
+# @ac AC-CORE-007.2
 async def test_asking_an_unknown_id_raises():
     session, view = await driven()
     with pytest.raises(ValueError, match="No peer with id"):
@@ -244,6 +256,7 @@ async def test_asking_an_unknown_id_raises():
     await session.close()
 
 
+# @ac AC-CORE-014.2
 async def test_a_slow_peer_holds_up_only_itself():
     """Each delivery runs on its own: one second is not two."""
     session, view = await driven(connectors=[_Lento(), _Rapido()])
@@ -255,6 +268,7 @@ async def test_a_slow_peer_holds_up_only_itself():
     await session.close()
 
 
+# @ac AC-CORE-007.5
 async def test_a_peer_that_raises_does_not_take_the_chat_down():
     session, view = await driven(connectors=[_Rebenta(), _Rapido()])
     failing = asyncio.create_task(view.ask(1, "?"))     # raises in the asker
@@ -265,6 +279,7 @@ async def test_a_peer_that_raises_does_not_take_the_chat_down():
     await session.close()
 
 
+# @ac AC-CORE-007.4
 async def test_a_peer_can_ask_the_user():
     """ask(LOCAL, ...) is what the old inbox was, with no extra concept."""
     session, view = await driven(commands=[_Eco()])
@@ -283,6 +298,7 @@ async def test_a_peer_can_ask_the_user():
     await session.close()
 
 
+# @ac AC-CORE-007.3
 async def test_an_answer_given_later_still_resolves_the_ask():
     """
     answer may return None; what is said later with reply_to resolves the ask.
@@ -321,6 +337,7 @@ async def test_an_answer_given_later_still_resolves_the_ask():
 # === Grants =====================================================================
 
 
+# @ac AC-CORE-005.1
 async def test_a_peer_gets_only_what_it_declared():
     @connector("mudo")
     @require(HookSay)
@@ -336,6 +353,7 @@ async def test_a_peer_gets_only_what_it_declared():
     await session.close()
 
 
+# @ac AC-CORE-005.3
 async def test_nobody_can_speak_in_another_name():
     """frm is bound at add_connector, not passed as an argument."""
     session, view = await driven(connectors=[_Ouvinte()])
@@ -347,6 +365,7 @@ async def test_nobody_can_speak_in_another_name():
 # === History ====================================================================
 
 
+# @ac AC-CORE-019.2
 async def test_context_narrows_by_time_and_count():
     session, view = await driven()
     for n in range(5):
@@ -358,6 +377,7 @@ async def test_context_narrows_by_time_and_count():
     await session.close()
 
 
+# @ac AC-CORE-019.4
 async def test_context_returns_a_copy():
     session, view = await driven()
     await view.say("guardada")
@@ -369,6 +389,7 @@ async def test_context_returns_a_copy():
 # === The older tier =============================================================
 
 
+# @ac AC-CORE-006.3
 async def test_what_is_said_reaches_the_one_that_listens():
     """
     Listening runs on its own task, and close() waits for it.
@@ -384,6 +405,7 @@ async def test_what_is_said_reaches_the_one_that_listens():
     assert [m.text for m in store.kept] == ["guarda isto"]
 
 
+# @ac AC-CORE-019.6
 async def test_context_spans_both_tiers_without_saying_which():
     """The whole point of one interface: the caller cannot tell them apart."""
     older = ChatMessage(id="old-1", text="de ontem", frm=LOCAL,
@@ -394,6 +416,7 @@ async def test_context_spans_both_tiers_without_saying_which():
     await session.close()
 
 
+# @ac AC-CORE-019.7
 async def test_recall_is_bounded_and_the_bound_is_the_session_s():
     older = [ChatMessage(id="old-%d" % n, text="m%d" % n, frm=LOCAL,
                          timestamp=datetime.now() - timedelta(minutes=5 - n))
@@ -403,6 +426,7 @@ async def test_recall_is_bounded_and_the_bound_is_the_session_s():
     await session.close()
 
 
+# @ac AC-CORE-019.8
 async def test_a_backend_that_only_listens_is_not_an_error():
     """Declaring less means doing less, not failing."""
 
@@ -423,6 +447,7 @@ async def test_a_backend_that_only_listens_is_not_an_error():
     assert [m.text for m in store.kept] == ["ainda assim guardada"]
 
 
+# @ac AC-CORE-014.5
 async def test_a_listener_that_fails_does_not_lose_the_message():
     @backend("avariado")
     @require(HookListen)
@@ -436,6 +461,7 @@ async def test_a_listener_that_fails_does_not_lose_the_message():
     await session.close()
 
 
+# @ac AC-CORE-020.1
 async def test_forget_without_a_backend():
     """Nothing archived, so it reports 0 — and the conversation forgets all the same."""
     session, view = await driven()
@@ -446,6 +472,7 @@ async def test_forget_without_a_backend():
     await session.close()
 
 
+# @ac AC-CORE-020.2
 async def test_forget_reaches_the_one_that_holds():
     store = _Archive()
     session, view = await driven(backend=store)
@@ -464,6 +491,7 @@ async def test_forget_reaches_the_one_that_holds():
 # === The id a class declares ====================================================
 
 
+# @ac AC-CORE-001.3
 async def test_a_connector_can_pin_the_id_it_answers_to():
     """
     Being peer zero is what the terminal *is*, not a favour at add_connector.
@@ -484,6 +512,7 @@ async def test_a_connector_can_pin_the_id_it_answers_to():
     await session.close()
 
 
+# @ac AC-CORE-003.1
 async def test_the_frontend_is_the_peer_that_speaks_for_the_person():
     """``frontend`` is a role, like ``backend``, and the role is an id."""
 
@@ -498,6 +527,7 @@ async def test_the_frontend_is_the_peer_that_speaks_for_the_person():
     await session.close()
 
 
+# @ac AC-CORE-003.2
 async def test_the_frontend_parameter_pins_peer_zero_on_its_own():
     """
     Which is the one place ``frontend`` and ``backend`` differ.
@@ -519,6 +549,7 @@ async def test_the_frontend_parameter_pins_peer_zero_on_its_own():
     await session.close()
 
 
+# @ac AC-CORE-003.3
 def test_a_chat_has_one_frontend():
     """LOCAL is a single id, so a second is refused like any id already taken."""
 
@@ -532,6 +563,7 @@ def test_a_chat_has_one_frontend():
         ChatSession(frontend=Terminal(), connectors=[Terminal()])
 
 
+# @ac AC-CORE-003.4
 async def test_the_frontend_is_registered_before_everyone_it_talks_to():
     """
     Attachment order is hook order, and the roster reports it.
@@ -546,6 +578,7 @@ async def test_the_frontend_is_registered_before_everyone_it_talks_to():
     await session.close()
 
 
+# @ac AC-CORE-001.6
 def test_the_caller_may_still_pin_a_different_id():
     @connector("teimoso", id=LOCAL)
     @require(HookListen)
@@ -557,6 +590,7 @@ def test_the_caller_may_still_pin_a_different_id():
     assert session.add_connector(Teimoso(), at=7) == 7
 
 
+# @ac AC-CORE-001.7
 def test_a_declared_id_may_not_be_TOOL_or_anything_but_an_int():
     with pytest.raises(ValueError, match="TOOL"):
         @connector("ladrao", id=TOOL)
@@ -572,6 +606,7 @@ def test_a_declared_id_may_not_be_TOOL_or_anything_but_an_int():
 # === run(), and what serves ======================================================
 
 
+# @ac AC-CORE-016.4
 async def test_the_first_peer_to_finish_serving_ends_the_chat():
     """
     serve() is lifecycle, not a hook: it runs until it is finished.
@@ -606,6 +641,7 @@ async def test_the_first_peer_to_finish_serving_ends_the_chat():
     assert [m.text for m in session._context()] == ["e pronto"]
 
 
+# @ac AC-CORE-016.5
 async def test_a_session_with_nothing_serving_runs_until_it_is_stopped():
     """A bot has no terminal to quit: it runs until something interrupts it."""
     session = ChatSession(connectors=[_Rapido()])
@@ -618,6 +654,7 @@ async def test_a_session_with_nothing_serving_runs_until_it_is_stopped():
         await running
 
 
+# @ac AC-CORE-016.6
 async def test_a_peer_that_fails_while_serving_is_not_swallowed():
     @connector("avariado")
     @require(HookListen)
@@ -632,6 +669,7 @@ async def test_a_peer_that_fails_while_serving_is_not_swallowed():
         await session._serve()
 
 
+# @ac AC-CORE-016.1
 async def test_an_async_initialize_is_awaited_by_start():
     """
     initialize() runs from start(), where a loop exists — so it may be async.
@@ -688,6 +726,7 @@ class _PlainCloser:
         self.calls += 1
 
 
+# @ac AC-CORE-017.1
 async def test_an_asynchronous_shutdown_is_awaited():
     closer = _Closer()
     session, _ = await driven(connectors=[closer])
@@ -695,6 +734,7 @@ async def test_an_asynchronous_shutdown_is_awaited():
     assert closer.closed
 
 
+# @ac AC-CORE-017.2
 async def test_a_synchronous_shutdown_still_works():
     plain = _PlainCloser()
     session, _ = await driven(connectors=[plain])
@@ -702,6 +742,7 @@ async def test_a_synchronous_shutdown_still_works():
     assert plain.calls == 1
 
 
+# @ac AC-CORE-017.3
 async def test_one_failing_shutdown_does_not_stop_the_others(caplog):
     failing, other = _Closer(fails=True), _Closer()
     session, _ = await driven(connectors=[failing, other])
@@ -711,6 +752,7 @@ async def test_one_failing_shutdown_does_not_stop_the_others(caplog):
     assert "could not close" in caplog.text
 
 
+# @ac AC-CORE-017.4
 async def test_a_shutdown_that_never_returns(monkeypatch, caplog):
     monkeypatch.setattr(ChatSession, "CLOSE_TIMEOUT", 0.2)
     session, _ = await driven(connectors=[_Closer(hangs=True)])
@@ -738,6 +780,7 @@ class _Numbered:
         return Reply("numbered")
 
 
+# @ac AC-CORE-001.4
 def test_a_numbered_peer_skips_an_id_already_pinned():
     """Numbering used to hand out 1 again, and the pinned peer silently vanished."""
     pinned, numbered = _Pinned(), _Numbered()
@@ -746,6 +789,7 @@ def test_a_numbered_peer_skips_an_id_already_pinned():
     assert session.id_of("pinned") == 1 and session.id_of("numbered") == 2
 
 
+# @ac AC-CORE-001.5
 def test_two_peers_pinned_to_one_id_are_refused():
     session = ChatSession(connectors=[_Pinned()])
     with pytest.raises(ValueError, match="already taken"):
@@ -779,6 +823,7 @@ class _Bystander:
             await self.say("not my question", reply_to=msg.id)
 
 
+# @ac AC-CORE-008.1
 async def test_only_the_asked_peer_resolves_an_ask():
     asker, slow = _Asker(), _Slow()
     session = ChatSession(connectors=[asker, slow, _Bystander()])
@@ -797,6 +842,7 @@ def test_help_declares_only_what_it_uses():
 
 # === Workspaces through the builders ===============================================
 
+# @ac AC-CORE-029.6
 @pytest.mark.parametrize("build", ["chat", "mcp"])
 async def test_a_built_session_serves_workspaces(repo, build):
     from chatinho import HookWorkspace, WorkspaceGrant, connector, require

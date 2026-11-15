@@ -1,0 +1,143 @@
+specworks: 1
+# specworks configuration. It always lives in .specworks/config.yml, and
+# .specworks/ is the workflow folder: .specworks/changes/active/ (in-flight
+# changes) and .specworks/changes/archive/. Every module has the same layout.
+#
+# context: free text the agent reads before every phase (stack, conventions,
+# constraints). Keep it short; it is guidance, not documentation.
+context: |
+  chatinho: a chat library where everyone is a peer (Python 3.12+, managed with
+  uv; the terminal frontend is built on Textual). The core installs nothing:
+  every battery sits behind an extra and is imported on first use.
+
+  Four layers, each importing only what is below it, enforced by
+  tests/test_architecture.py: the framework (session.py, hooks.py, message.py,
+  query.py), support/parts (stdlib only, no part imports another), support/kits
+  (may need an extra), and the specializations (connectors, frontends, backends,
+  commands, routers, workspaces), which never import one another. Only
+  builder.py and __init__.py see all four.
+
+  A peer or a command is a plain class that declares its hooks with @require;
+  no base class but WorkspaceView and AgentPeer. Everything is a coroutine and
+  nothing may block the loop.
+
+  Tests in tests/<capability>/ (pytest, asyncio_mode auto); what crosses
+  capabilities stays in tests/, with conftest.py and fakes/. No two test files
+  share a name.
+
+  Conventions (CLAUDE.md has the full list and the reasons): typing.List /
+  Optional, not PEP 585/604; no `from __future__ import annotations`; %-style
+  logging; aligned `=` and `:`; line length 110; Google-style docstrings. A
+  pyproject.toml change needs `uv lock` beside it. docs/SPEC.md is the
+  reference for the hooks and is checked against the code.
+
+# Name of the folder, inside each capability's code path, that holds its
+# living docs (spec.md, requirements.md, design.md and its diagrams).
+docs_dir: docs
+
+# Name of the folder, inside this project's folder, that holds a test folder
+# per capability (<tests_dir>/<capability>/); a capability's own `tests:`
+# overrides it. The review gate runs only the touched capabilities' folders
+# with commands.test_scoped.
+# tests_dir: tests
+
+# Whether `specworks new` creates and switches to a branch for each change
+# (true, the default). Set it to false to stay on the current branch, e.g.
+# when the branch is chosen for you; `new --branch` / `--no-branch` override it.
+# branch_per_change: false
+
+# Capabilities: durable behaviours of the system and the code folder that owns
+# each one. `close` writes the capability's living docs into <path>/<docs_dir>/.
+# Requirement IDs are REQ-<prefix>-NNN; the prefix defaults to the capability
+# name in upper case (with the module name in front inside a module).
+# capabilities:
+#   user-auth:
+#     path: src/auth
+#     description: Login, sessions and password reset
+#     prefix: AUTH          # optional: REQ-AUTH-001 instead of REQ-USER-AUTH-001
+#     tests: src/auth/tests # optional: its test folder instead of <tests_dir>/user-auth
+capabilities:
+  framework:
+    path: src/chatinho
+    description: "The session, the hooks, messages and context: who hears, who answers, and the peers' lifecycle"
+    prefix: CORE
+  keys:
+    path: src/chatinho/support/parts/keys
+    description: "Key sources read late, and endpoint profiles"
+    prefix: KEYS
+  workspace-model:
+    path: src/chatinho/support/parts/workspace
+    description: "What a workspace is: the tree, declared operations, the reading view and the writing one"
+    prefix: WSM
+  agents:
+    path: src/chatinho/support/kits/agent
+    description: "The chat around an agent: AgentPeer, the factories, the tools and the workspace backend"
+    prefix: AGENT
+  connectors:
+    path: src/chatinho/connectors
+    description: "The peers that answer: OpenAI, a remote session over MCP, and the agents"
+    prefix: CONN
+  frontends:
+    path: src/chatinho/frontends
+    description: "Who speaks for the person: the terminal, and the session served over MCP"
+    prefix: FRONT
+  backends:
+    path: src/chatinho/backends
+    description: "The archive: keeping, loading and forgetting the conversation and its attachments"
+    prefix: BACK
+  commands:
+    path: src/chatinho/commands
+    description: "The commands /help, /test and /ws"
+    prefix: CMD
+  routers:
+    path: src/chatinho/routers
+    description: "Who answers a say that names nobody"
+    prefix: ROUTE
+  workspaces:
+    path: src/chatinho/workspaces
+    description: "The provider: one git worktree per peer, merge and drop"
+    prefix: WS
+
+# Modules: sub-projects with their own config (their own .specworks/config.yml),
+# like git submodules. Each one is a complete project (own context,
+# capabilities and changes) linked to this one. Add them with `specworks module add <path>`.
+# modules:
+#   billing: services/billing
+modules: {}
+
+# Globs used by `specworks trace` to find tests and source files, relative to
+# the project folder (the one holding .specworks/); they apply to this project's files, not to its modules'.
+# Empty means "scan everything that is not in the workflow folder", except
+# documentation (.md, .rst, .txt, ...): a tag quoted in a doc is not code or a test.
+# In a glob * and ? stay within one folder and ** spans any number of folders,
+# e.g. test_globs: ["tests/**/*.py"] or source_globs: ["src/**"].
+test_globs: ["tests/**/*.py"]
+source_globs: ["src/**/*.py"]
+
+# Commands the skills run, in this project's own tooling (any language).
+# A module's commands override the top level's, key by key.
+#   test: uv run pytest            # or: npm test, go test ./..., cargo test, ctest
+#   lint: uv run ruff check .
+# test_scoped runs only the test folders of the capabilities a change touches,
+# in the review gate ({paths} is replaced by them); validate runs test.
+#   test_scoped: uv run pytest {paths}
+commands:
+  test: uv run pytest -q
+  lint: uv run ruff check src tests examples
+  test_scoped: uv run pytest -q {paths}
+  typecheck: uv run mypy src/chatinho examples
+
+# Design diagrams are written in D2 (https://d2lang.com) and rendered to SVG
+# by `specworks diagrams`. Only the top-level settings are used, so every
+# diagram in the workspace shares one look (modules ignore theirs).
+# Themes by name or number - `specworks diagrams --themes` lists them, e.g.
+# neutral-default, neutral-grey, cool-classics, colorblind-clear, c4, origami;
+# dark mode: dark-mauve, dark-flagship-terrastruct, or none (same as theme).
+diagrams:
+  theme: neutral-default
+  dark_theme: dark-mauve
+  layout: elk           # elk or dagre
+  sketch: false         # true for a hand-drawn look
+
+# AI tools the skills are installed for (`specworks skills --tools` changes it).
+tools: [claude]
