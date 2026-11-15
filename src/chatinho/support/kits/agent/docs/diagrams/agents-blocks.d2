@@ -1,0 +1,37 @@
+direction: down
+
+connectors: agent connectors {
+  shape: page
+}
+kit: agents {
+  peer: peer.py {
+    tooltip: "AgentPeer: the hooks, a run per question, built lazily, rebuilt on the chat's shape"
+  }
+  factories: factory.py, basic.py, deep.py {
+    tooltip: "AgentFactory; BasicAgent (create_agent); DeepAgent (create_deep_agent)"
+  }
+  tools: tools.py {
+    tooltip: "the ask_, run_ and ws_ tools, and ask_user"
+  }
+  graph: graph.py, results.py {
+    tooltip: "extract, agent, verify, load; the answer's text and files"
+  }
+  backend: workspace_backend.py {
+    tooltip: "WorkspaceBackend: a workspace as a deep agents backend"
+  }
+  peer -> factories: build(model, tools, options, peer)
+  peer -> tools: the chat's shape
+  peer -> graph: the built agent
+  factories -> backend: "DeepAgent: own workspace, and each peer under /peers/"
+}
+session: session grants {
+  shape: page
+}
+workspace: workspace operations {
+  shape: page
+}
+
+connectors -> kit.peer: a factory and its defaults
+kit.tools -> session: ask, invoke, workspace
+kit.tools -> workspace: operations_of, minus covered
+kit.backend -> workspace: one operation per protocol method
