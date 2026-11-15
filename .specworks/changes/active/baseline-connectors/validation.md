@@ -16,11 +16,11 @@ Write "None." when there are no findings. -->
 
 ## Summary
 
-Verdict: FAIL (1 critical, 1 warnings)
+Verdict: PASS (0 critical, 1 warnings)
 
-- Completeness 10/11
+- Completeness 11/11
 - Correctness 7/8
 - Coherence 3/3
 
 Warnings:
-- the specs are the ones agreed when specify passed: REQ-CONN-007 changed; REQ-CONN-019 changed; REQ-CONN-020 changed; if that is intended, `specworks start design --change baseline-connectors` re-checks specify and accepts them; the tests and code then follow the new specs
+- the specs are the ones agreed when specify passed: REQ-CONN-007 changed; REQ-CONN-017 changed; REQ-CONN-019 changed; REQ-CONN-020 changed; if that is intended, `specworks start design --change baseline-connectors` re-checks specify and accepts them; the tests and code then follow the new specs
