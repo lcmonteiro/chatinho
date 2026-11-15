@@ -1,6 +1,6 @@
 name: baseline-connectors
 created: '2026-11-15T11:59:51'
-phase: review
+phase: validate
 specified:
   REQ-CONN-001: 4ac017508f68
   REQ-CONN-002: d83d0d86e4ac
@@ -26,24 +26,3 @@ specified:
   REQ-CONN-022: c71e296c5fb2
   REQ-CONN-023: 599ee7e9d0ad
   REQ-CONN-024: cc1d0c4cea17
-dirty:
-  .specworks/changes/active/baseline-connectors/.change.yaml: 136d8b087b7348aedcc5dc92dca88678789b0815fcfe442cfc3953f2c1ed593f
-  .specworks/changes/active/baseline-connectors/design.md: 80a634d2310ff6b28620720da96ac4fea732e13f0a97d391061989b0946be050
-  .specworks/changes/active/baseline-connectors/diagrams/connectors-blocks.d2: 8a184b157cd73e091b19ac3dc5df93c886d01ab705f5729c71490ba64b5baed0
-  .specworks/changes/active/baseline-connectors/diagrams/connectors-blocks.svg: 0ba61ba17583e0af9487387b77834386a32a9e23e387f42dd2a8d923a2f8a3cb
-  .specworks/changes/active/baseline-connectors/tasks.md: a577e0884ddb3e8402989108a3c5609212c8cf81d9b4d8b149b47608a1ae5631
-  .specworks/changes/active/baseline-connectors/traceability.md: 512a137e911241356962c499629f88e3f7b3e1e95d815c5a5ab2b3ffc474ebf2
-  src/chatinho/connectors/agents/basic.py: b5f121286eb1c6e25b131fbc4090fa3f2ce08e488edbd08050c7e06dbbeb9aae
-  src/chatinho/connectors/agents/deep.py: a5795b63896e5cbd9e9938f0e8d717b71988465ef7005300dd2b76c6cbb7694b
-  src/chatinho/connectors/mcp.py: 76a5b3900901f56f1e66752e95f0140fd4b33ea287455dec81701b292bdde7e4
-  src/chatinho/connectors/openai.py: 652b20d5d1e3a9b0505847c0b1d1634ce3b13157490f9f79e9383757cb2409bc
-  src/chatinho/support/kits/agent/deep.py: e01ecef2daedc7c9e7af1e76f11d5d5845ddead246a440aa9262a97ffd501ad6
-  src/chatinho/support/kits/agent/graph.py: 0d4cb43e33e8b11b0a433346b905dd3ec5dd335fe31ce9b5bd6fd8a822c9080f
-  src/chatinho/support/kits/agent/peer.py: d5d14d90bdc5fda1324ea0b5f3ff839c7843e0ea1230407eff3da094c762c104
-  src/chatinho/support/kits/agent/results.py: ab35bf8a03f57f9c4d56f18e7f92146ec6268fa9fee67aae23f9688f9dfe0c5e
-  src/chatinho/support/kits/agent/tools.py: 4d1a8256c7a9754b0ecb1bc207ea1b12201f84c305948755dc8c4f1d730ef0af
-  src/chatinho/support/parts/memory.py: d2e2b6133971d074ae98959f07f57e84b1af85cbecbcb3872f273462e651dcc0
-  tests/connectors/test_basic_agent_connector.py: 4c1b551990d5dea3381044ee3f8a49020fe075a634cbd6d32985d4976c9f23b7
-  tests/connectors/test_deep_agent_connector.py: bce6eb8d73f5a90aad1d960bf45b40a0dc9c60adc564afc8a0bef51fb07fdc3a
-  tests/connectors/test_mcp_connector.py: 3c5e7de9f5932a43bfcffa024e686e64fd737781c0ed7fa752393bfbd4e6739a
-  tests/connectors/test_openai_connector.py: e58bf1866403462e8bb7e22f247a3c3acf824ad68a6467e80be859aacdf716b7
