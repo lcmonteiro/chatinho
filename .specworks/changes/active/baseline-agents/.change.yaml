@@ -1,0 +1,5 @@
+name: baseline-agents
+created: '2026-11-15T08:49:29'
+phase: specify
+dirty:
+  .specworks/changes/active/baseline-agents/.change.yaml: 7e82bb423255366bb33a74d333ed07d05efe8087d768ea36d5f541dc114c5aa6
