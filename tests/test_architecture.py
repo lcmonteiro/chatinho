@@ -454,6 +454,7 @@ def test_the_package_description_counts_the_hooks():
     assert _COUNTS.index(said[-1]) == len(ALL_HOOKS)
 
 
+# @ac AC-AGENT-004.2
 def test_the_basic_agent_needs_no_deepagents():
     """What the agent connectors share, and the basic one, import with deep agents blocked."""
     script = """
@@ -477,6 +478,7 @@ print("deepagents" in sys.modules)
     assert done.stdout.split() == ["deep-blocked", "False"]
 
 
+# @ac AC-AGENT-011.1
 def test_using_a_workspace_does_not_import_deepagents(repo):
     """The adapter is behind its extra: a workspace in a plain session must not pull it in."""
     script = """

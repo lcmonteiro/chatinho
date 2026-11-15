@@ -37,6 +37,7 @@ async def backends(repo):
 
 # === What it is =====================================================================
 
+# @ac AC-AGENT-005.1
 async def test_it_is_a_backend_and_not_a_sandbox(repo):
     mine, _ = await backends(repo)
     assert isinstance(mine, BackendProtocol)
@@ -45,6 +46,7 @@ async def test_it_is_a_backend_and_not_a_sandbox(repo):
 
 # === Paths ==========================================================================
 
+# @ac AC-AGENT-006.1
 async def test_a_rooted_path(repo):
     mine, _ = await backends(repo)
     await mine.awrite("/src/app.py", "x = 1\n")
@@ -54,12 +56,14 @@ async def test_a_rooted_path(repo):
     assert got.file_data["content"] == "x = 1\n"
 
 
+# @ac AC-AGENT-006.2
 async def test_escaping(repo):
     mine, _ = await backends(repo)
     got = await mine.aread("/../../etc/passwd")
     assert got.error is not None and "outside" in got.error and got.file_data is None
 
 
+# @ac AC-AGENT-006.3
 async def test_paths_come_back_absolute(repo):
     mine, _ = await backends(repo)
     await mine.awrite("/src/app.py", "")
@@ -72,12 +76,14 @@ async def test_paths_come_back_absolute(repo):
 
 # === Results, never exceptions =====================================================
 
+# @ac AC-AGENT-007.1
 async def test_a_missing_file(repo):
     mine, _ = await backends(repo)
     got = await mine.aread("/nope.txt")
     assert got.error is not None and "nope.txt" in got.error
 
 
+# @ac AC-AGENT-007.2
 async def test_an_ambiguous_edit(repo):
     mine, _ = await backends(repo)
     await mine.awrite("/a.txt", "x\nx\n")
@@ -88,6 +94,7 @@ async def test_an_ambiguous_edit(repo):
     assert (done.path, done.occurrences, done.error) == ("/a.txt", 2, None)
 
 
+# @ac AC-AGENT-007.3
 async def test_a_glob_with_dot_dot(repo):
     mine, _ = await backends(repo)
     assert (await mine.aglob("../*")).error is not None
@@ -95,6 +102,7 @@ async def test_a_glob_with_dot_dot(repo):
 
 # === Each method through its operation ==============================================
 
+# @ac AC-AGENT-008.1
 async def test_read_reports_its_window(repo):
     mine, _ = await backends(repo)
     await mine.awrite("/ten.txt", "".join("%d\n" % n for n in range(1, 11)))
@@ -107,6 +115,7 @@ async def test_read_reports_its_window(repo):
     assert (await mine.aread("/ten.txt", limit=0)).no_lines_requested
 
 
+# @ac AC-AGENT-008.2
 async def test_literal_grep(repo):
     mine, _ = await backends(repo)
     await mine.awrite("/a.py", "a.b(1)\naxb(2)\n")
@@ -114,6 +123,7 @@ async def test_literal_grep(repo):
     assert found.matches == [{"path": "/a.py", "line": 1, "text": "a.b(1)"}]
 
 
+# @ac AC-AGENT-008.3
 async def test_max_count(repo):
     mine, _ = await backends(repo)
     await mine.awrite("/many.txt", "hit\n" * 30)
@@ -122,6 +132,7 @@ async def test_max_count(repo):
     assert len((await mine.agrep("hit")).matches or []) == 30
 
 
+# @ac AC-AGENT-008.4
 async def test_a_write_goes_through_the_lock(repo):
     order : List[str] = []
 
@@ -139,6 +150,7 @@ async def test_a_write_goes_through_the_lock(repo):
     assert order == ["start owner", "end owner", "start agent", "end agent"]
 
 
+# @ac AC-AGENT-008.5
 async def test_uploads_and_downloads(repo):
     mine, _ = await backends(repo)
     up = await mine.aupload_files([("/blob.bin", b"\x00\xff"), ("/../x", b"no")])
@@ -149,6 +161,7 @@ async def test_uploads_and_downloads(repo):
 
 # === A view refuses writes ==========================================================
 
+# @ac AC-AGENT-009.1
 async def test_writing_to_someone_elses_workspace(repo):
     _, theirs = await backends(repo)
     root = theirs.workspace.tree.root
@@ -164,6 +177,7 @@ async def test_writing_to_someone_elses_workspace(repo):
 
 # === Async only =====================================================================
 
+# @ac AC-AGENT-010.1
 async def test_called_synchronously(repo):
     mine, _ = await backends(repo)
     with pytest.raises(NotImplementedError, match="async only"):
@@ -187,6 +201,7 @@ def steps(*calls: Dict[str, Any], answer: str = "done") -> Any:
     return script
 
 
+# @ac AC-AGENT-005.2
 async def test_a_deep_agent_works_in_the_workspace(repo):
     mine, _ = await backends(repo)
     agent = create_deep_agent(model=fake(steps(
@@ -198,6 +213,7 @@ async def test_a_deep_agent_works_in_the_workspace(repo):
     assert "fixed = True" in out["messages"][-1].content
 
 
+# @ac AC-AGENT-005.3
 async def test_a_composite_reads_a_peer_and_cannot_write_it(repo):
     mine, theirs = await backends(repo)
     composite = CompositeBackend(default=mine, routes={"/peers/reviewer/": theirs})
