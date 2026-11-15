@@ -114,6 +114,7 @@ class Tree:
 
     # === Paths ======================================================================
 
+    # @req REQ-WSM-002
     def resolve(self, path: str) -> Path:
         """
         The absolute path of *path*, relative to the root, refusing any way out.
@@ -163,6 +164,7 @@ class Tree:
         """
         return await run_git(cwd or self.root, *self._identity, *args, env=env, check=check)
 
+    # @req REQ-WSM-005, REQ-WSM-007
     async def files(self, path: str = ".", glob: Optional[str] = None) -> List[str]:
         """
         The files under *path* git tracks or would track, relative to the root.

@@ -41,6 +41,7 @@ class Operation:
     parameters  : Tuple[inspect.Parameter, ...]
 
 
+# @req REQ-WSM-001, REQ-WSM-010
 def operation(description: str, writes: bool = False) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Declares a method an operation of its workspace.
@@ -74,6 +75,7 @@ def operation(description: str, writes: bool = False) -> Callable[[Callable[...,
     return decorator
 
 
+# @req REQ-WSM-001
 def operations_of(cls: Any) -> List[Operation]:
     """
     Returns the operations a view or workspace class declares, inherited ones included.

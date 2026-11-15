@@ -25,12 +25,14 @@ async def own(repo, name: str = "dev") -> Workspace:
 
 # === Declaring operations ===========================================================
 
+# @ac AC-WSM-001.1
 def test_the_default_view_operations_in_order():
     ops = operations_of(WorkspaceView)
     assert [op.name for op in ops] == ["ls", "read", "glob", "grep", "diff", "log"]
     assert not any(op.writes for op in ops)
 
 
+# @ac AC-WSM-001.2
 def test_a_workspace_inherits_the_view_and_adds_writing_ones():
     ops = operations_of(Workspace)
     assert [op.name for op in ops] == ["ls", "read", "glob", "grep", "diff", "log",
@@ -38,16 +40,19 @@ def test_a_workspace_inherits_the_view_and_adds_writing_ones():
     assert [op.name for op in ops if op.writes] == ["write", "edit", "delete", "commit"]
 
 
+# @ac AC-WSM-001.3
 def test_an_operation_carries_its_description_and_parameters():
     grep = next(op for op in operations_of(WorkspaceView) if op.name == "grep")
     assert "regular expression" in grep.description
     assert [p.name for p in grep.parameters] == ["pattern", "path", "glob", "multiline", "limit"]
 
 
+# @ac AC-WSM-001.4
 def test_operations_of_an_instance_is_of_its_class():
     assert operations_of(WorkspaceView) == operations_of(WorkspaceView.__new__(WorkspaceView))
 
 
+# @ac AC-WSM-001.5
 def test_a_plain_def_is_refused_where_the_class_is_defined():
     with pytest.raises(TypeError, match="symbols"):
         class Broken(WorkspaceView):
@@ -56,6 +61,7 @@ def test_a_plain_def_is_refused_where_the_class_is_defined():
                 return []
 
 
+# @ac AC-WSM-001.6
 def test_an_added_operation_is_discovered():
     class MyView(WorkspaceView):
         @operation("List the symbols in a file")
@@ -67,18 +73,21 @@ def test_an_added_operation_is_discovered():
 
 # === The Tree: the one door to a path ===============================================
 
+# @ac AC-WSM-002.1
 async def test_dot_dot_is_refused(repo):
     ws = await own(repo)
     with pytest.raises(ValueError, match="outside"):
         await ws.read("../../etc/passwd")
 
 
+# @ac AC-WSM-002.2
 async def test_an_absolute_path_is_refused(repo):
     ws = await own(repo)
     with pytest.raises(ValueError, match="absolute"):
         await ws.read("/etc/passwd")
 
 
+# @ac AC-WSM-002.3
 async def test_a_link_out_of_the_workspace_is_refused(repo, tmp_path):
     ws = await own(repo)
     secret = tmp_path / "secret.txt"
@@ -88,6 +97,7 @@ async def test_a_link_out_of_the_workspace_is_refused(repo, tmp_path):
         await ws.read("link.txt")
 
 
+# @ac AC-WSM-002.4
 async def test_git_metadata_is_not_reachable(repo):
     ws = await own(repo)
     with pytest.raises(ValueError, match="metadata"):
@@ -96,6 +106,7 @@ async def test_git_metadata_is_not_reachable(repo):
 
 # === Reading ========================================================================
 
+# @ac AC-WSM-003.1
 async def test_ls_marks_directories_and_hides_git(repo):
     ws = await own(repo)
     await ws.write("src/app.py", "x = 1\n")
@@ -103,6 +114,7 @@ async def test_ls_marks_directories_and_hides_git(repo):
     assert await ws.ls("src") == ["app.py"]
 
 
+# @ac AC-WSM-004.1
 async def test_reading_a_window(repo):
     ws = await own(repo)
     await ws.write("ten.txt", "".join("line %d\n" % n for n in range(1, 11)))
@@ -110,6 +122,7 @@ async def test_reading_a_window(repo):
     assert got == Lines("line 5\nline 6\nline 7\n", start=5, more=True)
 
 
+# @ac AC-WSM-004.2
 async def test_a_window_past_the_end_says_nothing_remains(repo):
     ws = await own(repo)
     await ws.write("ten.txt", "".join("line %d\n" % n for n in range(1, 11)))
@@ -117,6 +130,7 @@ async def test_a_window_past_the_end_says_nothing_remains(repo):
     assert (got.text, got.start, got.more) == ("line 9\nline 10\n", 9, False)
 
 
+# @ac AC-WSM-004.3
 async def test_degenerate_windows_do_not_fail(repo):
     ws = await own(repo)
     await ws.write("ten.txt", "a\nb\n")
@@ -124,12 +138,14 @@ async def test_degenerate_windows_do_not_fail(repo):
     assert (await ws.read("ten.txt", limit=0)).text == ""
 
 
+# @ac AC-WSM-002.5
 async def test_reading_a_missing_file_names_it(repo):
     ws = await own(repo)
     with pytest.raises(FileNotFoundError, match="nope.txt"):
         await ws.read("nope.txt")
 
 
+# @ac AC-WSM-004.4
 async def test_reading_uncommitted_work_through_a_view(repo):
     provider = GitWorktrees(repo)
     dev      = await provider.provision("dev", "dev")
@@ -138,6 +154,7 @@ async def test_reading_uncommitted_work_through_a_view(repo):
     assert (await view.read("a.txt")).text == "work in progress\n"
 
 
+# @ac AC-WSM-005.1
 async def test_glob_matches_a_name_at_any_depth(repo):
     ws = await own(repo)
     await ws.write("a.py", "")
@@ -148,6 +165,7 @@ async def test_glob_matches_a_name_at_any_depth(repo):
     assert await ws.glob("*.py", path="src") == ["src/app/main.py"]
 
 
+# @ac AC-WSM-005.2
 async def test_glob_leaves_ignored_files_out(repo):
     ws = await own(repo)
     await ws.write("kept.log.txt", "")
@@ -156,6 +174,7 @@ async def test_glob_leaves_ignored_files_out(repo):
     assert await ws.glob("*") == [".gitignore", "README.md", "kept.log.txt"]
 
 
+# @ac AC-WSM-006.1
 async def test_the_diff_shows_committed_and_uncommitted_work(repo):
     ws = await own(repo)
     await ws.write("a.txt", "committed\n")
@@ -166,6 +185,7 @@ async def test_the_diff_shows_committed_and_uncommitted_work(repo):
     assert "b.txt" in diff and "+not yet" in diff
 
 
+# @ac AC-WSM-006.2
 async def test_the_diff_leaves_the_owners_index_alone(repo):
     ws = await own(repo)
     await ws.write("b.txt", "not yet\n")
@@ -173,6 +193,7 @@ async def test_the_diff_leaves_the_owners_index_alone(repo):
     assert (await ws.tree.git("diff", "--cached", "--name-only")).strip() == ""
 
 
+# @ac AC-WSM-006.3
 async def test_the_log_is_newest_first(repo):
     ws = await own(repo)
     await ws.write("a.txt", "1")
@@ -189,6 +210,7 @@ async def test_the_log_is_newest_first(repo):
 SOURCE = "class C:\n\n    def answer(self):\n        x = 1\n        return Reply(x)\n"
 
 
+# @ac AC-WSM-007.1
 async def test_a_match_on_one_line(repo):
     ws = await own(repo)
     await ws.write("c.py", SOURCE)
@@ -197,6 +219,7 @@ async def test_a_match_on_one_line(repo):
     assert found.matches[0].text == "    def answer(self):\n"
 
 
+# @ac AC-WSM-007.2
 async def test_a_match_across_lines(repo):
     ws = await own(repo)
     await ws.write("c.py", SOURCE)
@@ -205,12 +228,14 @@ async def test_a_match_across_lines(repo):
     assert "def answer" in found.matches[0].text and "return Reply" in found.matches[0].text
 
 
+# @ac AC-WSM-007.3
 async def test_the_same_pattern_without_multiline(repo):
     ws = await own(repo)
     await ws.write("c.py", SOURCE)
     assert (await ws.grep(r"def answer\(.*?return")).matches == ()
 
 
+# @ac AC-WSM-007.4
 async def test_ignored_files_are_not_searched(repo):
     ws = await own(repo)
     await ws.write("debug.log", "needle\n")
@@ -218,6 +243,7 @@ async def test_ignored_files_are_not_searched(repo):
     assert [m.path for m in (await ws.grep("needle")).matches] == ["kept.txt"]
 
 
+# @ac AC-WSM-007.5
 async def test_grep_filters_by_glob(repo):
     ws = await own(repo)
     await ws.write("a.py", "needle\n")
@@ -225,6 +251,7 @@ async def test_grep_filters_by_glob(repo):
     assert [m.path for m in (await ws.grep("needle", glob="*.py")).matches] == ["a.py"]
 
 
+# @ac AC-WSM-007.6
 async def test_more_matches_than_the_limit(repo):
     ws = await own(repo)
     await ws.write("many.txt", "hit\n" * 150)
@@ -232,6 +259,7 @@ async def test_more_matches_than_the_limit(repo):
     assert len(found.matches) == 100 and found.truncated
 
 
+# @ac AC-WSM-007.7
 async def test_exactly_the_limit_is_not_truncated(repo):
     ws = await own(repo)
     await ws.write("many.txt", "hit\n" * 5)
@@ -239,12 +267,14 @@ async def test_exactly_the_limit_is_not_truncated(repo):
     assert len(found.matches) == 5 and not found.truncated
 
 
+# @ac AC-WSM-007.8
 async def test_a_bad_pattern(repo):
     ws = await own(repo)
     with pytest.raises(ValueError, match="Invalid pattern"):
         await ws.grep("(unclosed")
 
 
+# @ac AC-WSM-007.9
 async def test_a_long_match_is_cut_and_says_so(repo):
     ws = await own(repo)
     await ws.write("long.txt", "start" + "x" * 2000 + "\n")
@@ -252,6 +282,7 @@ async def test_a_long_match_is_cut_and_says_so(repo):
     assert len(text) < 600 and "cut" in text
 
 
+# @ac AC-WSM-007.10
 async def test_binary_files_are_skipped(repo):
     ws = await own(repo)
     await ws.tree.write_bytes("blob.bin", b"needle\xff\xfe\n")
@@ -261,12 +292,14 @@ async def test_binary_files_are_skipped(repo):
 
 # === Writing ========================================================================
 
+# @ac AC-WSM-008.1
 async def test_write_creates_folders(repo):
     ws = await own(repo)
     await ws.write("deep/er/a.txt", "hi")
     assert (ws.tree.root / "deep/er/a.txt").read_text() == "hi"
 
 
+# @ac AC-WSM-008.2
 async def test_an_exact_edit(repo):
     ws = await own(repo)
     await ws.write("a.txt", "x = 1\n")
@@ -274,6 +307,7 @@ async def test_an_exact_edit(repo):
     assert (await ws.read("a.txt")).text == "x = 2\n"
 
 
+# @ac AC-WSM-008.3
 async def test_an_ambiguous_edit_changes_nothing(repo):
     ws = await own(repo)
     await ws.write("a.txt", "x = 1\nx = 1\n")
@@ -283,6 +317,7 @@ async def test_an_ambiguous_edit_changes_nothing(repo):
     assert await ws.edit("a.txt", "x = 1", "x = 2", replace_all=True) == 2
 
 
+# @ac AC-WSM-008.4
 async def test_an_edit_of_text_that_is_not_there(repo):
     ws = await own(repo)
     await ws.write("a.txt", "x = 1\n")
@@ -290,6 +325,7 @@ async def test_an_edit_of_text_that_is_not_there(repo):
         await ws.edit("a.txt", "y", "z")
 
 
+# @ac AC-WSM-008.5
 async def test_delete_a_file_and_a_folder(repo):
     ws = await own(repo)
     await ws.write("a.txt", "")
@@ -301,6 +337,7 @@ async def test_delete_a_file_and_a_folder(repo):
         await ws.delete("a.txt")
 
 
+# @ac AC-WSM-009.1
 async def test_write_commit_log(repo):
     ws = await own(repo)
     await ws.write("a.txt", "a")
@@ -309,6 +346,7 @@ async def test_write_commit_log(repo):
     assert newest.endswith(" add a") and sha.startswith(newest.split(" ")[0])
 
 
+# @ac AC-WSM-009.2
 async def test_the_commit_is_authored_by_the_peer(repo):
     ws = await own(repo)
     await ws.write("a.txt", "a")
@@ -316,6 +354,7 @@ async def test_the_commit_is_authored_by_the_peer(repo):
     assert (await ws.tree.git("log", "-1", "--format=%an")).strip() == "dev"
 
 
+# @ac AC-WSM-009.3
 async def test_nothing_to_commit(repo):
     ws = await own(repo)
     with pytest.raises(ValueError, match="Nothing to commit"):
@@ -323,6 +362,7 @@ async def test_nothing_to_commit(repo):
     assert await ws.log() == []
 
 
+# @ac AC-WSM-009.4
 async def test_the_base_is_untouched(repo):
     ws = await own(repo)
     before = (await ws.tree.git("rev-parse", "main")).strip()
@@ -351,6 +391,7 @@ class Slow(Workspace):
         self.events.append("end " + tag)
 
 
+# @ac AC-WSM-010.1
 async def test_writes_run_one_at_a_time_in_call_order(repo):
     ws = await GitWorktrees(repo, workspace=Slow).provision("dev", "dev")
     Slow.events = []
@@ -358,6 +399,7 @@ async def test_writes_run_one_at_a_time_in_call_order(repo):
     assert Slow.events == ["start 1", "end 1", "start 2", "end 2"]
 
 
+# @ac AC-WSM-010.2
 async def test_reads_do_not_wait_for_each_other(repo):
     ws = await GitWorktrees(repo, workspace=Slow).provision("dev", "dev")
     Slow.events = []
@@ -367,6 +409,7 @@ async def test_reads_do_not_wait_for_each_other(repo):
     assert time.monotonic() - begun < 0.18
 
 
+# @ac AC-WSM-010.3
 async def test_two_writes_of_one_file_end_with_the_last_called(repo):
     ws = await own(repo)
     await asyncio.gather(ws.write("a.txt", "first"), ws.write("a.txt", "second"))

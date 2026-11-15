@@ -81,6 +81,7 @@ def _cut(text: str) -> str:
     return text[:MATCH_TEXT_LIMIT] + "… [cut: %d more characters]" % (len(text) - MATCH_TEXT_LIMIT)
 
 
+# @req REQ-WSM-007
 def _search(tree: Tree, names: List[str], regex: "re.Pattern[str]", multiline: bool,
             limit: int) -> Matches:
     """The search itself, run in a thread: it reads files and it can be long."""
@@ -129,6 +130,7 @@ class WorkspaceView:
     def __repr__(self) -> str:
         return "%s(%r)" % (type(self).__name__, self.name)
 
+    # @req REQ-WSM-003
     @operation("List a directory of the workspace; directories end with '/'")
     async def ls(self, path: str = ".") -> List[str]:
         """
@@ -146,6 +148,7 @@ class WorkspaceView:
                           for entry in os.scandir(full) if entry.name != GIT_DIR)
         return await asyncio.to_thread(entries)
 
+    # @req REQ-WSM-002, REQ-WSM-004
     @operation("Read a file of the workspace, a window of lines at a time")
     async def read(self, path: str, offset: int = 0, limit: int = 2000) -> Lines:
         """
@@ -166,6 +169,7 @@ class WorkspaceView:
         window = lines[offset:offset + limit]
         return Lines("".join(window), offset + 1, offset + limit < len(lines))
 
+    # @req REQ-WSM-005
     @operation("Find files of the workspace by a glob pattern (*, **, ?)")
     async def glob(self, pattern: str, path: str = ".") -> List[str]:
         """
@@ -176,6 +180,7 @@ class WorkspaceView:
         """
         return await self.tree.files(path, pattern)
 
+    # @req REQ-WSM-007
     @operation("Search the workspace's files with a regular expression, optionally across lines")
     async def grep(
         self,
@@ -215,6 +220,7 @@ class WorkspaceView:
         names = await self.tree.files(path, glob)
         return await asyncio.to_thread(_search, self.tree, names, regex, multiline, limit)
 
+    # @req REQ-WSM-006
     @operation("Show the workspace's work: the working tree against where its branch left the base")
     async def diff(self) -> str:
         """
@@ -231,6 +237,7 @@ class WorkspaceView:
             await self.tree.git("add", "-A", env=env)
             return await self.tree.git("diff", "--cached", "--no-color", merge_base, env=env)
 
+    # @req REQ-WSM-006
     @operation("List the workspace's commits that are not on the base, newest first")
     async def log(self) -> List[str]:
         """Each commit on the branch and not on the base, as its short id and subject."""
@@ -245,11 +252,13 @@ class Workspace(WorkspaceView):
     Every operation here writes, so each runs under the workspace's lock.
     """
 
+    # @req REQ-WSM-008
     @operation("Write a file of the workspace, creating the folders it needs", writes=True)
     async def write(self, path: str, text: str) -> None:
         """Writes *text* to the file at *path*, replacing what it held."""
         await self.tree.write_bytes(path, text.encode("utf-8"))
 
+    # @req REQ-WSM-008
     @operation("Replace exact text in a file of the workspace", writes=True)
     async def edit(self, path: str, old: str, new: str, replace_all: bool = False) -> int:
         """
@@ -282,6 +291,7 @@ class Workspace(WorkspaceView):
         await self.tree.write_bytes(path, text.replace(old, new).encode("utf-8"))
         return count
 
+    # @req REQ-WSM-008
     @operation("Delete a file, or a folder and everything in it, from the workspace", writes=True)
     async def delete(self, path: str) -> None:
         """
@@ -304,6 +314,7 @@ class Workspace(WorkspaceView):
                 full.unlink()
         await asyncio.to_thread(remove)
 
+    # @req REQ-WSM-009
     @operation("Commit every change in the workspace on its own branch", writes=True)
     async def commit(self, message: str) -> str:
         """
