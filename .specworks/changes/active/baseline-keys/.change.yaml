@@ -1,6 +1,6 @@
 name: baseline-keys
 created: '2026-11-14T19:53:38'
-phase: review
+phase: validate
 specified:
   REQ-KEYS-001: 8c3c7d24bc6f
   REQ-KEYS-002: 8f8fcb642ac4
@@ -14,14 +14,3 @@ specified:
   REQ-KEYS-010: 21740d93ed5b
   REQ-KEYS-011: 35f89ab18dd2
   REQ-KEYS-012: a9c2681505e0
-dirty:
-  .specworks/changes/active/baseline-keys/.change.yaml: 9e995093499771844731b32c5a099a4a7bedd1ea278a13787387cf3daa215a3e
-  .specworks/changes/active/baseline-keys/design.md: 5c896629de068308678744fc5e61223f14d208fe9d4fb1436594c78abbd154fd
-  .specworks/changes/active/baseline-keys/diagrams/keys-blocks.d2: 95c6eb626e44bf3599d9e3fdda88b532c2e67b211e3b07da86a036593508550d
-  .specworks/changes/active/baseline-keys/diagrams/keys-blocks.svg: c0cb13a7c42f6af1b315cd0df6304d83da5c8d15d38fc868ee936d5ac501718a
-  .specworks/changes/active/baseline-keys/tasks.md: 2e9db4397a81deb5d34ef86884a6c99078e32026c1e7be439bb18797595a499a
-  .specworks/changes/active/baseline-keys/traceability.md: 680ae7b8e159c0221d242d4f24eeb74fdb34cb17d47e36852b4b8e32ac62eb00
-  src/chatinho/support/parts/keys/endpoint.py: 7ba2651368317d30877158c529c0ffa243e43780ad3aa3da8b8adba89eb2b7ae
-  src/chatinho/support/parts/keys/sources.py: 01a066fef2261ec9a31bb07c58981fdf272a0f9d5e2255c1167c1f6f6869170e
-  tests/keys/test_endpoint.py: fd2179847c66196ebd75ceb95df218f23c7acbbc635c595fd673d6ba34b0821e
-  tests/keys/test_keys.py: e2c4419f4769c9fb7674277fcc32bcbfe2571dd08e5b3ac9c9d48ed31724d165
