@@ -1,6 +1,6 @@
 name: baseline-workspace-model
 created: '2026-11-15T00:52:14'
-phase: review
+phase: validate
 specified:
   REQ-WSM-001: f200edea54f5
   REQ-WSM-002: eca0a1afe44a
@@ -12,14 +12,3 @@ specified:
   REQ-WSM-008: efaa2aa5fd16
   REQ-WSM-009: 7806ae6bc238
   REQ-WSM-010: d27b6fc02b32
-dirty:
-  .specworks/changes/active/baseline-workspace-model/.change.yaml: f72f4ecf0c3222aa944b278d44948cddec39b160a9a2162344b9c4c265bceebd
-  .specworks/changes/active/baseline-workspace-model/design.md: 36c3de4838762d1d1b8a942d2071be36f76f88a31a8ecc552ef025fde3e9b2d8
-  .specworks/changes/active/baseline-workspace-model/diagrams/workspace-model-blocks.d2: 59a4eba28ce4df14fed083791bd548f99cd6e430e3be26c1e7e1944d6e7aef61
-  .specworks/changes/active/baseline-workspace-model/diagrams/workspace-model-blocks.svg: 9961b9650c268dc68e865446799a7e2eec197c0738bbafd32a987e88e3cf7fdd
-  .specworks/changes/active/baseline-workspace-model/tasks.md: fe790a1670895d5def10b1415d669d26436a930e7e3acab633521945f8351ab1
-  .specworks/changes/active/baseline-workspace-model/traceability.md: d5400fb13ea7ea3d665a12cdd63a2d2b115fef8d3b7e651b85151170bb0bd615
-  src/chatinho/support/parts/workspace/operations.py: c64a31c4206d8e125c64700681b1ad4721bf56a54c719706f42730ebc6ddc401
-  src/chatinho/support/parts/workspace/tree.py: f3ab72e402ee9877f5ee344f78d00c98701eb82b4a3ad9172c8e035e5df7e454
-  src/chatinho/support/parts/workspace/views.py: 07c5b5fc9feb7e5c4eef34c1bfd9bb37f9629802a2254c8d22cfe3ce0c3af878
-  tests/workspace-model/test_workspace_operations.py: bde0a20691e39dfa99b05ffced8e96acf6a367e4d65c953265bdaed85bc2b143
