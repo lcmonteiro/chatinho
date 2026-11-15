@@ -1,6 +1,6 @@
 name: baseline-workspace-model
 created: '2026-11-15T00:52:14'
-phase: close
+phase: done
 specified:
   REQ-WSM-001: f200edea54f5
   REQ-WSM-002: eca0a1afe44a
