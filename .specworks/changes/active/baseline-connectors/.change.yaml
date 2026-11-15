@@ -1,0 +1,5 @@
+name: baseline-connectors
+created: '2026-11-15T11:59:51'
+phase: specify
+dirty:
+  .specworks/changes/active/baseline-connectors/.change.yaml: 7ba41a01d124b3ee2574770a394a0608900b6472f8d6174058735d08223363d9
