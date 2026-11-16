@@ -568,7 +568,9 @@ src/chatinho/
       clipboard.py OSC 52's second route: a clipboard helper, if the system has one
       style.py     ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
 docs/              SPEC.md — the seventeen hooks, with an example and a cost for each
-openspec/          specs/ (what the library promises), changes/ (in flight, then archive/)
+.specworks/        config.yml (capabilities, commands, context), changes/ (active/, then archive/)
+  docs/            architecture.md: the ten capabilities and how they fit; each capability's
+                   living spec is in its own <path>/docs/
 examples/          assistant.py, team.py, files.py (LLM demos: parts() + main()), lab_server.py / lab_client.py /
                    lab_fastmcp_client.py (a model over MCP, lent keys), inbox.py (HTTP, inbound), hooks.py (one peer per hook),
                    workspaces.py (two agents in git worktrees: dev commits, reviewer reads its diff)
@@ -1141,13 +1143,16 @@ pytest -q
 The examples are type-checked because `examples/hooks.py` is `docs/SPEC.md` made executable, and
 an example that passes the wrong type teaches it to everyone who copies it.
 
-CI also runs a fourth job, `openspec`: `openspec validate --all --strict --no-interactive`.
-
-**New behavior is planned with OpenSpec first.** `/opsx:propose` writes a change under
-`openspec/changes/` (proposal, delta specs, design, tasks), `/opsx:apply` implements it and
-`/opsx:archive` folds its specs into `openspec/specs/`. Artifacts are written in English.
-`openspec/specs/` starts empty: capabilities appear as changes land, and `docs/SPEC.md` stays the
-reference for the hooks until they are specified there.
+**New behavior is planned with specworks first.** The library is ten capabilities, registered
+in `.specworks/config.yml`, each with a living spec next to its code (`<path>/docs/spec.md`,
+`requirements.md`, `design.md`); `docs/architecture.md` draws them. A change goes through
+`/specworks-refine` → `/specworks-specify` → `/specworks-build` → `/specworks-done`, one at a time,
+in `.specworks/changes/active/`, and its close folds its delta specs into the living ones. Never
+edit a living spec by hand: close writes it. Tests carry `# @ac AC-…` and code `# @req REQ-…`;
+tags are scanned in `tests/**/*.py` and `src/**/*.py` only. A change with no behaviour change
+(docs, tooling) is marked `specworks skip-specs`. The review gate runs only the touched
+capabilities' tests (`tests/<capability>/`), and validate the whole suite. Artifacts are written
+in English. `docs/SPEC.md` stays the reference for the hooks, checked against the code.
 
 `pyproject.toml` sets `asyncio_mode = "auto"`: every peer is a coroutine, so every test that
 drives one is too, and marking each of them would be noise.

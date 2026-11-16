@@ -1,7 +1,7 @@
 """
 context(Query(...)): which part of the conversation a peer gets.
 
-See openspec/specs/conversation-context.
+See src/chatinho/docs/spec.md.
 """
 
 from datetime import datetime, timedelta

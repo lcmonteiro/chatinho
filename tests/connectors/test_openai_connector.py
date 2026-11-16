@@ -1,7 +1,7 @@
 """
 OpenAIConnector against a stubbed AsyncOpenAI: memory, keys, failures, no blocking.
 
-See openspec/specs/openai-connector.
+See src/chatinho/connectors/docs/spec.md.
 """
 
 import asyncio

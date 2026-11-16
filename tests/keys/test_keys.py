@@ -1,7 +1,7 @@
 """
 Key sources: where a key lives, read when needed, and never shown.
 
-See openspec/specs/key-sources.
+See src/chatinho/support/parts/keys/docs/spec.md.
 """
 
 import os

@@ -1,7 +1,4 @@
 {
-  "env": {
-    "OPENSPEC_TELEMETRY": "0"
-  },
   "hooks": {
     "SessionStart": [
       {
