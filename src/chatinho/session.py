@@ -147,6 +147,7 @@ class ChatSession:
             # the thing declared, not by which parameter it arrived in.
             self.add_connector(backend)
         if router is not None:
+            # @req REQ-ROUTE-002
             if not declares(router, HookRoute):
                 raise TypeError("%r does not declare %s: a router must @require(HookRoute)"
                                 % (router, HookRoute))
@@ -400,6 +401,7 @@ class ChatSession:
     # === The three verbs, bound to one speaker ======================================
 
     # @req REQ-CORE-006, REQ-CORE-009, REQ-CORE-025
+    # @req REQ-ROUTE-001
     def _say_for(self, frm: int):
         async def say(
             text        : str,
@@ -424,11 +426,13 @@ class ChatSession:
             return await self._post(msg)
         return say
 
+    # @req REQ-ROUTE-001
     def _answers(self, frm: int, reply_to: Optional[MessageID]) -> bool:
         """Whether a say by *frm* replying to *reply_to* answers something put to *frm*."""
         parent = self._store.find(reply_to) if reply_to is not None else None
         return parent is not None and parent.to == frm
 
+    # @req REQ-ROUTE-001, REQ-ROUTE-003
     async def _routed(self, router: Any, msg: ChatMessage) -> Optional[int]:
         """
         Who *msg* is for, as *router* decides; None for nobody.
