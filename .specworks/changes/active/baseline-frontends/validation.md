@@ -16,11 +16,11 @@ Write "None." when there are no findings. -->
 
 ## Summary
 
-Verdict: FAIL (1 critical, 1 warnings)
+Verdict: PASS (0 critical, 1 warnings)
 
-- Completeness 10/11
+- Completeness 11/11
 - Correctness 7/8
 - Coherence 3/3
 
 Warnings:
-- the specs are the ones agreed when specify passed: REQ-FRONT-010 changed; REQ-FRONT-011 changed; REQ-FRONT-015 changed; REQ-FRONT-019 changed; REQ-FRONT-020 changed; if that is intended, `specworks start design --change baseline-frontends` re-checks specify and accepts them; the tests and code then follow the new specs
+- the specs are the ones agreed when specify passed: REQ-FRONT-010 changed; REQ-FRONT-011 changed; REQ-FRONT-015 changed; REQ-FRONT-019 changed; REQ-FRONT-020 changed; REQ-FRONT-025 changed; if that is intended, `specworks start design --change baseline-frontends` re-checks specify and accepts them; the tests and code then follow the new specs

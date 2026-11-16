@@ -1,6 +1,6 @@
 name: baseline-frontends
 created: '2026-11-15T23:37:52'
-phase: review
+phase: validate
 specified:
   REQ-FRONT-001: 420d5a27d8f1
   REQ-FRONT-002: aaee5ae3488e
