@@ -126,15 +126,6 @@ As a session's backend, the archive SHALL give a reopened session the conversati
 - **WHEN** a session forgets the messages before a cut
 - **THEN** it returns how many, and its context holds only the newer one
 
-### Requirement: REQ-BACK-006 A session without a backend
-
-A session with no backend SHALL keep only what is said in it, and its `forget` returns 0.
-
-#### Scenario: AC-BACK-006.1 No older tier
-
-- **WHEN** a message is said in a session with no backend
-- **THEN** its context holds it, and `forget` returns 0
-
 ### Requirement: REQ-BACK-007 The archive keeps and links attachments
 
 `keep(msg_id, attachments)` SHALL store a message's attachments, one row per message and name, and `link(msg_id, name)` SHALL return a `file://` link to a file holding the attachment's content, written when the link is asked for, or `None` for a name never kept for that message. A name that is not a file name, or is only dots, still links to a file. Attachments outlive the session that kept them, and the files written are removed at `shutdown()`.
