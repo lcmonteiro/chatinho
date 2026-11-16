@@ -1,0 +1,26 @@
+direction: right
+
+speaker: a peer that says {
+  shape: page
+}
+session: session {
+  routed: _routed {
+    tooltip: "uses the route only when it is another peer that answers; logs a bad route or a failure"
+  }
+}
+routers: routers {
+  simple: simple.py {
+    router: SimpleRouter {
+      tooltip: "a reply to its author; anything else to the lone peer that answers"
+    }
+  }
+}
+builder: builder.py {
+  shape: page
+  tooltip: "build_chat_session, build_mcp_session: SimpleRouter unless given one"
+}
+
+speaker -> session.routed: say with no to
+session.routed -> routers.simple.router: route(msg)
+routers.simple.router -> session.routed: peers(), context()
+builder -> routers.simple.router: router=

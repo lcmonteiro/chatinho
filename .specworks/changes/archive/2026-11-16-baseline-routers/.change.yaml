@@ -1,6 +1,6 @@
 name: baseline-routers
 created: '2026-11-16T11:44:33'
-phase: close
+phase: done
 specified:
   REQ-ROUTE-001: b4a5e90e980f
   REQ-ROUTE-002: ddf6dff027a5
