@@ -188,7 +188,8 @@ to its speaker, is never routed.
 > **grants** `await ask(to: int, text: str, *, attachments: Sequence[Attachment] = ()) -> Reply`
 
 Asks the peer with id *to*, and **awaits its reply**. Raises `ValueError` if no peer has that id,
-and whatever the peer's `answer` raised if it failed. Only a reply from *to* resolves it: anyone
+and `RuntimeError` if the chat closes while it waits; a peer whose `answer` fails does not raise in
+the asker, it gets the session's `error` reply, and that is what the ask returns. Only a reply from *to* resolves it: anyone
 else's reply to the question is heard, and the ask keeps waiting. What comes back is a `Reply`
 holding the answer's text and its status — `answered`, `asked` (a question back), or `error` when
 the peer could not answer, the session's own "too many nested asks" included. Anything the reply
@@ -207,7 +208,9 @@ else:
 What the reply said about itself is on its message: `msg.status` is `answered`, `asked` (a question
 back) or `error` — a `ReplyStatus`, a `str` enum, so `msg.status == "asked"` holds — from
 `Reply(..., status=ReplyStatus.ASKED)`; a `Reply` is `ANSWERED` unless it says otherwise. A peer whose `answer`
-fails replies with `ReplyStatus.ERROR` when nobody is awaiting it — a say addressed to it.
+fails replies with `ReplyStatus.ERROR` whether or not an ask awaits it: the session posts
+`<peer> failed: <error type>` in its name, replying to the question and addressed to nobody — the
+type and never the message, which may echo a prompt — and an awaiting ask returns that reply.
 
 `ask(LOCAL, ...)` asks the user. It does not block the chat: the awaiting peer's own task is
 parked, and every other peer carries on.
@@ -325,7 +328,9 @@ Nothing is owed back. A backend, an audit log and a metrics counter each want al
 
 Someone asked *you*. The `Reply` you return is posted by the session in your name, with its
 attachments and its status. Anything else — a plain string included — is a failure (`TypeError`),
-as it is for a command's `execute`.
+as it is for a command's `execute`. A failure, raised or returned, is answered by the session with
+an `error` reply in your name, which is what an `ask` of you returns; the asker never sees your
+exception.
 
 ```python
 @connector("weather")
