@@ -1,0 +1,12 @@
+name: baseline-backends
+created: '2026-11-16T10:44:52'
+phase: done
+specified:
+  REQ-BACK-001: d019fd41d427
+  REQ-BACK-002: 48c1a4fcba84
+  REQ-BACK-003: bde91648171a
+  REQ-BACK-004: d1bb59f90c61
+  REQ-BACK-005: 2cf1bb61ce9c
+  REQ-BACK-006: c3791e6469a1
+  REQ-BACK-007: b95b9398ccc5
+  REQ-BACK-008: c9e89630e660

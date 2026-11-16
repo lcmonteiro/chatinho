@@ -1,0 +1,31 @@
+direction: right
+
+session: session {
+  shape: page
+}
+provider: workspace provider {
+  shape: page
+  tooltip: "GitWorktrees: names, ahead, provision, merge, drop"
+}
+commands: commands {
+  help: help.py {
+    cmd: HelpCommand {
+      tooltip: "/help: lists the commands and who is connected"
+    }
+  }
+  test: test.py {
+    cmd: TestCommand {
+      tooltip: "/test: says each check as it runs, answers the verdict"
+    }
+  }
+  ws: workspace.py {
+    cmd: WorkspaceCommand {
+      tooltip: "/ws, /ws diff, /ws merge, /ws drop; merge and drop only by the user"
+    }
+  }
+}
+
+session -> commands.help.cmd: execute(args, by); peers, commands
+session -> commands.test.cmd: execute(args, by); say, context, peers
+session -> commands.ws.cmd: execute(args, by)
+commands.ws.cmd -> provider: list, diff, merge, drop

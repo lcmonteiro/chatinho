@@ -49,6 +49,7 @@ NEWLINE_KEYS : Tuple[str, ...] = ("ctrl+enter", "ctrl+j", "shift+enter", "alt+en
 NEWLINE_ESCAPE : str = " "
 
 
+# @req REQ-FRONT-012
 def validate_escape(char: Optional[str]) -> Optional[str]:
     """
     Checks the escape character, or None for no escape at all.
@@ -77,6 +78,7 @@ def validate_escape(char: Optional[str]) -> Optional[str]:
     return char
 
 
+# @req REQ-FRONT-023
 class CommandSuggestions(OptionList):
     """Popup listing the commands whose name matches the "/token" being typed."""
 
@@ -152,6 +154,7 @@ class CommandSuggestions(OptionList):
         return f"{COMMAND_PREFIX}{name}"
 
 
+# @req REQ-FRONT-012
 class CommandInput(TextArea):
     """
     Multi-line input that drives the sibling :class:`CommandSuggestions` popup.
@@ -216,6 +219,7 @@ class CommandInput(TextArea):
         suggestions = self.suggestions
         return suggestions is not None and suggestions.has_suggestions
 
+    # @req REQ-FRONT-023
     def accept_suggestion(self) -> bool:
         """
         Completes the input with the highlighted suggestion, if any.
@@ -247,6 +251,7 @@ class CommandInput(TextArea):
             self.post_message(self.Submitted(self, text))
         return False
 
+    # @req REQ-FRONT-012
     def _open_line_at_the_escape(self) -> bool:
         """
         Turns :attr:`newline_escape` immediately before the cursor into a line.
@@ -279,6 +284,7 @@ class CommandInput(TextArea):
         self.replace("\n", (row, column - 1), (row, column))
         return True
 
+    # @req REQ-FRONT-012, REQ-FRONT-023
     async def _on_key(self, event: events.Key) -> None:
         """
         Claims Enter for sending, and the newline keys for a second line.

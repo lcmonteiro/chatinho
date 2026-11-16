@@ -24,6 +24,7 @@ DIFF_SHOWN : int = 20000
 REMINDER = "Your answer does not link every file you made."
 
 
+# @req REQ-CONN-012
 def text(messages: List[BaseMessage], structured: Any) -> str:
     """The run's answer: *structured* as JSON when there is one, else the last AI message's text."""
     if structured is not None:
@@ -39,6 +40,7 @@ def text(messages: List[BaseMessage], structured: Any) -> str:
                    if isinstance(block, str) or block.get("type") == "text")
 
 
+# @req REQ-CONN-013
 def files(messages: List[BaseMessage]) -> List[Attachment]:
     """The files the tools in *messages* made, the last of each name, in the order first made."""
     found : Dict[str, Attachment] = {}
@@ -49,6 +51,7 @@ def files(messages: List[BaseMessage]) -> List[Attachment]:
     return list(found.values())
 
 
+# @req REQ-CONN-013
 def attachment(artifact: Any) -> Optional[Attachment]:
     """*artifact* as an Attachment, when it is one or looks like one."""
     if isinstance(artifact, Attachment):
@@ -80,6 +83,7 @@ def shown(result: Any) -> str:
     return str(result)
 
 
+# @req REQ-CONN-019
 def diffed(diff: str, whose: str) -> Tuple[str, Optional[Attachment]]:
     """A diff as the model reads it, and as the attachment its answer links."""
     if not diff:

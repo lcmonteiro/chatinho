@@ -61,6 +61,7 @@ _CONFIRMATION : float = 5.0
 _HEADER_SLACK : int = 2
 
 
+# @req REQ-FRONT-018
 def _newlines_are_breaks(state) -> None:
     """
     Rewrites every soft break in the token stream as a hard one.
@@ -82,6 +83,7 @@ def _newlines_are_breaks(state) -> None:
                 child.type = "hardbreak"
 
 
+# @req REQ-FRONT-018
 def chat_markdown() -> MarkdownIt:
     """
     The parser a message body is rendered with: Markdown, but chat-shaped.
@@ -107,6 +109,7 @@ def chat_markdown() -> MarkdownIt:
     return parser
 
 
+# @req REQ-FRONT-022
 def _attachment_name(href: str) -> Optional[str]:
     """
     The attachment a link names, or None when it is an ordinary link.
@@ -129,6 +132,7 @@ def _attachment_name(href: str) -> Optional[str]:
     return href or None
 
 
+# @req REQ-FRONT-006, REQ-FRONT-020
 def preview_of(text: str, width: int = 60) -> str:
     """
     A single line of *text*, short enough to sit in a popup.
@@ -148,6 +152,7 @@ def preview_of(text: str, width: int = 60) -> str:
     return flat if len(flat) <= width else flat[:width - 1] + "…"
 
 
+# @req REQ-FRONT-016
 class TouchScrollableContainer(ScrollableContainer):
     """
     Scrollable container that pans by dragging, where there is nothing to select.
@@ -215,6 +220,7 @@ class TouchScrollableContainer(ScrollableContainer):
         event.stop()
 
 
+# @req REQ-FRONT-015
 class _MessageContainer(Vertical):
     """
     One message: its header, the bubble under it, and what a tap means.
@@ -294,6 +300,7 @@ class _MessageContainer(Vertical):
         event.stop()
 
 
+# @req REQ-FRONT-007
 class ChatLog(TouchScrollableContainer):
     """
     Renders the last ``max_displayed`` messages the chat will hand over.
@@ -379,6 +386,7 @@ class ChatLog(TouchScrollableContainer):
         if was_at_bottom:
             self.scroll_to_bottom()
 
+    # @req REQ-FRONT-022
     async def on_markdown_link_clicked(self, event: Markdown.LinkClicked) -> None:
         """
         Opens a link in a message: an attachment through ``locate``, anything else as is.
@@ -411,6 +419,7 @@ class ChatLog(TouchScrollableContainer):
         """Scrolls the log to the newest message."""
         self.scroll_end(animate=False)
 
+    # @req REQ-FRONT-019
     def _name_of_peer(self, frm: int) -> str:
         """
         What to call whoever said it, as the header writes it.
@@ -432,6 +441,7 @@ class ChatLog(TouchScrollableContainer):
         who  = here.get(frm)
         return name_of(who) if who is not None else str(frm)
 
+    # @req REQ-FRONT-008, REQ-FRONT-011, REQ-FRONT-013, REQ-FRONT-019
     def _render_message(self, msg: ChatMessage) -> Widget:
         """Render a message as a clickable container with header and body."""
         prefix = "%s @%s · %s" % (
@@ -492,6 +502,7 @@ class ChatLog(TouchScrollableContainer):
         self._msg_widgets[msg.id] = container
         return container
 
+    # @req REQ-FRONT-011
     def _bubble_width(self, text: str, quote: Optional[str] = None, floor: int = 0) -> int:
         """
         How wide this bubble wants to be, in cells.
@@ -518,6 +529,7 @@ class ChatLog(TouchScrollableContainer):
         widest = max([cell_len(line) for line in lines] + [0]) + _BUBBLE_CHROME
         return min(max(widest, floor + _HEADER_SLACK), self.style.bubble_max_width)
 
+    # @req REQ-FRONT-020
     def copy_message(self, msg_id: MessageID) -> None:
         """
         Puts the message's text on the clipboard, by both routes at once.
@@ -538,6 +550,7 @@ class ChatLog(TouchScrollableContainer):
         self.app.copy_to_clipboard(msg.text)
         self.run_worker(self._copy_with_a_helper(msg.id, msg.text), exclusive=False)
 
+    # @req REQ-FRONT-020
     async def _copy_with_a_helper(self, msg_id: MessageID, text: str) -> None:
         """Runs the clipboard helper off the event loop, then reports both routes."""
         loop  = asyncio.get_running_loop()
@@ -558,6 +571,7 @@ class ChatLog(TouchScrollableContainer):
         else:
             self.set_reply_target(msg_id)
 
+    # @req REQ-FRONT-006
     def set_reply_target(self, msg_id: MessageID) -> None:
         """Marks *msg_id* as the reply target and highlights it."""
         self.reply_target = msg_id

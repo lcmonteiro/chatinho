@@ -83,6 +83,7 @@ class ToolInfo(BaseModel):
     description : str
 
 
+# @req REQ-FRONT-024
 @frontend("master")
 @require(HookSay)
 @require(HookListen)
@@ -149,6 +150,7 @@ class McpFrontend:
 
     # === Being peer zero ============================================================
 
+    # @req REQ-FRONT-026
     async def listen(self, msg: ChatMessage) -> None:
         """
         Hands the asked peer's reply to a client's message back to that client.
@@ -188,6 +190,7 @@ class McpFrontend:
 
     # === The tools ==================================================================
 
+    # @req REQ-FRONT-025
     async def _ask(
         self,
         peer        : Annotated[str, Field(description="The peer's name.")],
@@ -202,16 +205,19 @@ class McpFrontend:
         """
         return await self._wait(await self._asked(peer, text, _meta(ctx)))
 
+    # @req REQ-FRONT-027
     async def _peers(self) -> List[PeerInfo]:
         """Lists the peers in this session, and whether each one answers what it is asked."""
         return [PeerInfo(name=name_of(who), answers=declares(who, HookAnswer))
                 for at, who in sorted(self.peers().items()) if at != LOCAL]
 
+    # @req REQ-FRONT-027
     async def _tools(self) -> List[ToolInfo]:
         """Lists this session's tools (its slash commands), each with what it does."""
         return [ToolInfo(name=name, description=str(getattr(cmd, "description", "") or ""))
                 for name, cmd in sorted(self.commands().items())]
 
+    # @req REQ-FRONT-027
     async def _invoke(
         self,
         name        : Annotated[str, Field(description="The tool's name, as tools lists it.")],
@@ -224,6 +230,7 @@ class McpFrontend:
 
     # === One message ================================================================
 
+    # @req REQ-FRONT-025, REQ-FRONT-026
     async def _asked(self, peer: str, text: str, meta: Dict[str, Any]) -> _Message:
         """Asks *text* of the peer named *peer*, with the credentials lent in *meta*."""
         named = [(at, who) for at, who in sorted(self.peers().items())
@@ -240,6 +247,7 @@ class McpFrontend:
         self._open[message.msg_id] = message
         return message
 
+    # @req REQ-FRONT-025, REQ-FRONT-026
     async def _wait(self, message: _Message) -> Answer:
         """Waits for the first reply to *message*, and lets go of it however the wait ends."""
         try:
@@ -252,6 +260,7 @@ class McpFrontend:
         return Answer(status=reply.status, text=reply.text, msg_id=str(reply.id),
                       attachments=[encode(item) for item in attachments])
 
+    # @req REQ-FRONT-028
     def _close(self, message: _Message) -> None:
         """Lets go of everything a message held: its wait and its credentials."""
         if message.closed:
@@ -265,6 +274,7 @@ class McpFrontend:
 
     # === Helpers ====================================================================
 
+    # @req REQ-FRONT-028
     def _lent(self, meta: Dict[str, Any]) -> Dict[str, Secret]:
         """The declared credentials lent with a message, wrapped so they never show."""
         lent = meta.get(CREDENTIALS_KEY)
@@ -273,6 +283,7 @@ class McpFrontend:
         return {name: Secret(value) for name, value in lent.items()
                 if name in self.credentials and isinstance(value, str)}
 
+    # @req REQ-FRONT-025
     async def _attachments_of(self, msg_id: MessageID, text: str) -> List[Attachment]:
         """What a reply attached: each name it links to that the backend can read back."""
         found: List[Attachment] = []
@@ -323,6 +334,7 @@ def _read_link(url: Optional[str]) -> Optional[bytes]:
         return None
 
 
+# @req REQ-FRONT-024
 class _OneToken(TokenVerifier):
     """Lets in the requests that carry the one bearer token, compared in constant time."""
 
@@ -336,6 +348,7 @@ class _OneToken(TokenVerifier):
         return None
 
 
+# @req REQ-FRONT-028
 class _Credentials(ServerExtension):
     """The ``chatinho/credentials`` extension: the credentials a server accepts, announced at discovery."""
 

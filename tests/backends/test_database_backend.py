@@ -47,12 +47,14 @@ async def archive():
 # === The archive itself =========================================================
 
 
+# @ac AC-BACK-001.1
 async def test_what_goes_in_comes_back_out(archive):
     now = datetime.now()
     await heard(archive, message(mid("msg-1"), "ola", now), message(mid("msg-2"), "adeus", now))
     assert [m.text for m in await archive.load()] == ["ola", "adeus"]
 
 
+# @ac AC-BACK-001.2
 async def test_a_message_keeps_its_address_and_its_thread(archive):
     now = datetime.now()
     await heard(archive, 
@@ -65,6 +67,7 @@ async def test_a_message_keeps_its_address_and_its_thread(archive):
     assert (answer.frm, answer.to, answer.reply_to) == (1, LOCAL, mid("msg-1"))
 
 
+# @ac AC-BACK-001.3
 async def test_hearing_the_same_message_twice_is_not_two_rows(archive):
     """The message id is the primary key, so a re-archive replaces."""
     now = datetime.now()
@@ -74,6 +77,7 @@ async def test_hearing_the_same_message_twice_is_not_two_rows(archive):
     assert [(m.id, m.text) for m in recalled] == [(mid("msg-1"), "corrigida")]
 
 
+# @ac AC-BACK-002.1
 async def test_load_takes_the_tail_oldest_first(archive):
     base = datetime.now()
     await heard(archive, *(message(mid("msg-%d" % n), "m%d" % n, base + timedelta(seconds=n))
@@ -81,6 +85,7 @@ async def test_load_takes_the_tail_oldest_first(archive):
     assert [m.text for m in await archive.load(limit=2)] == ["m3", "m4"]
 
 
+# @ac AC-BACK-002.2
 async def test_load_narrows_by_time(archive):
     base = datetime.now()
     await heard(archive, *(message(mid("msg-%d" % n), "m%d" % n, base + timedelta(seconds=n))
@@ -89,6 +94,7 @@ async def test_load_narrows_by_time(archive):
     assert [m.text for m in await archive.load(since=cut)] == ["m3", "m4"]
 
 
+# @ac AC-BACK-003.1
 async def test_forget_drops_only_what_is_older(archive):
     base = datetime.now()
     await heard(archive, *(message(mid("msg-%d" % n), "m%d" % n, base + timedelta(seconds=n))
@@ -97,18 +103,21 @@ async def test_forget_drops_only_what_is_older(archive):
     assert [m.text for m in await archive.load()] == ["m3", "m4"]
 
 
+# @ac AC-BACK-003.2
 async def test_forget_without_a_cut_forgets_everything(archive):
     await heard(archive, message(mid("msg-1"), "ola", datetime.now()))
     assert await archive.forget() == 1
     assert await archive.load() == []
 
 
+# @ac AC-BACK-004.1
 async def test_using_it_before_initialize_says_so():
     store = DatabaseBackend("sqlite:///:memory:")
     with pytest.raises(RuntimeError, match="not initialized"):
         await heard(store, message(mid("msg-1"), "ola", datetime.now()))
 
 
+# @ac AC-BACK-004.2
 async def test_shutdown_disposes_of_the_engine(archive):
     assert archive.engine is not None
     archive.shutdown()
@@ -118,6 +127,7 @@ async def test_shutdown_disposes_of_the_engine(archive):
 # === Wired to a session =========================================================
 
 
+# @ac AC-BACK-005.1
 async def test_a_conversation_survives_the_session_that_had_it(tmp_path):
     """The whole point: close the chat, open another, and the context is there."""
     store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
@@ -137,6 +147,7 @@ async def test_a_conversation_survives_the_session_that_had_it(tmp_path):
     await second.close()
 
 
+# @ac AC-BACK-005.2
 async def test_concurrent_messages_are_all_archived_in_order(tmp_path):
     """The session hands the backend messages concurrently; none is lost or reordered."""
     store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
@@ -156,6 +167,7 @@ async def test_concurrent_messages_are_all_archived_in_order(tmp_path):
     await second.close()
 
 
+# @ac AC-BACK-001.4
 async def test_an_in_memory_archive_takes_concurrent_writes(archive):
     """One shared connection, fifty writers at once: every row arrives."""
     start    = datetime(2026, 1, 1)
@@ -164,6 +176,7 @@ async def test_an_in_memory_archive_takes_concurrent_writes(archive):
     assert [m.text for m in await archive.load()] == ["m%02d" % n for n in range(50)]
 
 
+# @ac AC-CORE-020.1
 async def test_a_session_without_a_backend_simply_has_no_older_tier():
     session = ChatSession()
     view = Driver()
@@ -175,6 +188,7 @@ async def test_a_session_without_a_backend_simply_has_no_older_tier():
     await session.close()
 
 
+# @ac AC-BACK-005.3
 async def test_load_is_bounded_by_what_the_session_asks_for(tmp_path):
     """The window is stated, not hidden: older than `recall` is out of reach."""
     store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
@@ -207,18 +221,21 @@ def content(link: str) -> bytes:
     return Path(unquote(urlparse(link).path)).read_bytes()
 
 
+# @ac AC-BACK-007.1
 async def test_a_kept_attachment_links_to_a_file_with_its_data(archive):
     await archive.keep(mid("msg-1"), [page()])
     link = await archive.link(mid("msg-1"), "revenue.html")
     assert link is not None and content(link) == b"<p>up 12%</p>"
 
 
+# @ac AC-BACK-007.2
 async def test_a_name_never_kept_has_no_link(archive):
     await archive.keep(mid("msg-1"), [page()])
     assert await archive.link(mid("msg-1"), "other.html") is None
     assert await archive.link(mid("msg-2"), "revenue.html") is None
 
 
+# @ac AC-BACK-007.3
 async def test_keeping_the_same_attachment_twice_is_one_row(archive):
     from chatinho.backends.database import ArchivedAttachment
 
@@ -228,12 +245,14 @@ async def test_keeping_the_same_attachment_twice_is_one_row(archive):
         assert session.query(ArchivedAttachment).count() == 1
 
 
+# @ac AC-BACK-007.4
 async def test_a_name_that_is_not_a_file_name_still_links(archive):
     await archive.keep(mid("msg-1"), [page("my report/v2.html")])
     link = await archive.link(mid("msg-1"), "my report/v2.html")
     assert link is not None and content(link) == b"<p>up 12%</p>"
 
 
+# @ac AC-BACK-007.5
 @pytest.mark.parametrize("name", ["..", "."])
 async def test_a_dot_name_links_to_a_file_not_a_folder(archive, name):
     await archive.keep(mid("msg-1"), [page("revenue.html"), page(name, b"dots")])
@@ -242,6 +261,7 @@ async def test_a_dot_name_links_to_a_file_not_a_folder(archive, name):
     assert link is not None and content(link) == b"dots"
 
 
+# @ac AC-BACK-007.6
 async def test_shutdown_removes_the_files_it_wrote():
     store = DatabaseBackend("sqlite:///:memory:")
     store.initialize()
@@ -254,6 +274,7 @@ async def test_shutdown_removes_the_files_it_wrote():
     assert not written.exists()
 
 
+# @ac AC-BACK-003.3
 async def test_forget_drops_what_the_forgotten_messages_carried(archive):
     now = datetime.now()
     await heard(archive, message(mid("msg-1"), "old", now - timedelta(hours=2)),
@@ -265,6 +286,7 @@ async def test_forget_drops_what_the_forgotten_messages_carried(archive):
     assert await archive.link(mid("msg-2"), "revenue.html") is not None
 
 
+# @ac AC-BACK-003.4
 async def test_forgetting_everything_drops_every_attachment(archive):
     await heard(archive, message(mid("msg-1"), "old", datetime.now()))
     await archive.keep(mid("msg-1"), [page()])
@@ -274,6 +296,7 @@ async def test_forgetting_everything_drops_every_attachment(archive):
     assert await archive.link(mid("msg-9"), "revenue.html") is None
 
 
+# @ac AC-BACK-007.7
 async def test_an_attachment_outlives_the_session_that_said_it(tmp_path):
     """Close the chat, open another on the same file, and the link still opens."""
     store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
@@ -294,6 +317,7 @@ async def test_an_attachment_outlives_the_session_that_said_it(tmp_path):
     await second.close()
 
 
+# @ac AC-BACK-005.5
 async def test_a_reopened_chat_does_not_overwrite_what_it_archived(tmp_path):
     """Ids are unique across sessions, so a new chat on the same file adds, never replaces."""
     store = DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))
@@ -328,6 +352,7 @@ class _Bot:
         return Reply("hello")
 
 
+# @ac AC-BACK-005.4
 async def test_asked_closed_and_reopened(tmp_path):
     """A say routed to the lone answering peer keeps its `to` in the archive, and in its memory."""
     url = "sqlite:///%s" % (tmp_path / "chat.db")
@@ -351,6 +376,7 @@ async def test_asked_closed_and_reopened(tmp_path):
 
 
 
+# @ac AC-BACK-005.6
 async def test_forgotten_here_not_only_in_the_archive(tmp_path):
     """forget(before=t) drops the older messages from the conversation as well as the archive."""
     session, view = ChatSession(backend=DatabaseBackend("sqlite:///%s" % (tmp_path / "chat.db"))), Driver()
@@ -377,6 +403,7 @@ class _Failing:
         return Reply("rate limited", status=ReplyStatus.ERROR)
 
 
+# @ac AC-BACK-001.5
 async def test_a_failed_reply_stays_failed_when_reopened(tmp_path):
     """Without its status, a failed reply came back as an answer, into the model's memory."""
     url = "sqlite:///%s" % (tmp_path / "chat.db")
@@ -399,12 +426,14 @@ async def test_a_failed_reply_stays_failed_when_reopened(tmp_path):
     await second.close()
 
 
+# @ac AC-BACK-004.3
 def test_an_unknown_keyword_is_refused():
     """It used to be swallowed, so a typo was a setting that silently did nothing."""
     with pytest.raises(TypeError):
         DatabaseBackend("sqlite://", ecoh=True)            # type: ignore[call-arg]
 
 
+# @ac AC-BACK-008.1
 async def test_an_archive_with_the_old_asked_of_column_still_loads_and_saves(tmp_path):
     """Nothing is migrated: a table that still has asked_of is read and written as it is."""
     import sqlite3

@@ -42,6 +42,7 @@ class Base(DeclarativeBase):
     """Declarative base for the backend's models."""
 
 
+# @req REQ-BACK-001
 class _MessageIDText(TypeDecorator):
     """A :class:`MessageID` kept as the text ``str()`` writes, and read back with ``MessageID.parse``."""
 
@@ -55,6 +56,7 @@ class _MessageIDText(TypeDecorator):
         return MessageID.parse(value)
 
 
+# @req REQ-BACK-001, REQ-BACK-008
 class ArchivedMessage(Base):
     """
     One archived message, addressed exactly as it was when it was said.
@@ -76,6 +78,7 @@ class ArchivedMessage(Base):
     status    = Column(String, nullable=False, default=ReplyStatus.ANSWERED.value)
 
 
+# @req REQ-BACK-007
 class ArchivedAttachment(Base):
     """
     One attachment, kept under the message it was attached to.
@@ -92,6 +95,7 @@ class ArchivedAttachment(Base):
     data       = Column(LargeBinary, nullable=False)
 
 
+# @req REQ-BACK-001, REQ-BACK-005
 @backend("database")
 @require(HookListen)
 @require(HookLoad)
@@ -109,6 +113,7 @@ class DatabaseBackend:
     gives back what it held when the next session starts.
     """
 
+    # @req REQ-BACK-004
     def __init__(self, database_url: str, echo: bool = False) -> None:
         """
         Prepares the backend; the connection opens in :meth:`initialize`.
@@ -132,6 +137,7 @@ class DatabaseBackend:
 
     # === Lifecycle ==================================================================
 
+    # @req REQ-BACK-004, REQ-BACK-008
     def initialize(self) -> None:
         """
         Opens the connection and creates the table if it is not there.
@@ -154,6 +160,7 @@ class DatabaseBackend:
         Base.metadata.create_all(self.engine)
         self.SessionLocal = sessionmaker(bind=self.engine, future=True)
 
+    # @req REQ-BACK-004, REQ-BACK-007
     def shutdown(self) -> None:
         """Disposes of the engine, so its pool does not outlive the chat."""
         if self._worker is not None:
@@ -169,6 +176,7 @@ class DatabaseBackend:
 
     # === The archive ================================================================
 
+    # @req REQ-BACK-001
     async def listen(self, msg: ChatMessage) -> None:
         """
         Keeps one message that crossed the session.
@@ -178,6 +186,7 @@ class DatabaseBackend:
         """
         await self._off_loop(self._write, [msg])
 
+    # @req REQ-BACK-002
     async def load(
         self,
         since : Optional[datetime] = None,
@@ -195,6 +204,7 @@ class DatabaseBackend:
         """
         return await self._off_loop(self._read, since, limit)
 
+    # @req REQ-BACK-003
     async def forget(self, before: Optional[datetime] = None) -> int:
         """
         Drops archived messages older than *before*, or all of them.
@@ -209,6 +219,7 @@ class DatabaseBackend:
 
     # === What messages carry =========================================================
 
+    # @req REQ-BACK-007
     async def keep(self, msg_id: MessageID, attachments: Sequence[Attachment]) -> None:
         """
         Keeps what message *msg_id* carries, before the message is posted.
@@ -219,6 +230,7 @@ class DatabaseBackend:
         """
         await self._off_loop(self._keep, str(msg_id), tuple(attachments))
 
+    # @req REQ-BACK-007
     async def link(self, msg_id: MessageID, name: str) -> Optional[str]:
         """
         A ``file://`` link to attachment *name* of message *msg_id*, or None.
@@ -254,6 +266,7 @@ class DatabaseBackend:
             raise RuntimeError("Backend not initialized: call initialize() first")
         return await asyncio.get_running_loop().run_in_executor(self._worker, work, *args)
 
+    # @req REQ-BACK-004
     def _session(self) -> Any:
         """
         Returns a database session.
@@ -265,6 +278,7 @@ class DatabaseBackend:
             raise RuntimeError("Backend not initialized: call initialize() first")
         return self.SessionLocal()
 
+    # @req REQ-BACK-001
     def _write(self, messages: List[ChatMessage]) -> None:
         """The synchronous half of :meth:`listen`."""
         with self._session() as session:
@@ -275,6 +289,7 @@ class DatabaseBackend:
                 ))
             session.commit()
 
+    # @req REQ-BACK-002
     def _read(self, since: Optional[datetime], limit: Optional[int]) -> List[ChatMessage]:
         """The synchronous half of :meth:`load`."""
         with self._session() as session:
@@ -291,6 +306,7 @@ class DatabaseBackend:
                 for r in rows
             ]
 
+    # @req REQ-BACK-003
     def _forget(self, before: Optional[datetime]) -> int:
         """The synchronous half of :meth:`forget`: messages and what they carried."""
         with self._session() as session:
@@ -306,6 +322,7 @@ class DatabaseBackend:
             session.commit()
             return int(dropped)
 
+    # @req REQ-BACK-007
     def _keep(self, msg_id: str, attachments: Sequence[Attachment]) -> None:
         """The synchronous half of :meth:`keep`."""
         with self._session() as session:
@@ -315,6 +332,7 @@ class DatabaseBackend:
                 ))
             session.commit()
 
+    # @req REQ-BACK-007
     def _link(self, msg_id: str, name: str) -> Optional[str]:
         """The synchronous half of :meth:`link`."""
         with self._session() as session:

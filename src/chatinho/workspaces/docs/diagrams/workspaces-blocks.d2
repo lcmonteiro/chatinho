@@ -1,0 +1,34 @@
+direction: right
+
+session: session {
+  shape: page
+  tooltip: "ChatSession(workspaces=...): grants workspace(name) through provision"
+}
+ws: /ws command {
+  shape: page
+  tooltip: "WorkspaceCommand: names, ahead, merge, drop"
+}
+model: workspace-model {
+  shape: page
+  tooltip: "Tree, WorkspaceView (reads), Workspace (writes too)"
+}
+workspaces: workspaces {
+  git: git.py {
+    provider: GitWorktrees {
+      tooltip: "provision, names, ahead, merge, drop; one Tree (one lock) per workspace"
+    }
+    conflict: MergeConflict {
+      tooltip: "raised after the merge is aborted, with the conflicting paths"
+    }
+    provider -> conflict: merge conflicts
+  }
+}
+repo: git repository {
+  shape: cylinder
+  tooltip: "one worktree per peer under .chatinho/worktrees, on its peer branch; .chatinho/ in .git/info/exclude"
+}
+
+session -> workspaces.git.provider: provision(owner, name, create)
+ws -> workspaces.git.provider: list, merge, drop
+workspaces.git.provider -> model: owner gets a Workspace, others a WorkspaceView
+workspaces.git.provider -> repo: git worktree add / remove, merge, branch -D

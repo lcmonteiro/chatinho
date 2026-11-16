@@ -1,0 +1,9 @@
+name: baseline-workspaces
+created: '2026-11-16T14:26:57'
+phase: done
+specified:
+  REQ-WS-001: bc06bc13ea9c
+  REQ-WS-002: 859d06da0dac
+  REQ-WS-003: c3d570c0bbfb
+  REQ-WS-004: 82c07f34e3a1
+  REQ-WS-005: 63452c61731b

@@ -26,6 +26,7 @@ from .session import ChatSession
 
 
 # @req REQ-CORE-029
+# @req REQ-ROUTE-006
 def build_chat_session(
     connectors      : Optional[List[Any]] = None,
     commands        : Optional[List[Any]] = None,
@@ -113,6 +114,7 @@ def build_chat_session(
 
 
 # @req REQ-CORE-029
+# @req REQ-ROUTE-006
 def build_mcp_session(
     connectors  : Optional[List[Any]] = None,
     commands    : Optional[List[Any]] = None,

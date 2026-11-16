@@ -57,6 +57,7 @@ def _files(state: AgentState) -> List[Attachment]:
     return files(state["messages"][state["start"]:])
 
 
+# @req REQ-CONN-012, REQ-CONN-014
 def compile_graph(
     inner        : Any,
     history      : Callable[[ChatMessage], List[BaseMessage]],

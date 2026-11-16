@@ -44,6 +44,7 @@ class Interrupted(RuntimeError):
     """The agent stopped to wait for a human decision (``interrupt_on``) nothing in the chat can give."""
 
 
+# @req REQ-CONN-018
 def chat_model(model: Any) -> Any:
     """
     What a factory is given: the model as is, or an Endpoint made a chat model.
@@ -162,6 +163,7 @@ class AgentPeer:
 
     # === Being asked, being told =====================================================
 
+    # @req REQ-CONN-012
     async def answer(self, msg: ChatMessage) -> Reply:
         """Runs the graph on the conversation and the question, and answers with its result."""
         try:
@@ -170,6 +172,7 @@ class AgentPeer:
             return Reply(self._failed(exc), status=ReplyStatus.ERROR)
         return Reply(text, tuple(files))
 
+    # @req REQ-CONN-015
     async def listen(self, msg: ChatMessage) -> None:
         """
         Responds to what the user says to nobody in particular with a say; ignores everyone else.
@@ -187,6 +190,7 @@ class AgentPeer:
             text, files = self._failed(exc), []
         await self.say(text, reply_to=msg.id, attachments=files)
 
+    # @req REQ-CONN-012, REQ-CONN-024
     async def _run(self, msg: ChatMessage) -> Tuple[str, List[Attachment]]:
         """One run of the graph on *msg*: the answer's text and the run's files."""
         graph  = await self.graph()
@@ -198,6 +202,7 @@ class AgentPeer:
             raise Interrupted("the run stopped for a decision")
         return output["text"], list(output["attachments"])
 
+    # @req REQ-CONN-012
     def _failed(self, exc: Exception) -> str:
         if isinstance(exc, Interrupted):
             logger.warning("%s: the run was interrupted", self.name)
@@ -272,6 +277,7 @@ class AgentPeer:
         """
         return {name: await self.workspace(name, create=False) for name in await self._workspaced()}
 
+    # @req REQ-CONN-019
     # @req REQ-AGENT-003
     async def _workspaced(self) -> Tuple[str, ...]:
         """
@@ -298,6 +304,7 @@ class AgentPeer:
 
     # === Memory =====================================================================
 
+    # @req REQ-CONN-017
     def _history(self, msg: ChatMessage) -> List[BaseMessage]:
         """What ``memory`` selects, without the agent's own tool asks, then the question."""
         history : List[BaseMessage] = []

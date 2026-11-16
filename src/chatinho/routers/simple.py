@@ -6,6 +6,7 @@ from ..hooks import HookAnswer, HookContext, HookPeers, HookRoute, Context, Peer
 from ..message import LOCAL, ChatMessage
 
 
+# @req REQ-ROUTE-004, REQ-ROUTE-005
 @require(HookRoute)
 @require(HookPeers)
 @require(HookContext)
@@ -24,6 +25,7 @@ class SimpleRouter:
     peers    : Peers
     context  : Context
 
+    # @req REQ-ROUTE-004, REQ-ROUTE-005
     async def route(self, msg: ChatMessage) -> Optional[int]:
         """
         The peer that answers *msg*, or None.

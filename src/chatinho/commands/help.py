@@ -4,6 +4,7 @@ from ..hooks import HookExecute, HookPeers, HookCommands, Commands, Peers, requi
 from ..message import LOCAL, Reply
 
 
+# @req REQ-CMD-005
 @tool("help", "Lists the available commands")
 @require(HookExecute)
 @require(HookPeers)

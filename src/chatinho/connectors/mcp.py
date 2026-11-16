@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 # === What comes back from the server ==============================================
 
+# @req REQ-CONN-009
 def _reply_from(res: types.CallToolResult, name: str) -> Reply:
     """
     The local reply for what came back from the remote session.
@@ -50,6 +51,7 @@ def _reply_from(res: types.CallToolResult, name: str) -> Reply:
     return Reply(text, tuple(decode(item) for item in data.get("attachments") or ()))
 
 
+# @req REQ-CONN-007
 @connector("mcp")
 @require(HookAnswer)
 class McpConnector:
@@ -128,12 +130,14 @@ class McpConnector:
 
     # === Being asked ================================================================
 
+    # @req REQ-CONN-008
     async def answer(self, msg: ChatMessage) -> Reply:
         """A question asked of it; its text goes to the remote peer as it is."""
         return await self._ask_remote(msg.text)
 
     # === One question ===============================================================
 
+    # @req REQ-CONN-008, REQ-CONN-009
     async def _ask_remote(self, text: str) -> Reply:
         """Asks the remote session, and turns whatever happens into one reply."""
         try:
@@ -156,6 +160,7 @@ class McpConnector:
                          status=ReplyStatus.ERROR)
         return _reply_from(result, self.name)
 
+    # @req REQ-CONN-008
     async def _only_peer(self, client: Any) -> Optional[str]:
         """The only remote peer that answers, or None when there are none or several."""
         answering = [peer.name for peer in (await client.call_tool("peers")).data if peer.answers]
@@ -163,6 +168,7 @@ class McpConnector:
 
     # === Lending ====================================================================
 
+    # @req REQ-CONN-010
     async def _lending(self, client: Any) -> Optional[Dict[str, Any]]:
         """
         The ``_meta`` for one question: the configured credentials the server declared.

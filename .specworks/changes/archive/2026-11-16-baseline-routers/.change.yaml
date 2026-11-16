@@ -1,0 +1,10 @@
+name: baseline-routers
+created: '2026-11-16T11:44:33'
+phase: done
+specified:
+  REQ-ROUTE-001: b4a5e90e980f
+  REQ-ROUTE-002: ddf6dff027a5
+  REQ-ROUTE-003: 1b5eb7ad42fd
+  REQ-ROUTE-004: da87e02afc12
+  REQ-ROUTE-005: 6058628fb818
+  REQ-ROUTE-006: 4811550a1988

@@ -16,6 +16,7 @@ from chatinho.query import SELF, Query
 MEMORY = Query(peer=SELF, errors=False).last(20)
 
 
+# @req REQ-CONN-003, REQ-CONN-017
 def earlier(context: Context, memory: Optional[Query], question: ChatMessage) -> List[ChatMessage]:
     """
     What *memory* selects from the conversation, without *question* itself.
@@ -41,6 +42,7 @@ def earlier(context: Context, memory: Optional[Query], question: ChatMessage) ->
     return found
 
 
+# @req REQ-CONN-003, REQ-CONN-017
 def speaker(m: ChatMessage, me: Optional[int], roster: Dict[int, Any]) -> Tuple[str, str]:
     """
     The role *m* plays for the model remembering it, and its text as the model reads it.

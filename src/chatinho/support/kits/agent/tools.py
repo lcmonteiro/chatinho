@@ -35,6 +35,7 @@ def named(tool: Any) -> Optional[str]:
     return getattr(tool, "name", None) or getattr(tool, "__name__", None)
 
 
+# @req REQ-CONN-016
 # @req REQ-AGENT-001
 def chat_tools(peer: Any, shape: Shape) -> List[StructuredTool]:
     """The chat as tools: ask_<peer>, run_<command> and, when wanted, ask_user."""
@@ -67,6 +68,7 @@ def chat_tools(peer: Any, shape: Shape) -> List[StructuredTool]:
     return found
 
 
+# @req REQ-CONN-016
 def _asking(peer: Any, at: int, name: str) -> Callable[..., Any]:
     async def ask(question: str) -> Reply:
         try:
@@ -77,6 +79,7 @@ def _asking(peer: Any, at: int, name: str) -> Callable[..., Any]:
     return ask
 
 
+# @req REQ-CONN-016
 def _running(peer: Any, name: str) -> Callable[..., Any]:
     async def run(arguments: str = "") -> str:
         try:
@@ -109,6 +112,7 @@ def workspace_tools(peer: Any, mine: Workspace, covered: FrozenSet[str]) -> List
     return kept
 
 
+# @req REQ-CONN-019
 def _operating(peer: Any, op: Operation, whose: Optional[str]) -> StructuredTool:
     """
     A tool running *op*: on the peer's own workspace, or, when *whose* names the

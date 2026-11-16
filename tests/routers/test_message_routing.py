@@ -102,6 +102,7 @@ def _said(view, msg_id) -> ChatMessage:
 
 # === A router decides who an unaddressed say is for =================================
 
+# @ac AC-ROUTE-001.1
 async def test_routed_to_one_peer():
     bot, other = _Eco("hello"), _Eco("bye")
     router     = _Fixed(None)
@@ -114,6 +115,7 @@ async def test_routed_to_one_peer():
     assert [m.text for m in bot.asked] == ["hi"] and other.asked == []
 
 
+# @ac AC-ROUTE-001.2
 async def test_routed_to_nobody():
     bot, router = _Eco(), _Fixed(None)
     session, view = await driven(connectors=[bot], router=router)
@@ -122,6 +124,7 @@ async def test_routed_to_nobody():
     assert _said(view, said).to is None and bot.asked == []
 
 
+# @ac AC-ROUTE-001.3
 async def test_an_addressed_say_is_not_routed():
     sol, lua = _Eco("sunny"), _Eco("full moon")
     router   = _Fixed(2)
@@ -132,6 +135,7 @@ async def test_an_addressed_say_is_not_routed():
     assert [m.text for m in sol.asked] == ["hi"] and lua.asked == []
 
 
+# @ac AC-ROUTE-001.4
 async def test_a_commands_output_is_not_routed():
     router = _Fixed(1)
     session, view = await driven(connectors=[_Eco()], commands=[_Upper()], router=router)
@@ -140,6 +144,7 @@ async def test_a_commands_output_is_not_routed():
     assert router.consulted == []
 
 
+# @ac AC-ROUTE-001.5
 async def test_what_a_command_writes_is_not_routed():
     eco = _Eco()
     session, view = await driven(connectors=[eco])
@@ -150,6 +155,7 @@ async def test_what_a_command_writes_is_not_routed():
 
 # === The router is the one router= was given ======================================
 
+# @ac AC-ROUTE-002.1
 async def test_declaring_hookroute_does_not_make_a_connector_the_router():
     @connector("triage")
     @require(HookAnswer)
@@ -172,6 +178,7 @@ async def test_declaring_hookroute_does_not_make_a_connector_the_router():
     assert _said(view, said).to is None and triage.answered == []
 
 
+# @ac AC-ROUTE-002.2
 async def test_a_router_reads_the_room():
     @connector("reader")
     @require(HookRoute)
@@ -190,6 +197,7 @@ async def test_a_router_reads_the_room():
     assert _said(view, said).to == eco.peer_id
 
 
+# @ac AC-ROUTE-002.3
 async def test_a_router_starts_and_stops_with_the_chat():
     @require(HookRoute)
     class Lived:
@@ -211,11 +219,13 @@ async def test_a_router_starts_and_stops_with_the_chat():
     assert lived.life == ["up", "down"]
 
 
+# @ac AC-ROUTE-002.4
 def test_a_router_must_declare_hookroute():
     with pytest.raises(TypeError):
         ChatSession(router=_Eco())
 
 
+# @ac AC-ROUTE-002.5
 async def test_without_a_router_nothing_is_routed():
     eco = _Eco()
     session, view = await driven(connectors=[eco], router=None)
@@ -226,6 +236,7 @@ async def test_without_a_router_nothing_is_routed():
 
 # === What a router returns is checked ===============================================
 
+# @ac AC-ROUTE-003.1
 @pytest.mark.parametrize("pick", ["speaker", "listener", "stranger"])
 async def test_a_bad_route_is_ignored(pick, caplog):
     eco, falador = _Eco(), _Falador()
@@ -239,6 +250,7 @@ async def test_a_bad_route_is_ignored(pick, caplog):
     assert "Ignored the router's" in caplog.text
 
 
+# @ac AC-ROUTE-003.2
 async def test_a_failing_router_does_not_stop_the_say(caplog):
     @require(HookRoute)
     class Broken:
@@ -256,6 +268,7 @@ async def test_a_failing_router_does_not_stop_the_say(caplog):
 
 # === The default router =============================================================
 
+# @ac AC-ROUTE-004.1
 async def test_one_peer_answers():
     eco, falador = _Eco("sunny"), _Falador()
     session, view = await driven(connectors=[eco, falador])
@@ -269,6 +282,7 @@ async def test_one_peer_answers():
     await session.close()
 
 
+# @ac AC-ROUTE-004.2
 async def test_several_peers_answer():
     one, two, falador = _Eco(), _Eco(), _Falador()
     session, view = await driven(connectors=[one, two, falador])
@@ -279,6 +293,7 @@ async def test_several_peers_answer():
     await session.close()
 
 
+# @ac AC-ROUTE-004.3
 async def test_the_speaker_and_the_frontend_do_not_count():
     eco = _Eco()
     session, view = await driven(connectors=[eco])
@@ -289,6 +304,7 @@ async def test_the_speaker_and_the_frontend_do_not_count():
     await session.close()
 
 
+# @ac AC-ROUTE-005.1
 async def test_a_reply_to_the_user_goes_to_nobody():
     """A reply to what the user said is put neither to the user nor to the lone peer."""
     eco, falador = _Eco(), _Falador()
@@ -308,6 +324,7 @@ async def _answer_of(view, eco, text):
     return [m for m in view.context() if m.reply_to == said and m.frm == eco.peer_id][0].id
 
 
+# @ac AC-ROUTE-005.2
 async def test_the_user_follows_up_on_an_answer():
     bot = _Eco("sunny")
     session, view = await driven(connectors=[bot])
@@ -321,6 +338,7 @@ async def test_the_user_follows_up_on_an_answer():
     await session.close()
 
 
+# @ac AC-ROUTE-005.3
 async def test_following_up_in_a_room_with_several_peers():
     sol, lua = _Eco("sunny"), _Eco("full moon")
     session, view = await driven(connectors=[sol, lua])
@@ -334,6 +352,7 @@ async def test_following_up_in_a_room_with_several_peers():
     await session.close()
 
 
+# @ac AC-ROUTE-005.4
 async def test_replying_to_a_peer_that_does_not_answer():
     eco, falador = _Eco(), _Falador()
     session, view = await driven(connectors=[eco, falador])
@@ -345,6 +364,7 @@ async def test_replying_to_a_peer_that_does_not_answer():
     await session.close()
 
 
+# @ac AC-ROUTE-005.5
 async def test_replying_to_a_commands_output():
     eco = _Eco()
     session, view = await driven(connectors=[eco], commands=[_Upper()])
@@ -357,6 +377,7 @@ async def test_replying_to_a_commands_output():
     await session.close()
 
 
+# @ac AC-ROUTE-005.6
 async def test_an_explicit_recipient_wins():
     sol, lua = _Eco("sunny"), _Eco("full moon")
     session, view = await driven(connectors=[sol, lua])
@@ -370,6 +391,7 @@ async def test_an_explicit_recipient_wins():
     await session.close()
 
 
+# @ac AC-ROUTE-005.7
 async def test_replying_to_oneself():
     eco = _Eco()
     session, view = await driven(connectors=[eco])
@@ -382,6 +404,7 @@ async def test_replying_to_oneself():
     await session.close()
 
 
+# @ac AC-ROUTE-004.5
 async def test_a_lone_peer_that_fails_replies_with_an_error():
     eco, falador = _Eco(RuntimeError("boom")), _Falador()
     session, view = await driven(connectors=[eco, falador])
@@ -393,6 +416,7 @@ async def test_a_lone_peer_that_fails_replies_with_an_error():
     await session.close()
 
 
+# @ac AC-ROUTE-004.4
 async def test_a_listener_of_unaddressed_says_stays_quiet_when_the_say_is_routed():
     """The cost the proposal names: routed, the say is no longer owed by nobody."""
     bot, echo = _Eco("hello"), _Echo()
@@ -405,6 +429,7 @@ async def test_a_listener_of_unaddressed_says_stays_quiet_when_the_say_is_routed
 
 # === An answer is addressed to nobody ===============================================
 
+# @ac AC-ROUTE-001.6
 async def test_a_command_is_answered_by_nobody():
     session, view = await driven(connectors=[_Eco()], commands=[_Upper()])
     await view.command("upper", "shout")
@@ -413,6 +438,7 @@ async def test_a_command_is_answered_by_nobody():
     await session.close()
 
 
+# @ac AC-ROUTE-001.7
 async def test_a_late_answer_is_not_routed():
     @connector("late")
     @require(HookAnswer)
@@ -430,6 +456,7 @@ async def test_a_late_answer_is_not_routed():
     assert router.consulted == []
 
 
+# @ac AC-ROUTE-006.1
 async def test_the_builders_route_with_simple_router_unless_given_one():
     pytest.importorskip("textual")
     pytest.importorskip("fastmcp")

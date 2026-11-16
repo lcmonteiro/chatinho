@@ -1,0 +1,9 @@
+name: baseline-commands
+created: '2026-11-16T11:28:50'
+phase: done
+specified:
+  REQ-CMD-001: 0f53e064d797
+  REQ-CMD-002: 2e14723d1f59
+  REQ-CMD-003: fde1c06d96f0
+  REQ-CMD-004: 868354314b1d
+  REQ-CMD-005: 4a127c057f5e

@@ -96,6 +96,7 @@ class _Agente:
 # === Saying =====================================================================
 
 
+# @ac AC-FRONT-001.1
 async def test_say_returns_an_id_and_stores():
     app = await chat_frontend()
     async with app.run_test():
@@ -106,6 +107,7 @@ async def test_say_returns_an_id_and_stores():
         assert msg.is_local is True
 
 
+# @ac AC-FRONT-003.1
 async def test_the_welcome_message_is_a_banner_not_a_message():
     app = await chat_frontend(welcome_message="Bem-vindo")
     async with app.run_test():
@@ -114,6 +116,7 @@ async def test_the_welcome_message_is_a_banner_not_a_message():
         assert app.messages == []
 
 
+# @ac AC-FRONT-003.2
 async def test_no_welcome_no_banner():
     app = await chat_frontend()
     async with app.run_test():
@@ -133,6 +136,7 @@ class _Model:
         return Reply("ok")
 
 
+# @ac AC-FRONT-003.3
 async def test_the_terminal_never_puts_its_own_notices_to_a_peer():
     """
     The welcome and an unknown command are the terminal's, not the user's words.
@@ -149,6 +153,7 @@ async def test_the_terminal_never_puts_its_own_notices_to_a_peer():
     assert app.messages == []
 
 
+# @ac AC-FRONT-001.2
 async def test_submitting_text_says_it():
     app = await chat_frontend()
     async with app.run_test() as pilot:
@@ -160,6 +165,7 @@ async def test_submitting_text_says_it():
         assert app.query_one("#input-line", CommandInput).text == ""
 
 
+# @ac AC-FRONT-001.3
 async def test_blank_input_says_nothing():
     app = await chat_frontend()
     async with app.run_test() as pilot:
@@ -198,6 +204,7 @@ async def _submit(app, pilot, text):
         await pilot.pause(0.02)
 
 
+# @ac AC-FRONT-002.1
 async def test_an_at_name_asks_that_peer_without_the_name():
     sol = _Sol()
     app = await chat_frontend(connectors=[sol, _Lua()])
@@ -209,6 +216,7 @@ async def test_an_at_name_asks_that_peer_without_the_name():
         assert app.messages[-1].text == "sunny" and app.messages[-1].reply_to == asked.id
 
 
+# @ac AC-FRONT-002.2
 async def test_a_follow_up_to_an_answer_is_asked_of_whoever_answered():
     """
     Tap an answer, type, Enter: the peer that answered is asked the follow-up.
@@ -228,6 +236,7 @@ async def test_a_follow_up_to_an_answer_is_asked_of_whoever_answered():
         assert app.messages[-1].reply_to == app.messages[-2].id
 
 
+# @ac AC-FRONT-001.4
 @pytest.mark.parametrize("typed", ["@nobody hi", "@sol", "hello @sol"])
 async def test_anything_else_is_said_as_typed(typed):
     sol = _Sol()
@@ -241,6 +250,7 @@ async def test_anything_else_is_said_as_typed(typed):
 # === Commands are run, and the running is recorded ==============================
 
 
+# @ac AC-FRONT-004.2
 async def test_running_a_command_is_recorded_whole():
     """The invocation and the answer are both messages, in that order."""
     app = await chat_frontend(commands=[_Eco(), _Mudo()])
@@ -253,6 +263,7 @@ async def test_running_a_command_is_recorded_whole():
         ]
 
 
+# @ac AC-FRONT-004.3
 async def test_what_a_command_writes_is_not_the_user_speaking():
     """
     A connector answering the user must not answer /help's output.
@@ -271,6 +282,7 @@ async def test_what_a_command_writes_is_not_the_user_speaking():
         assert resposta.frm == TOOL and resposta.is_local is False
 
 
+# @ac AC-FRONT-004.1
 async def test_submitting_a_slash_runs_the_tool():
     app = await chat_frontend(commands=[_Eco()])
     async with app.run_test() as pilot:
@@ -316,6 +328,7 @@ async def _wait_for(app, pilot, text, tries=100):
     raise AssertionError("%r never arrived" % text)
 
 
+# @ac AC-FRONT-005.1
 async def test_a_slow_command_does_not_freeze_the_input():
     app = await chat_frontend(commands=[_LentoCmd()])
     async with app.run_test() as pilot:
@@ -342,6 +355,7 @@ class _BoomCmd:
         raise RuntimeError("kaboom")
 
 
+# @ac AC-FRONT-003.6
 async def test_a_failing_command_is_a_notice_and_the_terminal_stays():
     app = await chat_frontend(commands=[_BoomCmd()])
     async with app.run_test(notifications=True) as pilot:
@@ -356,6 +370,7 @@ async def test_a_failing_command_is_a_notice_and_the_terminal_stays():
         assert app.is_running
 
 
+# @ac AC-FRONT-005.2
 async def test_a_slow_command_shows_while_it_runs():
     """The invocation is painted when it is posted, not when the answer lands."""
     app = await chat_frontend(commands=[_LentoCmd()])
@@ -373,6 +388,7 @@ async def test_a_slow_command_shows_while_it_runs():
         await _wait_for(app, pilot, "lento: done")
 
 
+# @ac AC-FRONT-005.3
 async def test_a_slow_peer_does_not_freeze_the_input():
     app = await chat_frontend(connectors=[_LentaPeer(), _Lua()])
     async with app.run_test() as pilot:
@@ -386,6 +402,7 @@ async def test_a_slow_peer_does_not_freeze_the_input():
         await _wait_for(app, pilot, "lenta: done")
 
 
+# @ac AC-FRONT-005.5
 async def test_a_question_to_the_user_keeps_only_its_asker_waiting():
     agente = _Agente()
     app = await chat_frontend(connectors=[agente, _Lua()])
@@ -400,6 +417,7 @@ async def test_a_question_to_the_user_keeps_only_its_asker_waiting():
         waiting.cancel()
 
 
+# @ac AC-FRONT-003.4
 async def test_an_unknown_command_is_a_notice_not_a_message():
     app = await chat_frontend()
     async with app.run_test(notifications=True) as pilot:
@@ -408,6 +426,7 @@ async def test_an_unknown_command_is_a_notice_not_a_message():
     assert app.messages == []
 
 
+# @ac AC-FRONT-004.5
 async def test_help_lists_the_tools_that_can_be_asked():
     app = await chat_frontend(commands=[HelpCommand(), _Eco()])
     async with app.run_test() as pilot:
@@ -419,6 +438,7 @@ async def test_help_lists_the_tools_that_can_be_asked():
 # === Being asked ================================================================
 
 
+# @ac AC-FRONT-005.6
 async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
     """The whole round trip, with no routing code in the presentation."""
     agente = _Agente()
@@ -438,6 +458,7 @@ async def test_a_connector_can_ask_the_user_and_the_reply_answers_it():
 # === Threading ==================================================================
 
 
+# @ac AC-FRONT-001.5
 async def test_a_message_from_another_thread_reaches_the_log():
     """A connector with its own server thread must be able to speak."""
     app = await chat_frontend()
@@ -459,6 +480,7 @@ async def test_a_message_from_another_thread_reaches_the_log():
 # === Rendering ==================================================================
 
 
+# @ac AC-FRONT-004.4
 async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
     """
     What a command answered quotes the invocation, and is headed @tool.
@@ -478,6 +500,7 @@ async def test_a_commands_answer_is_rendered_as_a_reply_to_it():
         assert citacoes == ["↳ %s: /eco ola" % app.messages[0].id.short], "short: no ellipsis"
 
 
+# @ac AC-FRONT-006.4
 async def test_a_long_original_is_quoted_cut_with_an_ellipsis():
     app = await chat_frontend()
     async with app.run_test() as pilot:
@@ -489,6 +512,7 @@ async def test_a_long_original_is_quoted_cut_with_an_ellipsis():
         assert quote.endswith("…")
 
 
+# @ac AC-FRONT-007.3
 async def test_a_bubble_is_measured_in_cells_not_characters():
     """A CJK character takes two cells; counting characters made its bubble too narrow."""
     app = await chat_frontend()
@@ -497,12 +521,14 @@ async def test_a_bubble_is_measured_in_cells_not_characters():
         assert log._bubble_width("你好" * 10) == log._bubble_width("ab" * 10) + 20
 
 
+# @ac AC-FRONT-009.9
 def test_a_bad_copy_key_is_named_as_the_copy_key():
     with pytest.raises(ValueError, match="copy_key") as refused:
         ChatFrontend(copy_key="ctrl+h")
     assert "quit_key" not in str(refused.value)
 
 
+# @ac AC-FRONT-007.1
 async def test_the_log_renders_what_the_history_holds():
     app = await chat_frontend(commands=[_Eco()])
     async with app.run_test() as pilot:
@@ -514,6 +540,7 @@ async def test_the_log_renders_what_the_history_holds():
         assert len(log._msg_widgets) == len(app.messages) == 3
 
 
+# @ac AC-FRONT-007.2
 async def test_only_the_window_is_rendered():
     app = await chat_frontend(max_displayed=3)
     async with app.run_test() as pilot:
@@ -527,6 +554,7 @@ async def test_only_the_window_is_rendered():
 # === Threading a reply ==========================================================
 
 
+# @ac AC-FRONT-006.3
 async def test_get_replies_reads_the_thread_back():
     app = await chat_frontend()
     async with app.run_test():
@@ -536,6 +564,7 @@ async def test_get_replies_reads_the_thread_back():
         assert app.get_replies(MessageID.parse("msg-999")) == []
 
 
+# @ac AC-FRONT-006.1
 async def test_what_is_typed_replies_to_the_selected_target():
     app = await chat_frontend()
     async with app.run_test() as pilot:
@@ -547,6 +576,7 @@ async def test_what_is_typed_replies_to_the_selected_target():
         assert app._reply_target is None
 
 
+# @ac AC-FRONT-006.2
 async def test_without_a_target_what_is_typed_replies_to_nothing():
     app = await chat_frontend()
     async with app.run_test() as pilot:
@@ -558,6 +588,7 @@ async def test_without_a_target_what_is_typed_replies_to_nothing():
 # === Short ids =================================================================
 
 
+# @ac AC-FRONT-008.1
 async def test_the_header_shows_the_short_id_and_not_the_full_one():
     app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
@@ -568,6 +599,7 @@ async def test_the_header_shows_the_short_id_and_not_the_full_one():
         assert str(said) not in header
 
 
+# @ac AC-FRONT-008.2
 async def test_the_reply_placeholder_names_the_short_id():
     app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
@@ -578,6 +610,7 @@ async def test_the_reply_placeholder_names_the_short_id():
         assert app.query_one(CommandInput).placeholder == "Reply to %s…" % said.short
 
 
+# @ac AC-FRONT-008.3
 async def test_a_reply_still_carries_the_full_id():
     app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
@@ -589,6 +622,7 @@ async def test_a_reply_still_carries_the_full_id():
         assert re.fullmatch(r"msg-[0-9a-f]{16}", str(said))
 
 
+# @ac AC-FRONT-008.4
 async def test_the_copy_notice_is_titled_with_the_short_id(monkeypatch):
     from chatinho.frontends.chat import clipboard
 
@@ -624,11 +658,13 @@ def _actions_for(app, key):
         return None
 
 
+# @ac AC-FRONT-009.1
 async def test_the_quit_key_defaults_to_textuals_own():
     app = await chat_frontend()
     assert _actions_for(app, "ctrl+q") == ["quit"]
 
 
+# @ac AC-FRONT-009.2
 async def test_a_given_quit_key_replaces_the_default_rather_than_joining_it():
     """
     ChatFrontend declares no BINDINGS: quit is inherited, and Textual *merges*.
@@ -641,6 +677,7 @@ async def test_a_given_quit_key_replaces_the_default_rather_than_joining_it():
     assert _actions_for(app, "ctrl+q") is None
 
 
+# @ac AC-FRONT-009.3
 async def test_the_quit_key_actually_quits_and_the_old_one_does_not():
     """The map saying so is not the same as the app doing so."""
     app = await chat_frontend(quit_key="ctrl+g")
@@ -654,6 +691,7 @@ async def test_the_quit_key_actually_quits_and_the_old_one_does_not():
         assert not app.is_running
 
 
+# @ac AC-FRONT-009.4
 async def test_rebinding_quit_leaves_the_other_bindings_alone():
     """ctrl+c is help_quit and ctrl+p is the command palette; neither moves."""
     default = await chat_frontend()
@@ -662,6 +700,7 @@ async def test_rebinding_quit_leaves_the_other_bindings_alone():
         assert _actions_for(rebound, key) == _actions_for(default, key)
 
 
+# @ac AC-FRONT-009.5
 @pytest.mark.parametrize("bad", ["", "   ", "not a key", "ctrl+", "hyperx+q"])
 async def test_a_quit_key_textual_could_never_receive_is_refused(bad):
     """Binding() accepts 'not a key' and then never fires — a silent no-op."""
@@ -669,11 +708,13 @@ async def test_a_quit_key_textual_could_never_receive_is_refused(bad):
         await chat_frontend(quit_key=bad)
 
 
+# @ac AC-FRONT-009.8
 async def test_a_single_character_and_a_named_key_are_both_accepted():
     assert _actions_for(await chat_frontend(quit_key="q"), "q") == ["quit"]
     assert _actions_for(await chat_frontend(quit_key="escape"), "escape") == ["quit"]
 
 
+# @ac AC-FRONT-010.1
 def test_build_chat_returns_the_session_with_the_terminal_attached():
     """The session owns the loop; the terminal is one of the peers it serves."""
     session = build_chat_session(commands=[_Eco()])
@@ -683,6 +724,7 @@ def test_build_chat_returns_the_session_with_the_terminal_attached():
     assert callable(getattr(session, "run", None))
 
 
+# @ac AC-FRONT-010.2
 async def test_the_terminal_serves_until_the_user_quits():
     """
     serve() is what ChatSession.run() runs, and it is run_async underneath.
@@ -719,6 +761,7 @@ def _bubbles(app):
     return list(app.query(".message-bubble"))
 
 
+# @ac AC-FRONT-011.1
 async def test_a_bubble_is_as_wide_as_its_widest_line():
     """Dynamic, not 90% of the window — and never past the maximum."""
     app = await chat_frontend()
@@ -732,6 +775,7 @@ async def test_a_bubble_is_as_wide_as_its_widest_line():
         assert long.outer_size.width == 72, "a long one stops at bubble_max_width"
 
 
+# @ac AC-FRONT-011.2
 async def test_a_bubble_has_no_background_until_it_is_the_reply_target():
     """The fill is what selection means; nothing else in the log has one."""
     app = await chat_frontend()
@@ -751,6 +795,7 @@ async def test_a_bubble_has_no_background_until_it_is_the_reply_target():
         assert bubble.styles.background.a == 0, "deselected: back to an outline"
 
 
+# @ac AC-FRONT-011.4
 async def test_who_spoke_is_on_the_container_whichever_side_it_takes():
     """
     The side is a style; the class is what the log routes on.
@@ -775,6 +820,7 @@ async def test_who_spoke_is_on_the_container_whichever_side_it_takes():
 # === The input takes more than one line =========================================
 
 
+# @ac AC-FRONT-012.1
 @pytest.mark.parametrize("newline_key", NEWLINE_KEYS)
 async def test_a_newline_key_opens_a_line_and_enter_sends_both(newline_key):
     """
@@ -796,6 +842,7 @@ async def test_a_newline_key_opens_a_line_and_enter_sends_both(newline_key):
         assert app.query_one("#input-line", CommandInput).text == ""
 
 
+# @ac AC-FRONT-012.2
 async def test_a_space_before_enter_opens_a_line_and_is_consumed():
     """
     The default escape, and the way in that needs no key at all.
@@ -814,6 +861,7 @@ async def test_a_space_before_enter_opens_a_line_and_is_consumed():
         assert [m.text for m in app.messages] == ["a\nb"]
 
 
+# @ac AC-FRONT-012.3
 async def test_a_message_that_really_ends_in_the_escape_can_still_be_sent():
     """
     Which is why the check is anchored to the cursor, not to the text.
@@ -830,6 +878,7 @@ async def test_a_message_that_really_ends_in_the_escape_can_still_be_sent():
         assert [m.text for m in app.messages] == ["a"], "stripped on the way out"
 
 
+# @ac AC-FRONT-012.4
 async def test_the_escape_is_configurable_and_can_be_turned_off():
     """A space suits a chat; a backslash suits somebody who types prose in one."""
     app = await chat_frontend(newline_escape="\\")
@@ -848,6 +897,7 @@ async def test_the_escape_is_configurable_and_can_be_turned_off():
         assert [m.text for m in off.messages] == ["a"], "no escape at all"
 
 
+# @ac AC-FRONT-012.5
 @pytest.mark.parametrize("bad", ["", "  ", "\n", 7])
 def test_an_escape_that_could_never_fire_is_refused(bad):
     """
@@ -880,6 +930,7 @@ _WITHOUT_THE_PROTOCOL = {
 }
 
 
+# @ac AC-FRONT-012.6
 def test_at_least_one_newline_key_arrives_without_the_enhanced_protocol():
     """
     What a key is *called* is ours; whether it arrives is the terminal's.
@@ -909,6 +960,7 @@ def test_at_least_one_newline_key_arrives_without_the_enhanced_protocol():
         assert [e.key for e in XTermParser().feed(sequence)] == expected, name
 
 
+# @ac AC-FRONT-012.7
 async def test_the_input_grows_with_the_lines_up_to_its_maximum():
     """It starts one row tall and stops at input_max_height, borders included."""
     app = await chat_frontend()
@@ -925,6 +977,7 @@ async def test_the_input_grows_with_the_lines_up_to_its_maximum():
         assert inp.outer_size.height == 8, "and stops at the maximum"
 
 
+# @ac AC-FRONT-012.8
 async def test_up_moves_the_cursor_when_no_suggestion_is_open():
     """Up and Down belong to the popup only while it has something to move."""
     app = await chat_frontend(commands=[_Eco()])
@@ -950,6 +1003,7 @@ class _Segundo:
         return Reply("sou o segundo")
 
 
+# @ac AC-FRONT-013.1
 async def test_each_peer_gets_its_own_header_colour():
     """The header carries who spoke and the message id, so it is what is tinted."""
     app = await chat_frontend(connectors=[_Outro(), _Segundo()])
@@ -970,6 +1024,7 @@ async def test_each_peer_gets_its_own_header_colour():
         assert len(set(colours.values())) == len(colours), "no two peers share a colour"
 
 
+# @ac AC-FRONT-013.2
 def test_a_command_is_not_given_a_peer_slot():
     """TOOL has no id of its own, so it gets a name rather than a number."""
     style = ChatStyle()
@@ -977,6 +1032,7 @@ def test_a_command_is_not_given_a_peer_slot():
     assert style.header_class(LOCAL) == "peer-0"
 
 
+# @ac AC-FRONT-013.3
 def test_the_palette_wraps_round_rather_than_running_out():
     """More peers than colours is ordinary; running out of them would not be."""
     style = ChatStyle()
@@ -985,11 +1041,13 @@ def test_the_palette_wraps_round_rather_than_running_out():
     assert style.header_class(width + 1) == style.header_class(1)
 
 
+# @ac AC-FRONT-013.4
 def test_a_palette_with_no_colours_is_refused():
     with pytest.raises(ValueError, match="peer_headers"):
         ChatStyle(peer_headers=())
 
 
+# @ac AC-FRONT-014.1
 async def test_the_scrollbar_wears_the_palette_too():
     """
     Textual styles a scrollbar with properties, not with a class of its own.
@@ -1017,6 +1075,7 @@ async def test_the_scrollbar_wears_the_palette_too():
 # === A bubble stays inside the window ============================================
 
 
+# @ac AC-FRONT-014.2
 async def test_the_scrollbar_is_one_cell_wide():
     """
     Textual's own is two, which is a lot to give up beside a narrow chat.
@@ -1036,6 +1095,7 @@ async def test_the_scrollbar_is_one_cell_wide():
         assert log.scrollbar_size_vertical == 1, "one cell, not Textual's two"
 
 
+# @ac AC-FRONT-014.3
 async def test_the_scrollbar_width_is_a_style_field():
     """And a wider one is still reachable, for a terminal where one is too thin."""
     app = await chat_frontend(style=replace(ChatStyle(), scrollbar_size=3))
@@ -1047,6 +1107,7 @@ async def test_the_scrollbar_width_is_a_style_field():
         assert app._chat_log.scrollbar_size_vertical == 3
 
 
+# @ac AC-FRONT-014.4
 def test_a_scrollbar_with_no_width_is_refused_at_construction():
     """
     Textual refuses it too, but at mount, pointing at the generated CSS.
@@ -1074,6 +1135,7 @@ async def _scrollbar_column(app, pilot):
                               for y in range(bar.region.y, bar.region.bottom)}
 
 
+# @ac AC-FRONT-014.5
 async def test_the_track_is_the_chat_behind_it_until_you_reach_for_it():
     """
     One cell is the floor, so the thinning left is what the cell is painted with.
@@ -1096,6 +1158,7 @@ async def test_the_track_is_the_chat_behind_it_until_you_reach_for_it():
         assert painted() == {style.scrollbar_hover_bg}, "and the track is there when reached for"
 
 
+# @ac AC-FRONT-014.6
 async def test_a_transparent_track_follows_the_chat_background():
     """
     Which is why it is `transparent` and not `chat_bg`'s hex written twice.
@@ -1126,6 +1189,7 @@ async def _both_bars_up(pilot, app):
     return log, inp
 
 
+# @ac AC-FRONT-014.7
 async def test_the_input_scrollbar_wears_the_same_palette_as_the_log():
     """
     The input is a TextArea with a bar of its own, and nothing named it.
@@ -1150,6 +1214,7 @@ async def test_the_input_scrollbar_wears_the_same_palette_as_the_log():
                 "%s: the track is the chat behind it" % who
 
 
+# @ac AC-FRONT-014.8
 async def test_both_scrollbars_line_up_against_the_edge():
     """
     One column down the right side, not two bars in two places.
@@ -1169,6 +1234,7 @@ async def test_both_scrollbars_line_up_against_the_edge():
             "and that column is the last one in the window"
 
 
+# @ac AC-FRONT-011.5
 async def test_a_bubble_never_runs_past_the_window_or_under_the_scrollbar():
     """bubble_max_width is a cap, not a width: a narrow window wins over it."""
     app = await chat_frontend()
@@ -1193,6 +1259,7 @@ async def test_a_bubble_never_runs_past_the_window_or_under_the_scrollbar():
             "and keeps a margin between the two"
 
 
+# @ac AC-FRONT-011.3
 async def test_selecting_a_bubble_fills_it_and_nothing_else():
     """The fill is the whole of the selection; there is no second outline."""
     app = await chat_frontend()
@@ -1211,6 +1278,7 @@ async def test_selecting_a_bubble_fills_it_and_nothing_else():
 # === The header sits above the bubble, in the peer's colour =====================
 
 
+# @ac AC-FRONT-013.5
 async def test_the_header_is_above_the_bubble_and_outside_it():
     """It is a sibling of the bubble, not a child: the bubble holds only text."""
     app = await chat_frontend()
@@ -1227,6 +1295,7 @@ async def test_the_header_is_above_the_bubble_and_outside_it():
         assert header.region.y < bubble.region.y, "drawn above it"
 
 
+# @ac AC-FRONT-013.6
 async def test_the_bubble_border_is_the_headers_colour():
     """One colour per peer, not one for the name and another for the box."""
     app = await chat_frontend(connectors=[_Outro()])
@@ -1246,6 +1315,7 @@ async def test_the_bubble_border_is_the_headers_colour():
         assert len(pairs) > 1, "and the two peers are not the same colour"
 
 
+# @ac AC-FRONT-013.7
 async def test_a_bubble_is_never_narrower_than_the_header_above_it():
     """
     The header sits on top of the bubble, so the bubble has to reach it.
@@ -1269,6 +1339,7 @@ async def test_a_bubble_is_never_narrower_than_the_header_above_it():
 # === A key the terminal swallows is refused =====================================
 
 
+# @ac AC-FRONT-009.6
 @pytest.mark.parametrize("combo, arrives", [
     ("ctrl+h", "backspace"),        # what made ctrl+h fail on Termux
     ("ctrl+i", "tab"),
@@ -1286,6 +1357,7 @@ async def test_a_quit_key_the_terminal_cannot_send_is_refused(combo, arrives):
         await chat_frontend(quit_key=combo)
 
 
+# @ac AC-FRONT-009.7
 def test_the_swallowed_keys_are_read_from_textual_not_listed_here():
     """Derived, so it cannot drift from what Textual actually does."""
     from chatinho.frontends.chat import _SWALLOWED, _swallowed_keys
@@ -1298,6 +1370,7 @@ def test_the_swallowed_keys_are_read_from_textual_not_listed_here():
 # === Holding a message copies it ================================================
 
 
+# @ac AC-FRONT-015.2
 async def test_two_taps_copy_the_message():
     app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
@@ -1317,6 +1390,7 @@ async def test_two_taps_copy_the_message():
             "the second tap puts the selection back: a double tap only copies"
 
 
+# @ac AC-FRONT-015.1
 async def test_one_tap_still_selects_the_reply_target():
     app = await chat_frontend()
     async with app.run_test(size=(80, 24)) as pilot:
@@ -1357,6 +1431,7 @@ def _click_at(widget, screen_y, screen_x=None):
                         screen_y=screen_y)
 
 
+# @ac AC-FRONT-015.5
 async def test_a_press_that_travelled_down_is_not_a_tap():
     """A press that landed low and lifted high was a drag, not a tap."""
     app = await chat_frontend()
@@ -1373,6 +1448,7 @@ async def test_a_press_that_travelled_down_is_not_a_tap():
         assert app._chat_log.reply_target is None, "a drag selects nothing"
 
 
+# @ac AC-FRONT-015.6
 async def test_a_tap_that_barely_moves_is_still_a_tap():
     """A finger is never perfectly still; only a real travel is a scroll."""
     app = await chat_frontend()
@@ -1430,6 +1506,7 @@ async def _a_full_log(pilot, app, count=30):
     return log
 
 
+# @ac AC-FRONT-016.1
 async def test_dragging_across_text_selects_it_and_the_log_holds_still():
     """
     The reported bug: selecting across a bubble made the scroll shake.
@@ -1459,6 +1536,7 @@ async def test_dragging_across_text_selects_it_and_the_log_holds_still():
         assert screen.get_selected_text(), "and the drag selected the text it crossed"
 
 
+# @ac AC-FRONT-016.2
 async def test_dragging_the_background_still_pans_the_log():
     """
     A drag with nothing to select under it is still how the log is panned.
@@ -1493,6 +1571,7 @@ async def test_dragging_the_background_still_pans_the_log():
         assert screen.get_selected_text() is None, "and a pan selects nothing"
 
 
+# @ac AC-FRONT-015.7
 async def test_selecting_sideways_does_not_retarget_the_reply():
     """
     Textual makes a Click from any release on the widget the press landed on.
@@ -1517,6 +1596,7 @@ async def test_selecting_sideways_does_not_retarget_the_reply():
         assert app._chat_log.reply_target is None, "a sideways drag selects text, not a message"
 
 
+# @ac AC-FRONT-019.7
 async def test_the_header_stays_inside_a_phone_width_terminal():
     """
     `_bubble_width` caps at `bubble_max_width`, which is 72 — wider than a phone.
@@ -1547,6 +1627,7 @@ async def test_the_header_stays_inside_a_phone_width_terminal():
                 "at %d columns the header started before the log" % width
 
 
+# @ac AC-FRONT-015.8
 async def test_selecting_one_character_is_not_a_tap_either():
     """
     `_A_DRAG` has to allow a cell of wobble, so it cannot catch a short drag.
@@ -1581,6 +1662,7 @@ async def test_selecting_one_character_is_not_a_tap_either():
         assert log.reply_target is None, "a selection, however short, is not a tap"
 
 
+# @ac AC-FRONT-015.9
 async def test_a_tap_that_selects_nothing_still_taps():
     """And the guard above must not eat the gesture it sits in front of."""
     app = await chat_frontend()
@@ -1610,6 +1692,7 @@ async def test_a_tap_that_selects_nothing_still_taps():
 # === The input is ruled off, not boxed in ========================================
 
 
+# @ac AC-FRONT-017.1
 async def test_the_input_is_ruled_off_above_and_below_with_open_sides():
     """
     Two lines, not a bubble: the sides were costing the text two columns.
@@ -1636,6 +1719,7 @@ async def test_the_input_is_ruled_off_above_and_below_with_open_sides():
         assert inp.content_region.width == 45, "so the text keeps the side columns"
 
 
+# @ac AC-FRONT-017.2
 async def test_the_rules_brighten_while_the_input_has_focus():
     """
     `_input_frame_rules` writes the colour twice, once per state.
@@ -1664,6 +1748,7 @@ async def test_the_rules_brighten_while_the_input_has_focus():
             "and drops back to the resting colour when it loses focus"
 
 
+# @ac AC-FRONT-017.3
 async def test_the_input_rules_carry_no_hue_of_their_own():
     """
     Two orange bars across the width is not an accent, it is a stripe.
@@ -1679,6 +1764,7 @@ async def test_the_input_rules_carry_no_hue_of_their_own():
     assert style.accent != style.input_focus_border, "the accent is not the input's"
 
 
+# @ac AC-FRONT-017.4
 async def test_the_box_is_still_there_for_whoever_prefers_it():
     """Both shapes are real; `input_frame` is which one."""
     app = await chat_frontend(style=replace(ChatStyle(), input_frame="box"))
@@ -1692,6 +1778,7 @@ async def test_the_box_is_still_there_for_whoever_prefers_it():
         assert inp.content_region.width == 43, "which costs the two side columns"
 
 
+# @ac AC-FRONT-017.5
 def test_a_frame_that_is_neither_shape_is_refused_at_construction():
     """`local_align`'s argument again: Textual reports a broken rule nowhere useful."""
     for bad in ("round", "none", "", None):
@@ -1702,6 +1789,7 @@ def test_a_frame_that_is_neither_shape_is_refused_at_construction():
 # === A newline typed in the input is a newline in the bubble =====================
 
 
+# @ac AC-FRONT-018.1
 def test_the_chat_parser_turns_a_soft_break_into_a_hard_one():
     """
     Markdown's own answer to a lone newline is a space, and Textual obeys it.
@@ -1721,6 +1809,7 @@ def test_the_chat_parser_turns_a_soft_break_into_a_hard_one():
     assert "softbreak" not in kinds, "and none is left as a space"
 
 
+# @ac AC-FRONT-018.2
 def test_the_parser_leaves_a_fenced_block_alone():
     """A fence carries its content whole and has no children to rewrite."""
     fences = [t for t in chat_markdown().parse("```\na = 1\nb = 2\n```") if t.type == "fence"]
@@ -1729,6 +1818,7 @@ def test_the_parser_leaves_a_fenced_block_alone():
     assert fences[0].content == "a = 1\nb = 2\n", "the code is untouched"
 
 
+# @ac AC-FRONT-018.3
 async def test_a_message_typed_over_three_lines_is_three_lines_in_the_bubble():
     """
     The report: the Enters pressed in the input did not reach the bubble.
@@ -1748,6 +1838,7 @@ async def test_a_message_typed_over_three_lines_is_three_lines_in_the_bubble():
         assert paragraphs == ["um\ndois\ntres"], "three lines, not 'um dois tres'"
 
 
+# @ac AC-FRONT-018.4
 async def test_the_enters_reach_the_bubble_from_the_keyboard():
     """
     End to end, by the gesture: space+Enter opens a line, Ctrl+J opens one.
@@ -1774,6 +1865,7 @@ async def test_the_enters_reach_the_bubble_from_the_keyboard():
         assert [str(b._content) for b in body.children] == ["um\ndois\ntres"]
 
 
+# @ac AC-FRONT-018.5
 async def test_a_fenced_block_still_renders_as_code_in_a_bubble():
     """The rewrite must not reach inside a fence, where newlines were fine."""
     app = await chat_frontend()
@@ -1791,6 +1883,7 @@ async def test_a_fenced_block_still_renders_as_code_in_a_bubble():
 # === The header names who spoke =================================================
 
 
+# @ac AC-FRONT-019.1
 async def test_the_header_names_the_peer_with_an_at_and_no_brackets():
     """`Other` told you nothing when two connectors were in the room."""
     app = await chat_frontend(connectors=[_Outro()], commands=[_Eco()])
@@ -1814,6 +1907,7 @@ async def test_the_header_names_the_peer_with_an_at_and_no_brackets():
         assert "@tool" in named[TOOL], "a command is named outright: it is in no roster"
 
 
+# @ac AC-FRONT-019.2
 async def test_a_peer_that_is_gone_is_named_by_its_number():
     """History outlives connectors: a backend reloads what a peer once said."""
     app = await chat_frontend()
@@ -1821,6 +1915,7 @@ async def test_a_peer_that_is_gone_is_named_by_its_number():
         assert app._chat_log._name_of_peer(41) == "41", "still true, still distinct"
 
 
+# @ac AC-FRONT-019.3
 async def test_the_terminal_can_be_named_something_you_would_call_yourself():
     """`@chat` is the class's own name; `@me` is what a person types."""
     app = await chat_frontend(name="me")
@@ -1832,6 +1927,7 @@ async def test_the_terminal_can_be_named_something_you_would_call_yourself():
         assert "@me" in str(container.query_one(".message-header").render())
 
 
+# @ac AC-FRONT-019.4
 async def test_naming_the_terminal_is_optional_and_defaults_to_the_class():
     app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
@@ -1842,12 +1938,14 @@ async def test_naming_the_terminal_is_optional_and_defaults_to_the_class():
         assert "@chat" in str(container.query_one(".message-header").render())
 
 
+# @ac AC-FRONT-019.5
 async def test_a_blank_terminal_name_is_refused():
     """It is shown as `@name`: a blank one renders a lone `@`."""
     with pytest.raises(ValueError, match="blank"):
         await chat_frontend(name="   ")
 
 
+# @ac AC-FRONT-019.6
 def test_naming_an_instance_works_only_because_the_decorator_shadows_the_property():
     """
     DOMNode.name is read-only; @frontend's class attribute is what allows this.
@@ -1869,6 +1967,7 @@ def test_naming_an_instance_works_only_because_the_decorator_shadows_the_propert
 # === What the bubble costs around its text ======================================
 
 
+# @ac AC-FRONT-011.6
 async def test_the_bubble_clears_its_header_by_a_space():
     """Flush with the header reads as one block; a space apart reads as two."""
     app = await chat_frontend()
@@ -1883,6 +1982,7 @@ async def test_the_bubble_clears_its_header_by_a_space():
             "the header's own indent, plus one space after it"
 
 
+# @ac AC-FRONT-011.7
 async def test_a_line_measured_to_fit_does_not_wrap():
     """
     Markdown carries `padding: 0 2 0 2` of its own, inside what we measured.
@@ -1902,6 +2002,7 @@ async def test_a_line_measured_to_fit_does_not_wrap():
         assert body.styles.padding.right == 0, "and Markdown adds no padding of its own"
 
 
+# @ac AC-FRONT-011.8
 async def test_there_is_one_blank_row_under_the_text_not_two():
     """The bubble pads by one; MarkdownParagraph added a second underneath."""
     app = await chat_frontend()
@@ -1915,6 +2016,7 @@ async def test_there_is_one_blank_row_under_the_text_not_two():
         assert bubble.region.height == 5
 
 
+# @ac AC-FRONT-011.9
 async def test_paragraphs_are_still_separated_from_each_other():
     """Only the *trailing* margin goes: `:last-child`, not every paragraph."""
     app = await chat_frontend()
@@ -1927,6 +2029,7 @@ async def test_paragraphs_are_still_separated_from_each_other():
         assert margins == [1, 1, 0], "separated, but nothing trailing the last"
 
 
+# @ac AC-FRONT-011.10
 async def test_one_blank_row_separates_one_message_from_the_next():
     app = await chat_frontend()
     async with app.run_test(size=(90, 40)) as pilot:
@@ -1942,6 +2045,7 @@ async def test_one_blank_row_separates_one_message_from_the_next():
 # === Copying without the gesture ================================================
 
 
+# @ac AC-FRONT-020.1
 async def test_the_copy_key_copies_the_selected_message():
     """A phone terminal may take the long press for its own menu."""
     app = await chat_frontend()
@@ -1959,6 +2063,7 @@ async def test_the_copy_key_copies_the_selected_message():
         assert copied == ["para copiar"]
 
 
+# @ac AC-FRONT-020.2
 async def test_the_copy_key_says_what_to_do_when_nothing_is_selected():
     app = await chat_frontend()
     async with app.run_test(size=(90, 24)) as pilot:
@@ -1977,6 +2082,7 @@ async def test_the_copy_key_says_what_to_do_when_nothing_is_selected():
         assert told and "Select a message first" in told[0]
 
 
+# @ac AC-FRONT-020.3
 async def test_the_copy_key_can_be_moved_and_is_validated_like_the_quit_key():
     app = await chat_frontend(copy_key="f8")
     async with app.run_test(size=(90, 24)) as pilot:
@@ -1995,6 +2101,7 @@ async def test_the_copy_key_can_be_moved_and_is_validated_like_the_quit_key():
         await chat_frontend(copy_key="ctrl+h")
 
 
+# @ac AC-FRONT-020.4
 async def test_copying_takes_both_routes_and_names_them(monkeypatch):
     """OSC 52 goes out regardless; a helper runs too when the system has one."""
     from chatinho.frontends.chat import clipboard
@@ -2023,6 +2130,7 @@ async def test_copying_takes_both_routes_and_names_them(monkeypatch):
         assert "para copiar" in told[0], "and the confirmation shows what was copied"
 
 
+# @ac AC-FRONT-020.5
 async def test_with_no_helper_the_notification_says_only_osc_52(monkeypatch):
     """Naming the route is what makes a silent failure diagnosable."""
     from chatinho.frontends.chat import clipboard
@@ -2048,6 +2156,7 @@ async def test_with_no_helper_the_notification_says_only_osc_52(monkeypatch):
         assert told and told[0].endswith("Sent by OSC 52.")
 
 
+# @ac AC-FRONT-015.3
 async def test_two_taps_far_apart_in_time_are_two_taps():
     """The pair has to be quick, or every second reply-select would copy."""
     app = await chat_frontend()
@@ -2070,6 +2179,7 @@ async def test_two_taps_far_apart_in_time_are_two_taps():
         assert copied == [], "two separate taps copy nothing"
 
 
+# @ac AC-FRONT-020.6
 async def test_the_confirmation_is_a_popup_that_actually_appears(monkeypatch):
     """
     The one that matters, and the one nothing was checking.
@@ -2102,6 +2212,7 @@ async def test_the_confirmation_is_a_popup_that_actually_appears(monkeypatch):
         assert toasts[0].region.width > 0 and toasts[0].display, "and it is drawn"
 
 
+# @ac AC-FRONT-020.7
 def test_the_confirmation_shows_what_was_copied_on_one_line():
     """A phone cannot check the clipboard without leaving the chat."""
     assert preview_of("uma linha") == "uma linha"
@@ -2112,6 +2223,7 @@ def test_the_confirmation_shows_what_was_copied_on_one_line():
     assert len(shown) == 60 and shown.endswith("…")
 
 
+# @ac AC-FRONT-015.4
 def test_the_double_tap_does_not_use_textuals_chain_count():
     """
     Textual counts a double click only on the *exact same cell*.
@@ -2159,6 +2271,7 @@ def _header_text_span(container):
             header.region.x + len(line.rstrip()))
 
 
+# @ac AC-FRONT-021.1
 async def test_the_chat_is_centred_and_capped_on_a_wide_terminal():
     """A line the width of a desk is a line nobody reads across."""
     app = await chat_frontend()
@@ -2172,6 +2285,7 @@ async def test_the_chat_is_centred_and_capped_on_a_wide_terminal():
         assert body.region.x == (140 - cap) // 2, "and centred in what is left"
 
 
+# @ac AC-FRONT-021.2
 async def test_a_narrow_terminal_gives_the_chat_all_of_it():
     """The cap is a maximum, not a width: nothing is wasted on a phone."""
     app = await chat_frontend()
@@ -2183,6 +2297,7 @@ async def test_a_narrow_terminal_gives_the_chat_all_of_it():
         assert (body.region.x, body.region.width) == (0, 60)
 
 
+# @ac AC-FRONT-021.3
 async def test_the_input_is_still_at_the_bottom_of_the_centred_body():
     """`dock: bottom` is relative to the parent, which is now a narrower one."""
     app = await chat_frontend()
@@ -2200,6 +2315,7 @@ async def test_the_input_is_still_at_the_bottom_of_the_centred_body():
         assert input.region.x == body.region.x, "and the input moved in with it"
 
 
+# @ac AC-FRONT-021.4
 async def test_your_own_messages_are_on_the_right_by_default():
     """Everyone else stays left, so it reads as two columns."""
     app = await chat_frontend(connectors=[_Outro()])
@@ -2215,6 +2331,7 @@ async def test_your_own_messages_are_on_the_right_by_default():
             "and theirs are not"
 
 
+# @ac AC-FRONT-019.8
 async def test_a_header_hugs_the_same_edge_its_bubble_does():
     """
     Textual's ``align`` moves the header and the bubble as one block.
@@ -2246,6 +2363,7 @@ async def test_a_header_hugs_the_same_edge_its_bubble_does():
         assert end < bubble.right - 10, "and is not dragged over to the other end"
 
 
+# @ac AC-FRONT-021.5
 async def test_local_align_left_puts_everyone_in_one_column():
     app = await chat_frontend(connectors=[_Outro()],
                          style=replace(ChatStyle(), local_align="left"))
@@ -2259,6 +2377,7 @@ async def test_local_align_left_puts_everyone_in_one_column():
         assert sides["sent"] == sides["received"], "one column"
 
 
+# @ac AC-FRONT-021.6
 def test_a_local_align_that_is_not_a_side_is_refused():
     """Textual would take a broken rule and report it nowhere useful."""
     with pytest.raises(ValueError, match="left.*right"):
@@ -2303,6 +2422,7 @@ def _record(app, monkeypatch) -> tuple:
     return opened, notices
 
 
+# @ac AC-FRONT-022.1
 async def test_an_attachment_link_opens_where_the_backend_says(monkeypatch):
     keeper = _Keeper()
     app = await chat_frontend(backend=keeper)
@@ -2316,6 +2436,7 @@ async def test_an_attachment_link_opens_where_the_backend_says(monkeypatch):
     assert notices == []
 
 
+# @ac AC-FRONT-022.2
 async def test_an_attachment_the_backend_does_not_have_is_not_found(monkeypatch):
     app = await chat_frontend(backend=_Keeper())
     opened, notices = _record(app, monkeypatch)
@@ -2327,6 +2448,7 @@ async def test_an_attachment_the_backend_does_not_have_is_not_found(monkeypatch)
     assert notices == ["Not found"]
 
 
+# @ac AC-FRONT-022.3
 async def test_without_a_backend_an_attachment_link_is_not_found(monkeypatch):
     app = await chat_frontend()
     opened, notices = _record(app, monkeypatch)
@@ -2338,6 +2460,7 @@ async def test_without_a_backend_an_attachment_link_is_not_found(monkeypatch):
     assert notices == ["Not found"]
 
 
+# @ac AC-FRONT-022.4
 async def test_an_absolute_link_opens_without_asking_the_backend(monkeypatch):
     keeper = _Keeper()
     app = await chat_frontend(backend=keeper)
@@ -2350,6 +2473,7 @@ async def test_an_absolute_link_opens_without_asking_the_backend(monkeypatch):
     assert (notices, keeper.asked) == ([], 0)
 
 
+# @ac AC-FRONT-005.4
 async def test_a_slow_router_does_not_hold_the_input():
     """The router decides before a say is posted; the person keeps typing meanwhile."""
     @require(HookRoute)
