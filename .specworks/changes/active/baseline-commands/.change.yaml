@@ -1,5 +1,17 @@
 name: baseline-commands
 created: '2026-11-16T11:28:50'
-phase: specify
+phase: review
+specified:
+  REQ-CMD-001: 0f53e064d797
+  REQ-CMD-002: 2e14723d1f59
+  REQ-CMD-003: fde1c06d96f0
+  REQ-CMD-004: 868354314b1d
+  REQ-CMD-005: 4a127c057f5e
 dirty:
-  .specworks/changes/active/baseline-commands/.change.yaml: 45679a403125f6c96233191fd3299050f3a89954597818eb19614ebdbe2878b3
+  .specworks/changes/active/baseline-commands/.change.yaml: ee3c7adbabba709501f9759d123b66ff31a6df639be8a102851b95ecdd07ea12
+  .specworks/changes/active/baseline-commands/design.md: 609e64ad847450c8bb176ecbf1f02c5bae64243b3062e57d2281d63ee4dbf7b0
+  .specworks/changes/active/baseline-commands/tasks.md: 5c1aebfb4ebe1304e5cb86b1baee7bdd2664817efb78fb8617e8ab2b2dd5fe86
+  .specworks/changes/active/baseline-commands/traceability.md: f0aca5271bc02fcd78955ae1f371745d2c80b397f9da3c5b52e815ef7bcf72a0
+  src/chatinho/commands/help.py: 9c367562ca3992e4ef07dad936daf1d1d98445b11df07f113362a357a252c7a4
+  src/chatinho/commands/workspace.py: 1e09452b236ef9d7353216042756fc230874c01a8738a991220e3bc01bcd8ce9
+  tests/commands/test_workspace_command.py: a73d2f0216b2f3fa7820f6200f868d38a338c8ae9ebfc1bb00bf387c1094ef09

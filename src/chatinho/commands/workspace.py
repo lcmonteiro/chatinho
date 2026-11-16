@@ -8,6 +8,7 @@ from ..message import LOCAL, Attachment, Reply
 USAGE = "Usage: /ws | /ws diff <name> | /ws merge <name> | /ws drop <name>"
 
 
+# @req REQ-CMD-005
 @tool("ws", "Lists the workspaces; diff, merge or drop one")
 @require(HookExecute)
 class WorkspaceCommand:
@@ -28,6 +29,7 @@ class WorkspaceCommand:
     def __init__(self, provider: Any) -> None:
         self.provider = provider
 
+    # @req REQ-CMD-002, REQ-CMD-003, REQ-CMD-004
     async def execute(self, args: str = "", by: int = LOCAL, **kwargs: Any) -> Reply:
         """
         Runs one subcommand.
@@ -72,6 +74,7 @@ class WorkspaceCommand:
         await self.provider.drop(name)
         return Reply("Dropped %s's workspace." % name)
 
+    # @req REQ-CMD-001
     async def _listing(self) -> Reply:
         names = await self.provider.names()
         if not names:

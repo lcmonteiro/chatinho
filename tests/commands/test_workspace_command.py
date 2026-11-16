@@ -44,6 +44,7 @@ async def committed(dev: Dev, n: int = 2) -> None:
         await ws.commit("change %d" % i)
 
 
+# @ac AC-CMD-001.1
 async def test_listing(repo):
     session, view, dev = await chat_with_ws(repo)
     assert await view.command("ws") == "No workspaces yet."
@@ -52,6 +53,7 @@ async def test_listing(repo):
     await session.close()
 
 
+# @ac AC-CMD-002.1
 async def test_the_diff_is_an_attachment(repo):
     session, view, dev = await chat_with_ws(repo)
     await committed(dev, 1)
@@ -61,6 +63,7 @@ async def test_the_diff_is_an_attachment(repo):
     assert answer.text == "dev's work: [dev.diff](dev.diff)"
 
 
+# @ac AC-CMD-002.2
 async def test_the_diff_attachment_holds_the_diff(repo):
     provider = GitWorktrees(repo)
     ws = await provider.provision("dev", "dev")
@@ -71,6 +74,7 @@ async def test_the_diff_attachment_holds_the_diff(repo):
     assert b"+hello" in attached.data
 
 
+# @ac AC-CMD-003.1
 async def test_merging(repo):
     session, view, dev = await chat_with_ws(repo)
     await committed(dev, 1)
@@ -80,6 +84,7 @@ async def test_merging(repo):
     await session.close()
 
 
+# @ac AC-CMD-003.2
 async def test_a_model_cannot_merge(repo):
     session, view, dev = await chat_with_ws(repo)
     await committed(dev, 1)
@@ -93,6 +98,7 @@ async def test_a_model_cannot_merge(repo):
     await session.close()
 
 
+# @ac AC-CMD-003.3
 async def test_a_conflicting_merge(repo):
     session, view, dev = await chat_with_ws(repo)
     ws = await dev.workspace()
@@ -107,6 +113,7 @@ async def test_a_conflicting_merge(repo):
     await session.close()
 
 
+# @ac AC-CMD-003.4
 async def test_dropping(repo):
     session, view, dev = await chat_with_ws(repo)
     await committed(dev, 1)
@@ -116,6 +123,7 @@ async def test_dropping(repo):
     await session.close()
 
 
+# @ac AC-CMD-004.1
 @pytest.mark.parametrize("args, error", [
     ("frobnicate dev", ValueError),
     ("diff", ValueError),
@@ -129,6 +137,7 @@ async def test_what_it_refuses(repo, args, error):
     await session.close()
 
 
+# @ac AC-CMD-005.1
 async def test_the_builders_add_no_command_of_their_own(repo):
     """/ws is chosen like any command: given workspaces, a builder adds nothing to the list."""
     from chatinho import HelpCommand
@@ -138,6 +147,7 @@ async def test_the_builders_add_no_command_of_their_own(repo):
     assert list(session.commands) == ["help"]
 
 
+# @ac AC-CMD-005.2
 async def test_help_lists_ws_when_it_is_given(repo):
     from chatinho import HelpCommand
     from chatinho.builder import build_chat_session
