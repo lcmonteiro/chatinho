@@ -143,8 +143,8 @@ class _Antigo:
 async def test_an_answer_must_be_a_reply():
     falador = _Falador()
     session, view = await driven(connectors=[_Antigo(), _Eco(), falador])
-    with pytest.raises(TypeError):
-        await view.ask(view.id_of("antigo"), "rain?")
+    asked = await asyncio.wait_for(view.ask(view.id_of("antigo"), "rain?"), timeout=2)
+    assert asked.status == "error" and "TypeError" in asked.text
     said_id = await falador.say("rain?", to=view.id_of("antigo"))
     await _settle()
     reply = view.context()[-1]
