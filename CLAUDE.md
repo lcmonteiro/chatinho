@@ -567,10 +567,10 @@ src/chatinho/
       composer.py  CommandInput (a multi-line TextArea) + CommandSuggestions
       clipboard.py OSC 52's second route: a clipboard helper, if the system has one
       style.py     ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
-docs/              SPEC.md — the seventeen hooks, with an example and a cost for each
-.specworks/        config.yml (capabilities, commands, context), changes/ (active/, then archive/)
-  docs/            architecture.md: the ten capabilities and how they fit; each capability's
-                   living spec is in its own <path>/docs/
+docs/              SPEC.md — the seventeen hooks, with an example and a cost for each;
+                   architecture.md — the ten capabilities and how they fit
+.specworks/        config.yml (capabilities, commands, context), changes/ (active/, then archive/);
+                   each capability's living spec is in its own <path>/docs/
 examples/          assistant.py, team.py, files.py (LLM demos: parts() + main()), lab_server.py / lab_client.py /
                    lab_fastmcp_client.py (a model over MCP, lent keys), inbox.py (HTTP, inbound), hooks.py (one peer per hook),
                    workspaces.py (two agents in git worktrees: dev commits, reviewer reads its diff)
