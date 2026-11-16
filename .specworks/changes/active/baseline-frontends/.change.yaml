@@ -1,6 +1,6 @@
 name: baseline-frontends
 created: '2026-11-15T23:37:52'
-phase: review
+phase: validate
 specified:
   REQ-FRONT-001: 420d5a27d8f1
   REQ-FRONT-002: aaee5ae3488e
@@ -30,21 +30,3 @@ specified:
   REQ-FRONT-026: e95c2f337626
   REQ-FRONT-027: 8194be0b63b3
   REQ-FRONT-028: d94e58127ce4
-dirty:
-  .specworks/changes/active/baseline-frontends/.change.yaml: 962dc4452ba31ce653f5580c9452c2e090eac5ec992604b86d7843fa9eca9239
-  .specworks/changes/active/baseline-frontends/design.md: 58bb8ac7b97ff3ebb12374a7319d481cce37a7c01b87a018f17c973073f920cf
-  .specworks/changes/active/baseline-frontends/diagrams/frontends-blocks.d2: bd07434d52977fbb9984c8b8cfa662ea73dac53c2b07b04da1ca8d0c71b635e7
-  .specworks/changes/active/baseline-frontends/diagrams/frontends-blocks.svg: 3333d451b79f130d206d1760bbd2bc5309676f88522cb946ae5ac4dce0cdfd88
-  .specworks/changes/active/baseline-frontends/tasks.md: 5a2eb65b1eae2bf64846cc0a6d70e59108fa1d40db274d07e88b44c77a7fda5d
-  .specworks/changes/active/baseline-frontends/traceability.md: df95dcfed84de81fd1d43fc6bd99bfd5e6d640f57dd8ff4e5223e511e983334b
-  src/chatinho/frontends/chat/__init__.py: bce1a824615185c995f865efa494654fceaca7e8ac60907d1c5eab9851a33669
-  src/chatinho/frontends/chat/clipboard.py: 10882d0448e11105c89ff2eaf37810583d3e9812481855b9a56aa603971625b7
-  src/chatinho/frontends/chat/composer.py: e3a426f60794d18ced96d97ceb15831f4afb4856df44c3eb6f72f556a1144546
-  src/chatinho/frontends/chat/messages.py: b76097dda80b05cc9259cb23ac34bce745583e0840d099dde121c78931983300
-  src/chatinho/frontends/chat/style.py: de796e0ff89c476f15c4cdfc449ba5e2e5ab820c2d214b667ebda392c3bfae57
-  src/chatinho/frontends/mcp.py: d0e63547023944ef96e4882e5e9b63b7f67a193ba544ca710af4aabc44d1d311
-  tests/frontends/test_chat_frontend.py: b90c734d276421cbc58dad52c0f09da95a285390ded12a9f44a27b2649a6fc2c
-  tests/frontends/test_clipboard.py: b3dc1b9fe59442e47b51dbe2cf70b5ac42632df09bf487704e553709b09b672b
-  tests/frontends/test_command_suggestions.py: 8e0399d06aa26dd2fda1729253c3b2caad68f4d9fd7e0ba895c64a9685cdbe8f
-  tests/frontends/test_mcp_frontend.py: fd4eb6534b9d5e2ee6251f9a98b8b273cf6b9e4fb0e8df7217b42efa97c1b54f
-  tests/frontends/test_mcp_http.py: 968cb500db14d4cd586aa199a3e025913bbc304577835c6226b00a85f0e1555f
