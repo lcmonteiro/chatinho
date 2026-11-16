@@ -1,6 +1,6 @@
 name: baseline-commands
 created: '2026-11-16T11:28:50'
-phase: validate
+phase: close
 specified:
   REQ-CMD-001: 0f53e064d797
   REQ-CMD-002: 2e14723d1f59
