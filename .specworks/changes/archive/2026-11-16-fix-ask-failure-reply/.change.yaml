@@ -1,6 +1,6 @@
 name: fix-ask-failure-reply
 created: '2026-11-14T18:56:18'
-phase: validate
+phase: done
 specified:
   REQ-CORE-007: 541d329dcec7
   REQ-CORE-011: b247e4b2a6c6
