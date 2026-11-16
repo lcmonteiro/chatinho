@@ -1,0 +1,43 @@
+direction: down
+
+person: the person {
+  shape: person
+}
+clients: MCP clients {
+  shape: cloud
+}
+frontends: frontends {
+  chat: chat/ (the terminal) {
+    app: __init__.py {
+      tooltip: "ChatFrontend: the Textual app, keys, commands, the at-name ask"
+    }
+    log: messages.py {
+      tooltip: "ChatLog: bubbles, headers, taps, drags, copying, links"
+    }
+    input: composer.py {
+      tooltip: "CommandInput and CommandSuggestions"
+    }
+    look: style.py {
+      tooltip: "ChatStyle: the palette, sides, frames, scrollbars as CSS"
+    }
+    clipboard: clipboard.py {
+      tooltip: "a clipboard helper, if the system has one"
+    }
+    app -> log: the conversation to render
+    app -> input: what was submitted
+    app -> look: the stylesheet
+    log -> clipboard: text to copy
+  }
+  mcp: mcp.py {
+    tooltip: "McpFrontend: ask, peers, tools, invoke over Streamable HTTP"
+  }
+}
+session: session {
+  shape: page
+}
+
+person -> frontends.chat: keys, taps, drags
+clients -> frontends.mcp: tool calls with a bearer token
+frontends.chat -> session: say, invoke, context, peers, locate
+frontends.mcp -> session: say to a peer, invoke, context
+session -> frontends: every message, and questions to the person
