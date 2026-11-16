@@ -678,8 +678,8 @@ The copy key SHALL copy the selected message, or say what to do when none is sel
 
 #### Scenario: AC-FRONT-020.11 A helper that fails is logged and not raised
 
-- **WHEN** the helper exits with an error
-- **THEN** the failure is logged and nothing is raised
+- **WHEN** running the helper raises
+- **THEN** copying raises nothing and reports no helper
 
 #### Scenario: AC-FRONT-020.12 Put really runs the helper
 
@@ -873,8 +873,8 @@ Typing `/` at the start of the input SHALL list the session's commands, filtered
 
 #### Scenario: AC-FRONT-025.6 Ask a peer that fails
 
-- **WHEN** the asked peer answers with status `error`, or raises
-- **THEN** the result is a tool error
+- **WHEN** the asked peer's `answer` raises
+- **THEN** the result is a tool error saying it failed
 
 #### Scenario: AC-FRONT-025.7 Ask who cannot answer
 

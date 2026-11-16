@@ -6,6 +6,8 @@ Base: `origin/main`
 
 - [x] R1 **test-gap** Five criteria, written from their tests' names, said something their tests do not assert: AC-FRONT-019.6 (naming an instance), AC-FRONT-020.7 (the confirmation's text), AC-FRONT-015.4 (the double tap and Textual's chain count), AC-FRONT-011.1 (a bubble's width) and AC-FRONT-010.2 (serving until the person quits) (`tests/frontends/test_chat_frontend.py`)
   - **Decision**: spec updated (ADDED REQ-FRONT-010, REQ-FRONT-011, REQ-FRONT-015, REQ-FRONT-019, REQ-FRONT-020): each of the five now says what its test asserts. No test changed.
+- [x] R2 **test-gap** Validate found two more criteria that said more than their tests check (V1, V2 in validation.md): AC-FRONT-025.6 claimed a peer answering with status `error` yields a tool error, but its test only has a peer that raises; AC-FRONT-020.11 claimed a failing helper is logged, but its test only checks that copying returns nothing (`tests/frontends/test_mcp_frontend.py`, `tests/frontends/test_clipboard.py`)
+  - **Decision**: spec updated (ADDED REQ-FRONT-020, REQ-FRONT-025): both criteria reworded to what their tests check. No test changed, as the user chose for the same kind of finding in `baseline-connectors`; the two untested behaviours are noted for a later change.
 
 ## Changed files without tags
 
