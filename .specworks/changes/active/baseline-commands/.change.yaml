@@ -1,0 +1,5 @@
+name: baseline-commands
+created: '2026-11-16T11:28:50'
+phase: specify
+dirty:
+  .specworks/changes/active/baseline-commands/.change.yaml: 45679a403125f6c96233191fd3299050f3a89954597818eb19614ebdbe2878b3
