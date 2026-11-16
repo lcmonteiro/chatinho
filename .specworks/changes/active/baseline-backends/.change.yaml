@@ -1,6 +1,6 @@
 name: baseline-backends
 created: '2026-11-16T10:44:52'
-phase: review
+phase: validate
 specified:
   REQ-BACK-001: d019fd41d427
   REQ-BACK-002: 48c1a4fcba84
@@ -10,12 +10,3 @@ specified:
   REQ-BACK-006: c3791e6469a1
   REQ-BACK-007: b95b9398ccc5
   REQ-BACK-008: c9e89630e660
-dirty:
-  .specworks/changes/active/baseline-backends/.change.yaml: 7850436ffa3a0c9ad99feb4dc98372fad662283bf4c8c3f4cd3c97969d957658
-  .specworks/changes/active/baseline-backends/design.md: a06af5ab55e85352d95b3901faa72eda5a57f30c06eb7a3677ca3550152fefae
-  .specworks/changes/active/baseline-backends/proposal.md: fcce5986177f2ca6c5f8936f82e35a43c5d2f1ae415845647c67d1c7fea3424e
-  .specworks/changes/active/baseline-backends/specs/backends/spec.md: f2b565b8c2f9010cb3e9ea0e496a669fe7ad121fe60de3c27dc2a95821564b54
-  .specworks/changes/active/baseline-backends/tasks.md: 8b95c3a44fdf6ef5be685281808dda3b105e9ba0af0c593bb4700d9ed1ea8d70
-  .specworks/changes/active/baseline-backends/traceability.md: f703dd1d2a1890bce375f6059730f46faf5526d5fb458f7e3229c5c97081ce07
-  src/chatinho/backends/database.py: 4f385ba4684a35df674bbd30da1a4952b1705c46c4c5e880572d02ba2c18d0c5
-  tests/backends/test_database_backend.py: a813de941cd7ff1548cab0be7ba4112145e93616432bc035570496db3f5b3f5f
