@@ -1,5 +1,13 @@
 name: baseline-workspaces
 created: '2026-11-16T14:26:57'
-phase: specify
+phase: implement
+specified:
+  REQ-WS-001: bc06bc13ea9c
+  REQ-WS-002: 859d06da0dac
+  REQ-WS-003: c3d570c0bbfb
+  REQ-WS-004: 82c07f34e3a1
+  REQ-WS-005: 63452c61731b
 dirty:
-  .specworks/changes/active/baseline-workspaces/.change.yaml: 99b26b3a5b294b3789d1e7d3efe6e8b224698a46ae214259d2c57efabefa97ee
+  .specworks/changes/active/baseline-workspaces/.change.yaml: 037b4cb1cd436f8d6bb655910bfe61fb418e14989bad08c5ee0b9c4f67c67739
+  .specworks/changes/active/baseline-workspaces/design.md: a98bb708784c8f27b85930f00fc0cd43ff6f889be51b8f14a56ce8411fa4ec1c
+  .specworks/changes/active/baseline-workspaces/traceability.md: cf72fdba02053173c8e6a1eebf785af6dfe2cc213de65001edd94c8d6a182abf

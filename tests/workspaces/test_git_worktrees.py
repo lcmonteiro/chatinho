@@ -26,11 +26,13 @@ class MyView(WorkspaceView):
         return ["C"]
 
 
+# @ac AC-WS-001.1
 def test_a_workspace_class_that_does_not_extend_the_view(repo):
     with pytest.raises(TypeError, match="must subclass the view class MyView"):
         GitWorktrees(repo, view=MyView, workspace=Workspace)
 
 
+# @ac AC-WS-001.2
 def test_a_view_with_a_writing_operation(repo):
     class Leaky(WorkspaceView):
         @operation("Write anyway", writes=True)
@@ -41,6 +43,7 @@ def test_a_view_with_a_writing_operation(repo):
         GitWorktrees(repo, view=Leaky, workspace=type("W", (Workspace, Leaky), {}))
 
 
+# @ac AC-WS-001.3
 async def test_an_extended_pair_gives_both_sides_the_added_read(repo):
     class MyWorkspace(Workspace, MyView):
         pass
@@ -54,6 +57,7 @@ async def test_an_extended_pair_gives_both_sides_the_added_read(repo):
 
 # === Starting: the repository and the base ==========================================
 
+# @ac AC-WS-002.1
 async def test_not_a_repository(tmp_path):
     plain = tmp_path / "plain"
     plain.mkdir()
@@ -61,11 +65,13 @@ async def test_not_a_repository(tmp_path):
         await GitWorktrees(plain).initialize()
 
 
+# @ac AC-WS-002.2
 async def test_a_base_that_does_not_exist(repo):
     with pytest.raises(ValueError, match="'nope' does not exist"):
         await GitWorktrees(repo, base="nope").initialize()
 
 
+# @ac AC-WS-002.3
 async def test_the_default_base_is_what_is_checked_out(repo):
     provider = GitWorktrees(repo)
     await provider.initialize()
@@ -74,6 +80,7 @@ async def test_the_default_base_is_what_is_checked_out(repo):
     assert (await ws.tree.git("merge-base", "HEAD", "main")).strip() == git(repo, "rev-parse", "main").strip()
 
 
+# @ac AC-WS-002.4
 async def test_a_base_given_by_name(repo):
     git(repo, "branch", "release")
     git(repo, "checkout", "--quiet", "-b", "elsewhere")
@@ -84,6 +91,7 @@ async def test_a_base_given_by_name(repo):
 
 # === Provisioning ===================================================================
 
+# @ac AC-WS-003.1
 async def test_created_on_first_use(repo):
     ws = await GitWorktrees(repo).provision("dev", "dev")
     assert isinstance(ws, Workspace)
@@ -91,6 +99,7 @@ async def test_created_on_first_use(repo):
     assert git(ws.tree.root, "branch", "--show-current").strip() == "peer/dev"
 
 
+# @ac AC-WS-003.2
 async def test_someone_elses_is_a_view_without_writing_operations(repo):
     provider = GitWorktrees(repo)
     await provider.provision("dev", "dev")
@@ -100,11 +109,13 @@ async def test_someone_elses_is_a_view_without_writing_operations(repo):
         assert not hasattr(view, name)
 
 
+# @ac AC-WS-003.3
 async def test_a_command_gets_a_view(repo):
     view = await GitWorktrees(repo).provision(None, "dev")
     assert type(view) is WorkspaceView
 
 
+# @ac AC-WS-003.4
 async def test_one_tree_per_workspace(repo):
     provider = GitWorktrees(repo)
     mine     = await provider.provision("dev", "dev")
@@ -112,6 +123,7 @@ async def test_one_tree_per_workspace(repo):
     assert mine.tree is theirs.tree                 # so one lock
 
 
+# @ac AC-WS-004.1
 async def test_reused_after_a_restart(repo):
     ws = await GitWorktrees(repo).provision("dev", "dev")
     await ws.write("a.txt", "a")                    # type: ignore[attr-defined]
@@ -120,6 +132,7 @@ async def test_reused_after_a_restart(repo):
     assert (await again.log())[0].endswith(" add a")
 
 
+# @ac AC-WS-004.2
 async def test_reused_when_only_the_branch_survived(repo):
     ws = await GitWorktrees(repo).provision("dev", "dev")
     await ws.write("a.txt", "a")                    # type: ignore[attr-defined]
@@ -129,6 +142,7 @@ async def test_reused_when_only_the_branch_survived(repo):
     assert (await again.log())[0].endswith(" add a")
 
 
+# @ac AC-WS-004.3
 async def test_close_keeps_the_work(repo):
     from chatinho.session import ChatSession
     provider = GitWorktrees(repo)
@@ -140,6 +154,7 @@ async def test_close_keeps_the_work(repo):
     assert (ws.tree.root / "a.txt").read_text() == "uncommitted"
 
 
+# @ac AC-WS-004.4
 async def test_the_repository_stays_clean(repo):
     before = git(repo, "status", "--porcelain")
     ws = await GitWorktrees(repo).provision("dev", "dev")
@@ -148,16 +163,19 @@ async def test_the_repository_stays_clean(repo):
     assert git(repo, "diff", "--name-only", "HEAD") == ""
 
 
+# @ac AC-WS-003.6
 async def test_viewing_without_creating(repo):
     with pytest.raises(KeyError):
         await GitWorktrees(repo).provision("reviewer", "ghost", create=False)
 
 
+# @ac AC-WS-003.7
 async def test_a_name_that_cannot_be_a_branch(repo):
     with pytest.raises(ValueError, match="cannot name a workspace"):
         await GitWorktrees(repo).provision("../x", "../x")
 
 
+# @ac AC-WS-003.5
 async def test_two_first_asks_create_it_once(repo):
     import asyncio
     provider = GitWorktrees(repo)
@@ -168,6 +186,7 @@ async def test_two_first_asks_create_it_once(repo):
 
 # === Listing, merging and dropping ==================================================
 
+# @ac AC-WS-005.1
 async def test_names_and_how_far_ahead(repo):
     provider = GitWorktrees(repo)
     ws = await provider.provision("dev", "dev")
@@ -179,6 +198,7 @@ async def test_names_and_how_far_ahead(repo):
     assert await provider.ahead("dev") == 2 and await provider.ahead("lab") == 0
 
 
+# @ac AC-WS-005.2
 async def test_merging_into_the_checked_out_base(repo):
     provider = GitWorktrees(repo)
     ws = await provider.provision("dev", "dev")
@@ -190,6 +210,7 @@ async def test_merging_into_the_checked_out_base(repo):
     assert await provider.names() == ["dev"]
 
 
+# @ac AC-WS-005.3
 async def test_merging_into_a_base_checked_out_nowhere(repo):
     git(repo, "branch", "release")
     provider = GitWorktrees(repo, base="release")
@@ -202,6 +223,7 @@ async def test_merging_into_a_base_checked_out_nowhere(repo):
     assert len(git(repo, "worktree", "list").splitlines()) == 2      # the temporary one is gone
 
 
+# @ac AC-WS-005.4
 async def test_a_conflicting_merge_is_aborted(repo):
     provider = GitWorktrees(repo)
     ws = await provider.provision("dev", "dev")
@@ -217,6 +239,7 @@ async def test_a_conflicting_merge_is_aborted(repo):
     assert git(repo, "status", "--porcelain") == ""
 
 
+# @ac AC-WS-005.5
 async def test_dropping(repo):
     provider = GitWorktrees(repo)
     ws = await provider.provision("dev", "dev")
@@ -230,6 +253,7 @@ async def test_dropping(repo):
     assert await fresh.log() == []
 
 
+# @ac AC-WS-005.6
 async def test_merging_or_dropping_what_does_not_exist(repo):
     provider = GitWorktrees(repo)
     with pytest.raises(KeyError):
