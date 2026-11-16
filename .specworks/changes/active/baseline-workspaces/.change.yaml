@@ -1,0 +1,5 @@
+name: baseline-workspaces
+created: '2026-11-16T14:26:57'
+phase: specify
+dirty:
+  .specworks/changes/active/baseline-workspaces/.change.yaml: 99b26b3a5b294b3789d1e7d3efe6e8b224698a46ae214259d2c57efabefa97ee
