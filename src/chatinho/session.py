@@ -578,9 +578,10 @@ class ChatSession:
         message put to the peer (*asked*) is answered: a reply that resolved
         the peer's own ask is only heard, never answered again.
 
-        What ``answer`` returns is posted in the peer's name. Returning None is
-        not a failure: the ask stays waiting, and whatever the peer says later
-        with ``reply_to`` set resolves it.
+        What ``answer`` returns is posted in the peer's name, and so is the
+        ``error`` reply for an ``answer`` that fails. Returning None is not a
+        failure: the ask stays waiting, and whatever the peer says later with
+        ``reply_to`` set resolves it.
         """
         if declares(who, HookListen):
             _ANSWERING.set(0)              # hearing is not answering
@@ -609,16 +610,13 @@ class ChatSession:
         try:
             reply = _checked(await who.answer(msg), "%s's answer" % name_of(who))
         except Exception as exc:
-            # The asker is owed one reply, and a failure is one. An ask that is
-            # waiting raises; a say that was asked of this peer gets an error
-            # reply, so whoever waits on it hears. _delivery logs it either way.
-            waiting = self._pending.pop(msg.id, None)
-            if waiting is not None and not waiting.done():
-                waiting.set_exception(exc)
-            else:
-                await self._post(ChatMessage(
-                    id=self._store.new_id(), text="%s failed: %s" % (name_of(who), type(exc).__name__),
-                    frm=at, to=None, reply_to=msg.id, status=ReplyStatus.ERROR))
+            # The asker is owed one reply, and a failure is one: an error reply
+            # in the peer's name, whether an ask waits or a say was asked of it.
+            # _post resolves a waiting ask with it like any answer, so the asker
+            # never catches another peer's error. Only the type is named, never
+            # the message, which may echo a prompt. _delivery logs it.
+            await self._answered(at, msg, Reply("%s failed: %s" % (name_of(who), type(exc).__name__),
+                                                status=ReplyStatus.ERROR))
             raise
         if reply is not None:
             await self._answered(at, msg, reply)

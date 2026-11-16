@@ -83,11 +83,15 @@ class Ask(Protocol):
 
         Returns:
             Reply: The answer's text and its status — ``answered``, ``asked``
-            back, or ``error`` when the peer could not answer. What the answer
-            attached is with the backend, where ``locate`` finds it.
+            back, or ``error`` when the peer could not answer. A peer whose
+            ``answer`` fails — it raises, or returns anything but a ``Reply`` or
+            None — gets the ``error`` reply the session posts for it, naming the
+            peer and the type of the error, and that is what comes back. What the
+            answer attached is with the backend, where ``locate`` finds it.
 
         Raises:
-            Exception: Whatever the peer's ``answer`` raised, when it failed.
+            ValueError: When *to* is not another peer in the chat.
+            RuntimeError: When the chat closes while the ask is still waiting.
         """
         ...
 

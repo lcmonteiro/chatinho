@@ -139,6 +139,17 @@ did not — because that is what an agent's `ask_<peer>` tool hands its model, w
 the dataclass's repr. What the answer
 attached is with the backend, so the returned `Reply` carries none of it; `locate` finds it.
 
+**An ask of a peer that fails returns its `error` reply, and never raises the peer's error.** When
+the asked peer's `answer` raises — or returns anything but a `Reply` or `None` — the session posts
+`<peer> failed: <error type>` in that peer's name, status `error`, replying to the question and
+addressed to nobody, and the waiting `ask` returns it like any answer. It used to raise the peer's
+own exception in the asker and post nothing, while a say addressed to the same peer got the error
+reply: the conversation kept a question with no answer, and every caller had to catch another
+peer's exceptions. The text names the type and never the message, which may echo a prompt; the
+failure is still logged with its traceback. **BREAKING** for a caller that caught the exception;
+`ask` still raises for its own failures — `ValueError` for an id that is no peer, and the chat
+closing while it waits.
+
 A reply to a `say` is another `say`. There is no fourth verb, and that is not an omission:
 `ask`/`answer` are a pair because an ask is *addressed and owed* — one party, one reply, tracked
 by the message it answers. A say with no `to` is owed to nobody.
@@ -280,7 +291,7 @@ log from inside a *synchronous* Textual paint.
 ## Attachments go to the backend, and the message stays text
 
 A peer attaches through every door it speaks through: `say` and `ask` take `attachments`, `answer`
-and a command's `execute` both return a `Reply` (a string raises `TypeError`); `ask` returns a `Reply` holding the answer's text and status, and `invoke` still returns text. None of it rides on `ChatMessage`:
+and a command's `execute` both return a `Reply` (a string from `execute` raises `TypeError`, and one from `answer` is that peer failing: the asker gets its `error` reply); `ask` returns a `Reply` holding the answer's text and status, and `invoke` still returns text. None of it rides on `ChatMessage`:
 at each door the session hands the attachments to the backend's `keep` (`HookKeep`), under the new
 message's id, **before** `_post` — so the link exists when the text arrives — and posts the text
 alone. No keeper, and they are dropped; a keeper that raises is logged and the text posted anyway.

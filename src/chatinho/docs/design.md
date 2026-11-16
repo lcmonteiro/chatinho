@@ -34,10 +34,22 @@ assembly on top of it: the two builders and the public names.
 - **`ask` returns the answer's `Reply`, status and all** (REQ-CORE-007,
   REQ-CORE-010), and only the asked peer resolves it (REQ-CORE-008). An
   `answer` returning `None` answers later with a say whose `reply_to` is the
-  question. When the asked peer's `answer` raises, the waiting `ask` raises
-  that error and no reply is posted, while an addressed say gets an `error`
-  reply. Alternative: returning the text alone, which hid an error from the
+  question. Alternative: returning the text alone, which hid an error from the
   asker. (baseline-framework)
+- **A failing `answer` is always answered with an `error` reply**
+  (REQ-CORE-007, REQ-CORE-011). When `answer` raises, or returns anything but
+  a `Reply` or `None`, the session posts `<peer> failed: <error type>` in that
+  peer's name, status `error`, replying to the question and addressed to
+  nobody, whether or not an `ask` waits; a waiting `ask` is resolved by that
+  reply through the same path as any answer, and never raises the peer's
+  error. The text names the type, never the message, which may echo a
+  prompt; the failure is still logged with its traceback. `ask` raises only
+  for its own failures: `ValueError` for an id that is no peer, and
+  `RuntimeError` when the chat closes while it waits. Alternative: raising
+  the peer's error in the asker, which left the question unanswered in the
+  conversation and made every caller catch another peer's exceptions, or
+  resolving the waiting future directly, a second resolution path.
+  (fix-ask-failure-reply)
 - **A command is not a peer** (REQ-CORE-013). Its invocation is a message
   addressed to `TOOL`, and what `execute` returns is posted from `TOOL`,
   replying to it and addressed to nobody. Why: nobody answers somebody
