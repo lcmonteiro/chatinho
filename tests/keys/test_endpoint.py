@@ -1,7 +1,7 @@
 """
 Endpoint: URL, model and key as one named profile.
 
-See openspec/specs/endpoint-profiles.
+See src/chatinho/support/parts/keys/docs/spec.md.
 """
 
 import os

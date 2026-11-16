@@ -484,18 +484,20 @@ importing without its extras.
 [`CLAUDE.md`](CLAUDE.md) is the design record — why the library has this shape, and what it was
 before.
 
-### Changes go through OpenSpec
+### Changes go through specworks
 
-New behavior is planned with [OpenSpec](https://github.com/Fission-AI/OpenSpec) before it is
-built: `openspec/specs/` holds what the library promises, `openspec/changes/` the changes in flight
-and, under `archive/`, the ones that landed. CI's `openspec` job runs
-`openspec validate --all --strict --no-interactive`.
+New behavior is planned with [specworks](https://github.com/lcmonteiro/specworks) before it is
+built. The library is ten capabilities, each with a living spec next to its code
+(`<path>/docs/spec.md`, `requirements.md`, `design.md`), and `docs/architecture.md` draws how they
+fit together. `.specworks/config.yml` holds the capabilities, the commands and the context;
+`.specworks/changes/active/` the changes in flight and `archive/` the ones that landed.
 
-In Claude Code, `/opsx:explore` thinks an idea through, `/opsx:propose "your idea"` writes the
-proposal, specs, design and tasks, `/opsx:apply` implements them and `/opsx:archive` folds the
-specs into `openspec/specs/`. All twelve workflows are installed (`.claude/skills/openspec-*`,
-`.claude/commands/opsx/`); `/opsx:onboard` walks through a whole cycle. The CLI comes from
-`npm install -g @fission-ai/openspec`, which `.claude/hooks/session-start.sh` runs for you.
+In Claude Code, `/specworks-refine` thinks a change through, `/specworks-specify` writes its
+proposal, delta specs and tasks, `/specworks-build` designs, implements and reviews it, and
+`/specworks-done` validates it and folds its specs into the living ones; `/specworks-onboard`
+says where a project stands. Tests carry `# @ac AC-…` and code `# @req REQ-…`, so every
+criterion is tied to a test and every requirement to its code. The skills are in
+`.claude/skills/specworks-*`.
 
 ## License
 
