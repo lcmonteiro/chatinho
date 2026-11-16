@@ -1,6 +1,6 @@
 name: baseline-workspaces
 created: '2026-11-16T14:26:57'
-phase: close
+phase: done
 specified:
   REQ-WS-001: bc06bc13ea9c
   REQ-WS-002: 859d06da0dac
