@@ -1,6 +1,6 @@
 name: baseline-backends
 created: '2026-11-16T10:44:52'
-phase: validate
+phase: close
 specified:
   REQ-BACK-001: d019fd41d427
   REQ-BACK-002: 48c1a4fcba84
