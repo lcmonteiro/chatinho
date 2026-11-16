@@ -446,6 +446,30 @@ async def test_an_error_reply_is_addressed_to_nobody():
     assert error.to is None and error.reply_to == said.id
 
 
+# @ac AC-CORE-011.5
+async def test_a_failed_ask_is_in_the_conversation():
+    """The waiting ask does not keep the failure out of the conversation, nor its message in."""
+    @connector("broken")
+    @require(HookAnswer)
+    class Broken:
+        async def answer(self, msg: ChatMessage) -> Reply:
+            raise RuntimeError("secret prompt")
+
+    session, view = await driven(connectors=[Broken()])
+    broken = view.id_of("broken")
+    try:
+        await asyncio.wait_for(view.ask(broken, "rain?"), timeout=2)
+    except RuntimeError:
+        pass                # what ask returns is AC-CORE-007.5; this checks the conversation
+    await session.close()
+    question = [m for m in view.context() if m.text == "rain?"][0]
+    replies  = [m for m in view.context() if m.reply_to == question.id]
+    assert len(replies) == 1
+    error = replies[0]
+    assert (error.frm, error.status, error.to) == (broken, ReplyStatus.ERROR, None)
+    assert "RuntimeError" in error.text and "secret prompt" not in error.text
+
+
 # @ac AC-CORE-012.5
 async def test_a_late_answer_is_not_put_to_the_asker():
     """The asked peer says its reply later; the asker also answers, and is not asked it."""

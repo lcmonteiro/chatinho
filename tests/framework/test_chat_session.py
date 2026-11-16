@@ -270,12 +270,15 @@ async def test_a_slow_peer_holds_up_only_itself():
 
 # @ac AC-CORE-007.5
 async def test_a_peer_that_raises_does_not_take_the_chat_down():
+    """The asker gets the error reply the session posted, not the peer's exception."""
     session, view = await driven(connectors=[_Rebenta(), _Rapido()])
-    failing = asyncio.create_task(view.ask(1, "?"))     # raises in the asker
+    failing = asyncio.create_task(view.ask(1, "?"))
     await asyncio.sleep(0.05)
     assert (await view.ask(2, "ola")).text == "eco: ola"
-    with pytest.raises(RuntimeError, match="kaboom"):
-        await failing
+    failed = await asyncio.wait_for(failing, timeout=2)
+    assert isinstance(failed, Reply)
+    assert failed.status == "error"
+    assert "rebenta" in failed.text and "RuntimeError" in failed.text
     await session.close()
 
 
