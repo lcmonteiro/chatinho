@@ -1,3 +1,15 @@
 name: strengthen-weak-tests
 created: '2026-11-16T22:55:53'
-phase: specify
+phase: design
+specified:
+  REQ-CMD-006: f0ec0dd99fcc
+  REQ-CMD-002: 9d40b0aa125e
+  REQ-CMD-003: b92bc10023dd
+  REQ-CONN-020: 34d7e804ac2f
+  REQ-FRONT-020: be1dd47d3198
+  REQ-FRONT-025: b8cc0a24eea4
+  REQ-KEYS-003: 9501c2a1c3d1
+  REQ-KEYS-006: b159caaf78f4
+  REQ-ROUTE-005: 1e858318b89c
+  REQ-WS-001: 56735b8c3ac7
+  REQ-WS-002: 35995e9e3a29
