@@ -30,6 +30,7 @@ BRANCH_PREFIX = "peer/"
 _NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*\Z")
 
 
+# @req REQ-WS-005
 class MergeConflict(RuntimeError):
     """A merge into the base conflicted; it was aborted and the base is as it was."""
 
@@ -39,6 +40,7 @@ class MergeConflict(RuntimeError):
         self.paths : List[str] = paths
 
 
+# @req REQ-WS-003, REQ-WS-004
 @require(HookProvision)
 class GitWorktrees:
     """
@@ -59,6 +61,7 @@ class GitWorktrees:
 
     name = "workspaces"
 
+    # @req REQ-WS-001
     def __init__(
         self,
         repo      : Union[str, Path],
@@ -94,6 +97,7 @@ class GitWorktrees:
 
     # === Starting ===================================================================
 
+    # @req REQ-WS-002, REQ-WS-004
     async def initialize(self) -> None:
         """
         Checks the repository and the base, and keeps the worktrees out of ``git status``.
@@ -133,6 +137,7 @@ class GitWorktrees:
 
     # === The hook ===================================================================
 
+    # @req REQ-WS-003
     async def provision(self, owner: Optional[str], name: str, create: bool = True) -> WorkspaceView:
         """
         *name*'s workspace, writable when *owner* is *name*, a view otherwise.
@@ -152,6 +157,7 @@ class GitWorktrees:
         tree = await self._tree(name, create)
         return (self.workspace if owner == name else self.view)(tree)
 
+    # @req REQ-WS-003, REQ-WS-004
     async def _tree(self, name: str, create: bool) -> Tree:
         if not _NAME.match(name):
             raise ValueError("%r cannot name a workspace: use letters, digits, '_', '.' and '-'" % name)
@@ -184,6 +190,7 @@ class GitWorktrees:
 
     # === What /ws does ==============================================================
 
+    # @req REQ-WS-005
     async def names(self) -> List[str]:
         """The workspaces that exist: every worktree on a ``peer/`` branch under the worktrees directory."""
         top    = await self._started()
@@ -196,12 +203,14 @@ class GitWorktrees:
                     found.append(name)
         return sorted(found)
 
+    # @req REQ-WS-005
     async def ahead(self, name: str) -> int:
         """How many commits *name*'s branch has that the base has not."""
         top = await self._started()
         out = await run_git(top, "rev-list", "--count", "%s..%s" % (self.base, BRANCH_PREFIX + name))
         return int(out.strip() or 0)
 
+    # @req REQ-WS-005
     async def merge(self, name: str) -> str:
         """
         Merges *name*'s branch into the base, and leaves the workspace in place.
@@ -250,6 +259,7 @@ class GitWorktrees:
                 return current
         return None
 
+    # @req REQ-WS-005
     async def drop(self, name: str) -> None:
         """
         Removes *name*'s worktree and deletes its branch, unmerged work and all.
@@ -266,6 +276,7 @@ class GitWorktrees:
             self._trees.pop(name, None)
 
 
+# @req REQ-WS-004
 def _exclude(path: Path, pattern: str) -> None:
     """Adds *pattern* to the repository's own exclude file, once."""
     path.parent.mkdir(parents=True, exist_ok=True)
