@@ -2,7 +2,7 @@
 
 ## 1. A failing answer is an error reply
 
-- [ ] 1.1 Confirm the API is unchanged: `ask` keeps its signature, no stubs needed (REQ-CORE-007, REQ-CORE-011); verify `specworks run typecheck`
+- [x] 1.1 Confirm the API is unchanged: `ask` keeps its signature, no stubs needed (REQ-CORE-007, REQ-CORE-011); verify `specworks run typecheck`
 - [ ] 1.2 [test] Rewrite the test tagged `@ac AC-CORE-007.5` so the failing peer's `ask` returns a `Reply` with status `error` naming the peer and `RuntimeError`, and the other ask its answer; verify it fails against today's code because `ask` raises
 - [ ] 1.3 [test] Rewrite the test tagged `@ac AC-CORE-011.1` so an `ask` of a peer returning a string returns `error` naming `TypeError`, and the addressed say still gets an `error` reply; verify it fails because `ask` raises `TypeError`
 - [ ] 1.4 [test] Add a test tagged `@ac AC-CORE-011.5`: a peer raising `RuntimeError("secret prompt")` is asked; the conversation holds one reply to the question from that peer, status `error`, `to` unset, naming `RuntimeError` and not `secret prompt`; verify it fails because nothing is posted today
