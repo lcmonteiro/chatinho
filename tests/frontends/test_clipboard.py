@@ -13,6 +13,7 @@ import pytest
 from chatinho.frontends.chat import clipboard
 
 
+# @ac AC-FRONT-020.8
 def test_no_helper_installed_is_not_a_failure(monkeypatch):
     """The ordinary case on a plain server: OSC 52 is then the only route."""
     monkeypatch.setattr(clipboard.shutil, "which", lambda name: None)
@@ -21,6 +22,7 @@ def test_no_helper_installed_is_not_a_failure(monkeypatch):
     assert clipboard.put("oi") is None
 
 
+# @ac AC-FRONT-020.9
 def test_the_first_helper_on_path_wins(monkeypatch):
     """Termux leads the list: its terminal is the one that drops OSC 52."""
     monkeypatch.setattr(
@@ -36,6 +38,7 @@ def test_the_first_helper_on_path_wins(monkeypatch):
     assert clipboard.helper() == ["xclip", "-selection", "clipboard"]
 
 
+# @ac AC-FRONT-020.10
 def test_the_text_is_fed_to_the_helper_on_stdin(monkeypatch):
     seen = {}
 
@@ -54,6 +57,7 @@ def test_the_text_is_fed_to_the_helper_on_stdin(monkeypatch):
     assert seen["timeout"] == clipboard.TIMEOUT
 
 
+# @ac AC-FRONT-020.11
 @pytest.mark.parametrize("blow_up", [
     OSError("no such thing"),
     subprocess.TimeoutExpired("termux-clipboard-set", 5),
@@ -92,11 +96,13 @@ def a_helper_on_path(tmp_path, monkeypatch):
     return written
 
 
+# @ac AC-FRONT-020.12
 def test_put_really_runs_the_helper(a_helper_on_path):
     assert clipboard.put("texto a sério") == "termux-clipboard-set"
     assert a_helper_on_path.read_text() == "texto a sério"
 
 
+# @ac AC-FRONT-020.13
 async def test_the_app_really_reaches_the_clipboard(a_helper_on_path):
     """
     End to end with nothing stubbed: the log's copy, and the clipboard.

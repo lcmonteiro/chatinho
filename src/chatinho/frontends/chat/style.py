@@ -184,6 +184,7 @@ $peer_header_rules
 )
 
 
+# @req REQ-FRONT-011, REQ-FRONT-013, REQ-FRONT-014, REQ-FRONT-017, REQ-FRONT-021
 @dataclass(frozen=True)
 class ChatStyle:
     """
@@ -289,6 +290,7 @@ class ChatStyle:
     quote_color: str = "#8a8984"
     quote_bg: str = "#262624"
 
+    # @req REQ-FRONT-013, REQ-FRONT-014, REQ-FRONT-017, REQ-FRONT-021
     def __post_init__(self) -> None:
         """
         Refuses a palette with nothing in it, a side or a frame that is neither, and a bar of no width.
@@ -320,6 +322,7 @@ class ChatStyle:
                 "scrollbar_size is a width in cells, one or more, not %r" % (self.scrollbar_size,)
             )
 
+    # @req REQ-FRONT-013
     def header_class(self, frm: int) -> str:
         """
         The header class carrying *frm*'s colour.
@@ -352,6 +355,7 @@ class ChatStyle:
             **asdict(self),
         )
 
+    # @req REQ-FRONT-017
     def _input_frame_rules(self) -> str:
         """
         The border declarations for the input, resting and focused.

@@ -33,6 +33,7 @@ async def _serving(front: McpFrontend) -> asyncio.Task:
     raise RuntimeError("the server never came up")
 
 
+# @ac AC-FRONT-024.5
 async def test_http_refuses_requests_without_the_token_and_serves_those_with_it():
     front   = McpFrontend(port=_free_port(), token="s3cret")
     session = ChatSession(frontend=front, connectors=[Weather("sunny")])
@@ -56,6 +57,7 @@ async def test_http_refuses_requests_without_the_token_and_serves_those_with_it(
         await session.close()
 
 
+# @ac AC-FRONT-024.6
 async def test_tokens_from_key_sources(monkeypatch):
     monkeypatch.setenv("CHATINHO_MCP_TOKEN", "s3cret")
     front   = McpFrontend(port=_free_port(), token=Env("CHATINHO_MCP_TOKEN"))
@@ -79,6 +81,7 @@ async def test_tokens_from_key_sources(monkeypatch):
         await session.close()
 
 
+# @ac AC-FRONT-024.7
 def test_a_missing_token_fails_at_startup(monkeypatch):
     monkeypatch.delenv("UNSET", raising=False)
     with pytest.raises(KeyUnavailable, match="UNSET"):

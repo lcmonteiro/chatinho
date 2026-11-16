@@ -273,8 +273,8 @@ The quit key SHALL default to Textual's own and, when given, replace it without 
 
 #### Scenario: AC-FRONT-010.2 The terminal serves until the user quits
 
-- **WHEN** the terminal serves and the person quits
-- **THEN** `serve()` returns
+- **WHEN** the terminal is serving
+- **THEN** `serve()` is still running while the terminal is up
 
 ### Requirement: REQ-FRONT-011 A bubble is an outline sized to its text
 
@@ -283,7 +283,7 @@ A message SHALL be drawn as a bordered bubble as wide as its widest line, never 
 #### Scenario: AC-FRONT-011.1 A bubble is as wide as its widest line
 
 - **WHEN** messages of different lengths are rendered
-- **THEN** each bubble is as wide as its widest line
+- **THEN** a short message takes a short bubble and a long one stops at the style's maximum bubble width
 
 #### Scenario: AC-FRONT-011.2 A bubble has no background until it is the reply target
 
@@ -478,8 +478,8 @@ A tap on a message SHALL select it as the reply target, and a second tap within 
 
 #### Scenario: AC-FRONT-015.4 The double tap does not use textuals chain count
 
-- **WHEN** two taps arrive a cell apart
-- **THEN** they still count as a double tap
+- **WHEN** the tap handler and its thresholds are read
+- **THEN** the handler does not use Textual's click chain, and it allows a longer pause than Textual's double click and a cell of travel
 
 #### Scenario: AC-FRONT-015.5 A press that travelled down is not a tap
 
@@ -609,8 +609,8 @@ A message's header SHALL name its speaker as `@name`, a peer that is gone by its
 
 #### Scenario: AC-FRONT-019.6 Naming an instance works only because the decorator shadows the property
 
-- **WHEN** a name is assigned to a terminal instance
-- **THEN** the assignment works
+- **WHEN** a name is assigned to an instance of a plain Textual app, and the terminal's class is read
+- **THEN** the first raises `AttributeError`, and the terminal's class carries the name its decorator gave it
 
 #### Scenario: AC-FRONT-019.7 The header stays inside a phone width terminal
 
@@ -658,8 +658,8 @@ The copy key SHALL copy the selected message, or say what to do when none is sel
 
 #### Scenario: AC-FRONT-020.7 The confirmation shows what was copied on one line
 
-- **WHEN** a multi-line message is copied
-- **THEN** the confirmation shows its text on one line
+- **WHEN** the text shown in the confirmation is made from a short text, a text with line breaks and runs of spaces, and a long text
+- **THEN** the first is unchanged, the second has single spaces instead, and the third is cut at 60 characters ending with an ellipsis
 
 #### Scenario: AC-FRONT-020.8 No helper installed is not a failure
 

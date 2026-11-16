@@ -64,6 +64,7 @@ _KEY_NAMES = {key.value for key in Keys} | set(KEY_ALIASES)
 _MODIFIERS = frozenset({"ctrl", "shift", "alt", "meta", "super", "hyper"})
 
 
+# @req REQ-FRONT-009
 def _swallowed_keys() -> Dict[str, str]:
     """
     The ctrl combos a terminal never delivers as themselves.
@@ -95,6 +96,7 @@ def _swallowed_keys() -> Dict[str, str]:
 _SWALLOWED : Dict[str, str] = _swallowed_keys()
 
 
+# @req REQ-FRONT-009
 def _validate_key(key: str, what: str = "quit_key") -> str:
     """
     Returns *key* if Textual could ever receive it, and raises if not.
@@ -148,6 +150,7 @@ def _validate_key(key: str, what: str = "quit_key") -> str:
     return key
 
 
+# @req REQ-FRONT-001, REQ-FRONT-003
 @frontend("chat")
 @require(HookSay)
 @require(HookAsk)
@@ -240,6 +243,7 @@ class ChatFrontend(App):
         """
         self._repaint_after("say", "ask")
 
+    # @req REQ-FRONT-010
     async def serve(self) -> None:
         """
         Runs the terminal, and returns when the user quits.
@@ -251,6 +255,7 @@ class ChatFrontend(App):
         """
         await self.run_async()
 
+    # @req REQ-FRONT-009
     def _rebind_quit(self, quit_key: str) -> None:
         """
         Moves the quit binding onto *quit_key*, and off whatever held it.
@@ -278,6 +283,7 @@ class ChatFrontend(App):
         }
         bindings.bind(quit_key, "quit", description="Quit", show=False, priority=True)
 
+    # @req REQ-FRONT-020
     def action_copy_selected(self) -> None:
         """
         Copies the message selected as the reply target.
@@ -353,6 +359,7 @@ class ChatFrontend(App):
             self._chat_log.sync()
             self._chat_log.scroll_to_bottom()
 
+    # @req REQ-FRONT-001, REQ-FRONT-005
     async def on_command_input_submitted(self, message: CommandInput.Submitted) -> None:
         """
         Handle the user sending what they typed.
@@ -375,6 +382,7 @@ class ChatFrontend(App):
             to, text = self._addressed(text)
             self.run_worker(self.say(text, to=to, reply_to=target), exclusive=False, exit_on_error=False)
 
+    # @req REQ-FRONT-002
     def _addressed(self, text: str) -> Tuple[Optional[int], str]:
         """
         ``@name rest`` asks the peer called *name* (``rest`` alone); anything else is said to all.
@@ -400,6 +408,7 @@ class ChatFrontend(App):
 
     # === The conversation ===========================================================
 
+    # @req REQ-FRONT-004
     async def command(self, name: str, args: str = "") -> Optional[str]:
         """
         Runs ``/name args`` and returns whatever it answered.
@@ -424,6 +433,7 @@ class ChatFrontend(App):
             return None
         return await self.invoke(name, args)
 
+    # @req REQ-FRONT-003, REQ-FRONT-004, REQ-FRONT-005
     async def _typed_command(self, name: str, args: str) -> None:
         """
         Runs a command the user typed, in a worker, and tells the person when it fails.
@@ -455,6 +465,7 @@ class ChatFrontend(App):
         """Someone spoke to everyone: repaint."""
         self._repaint()
 
+    # @req REQ-FRONT-005
     async def answer(self, msg: ChatMessage, **kwargs) -> Optional[Reply]:
         """
         Someone asked the user something.
@@ -471,6 +482,7 @@ class ChatFrontend(App):
         """The full message history, oldest first."""
         return self.context()
 
+    # @req REQ-FRONT-006
     def get_replies(self, msg_id: MessageID) -> List[MessageID]:
         """Returns the ids of the messages that answer *msg_id*."""
         return [m.id for m in self.context() if m.reply_to == msg_id]
@@ -528,6 +540,7 @@ class ChatFrontend(App):
     def _rendered_msg_ids(self) -> List[MessageID]:
         return self._chat_log._rendered_msg_ids
 
+    # @req REQ-FRONT-006
     def _set_reply_target(self, msg_id: MessageID) -> None:
         self._chat_log.set_reply_target(msg_id)
 

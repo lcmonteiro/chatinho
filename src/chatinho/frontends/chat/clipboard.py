@@ -38,6 +38,7 @@ HELPERS : Tuple[Tuple[str, ...], ...] = (
 TIMEOUT : float = 5.0
 
 
+# @req REQ-FRONT-020
 def helper() -> Optional[List[str]]:
     """
     The first clipboard helper this system actually has.
@@ -52,6 +53,7 @@ def helper() -> Optional[List[str]]:
     return None
 
 
+# @req REQ-FRONT-020
 def put(text: str) -> Optional[str]:
     """
     Writes *text* to the clipboard with a helper, if there is one.

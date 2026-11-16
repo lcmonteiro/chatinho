@@ -51,6 +51,7 @@ COMMANDS = [
 COMMAND_NAMES = {"help", "history", "hello"}
 
 
+# @ac AC-FRONT-023.1
 @pytest.mark.asyncio
 async def test_no_suggestions_without_registered_commands():
     app = await chat_frontend()
@@ -61,6 +62,7 @@ async def test_no_suggestions_without_registered_commands():
         assert not app.has_command_suggestions()
 
 
+# @ac AC-FRONT-023.2
 @pytest.mark.asyncio
 async def test_slash_alone_lists_all_commands():
     app = await chat_frontend(commands=COMMANDS)
@@ -71,6 +73,7 @@ async def test_slash_alone_lists_all_commands():
         assert {o.id for o in suggestions.options} == COMMAND_NAMES
 
 
+# @ac AC-FRONT-023.3
 @pytest.mark.asyncio
 async def test_typing_filters_suggestions_by_prefix():
     app = await chat_frontend(commands=COMMANDS)
@@ -80,6 +83,7 @@ async def test_typing_filters_suggestions_by_prefix():
         assert {o.id for o in suggestions.options} == {"help", "hello"}
 
 
+# @ac AC-FRONT-023.4
 @pytest.mark.asyncio
 async def test_no_match_hides_suggestions():
     app = await chat_frontend(commands=COMMANDS)
@@ -90,6 +94,7 @@ async def test_no_match_hides_suggestions():
         assert suggestions.option_count == 0
 
 
+# @ac AC-FRONT-023.5
 @pytest.mark.asyncio
 async def test_space_after_token_hides_suggestions():
     """Once a full command is followed by a space, it's no longer being typed."""
@@ -100,6 +105,7 @@ async def test_space_after_token_hides_suggestions():
         assert not suggestions.has_class("-visible")
 
 
+# @ac AC-FRONT-023.6
 @pytest.mark.asyncio
 async def test_tab_completes_highlighted_suggestion():
     app = await chat_frontend(commands=COMMANDS)
@@ -113,6 +119,7 @@ async def test_tab_completes_highlighted_suggestion():
         assert not suggestions.has_class("-visible")
 
 
+# @ac AC-FRONT-023.7
 @pytest.mark.asyncio
 async def test_down_moves_highlight_then_tab_completes_it():
     app = await chat_frontend(commands=COMMANDS)
@@ -128,6 +135,7 @@ async def test_down_moves_highlight_then_tab_completes_it():
         assert inp.text == f"/{second} "
 
 
+# @ac AC-FRONT-023.8
 @pytest.mark.asyncio
 async def test_enter_accepts_suggestion_instead_of_submitting():
     app = await chat_frontend(commands=COMMANDS)
@@ -139,6 +147,7 @@ async def test_enter_accepts_suggestion_instead_of_submitting():
         assert len(app.messages) == 0  # not submitted yet
 
 
+# @ac AC-FRONT-023.9
 @pytest.mark.asyncio
 async def test_escape_hides_suggestions_without_changing_input():
     app = await chat_frontend(commands=COMMANDS)
@@ -151,6 +160,7 @@ async def test_escape_hides_suggestions_without_changing_input():
         assert inp.text == "/h"
 
 
+# @ac AC-FRONT-023.10
 @pytest.mark.asyncio
 async def test_tab_falls_through_to_focus_next_without_suggestions():
     """Tab must keep its normal Textual behavior when no popup is open."""
@@ -162,6 +172,7 @@ async def test_tab_falls_through_to_focus_next_without_suggestions():
         assert app.focused is not focused_before
 
 
+# @ac AC-FRONT-003.5
 @pytest.mark.asyncio
 async def test_an_unknown_command_says_so_instead_of_vanishing():
     """There is no dispatch to fall through: an unknown name has no id."""

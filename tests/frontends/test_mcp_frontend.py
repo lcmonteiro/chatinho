@@ -13,6 +13,7 @@ from fakes.mcp import Agent, Files, Weather, ask, call, client, remote
 
 # === The frontend itself ===========================================================
 
+# @ac AC-FRONT-024.1
 async def test_named_master_by_default():
     session, front = await remote(Weather())
     assert front.name == "master"
@@ -23,6 +24,7 @@ async def test_named_master_by_default():
     await session.close()
 
 
+# @ac AC-FRONT-024.2
 def test_a_token_is_required():
     with pytest.raises(ValueError):
         McpFrontend(token="")
@@ -30,6 +32,7 @@ def test_a_token_is_required():
         McpFrontend()                                   # type: ignore[call-arg]
 
 
+# @ac AC-FRONT-024.3
 async def test_what_a_terminal_can_do():
     session, front = await remote(Weather())
     async with client(front) as c:
@@ -42,6 +45,7 @@ async def test_what_a_terminal_can_do():
     await session.close()
 
 
+# @ac AC-FRONT-025.2
 async def test_answered():
     session, front = await remote(Weather("sunny"))
     async with client(front) as c:
@@ -50,6 +54,7 @@ async def test_answered():
     await session.close()
 
 
+# @ac AC-FRONT-025.3
 async def test_answered_with_a_question():
     session, front = await remote(Weather(Reply("which login flow?", status="asked")))
     async with client(front) as c:
@@ -58,6 +63,7 @@ async def test_answered_with_a_question():
     await session.close()
 
 
+# @ac AC-FRONT-025.5
 async def test_a_failing_peer_is_an_error():
     session, front = await remote(Weather(RuntimeError("boom")))
     async def boom(msg):
@@ -69,6 +75,7 @@ async def test_a_failing_peer_is_an_error():
     await session.close()
 
 
+# @ac AC-FRONT-025.8
 async def test_attachments_come_back(tmp_path):
     chart = Attachment("chart.svg", "image/svg+xml", b"<svg/>")
     session, front = await remote(Agent(attach=chart), backend=Files(tmp_path))
@@ -91,6 +98,7 @@ class _Echo:
         return Reply("echo: %s" % msg.text)
 
 
+# @ac AC-FRONT-026.1
 async def test_the_reply_goes_back_to_its_client():
     weather = Weather("sunny")
     session, front = await remote(weather)
@@ -101,6 +109,7 @@ async def test_the_reply_goes_back_to_its_client():
     await session.close()
 
 
+# @ac AC-FRONT-026.2
 async def test_two_clients_at_once():
     session, front = await remote(_Echo())
     before = set(session._peers())
@@ -124,6 +133,7 @@ class _Bystander:
             await self.say("not my question", reply_to=msg.id)
 
 
+# @ac AC-FRONT-026.3
 async def test_another_peers_reply_does_not_end_the_call():
     """Only the asked peer's reply ends the call: the bystander's is overheard."""
     session, front = await remote(Weather("sunny", delay=0.2), _Bystander())
@@ -134,6 +144,7 @@ async def test_another_peers_reply_does_not_end_the_call():
     await session.close()
 
 
+# @ac AC-FRONT-026.4
 async def test_a_forgotten_question_still_takes_the_first_reply():
     """With the question gone from the conversation, nobody is known to be asked; the call must not hang."""
     session, front = await remote(Weather("sunny", delay=0.2))
@@ -146,12 +157,14 @@ async def test_a_forgotten_question_still_takes_the_first_reply():
     await session.close()
 
 
+# @ac AC-FRONT-024.4
 def test_the_frontend_is_never_asked():
     assert not declares(McpFrontend(token="t"), HookAnswer)
 
 
 # === Asking one peer ===============================================================
 
+# @ac AC-FRONT-025.1
 async def test_ask_a_peer_by_name():
     agent, weather = Agent(), Weather("sunny")
     session, front = await remote(agent, weather)
@@ -164,6 +177,7 @@ async def test_ask_a_peer_by_name():
     await session.close()
 
 
+# @ac AC-FRONT-025.4
 async def test_ask_keeps_the_status():
     session, front = await remote(Agent(), Weather(Reply("which city?", status="asked")))
     async with client(front) as c:
@@ -172,6 +186,7 @@ async def test_ask_keeps_the_status():
     await session.close()
 
 
+# @ac AC-FRONT-025.6
 async def test_ask_a_peer_that_fails():
     session, front = await remote(Agent(), Weather(RuntimeError("boom")))
     async def boom(msg):
@@ -188,6 +203,7 @@ class _Mute:
     """In the session, but answers nothing."""
 
 
+# @ac AC-FRONT-025.7
 @pytest.mark.parametrize("peers, peer, says", [
     ((Weather(),), "nobody", "No peer named"),
     ((Weather(), _Mute()), "mute", "does not answer"),
@@ -202,6 +218,7 @@ async def test_ask_who_cannot_answer(peers, peer, says):
     await session.close()
 
 
+# @ac AC-FRONT-028.2
 async def test_ask_lends_credentials():
     agent = Agent(key=True)
     session, front = await remote(agent, Weather(), credentials={"llm": "key"})
@@ -225,6 +242,7 @@ class _EcoTool:
         return Reply("eco: %s" % args)
 
 
+# @ac AC-FRONT-027.1
 async def test_peers():
     session, front = await remote(Agent(), Weather(), _Mute())
     async with client(front) as c:
@@ -233,6 +251,7 @@ async def test_peers():
     await session.close()
 
 
+# @ac AC-FRONT-027.2
 async def test_tools():
     session, front = await remote(Weather(), commands=[_EcoTool()])
     async with client(front) as c:
@@ -241,6 +260,7 @@ async def test_tools():
     await session.close()
 
 
+# @ac AC-FRONT-027.3
 async def test_invoke_a_tool():
     session, front = await remote(Weather(), commands=[_EcoTool()])
     async with client(front) as c:
@@ -252,6 +272,7 @@ async def test_invoke_a_tool():
     await session.close()
 
 
+# @ac AC-FRONT-027.4
 async def test_invoke_a_tool_that_does_not_exist():
     session, front = await remote(Weather())
     async with client(front) as c:
@@ -268,6 +289,7 @@ async def _lend(c, value="sk-test", **args):
     return res.structured_content
 
 
+# @ac AC-FRONT-028.1
 async def test_declared_at_discovery():
     session, front = await remote(Weather(), credentials={"llm": "OpenAI-compatible API key"})
     async with client(front) as c:
@@ -276,6 +298,7 @@ async def test_declared_at_discovery():
     await session.close()
 
 
+# @ac AC-FRONT-028.3
 async def test_a_lent_credential_reaches_the_peer_and_undeclared_ones_do_not():
     agent = Agent(key=True)
     session, front = await remote(agent, credentials={"llm": "key"})
@@ -286,6 +309,7 @@ async def test_a_lent_credential_reaches_the_peer_and_undeclared_ones_do_not():
     await session.close()
 
 
+# @ac AC-FRONT-028.5
 async def test_a_credential_is_gone_after_the_reply():
     agent = Agent(key=True)
     session, front = await remote(agent, credentials={"llm": "key"})
@@ -296,6 +320,7 @@ async def test_a_credential_is_gone_after_the_reply():
     await session.close()
 
 
+# @ac AC-FRONT-028.4
 async def test_each_message_brings_its_own_key():
     agent = Agent(key=True)
     session, front = await remote(agent, credentials={"llm": "key"})
@@ -307,6 +332,7 @@ async def test_each_message_brings_its_own_key():
     await session.close()
 
 
+# @ac AC-FRONT-028.6
 async def test_a_credential_is_gone_when_the_client_gives_up():
     agent = Agent(key=False, delay=0.5)
     session, front = await remote(agent, credentials={"llm": "key"})
@@ -320,6 +346,7 @@ async def test_a_credential_is_gone_when_the_client_gives_up():
     await session.close()
 
 
+# @ac AC-FRONT-028.7
 async def test_a_credential_is_never_in_the_conversation():
     agent = Agent(key=True)
     session, front = await remote(agent, credentials={"llm": "key"})
