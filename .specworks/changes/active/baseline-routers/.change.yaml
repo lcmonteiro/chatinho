@@ -1,6 +1,6 @@
 name: baseline-routers
 created: '2026-11-16T11:44:33'
-phase: review
+phase: validate
 specified:
   REQ-ROUTE-001: b4a5e90e980f
   REQ-ROUTE-002: ddf6dff027a5
@@ -8,12 +8,3 @@ specified:
   REQ-ROUTE-004: da87e02afc12
   REQ-ROUTE-005: 6058628fb818
   REQ-ROUTE-006: 4811550a1988
-dirty:
-  .specworks/changes/active/baseline-routers/.change.yaml: 3d25f12e2dade2e520e59398a72ad10b85c8c6d30e52350fa80674e3d7642ed3
-  .specworks/changes/active/baseline-routers/design.md: 4bb805f2b3c02012f077c21af3d1445bf4c6110ce81e41d6e13757fffe4fe7bd
-  .specworks/changes/active/baseline-routers/tasks.md: a28ac9a9a9e104cf01adc0779f0ba7c09bf82301b0cfc506a525551cf89a4840
-  .specworks/changes/active/baseline-routers/traceability.md: cdb547937657f2e9b94d9fae20e7b8a3b464b0a611e1097c61506b65610d2a6c
-  src/chatinho/builder.py: 611bb604ece62fb1d5986a4f50bec2dd64e64a461bbc603db7ef22511fcc8cfd
-  src/chatinho/routers/simple.py: 030c3c2da4d2a7a6eaa7482bfe2bb733beac56a4b31e634e4731d71ac930bbaa
-  src/chatinho/session.py: 7103e1ad2adf7acdec477b1541247a5a597830826b6866bdb9dd16074c4070e7
-  tests/routers/test_message_routing.py: 8eb2624c84ee9ee925bfdfff08fc9e9b5baf7e869c203da54ad5f70b8a801338
