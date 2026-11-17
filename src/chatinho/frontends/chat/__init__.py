@@ -42,10 +42,10 @@ from textual.widgets import TextArea
 from ...hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke
 from ...hooks import HookListen, HookLocate, HookPeers, HookSay
 from ...hooks import Ask, Commands, Context, Invoke, Locate, Peers, Say
-from ...hooks import frontend, name_of, require
+from ...hooks import declares, frontend, name_of, require
 from ...message import LOCAL, ChatMessage, MessageID, Reply
 from .composer import COMMAND_PREFIX, NEWLINE_ESCAPE, SUGGESTIONS_ID
-from .composer import CommandInput, CommandSuggestions, validate_escape
+from .composer import PEER_PREFIX, CommandInput, Suggestions, validate_escape
 from .messages import ChatLog
 from .style import ChatStyle
 
@@ -332,7 +332,7 @@ class ChatFrontend(App):
                 id=CHAT_LOG_ID,
             ),
             Vertical(
-                CommandSuggestions(self.commands, id=SUGGESTIONS_ID),
+                Suggestions(self.commands, self._answering_peers, id=SUGGESTIONS_ID),
                 CommandInput(
                     newline_escape = self._newline_escape,
                     placeholder    = self._input_placeholder,
@@ -390,7 +390,7 @@ class ChatFrontend(App):
         The ask is an addressed say: the peer is asked, the answer comes back
         as a reply, and nothing waits on it here, so the input stays free.
         """
-        name, _, rest = text[1:].partition(" ") if text.startswith("@") else ("", "", "")
+        name, _, rest = text[1:].partition(" ") if text.startswith(PEER_PREFIX) else ("", "", "")
         rest = rest.strip()
         if rest:
             for at, who in self.peers().items():
@@ -399,10 +399,10 @@ class ChatFrontend(App):
         return None, text
 
     def on_text_area_changed(self, message: TextArea.Changed) -> None:
-        """Update the command-suggestion popup as the user types."""
+        """Update the suggestion popup as the user types."""
         if message.text_area.id != INPUT_ID:
             return
-        self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).update_for(
+        self.query_one("#%s" % SUGGESTIONS_ID, Suggestions).update_for(
             message.text_area.text
         )
 
@@ -489,9 +489,20 @@ class ChatFrontend(App):
 
     # === Presentation-owned behaviour ===============================================
 
-    def has_command_suggestions(self) -> bool:
-        """Whether the command-suggestion popup currently has entries."""
-        return self.query_one("#%s" % SUGGESTIONS_ID, CommandSuggestions).has_suggestions
+    def has_suggestions(self) -> bool:
+        """Whether the suggestion popup currently has entries."""
+        return self.query_one("#%s" % SUGGESTIONS_ID, Suggestions).has_suggestions
+
+    # @req REQ-FRONT-029
+    def _answering_peers(self) -> List[str]:
+        """
+        The names of the peers that can be asked: every one but the terminal that declares ``HookAnswer``.
+
+        Read fresh on every call, so a peer registered after the terminal started is offered too.
+        Implements REQ-FRONT-029.
+        """
+        return [name_of(who) for at, who in self.peers().items()
+                if at != LOCAL and declares(who, HookAnswer)]
 
     # === Internals ==================================================================
 

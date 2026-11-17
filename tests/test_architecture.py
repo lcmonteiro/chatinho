@@ -251,7 +251,7 @@ def _assigned_attributes(path: str, class_name: str) -> set:
         ("src/chatinho/frontends/chat/__init__.py", "ChatFrontend",       "textual.app:App"),
         ("src/chatinho/frontends/chat/messages.py", "ChatLog",            "textual.containers:Container"),
         ("src/chatinho/frontends/chat/composer.py", "CommandInput",       "textual.widgets:Input"),
-        ("src/chatinho/frontends/chat/composer.py", "CommandSuggestions", "textual.widgets:OptionList"),
+        ("src/chatinho/frontends/chat/composer.py", "Suggestions",        "textual.widgets:OptionList"),
     ],
 )
 def test_a_grant_never_shadows_a_textual_method(module, class_name, base):
@@ -289,7 +289,7 @@ def _declared_hooks(path: str, class_name: str) -> set:
         ("src/chatinho/frontends/chat/__init__.py", "ChatFrontend",       "textual.app:App"),
         ("src/chatinho/frontends/chat/messages.py", "ChatLog",            "textual.containers:Container"),
         ("src/chatinho/frontends/chat/composer.py", "CommandInput",       "textual.widgets:Input"),
-        ("src/chatinho/frontends/chat/composer.py", "CommandSuggestions", "textual.widgets:OptionList"),
+        ("src/chatinho/frontends/chat/composer.py", "Suggestions",        "textual.widgets:OptionList"),
     ],
 )
 def test_we_never_shadow_a_textual_method(module, class_name, base):

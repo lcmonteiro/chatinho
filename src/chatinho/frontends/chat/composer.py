@@ -1,7 +1,7 @@
 """
 The command input line and its autocomplete popup.
 
-:class:`CommandSuggestions` owns the popup's options and visibility;
+:class:`Suggestions` owns the popup's options and visibility;
 :class:`CommandInput` drives it through the sibling widget rather than
 reaching up into the application.
 
@@ -30,7 +30,10 @@ from ...session import COMMAND_PREFIX
 logger = logging.getLogger(__name__)
 
 
-SUGGESTIONS_ID : str = "command-suggestions"
+SUGGESTIONS_ID : str = "suggestions"
+
+#: What starts a line that asks one peer, and opens the list of peers to ask.
+PEER_PREFIX    : str = "@"
 
 #: The keys that open a new line instead of sending. ``ctrl+j`` is the only
 #: one that needs no enhanced keyboard protocol to arrive — it is Line Feed,
@@ -78,37 +81,61 @@ def validate_escape(char: Optional[str]) -> Optional[str]:
     return char
 
 
-# @req REQ-FRONT-023
-class CommandSuggestions(OptionList):
-    """Popup listing the commands whose name matches the "/token" being typed."""
+# @req REQ-FRONT-023, REQ-FRONT-029
+class Suggestions(OptionList):
+    """
+    Popup listing what the token being typed can complete to.
 
-    def __init__(self, commands: Callable[[], Dict[str, Any]], **kwargs) -> None:
+    After a leading ``/`` that is the session's commands; after a leading
+    ``@`` the peers that answer. Each option is the whole completion, prefix
+    included, so the input writes back what it takes without knowing which
+    prefix opened the popup.
+    """
+
+    def __init__(self,
+                 commands : Callable[[], Dict[str, Any]],
+                 peers    : Callable[[], List[str]],
+                 **kwargs) -> None:
+        """
+        Args:
+            commands: The commands by name — the ``commands`` grant, called fresh each time.
+            peers: The names of the peers that answer, read fresh each time.
+        """
         super().__init__(**kwargs)
         # Granted by HookCommands: called fresh each time, never held as a dict.
         self._commands = commands
+        self._peers    = peers
 
     @property
     def has_suggestions(self) -> bool:
         """Whether the popup currently has entries."""
         return self.option_count > 0
 
+    # @req REQ-FRONT-023, REQ-FRONT-029
     def update_for(self, text: str) -> None:
         """
-        Shows the commands matching *text*, or hides the popup if none do.
+        Shows what the token being typed can complete to, or hides the popup.
+
+        The token is what follows a leading ``/`` (the commands) or ``@`` (the
+        peers that answer), up to the first space; anywhere else there is no
+        token at all.
 
         Args:
             text: The current content of the input line.
         """
         matches = []
-        if text.startswith(COMMAND_PREFIX) and " " not in text:
-            token = text[len(COMMAND_PREFIX):]
-            matches = sorted(n for n in self._names() if n.startswith(token))
+        prefix  = text[:1]
+        if prefix in (COMMAND_PREFIX, PEER_PREFIX) and " " not in text:
+            names   = self._names() if prefix == COMMAND_PREFIX else self._peers()
+            token   = text[len(prefix):]
+            # A set: two peers may share a name, and an option's id must not repeat.
+            matches = sorted({n for n in names if n.startswith(token)})
 
         if not matches:
             self.hide()
             return
 
-        self.set_options(Option(self._label(name), id=name) for name in matches)
+        self.set_options(Option(self._label(prefix, name), id=prefix + name) for name in matches)
         self.highlighted = 0
         self.add_class("-visible")
 
@@ -126,17 +153,18 @@ class CommandSuggestions(OptionList):
 
     def take_highlighted(self) -> Optional[str]:
         """
-        Returns the highlighted command name and hides the popup.
+        Returns the highlighted completion and hides the popup.
 
         Returns:
-            Optional[str]: The command name, or None if nothing is highlighted.
+            Optional[str]: The completion with its prefix (``"/help"``,
+            ``"@sol"``), or None if nothing is highlighted.
         """
         option = self.highlighted_option
         if option is None or option.id is None:
             return None
-        name = option.id
+        completion = option.id
         self.hide()
-        return name
+        return completion
 
     def _names(self) -> List[str]:
         """The names of the registered commands."""
@@ -146,18 +174,18 @@ class CommandSuggestions(OptionList):
         """The command with that name, or None."""
         return self._commands().get(name)
 
-    def _label(self, name: str) -> str:
-        """Returns the popup label for the command registered as *name*."""
-        description = getattr(self._tool(name), "description", "")
+    def _label(self, prefix: str, name: str) -> str:
+        """Returns the popup label for *name* typed after *prefix*: a command's carries its description."""
+        description = getattr(self._tool(name), "description", "") if prefix == COMMAND_PREFIX else ""
         if description:
-            return f"{COMMAND_PREFIX}{name}  —  {description}"
-        return f"{COMMAND_PREFIX}{name}"
+            return f"{prefix}{name}  —  {description}"
+        return f"{prefix}{name}"
 
 
 # @req REQ-FRONT-012
 class CommandInput(TextArea):
     """
-    Multi-line input that drives the sibling :class:`CommandSuggestions` popup.
+    Multi-line input that drives the sibling :class:`Suggestions` popup.
 
     Enter sends what was typed as :class:`CommandInput.Submitted`; the keys in
     :data:`NEWLINE_KEYS`, and :attr:`newline_escape` typed just before it, open
@@ -205,10 +233,10 @@ class CommandInput(TextArea):
         super().__init__(**kwargs)
 
     @property
-    def suggestions(self) -> Optional[CommandSuggestions]:
+    def suggestions(self) -> Optional[Suggestions]:
         """The sibling popup, or None before the widget tree exists."""
         try:
-            return self.screen.query_one(f"#{SUGGESTIONS_ID}", CommandSuggestions)
+            return self.screen.query_one(f"#{SUGGESTIONS_ID}", Suggestions)
         except (NoMatches, ScreenStackError):
             # Bindings are checked before the widget tree exists too.
             return None
@@ -219,7 +247,7 @@ class CommandInput(TextArea):
         suggestions = self.suggestions
         return suggestions is not None and suggestions.has_suggestions
 
-    # @req REQ-FRONT-023
+    # @req REQ-FRONT-023, REQ-FRONT-029
     def accept_suggestion(self) -> bool:
         """
         Completes the input with the highlighted suggestion, if any.
@@ -230,10 +258,10 @@ class CommandInput(TextArea):
         suggestions = self.suggestions
         if suggestions is None:
             return False
-        name = suggestions.take_highlighted()
-        if name is None:
+        completion = suggestions.take_highlighted()
+        if completion is None:
             return False
-        self.text = f"{COMMAND_PREFIX}{name} "
+        self.text = f"{completion} "
         self.move_cursor(self.document.end)
         return True
 
