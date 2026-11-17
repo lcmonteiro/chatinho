@@ -1,4 +1,4 @@
 name: clean-failing-peer-test
 created: '2026-11-17T07:35:47'
-phase: specify
+phase: design
 skip_specs: true
