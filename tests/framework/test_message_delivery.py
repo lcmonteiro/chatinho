@@ -457,10 +457,7 @@ async def test_a_failed_ask_is_in_the_conversation():
 
     session, view = await driven(connectors=[Broken()])
     broken = view.id_of("broken")
-    try:
-        await asyncio.wait_for(view.ask(broken, "rain?"), timeout=2)
-    except RuntimeError:
-        pass                # what ask returns is AC-CORE-007.5; this checks the conversation
+    await asyncio.wait_for(view.ask(broken, "rain?"), timeout=2)   # what it returns is AC-CORE-007.5
     await session.close()
     question = [m for m in view.context() if m.text == "rain?"][0]
     replies  = [m for m in view.context() if m.reply_to == question.id]

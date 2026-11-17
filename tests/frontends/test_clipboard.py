@@ -5,6 +5,7 @@ Textual copies with OSC 52, which a terminal is free to ignore; Termux does.
 These cover the second route: a helper program the system already has.
 """
 
+import logging
 import os
 import subprocess
 
@@ -63,7 +64,7 @@ def test_the_text_is_fed_to_the_helper_on_stdin(monkeypatch):
     subprocess.TimeoutExpired("termux-clipboard-set", 5),
     subprocess.CalledProcessError(1, "termux-clipboard-set"),
 ])
-def test_a_helper_that_fails_is_logged_and_not_raised(monkeypatch, blow_up):
+def test_a_helper_that_fails_is_logged_and_not_raised(monkeypatch, caplog, blow_up):
     """
     The chat has already copied by the other route; a clipboard is not
     worth interrupting a conversation for."""
@@ -73,7 +74,11 @@ def test_a_helper_that_fails_is_logged_and_not_raised(monkeypatch, blow_up):
     monkeypatch.setattr(clipboard.shutil, "which", lambda name: "/usr/bin/" + name)
     monkeypatch.setattr(clipboard.subprocess, "run", fake_run)
 
-    assert clipboard.put("oi") is None
+    with caplog.at_level(logging.WARNING, logger=clipboard.__name__):
+        assert clipboard.put("oi") is None
+    warnings = [r for r in caplog.records
+                if r.name == clipboard.__name__ and r.levelno == logging.WARNING]
+    assert len(warnings) == 1 and "termux-clipboard-set" in warnings[0].getMessage()
 
 
 # === The real subprocess, not a stand-in ========================================
