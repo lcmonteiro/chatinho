@@ -19,6 +19,14 @@ __all__ = [
 ]
 
 
+# @req REQ-ROUTE-011
 def __getattr__(name: str) -> Any:
     """Resolves ``LLMRouter`` on first use, so importing the routers needs no ``openai`` (PEP 562)."""
-    raise NotImplementedError
+    if name != "LLMRouter":
+        raise AttributeError("module %r has no attribute %r" % (__name__, name))
+    try:
+        from .llm import LLMRouter
+    except ImportError as exc:
+        raise ImportError("LLMRouter needs chatinho[openai] (pip install 'chatinho[openai]'): %s"
+                          % exc) from exc
+    return LLMRouter

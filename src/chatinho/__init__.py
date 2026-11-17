@@ -40,7 +40,7 @@ Served over MCP, which needs ``pip install chatinho[mcp]``::
 Each builder attaches a frontend — ``ChatFrontend`` or ``McpFrontend``, both in
 :mod:`chatinho.frontends` — and either can be passed to ``ChatSession`` by hand.
 
-Eleven names need an extra, and say so if it is missing:
+Twelve names need an extra, and say so if it is missing:
 
     build_chat_session   chatinho[tui,mcp]     textual, fastmcp
     build_mcp_session    chatinho[tui,mcp]     textual, fastmcp
@@ -49,6 +49,7 @@ Eleven names need an extra, and say so if it is missing:
     McpFrontend          chatinho[mcp]         fastmcp
     McpConnector         chatinho[mcp]         fastmcp
     OpenAIConnector      chatinho[openai]      openai
+    LLMRouter            chatinho[openai]      openai
     BasicAgentConnector  chatinho[langchain]   langchain
     DeepAgentConnector   chatinho[deepagents]  deepagents
     DatabaseBackend      chatinho[sql]         sqlalchemy
@@ -107,6 +108,7 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
     "McpFrontend"         : (".frontends.mcp",           (_MCP,)),
     "McpConnector"        : (".connectors.mcp",          (_MCP,)),
     "OpenAIConnector"     : (".connectors.openai",       (("openai", "openai"),)),
+    # @req REQ-ROUTE-011
     "LLMRouter"           : (".routers.llm",             (("openai", "openai"),)),
     "BasicAgentConnector" : (".connectors.agents.basic", (("langchain", "langchain"),)),
     "DeepAgentConnector"  : (".connectors.agents.deep",  (("deepagents", "deepagents"),)),

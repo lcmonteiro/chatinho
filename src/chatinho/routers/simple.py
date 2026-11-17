@@ -6,6 +6,7 @@ from ..hooks import HookAnswer, HookContext, HookPeers, HookRoute, Context, Peer
 from ..message import LOCAL, ChatMessage
 
 
+# @req REQ-ROUTE-007
 def answering(msg: ChatMessage, roster: Dict[int, Any]) -> List[int]:
     """
     The peers that could answer *msg*: those that answer, but its speaker and the frontend.
@@ -17,9 +18,11 @@ def answering(msg: ChatMessage, roster: Dict[int, Any]) -> List[int]:
     Returns:
         List[int]: Their ids, in roster order.
     """
-    raise NotImplementedError
+    return [at for at, who in roster.items()
+            if at not in (msg.frm, LOCAL) and declares(who, HookAnswer)]
 
 
+# @req REQ-ROUTE-004, REQ-ROUTE-005, REQ-ROUTE-007
 def simple_route(msg: ChatMessage, roster: Dict[int, Any], context: Context) -> Optional[int]:
     """
     ``SimpleRouter``'s two rules, for any router that wants them first.
@@ -36,7 +39,12 @@ def simple_route(msg: ChatMessage, roster: Dict[int, Any], context: Context) -> 
     Returns:
         Optional[int]: The peer the rules choose, or None.
     """
-    raise NotImplementedError
+    candidates = answering(msg, roster)
+    if msg.reply_to is not None:
+        parent = next((m for m in context() if m.id == msg.reply_to), None)
+        author = parent.frm if parent is not None else None
+        return author if author in candidates else None
+    return candidates[0] if len(candidates) == 1 else None
 
 
 # @req REQ-ROUTE-004, REQ-ROUTE-005
@@ -70,15 +78,4 @@ class SimpleRouter:
             Optional[int]: The id of the author of what it replies to, or of
             the lone peer that answers; None when there is no such peer.
         """
-        roster = self.peers()
-
-        def answers(at: Optional[int]) -> bool:
-            return (at is not None and at not in (msg.frm, LOCAL)
-                    and at in roster and declares(roster[at], HookAnswer))
-
-        if msg.reply_to is not None:
-            parent = next((m for m in self.context() if m.id == msg.reply_to), None)
-            author = parent.frm if parent is not None else None
-            return author if answers(author) else None
-        answering = [at for at in roster if answers(at)]
-        return answering[0] if len(answering) == 1 else None
+        return simple_route(msg, self.peers(), self.context)

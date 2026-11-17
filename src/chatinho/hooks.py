@@ -464,8 +464,8 @@ def connector(name: str, id: Optional[int] = None, description: str = "") -> Cal
         ValueError: If *name* is empty, or *id* is not an int, or *id* is TOOL,
             or *description* is not a string.
     """
-    if description != "":
-        raise NotImplementedError("connector(description=...) is not implemented yet")
+    if not isinstance(description, str):
+        raise ValueError("A connector description must be a string, got %r" % (description,))
     if not isinstance(name, str) or not name.strip():
         raise ValueError("A connector name must be a non-empty string, got %r" % (name,))
     if id is not None:
@@ -475,7 +475,8 @@ def connector(name: str, id: Optional[int] = None, description: str = "") -> Cal
             raise ValueError("Id %d is TOOL's: a command is not a peer" % TOOL)
 
     def decorator(cls: type) -> type:
-        cls.name = name  # type: ignore[attr-defined]
+        cls.name        = name  # type: ignore[attr-defined]
+        cls.description = description  # type: ignore[attr-defined]
         if id is not None:
             # Not ``cls.id``: Textual's DOMNode owns that name and validates it
             # as a string, which is a TypeError at attach and was one once.
