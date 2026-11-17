@@ -208,6 +208,33 @@ def test_connector_names_the_class_and_an_instance_may_override_it():
     assert name_of(other) == "weather-eu"
 
 
+# @ac AC-CORE-002.6
+def test_a_peer_carries_its_description_and_an_instance_may_override_it():
+    @connector("weather", description="Forecasts by city")
+    class Weather:
+        pass
+
+    other = Weather()
+    other.description = "Forecasts for Lisbon"
+    assert (Weather().description, other.description) == ("Forecasts by city", "Forecasts for Lisbon")
+
+
+# @ac AC-CORE-002.7
+def test_a_peer_with_no_description_has_an_empty_one():
+    @connector("weather")
+    class Weather:
+        pass
+
+    assert Weather().description == ""
+
+
+# @ac AC-CORE-002.8
+@pytest.mark.parametrize("bad", [None, 3, ["Forecasts"]])
+def test_a_description_that_is_not_a_string_is_refused(bad):
+    with pytest.raises(ValueError, match="description"):
+        connector("weather", description=bad)
+
+
 # @ac AC-CORE-003.5
 def test_frontend_is_a_connector_that_already_knows_it_is_peer_zero():
     """

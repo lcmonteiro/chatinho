@@ -1,6 +1,6 @@
 name: add-llm-router
 created: '2026-11-17T21:47:41'
-phase: design
+phase: implement
 specified:
   REQ-CORE-002: 440fee33a29d
   REQ-ROUTE-007: 88f7576b1899
