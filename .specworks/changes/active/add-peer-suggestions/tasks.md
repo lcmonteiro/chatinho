@@ -1,0 +1,10 @@
+# Tasks: add-peer-suggestions
+
+## 1. One popup, a source per prefix
+
+- [ ] 1.1 Rename `CommandSuggestions` to `Suggestions`, `SUGGESTIONS_ID` to `"suggestions"` and `has_command_suggestions()` to `has_suggestions()`; add `PEER_PREFIX` and the `peers` constructor argument and `ChatFrontend._answering_peers()` as stubs; follow the rename in `style.py` and `tests/test_architecture.py` (REQ-FRONT-023, REQ-FRONT-029); verify `uv run mypy src/chatinho examples` and `uv run ruff check src tests examples` pass
+- [ ] 1.2 [test] Follow the rename in `tests/frontends/test_command_suggestions.py` without changing what any `@ac AC-FRONT-023.*` test asserts (AC-FRONT-023.1, AC-FRONT-023.2, AC-FRONT-023.3, AC-FRONT-023.4, AC-FRONT-023.5, AC-FRONT-023.6, AC-FRONT-023.7, AC-FRONT-023.8, AC-FRONT-023.9, AC-FRONT-023.10); verify they still pass against the stubs
+- [ ] 1.3 [test] Write failing mounted tests for the list's contents, tagged `@ac`: AC-FRONT-029.1, AC-FRONT-029.2, AC-FRONT-029.3, AC-FRONT-029.4, AC-FRONT-029.5, AC-FRONT-029.6, AC-FRONT-029.7, AC-FRONT-029.13 (REQ-FRONT-029); verify they fail because no list opens after `@`
+- [ ] 1.4 [test] Write failing mounted tests for the keys and the result, tagged `@ac`: AC-FRONT-029.8, AC-FRONT-029.9, AC-FRONT-029.10, AC-FRONT-029.11, AC-FRONT-029.12 (REQ-FRONT-029); verify they fail because nothing is completed
+- [ ] 1.5 [code] Make `Suggestions` hold completions with their prefix, match `/` against the commands and `@` against `peers()`, and have `accept_suggestion` write the completion and a space, tagged `@req REQ-FRONT-023, REQ-FRONT-029` (REQ-FRONT-023, REQ-FRONT-029); verify typing `@` in `./run.sh` lists the connector, and mypy and ruff pass
+- [ ] 1.6 [code] Implement `ChatFrontend._answering_peers()` (peers but `LOCAL` that declare `HookAnswer`, read fresh), pass it to the popup, and use `PEER_PREFIX` in `_addressed`, tagged `@req REQ-FRONT-029` (REQ-FRONT-029); verify mypy and ruff pass and `./run.sh` does not list the database backend
