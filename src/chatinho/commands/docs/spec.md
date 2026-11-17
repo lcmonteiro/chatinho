@@ -17,7 +17,7 @@ The commands the library ships: `/help`, `/test` and `/ws`, which run when someo
 
 ### Requirement: REQ-CMD-002 /ws diff shows a workspace's work
 
-`/ws diff <name>` SHALL answer with a link to the workspace's diff against the base, attached as `<name>.diff` with media type `text/x-diff`. Anyone who can run commands may run it, an agent included.
+`/ws diff <name>` SHALL answer with a link to the workspace's diff against the base, attached as `<name>.diff` with media type `text/x-diff`; a workspace with no changes is answered `<name>'s workspace has no changes.` with nothing attached. Anyone who can run commands may run it, an agent included.
 
 #### Scenario: AC-CMD-002.1 The diff is an attachment
 
@@ -28,6 +28,11 @@ The commands the library ships: `/help`, `/test` and `/ws`, which run when someo
 
 - **WHEN** the answer's attachment is read
 - **THEN** it is `dev.diff`, of type `text/x-diff`, and holds the workspace's changes
+
+#### Scenario: AC-CMD-002.3 No changes
+
+- **WHEN** `/ws diff dev` is run while dev's workspace has no changes
+- **THEN** it answers `dev's workspace has no changes.` with no attachment
 
 ### Requirement: REQ-CMD-003 Only the user merges or drops
 
@@ -41,7 +46,7 @@ The commands the library ships: `/help`, `/test` and `/ws`, which run when someo
 #### Scenario: AC-CMD-003.2 A peer cannot merge or drop
 
 - **WHEN** a peer other than the user runs `/ws merge` and `/ws drop`
-- **THEN** each raises `PermissionError`, the base is unchanged, and the peer can still run `/ws diff`
+- **THEN** each raises `PermissionError`, the base is unchanged, dev's workspace is still listed with its commit, and the peer can still run `/ws diff`
 
 #### Scenario: AC-CMD-003.3 A conflicting merge
 
@@ -75,3 +80,22 @@ The commands the library ships: `/help`, `/test` and `/ws`, which run when someo
 
 - **WHEN** a session has `/help` and `/ws` and `/help` is run
 - **THEN** its answer lists `/ws`
+
+### Requirement: REQ-CMD-006 /test checks the chat is wired up
+
+`TestCommand()` is the command `test`. Run, it SHALL say `Running checks…`, then `Peers: ` followed by the names of the peers other than the user, sorted (or `none`), then `Context: <n> message(s) in reach`, each as its own message, and answer `Checks done, for peer <id>.` with the id of whoever ran it. It takes no input it can refuse: its arguments are ignored.
+
+#### Scenario: AC-CMD-006.1 Run by the user
+
+- **WHEN** the user runs `/test` in a chat with the peers `weather` and `agent`
+- **THEN** it says `Running checks…`, `Peers: agent, weather` and how many messages are in reach, in that order, and answers `Checks done, for peer 0.`
+
+#### Scenario: AC-CMD-006.2 Run by a peer, with arguments
+
+- **WHEN** the peer `bot`, id 1, the only peer besides the user, runs `/test extra words`
+- **THEN** it says `Peers: bot`, ignores the words, and answers `Checks done, for peer 1.`
+
+#### Scenario: AC-CMD-006.3 No peers
+
+- **WHEN** the user runs `/test` in a chat with no other peer
+- **THEN** it says `Peers: none`

@@ -9,7 +9,7 @@ invokes it; what `execute` returns is posted by the session as `TOOL`,
 replying to the invocation. `/ws` is handed the session's workspace provider
 and lets the user list, diff, merge and drop the peers' workspaces.
 
-![The commands and what each reaches (REQ-CMD-001, REQ-CMD-002, REQ-CMD-003, REQ-CMD-004, REQ-CMD-005)](diagrams/commands-blocks.svg)
+![The commands and what each reaches (REQ-CMD-001, REQ-CMD-002, REQ-CMD-003, REQ-CMD-004, REQ-CMD-005, REQ-CMD-006)](diagrams/commands-blocks.svg)
 
 ## Decisions
 
@@ -39,13 +39,15 @@ and lets the user list, diff, merge and drop the peers' workspaces.
   commands with their descriptions, then who else is connected.
 - `TestCommand()`: `@tool("test", ...)`, declaring `HookExecute`, `HookSay`,
   `HookContext` and `HookPeers`. `async execute(args="", by=LOCAL) -> Reply`:
-  says each check, answers `Checks done, for peer <by>.` (no requirement yet).
+  says `Running checks…`, the other peers sorted (or `none`) and how many
+  messages are in reach, then answers `Checks done, for peer <by>.`; its
+  arguments are ignored (REQ-CMD-006).
 - `WorkspaceCommand(provider)`: `@tool("ws", ...)`, declaring `HookExecute`.
   `async execute(args="", by=LOCAL) -> Reply`:
   - `""`: each workspace with `peer/<name>` and how many commits it is ahead
     of the base, or `No workspaces yet.`;
   - `diff <name>`: `<name>'s work: [<name>.diff](<name>.diff)` with the diff
-    attached;
+    attached, or `<name>'s workspace has no changes.` with nothing attached;
   - `merge <name>`, `drop <name>`: what was done.
   - Raises `ValueError`, `KeyError`, `PermissionError` and the provider's
     `MergeConflict` (naming the files; the base is left as it was).

@@ -124,7 +124,7 @@ The session SHALL use what the router returns only when it is another peer that 
 #### Scenario: AC-ROUTE-005.1 A reply to the user
 
 - **WHEN** a peer's answer replies to the user's say
-- **THEN** the peer was asked once, and its answer is not routed back to it
+- **THEN** the lone answering peer was asked the user's say once and never the reply, and the reply is posted addressed to nobody
 
 #### Scenario: AC-ROUTE-005.2 A follow-up
 

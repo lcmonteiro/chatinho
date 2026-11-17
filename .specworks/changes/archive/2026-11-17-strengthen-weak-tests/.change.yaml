@@ -1,6 +1,6 @@
 name: strengthen-weak-tests
 created: '2026-11-16T22:55:53'
-phase: close
+phase: done
 specified:
   REQ-CMD-006: f0ec0dd99fcc
   REQ-CMD-002: 9d40b0aa125e
