@@ -48,7 +48,8 @@ COMMANDS = [
     stub("history", "Show history"),
     stub("hello", ""),
 ]
-COMMAND_NAMES = {"help", "history", "hello"}
+#: What the popup offers for them: each option is the whole completion, prefix included.
+COMMAND_NAMES = {"/help", "/history", "/hello"}
 
 
 # @ac AC-FRONT-023.1
@@ -56,10 +57,10 @@ COMMAND_NAMES = {"help", "history", "hello"}
 async def test_no_suggestions_without_registered_commands():
     app = await chat_frontend()
     async with app.run_test() as pilot:
-        suggestions = app.query_one("#command-suggestions", OptionList)
+        suggestions = app.query_one("#suggestions", OptionList)
         await pilot.press("/")
         assert not suggestions.has_class("-visible")
-        assert not app.has_command_suggestions()
+        assert not app.has_suggestions()
 
 
 # @ac AC-FRONT-023.2
@@ -67,7 +68,7 @@ async def test_no_suggestions_without_registered_commands():
 async def test_slash_alone_lists_all_commands():
     app = await chat_frontend(commands=COMMANDS)
     async with app.run_test() as pilot:
-        suggestions = app.query_one("#command-suggestions", OptionList)
+        suggestions = app.query_one("#suggestions", OptionList)
         await pilot.press("/")
         assert suggestions.has_class("-visible")
         assert {o.id for o in suggestions.options} == COMMAND_NAMES
@@ -78,9 +79,9 @@ async def test_slash_alone_lists_all_commands():
 async def test_typing_filters_suggestions_by_prefix():
     app = await chat_frontend(commands=COMMANDS)
     async with app.run_test() as pilot:
-        suggestions = app.query_one("#command-suggestions", OptionList)
+        suggestions = app.query_one("#suggestions", OptionList)
         await pilot.press("/", "h", "e")
-        assert {o.id for o in suggestions.options} == {"help", "hello"}
+        assert {o.id for o in suggestions.options} == {"/help", "/hello"}
 
 
 # @ac AC-FRONT-023.4
@@ -88,7 +89,7 @@ async def test_typing_filters_suggestions_by_prefix():
 async def test_no_match_hides_suggestions():
     app = await chat_frontend(commands=COMMANDS)
     async with app.run_test() as pilot:
-        suggestions = app.query_one("#command-suggestions", OptionList)
+        suggestions = app.query_one("#suggestions", OptionList)
         await pilot.press("/", "z")
         assert not suggestions.has_class("-visible")
         assert suggestions.option_count == 0
@@ -100,7 +101,7 @@ async def test_space_after_token_hides_suggestions():
     """Once a full command is followed by a space, it's no longer being typed."""
     app = await chat_frontend(commands=COMMANDS)
     async with app.run_test() as pilot:
-        suggestions = app.query_one("#command-suggestions", OptionList)
+        suggestions = app.query_one("#suggestions", OptionList)
         await pilot.press("/", "h", "e", "l", "p", "space")
         assert not suggestions.has_class("-visible")
 
@@ -111,7 +112,7 @@ async def test_tab_completes_highlighted_suggestion():
     app = await chat_frontend(commands=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", CommandInput)
-        suggestions = app.query_one("#command-suggestions", OptionList)
+        suggestions = app.query_one("#suggestions", OptionList)
         await pilot.press("/", "h", "e")
         # "hello" sorts before "help" — first match is highlighted by default.
         await pilot.press("tab")
@@ -125,14 +126,14 @@ async def test_down_moves_highlight_then_tab_completes_it():
     app = await chat_frontend(commands=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", CommandInput)
-        suggestions = app.query_one("#command-suggestions", OptionList)
+        suggestions = app.query_one("#suggestions", OptionList)
         await pilot.press("/", "h", "e")
         first = suggestions.highlighted_option.id
         await pilot.press("down")
         second = suggestions.highlighted_option.id
         assert second != first
         await pilot.press("tab")
-        assert inp.text == f"/{second} "
+        assert inp.text == f"{second} "
 
 
 # @ac AC-FRONT-023.8
@@ -153,7 +154,7 @@ async def test_escape_hides_suggestions_without_changing_input():
     app = await chat_frontend(commands=COMMANDS)
     async with app.run_test() as pilot:
         inp = app.query_one("#input-line", CommandInput)
-        suggestions = app.query_one("#command-suggestions", OptionList)
+        suggestions = app.query_one("#suggestions", OptionList)
         await pilot.press("/", "h")
         await pilot.press("escape")
         assert not suggestions.has_class("-visible")
