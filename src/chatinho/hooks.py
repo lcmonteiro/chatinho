@@ -436,7 +436,7 @@ ALL_HOOKS: Tuple[Hook, ...] = (
 
 
 # @req REQ-CORE-001, REQ-CORE-002
-def connector(name: str, id: Optional[int] = None) -> Callable[[type], type]:
+def connector(name: str, id: Optional[int] = None, description: str = "") -> Callable[[type], type]:
     """
     Names a connector class, and optionally pins the id it answers to.
 
@@ -454,13 +454,18 @@ def connector(name: str, id: Optional[int] = None) -> Callable[[type], type]:
         name: The connector's name; must be a non-empty string.
         id: The id it must answer to, when it can only be one peer. ``TOOL`` is
             refused: a command is not a peer, and nothing may take its name.
+        description: One line on what the peer is for, read by a router that
+            chooses between peers; an instance may override it. Empty by default.
 
     Returns:
         Callable: The class decorator.
 
     Raises:
-        ValueError: If *name* is empty, or *id* is not an int, or *id* is TOOL.
+        ValueError: If *name* is empty, or *id* is not an int, or *id* is TOOL,
+            or *description* is not a string.
     """
+    if description != "":
+        raise NotImplementedError("connector(description=...) is not implemented yet")
     if not isinstance(name, str) or not name.strip():
         raise ValueError("A connector name must be a non-empty string, got %r" % (name,))
     if id is not None:

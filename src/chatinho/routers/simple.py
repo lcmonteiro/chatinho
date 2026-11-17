@@ -1,9 +1,42 @@
 """The builders' router: a reply goes back to its author, and anything else to the lone peer that answers."""
 
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from ..hooks import HookAnswer, HookContext, HookPeers, HookRoute, Context, Peers, declares, require
 from ..message import LOCAL, ChatMessage
+
+
+def answering(msg: ChatMessage, roster: Dict[int, Any]) -> List[int]:
+    """
+    The peers that could answer *msg*: those that answer, but its speaker and the frontend.
+
+    Args:
+        msg: A say with ``to`` unset.
+        roster: The peers in the room, by id.
+
+    Returns:
+        List[int]: Their ids, in roster order.
+    """
+    raise NotImplementedError
+
+
+def simple_route(msg: ChatMessage, roster: Dict[int, Any], context: Context) -> Optional[int]:
+    """
+    ``SimpleRouter``'s two rules, for any router that wants them first.
+
+    A say that replies to a message goes to that message's author, and any
+    other say to the one peer that answers; each only when that is another
+    peer that answers, and neither counts the frontend.
+
+    Args:
+        msg: A say with ``to`` unset.
+        roster: The peers in the room, by id.
+        context: The ``context`` grant, to find what *msg* replies to.
+
+    Returns:
+        Optional[int]: The peer the rules choose, or None.
+    """
+    raise NotImplementedError
 
 
 # @req REQ-ROUTE-004, REQ-ROUTE-005

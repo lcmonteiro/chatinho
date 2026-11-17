@@ -73,6 +73,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
     from .frontends.chat import ChatFrontend
     from .frontends.chat.style import ChatStyle
     from .frontends.mcp import McpFrontend
+    from .routers.llm import LLMRouter
     from .support.kits.agent.workspace_backend import WorkspaceBackend
 
 from .session import ChatSession
@@ -106,6 +107,7 @@ _BEHIND_AN_EXTRA : Dict[str, Tuple[str, Tuple[Tuple[str, str], ...]]] = {
     "McpFrontend"         : (".frontends.mcp",           (_MCP,)),
     "McpConnector"        : (".connectors.mcp",          (_MCP,)),
     "OpenAIConnector"     : (".connectors.openai",       (("openai", "openai"),)),
+    "LLMRouter"           : (".routers.llm",             (("openai", "openai"),)),
     "BasicAgentConnector" : (".connectors.agents.basic", (("langchain", "langchain"),)),
     "DeepAgentConnector"  : (".connectors.agents.deep",  (("deepagents", "deepagents"),)),
     "DatabaseBackend"     : (".backends",                (("sql", "sqlalchemy"),)),
@@ -246,4 +248,5 @@ __all__ = [
     "TestCommand",
     "WorkspaceCommand",
     "SimpleRouter",
+    "LLMRouter",
 ]
