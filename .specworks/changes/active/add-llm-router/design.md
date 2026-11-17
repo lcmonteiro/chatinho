@@ -106,7 +106,7 @@ Agreed with the user
   - `async LLMRouter.route(self, msg: ChatMessage) -> Optional[int]` (REQ-ROUTE-007,
     REQ-ROUTE-008, REQ-ROUTE-009, REQ-ROUTE-010);
   - `async LLMRouter.shutdown(self) -> None`: closes every client it kept (REQ-ROUTE-010);
-  - `AsyncOpenAI` is a module-level name, so tests replace it with `tests/fakes/llm.FakeOpenAI`.
+  - `AsyncOpenAI` is a module-level name, so tests replace it with `FakeOpenAI` from `tests/fakes/llm.py`.
 - `src/chatinho/routers/__init__.py`: `__getattr__(name)` resolving `LLMRouter`; `__all__` gains it
   (REQ-ROUTE-011).
 - `src/chatinho/__init__.py`: `LLMRouter` in `_BEHIND_AN_EXTRA`, under `TYPE_CHECKING`, and in
