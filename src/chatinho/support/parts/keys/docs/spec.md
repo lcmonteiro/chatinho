@@ -59,7 +59,7 @@ A source that cannot yield a key SHALL raise `KeyUnavailable` naming the source'
 #### Scenario: AC-KEYS-003.2 A variable the dotenv file lacks
 
 - **WHEN** `DotEnv` reads a variable the file does not set
-- **THEN** the error names the variable and the file
+- **THEN** the error names the variable and the file's path
 
 #### Scenario: AC-KEYS-003.3 A missing file
 
@@ -119,7 +119,7 @@ On systems with POSIX permissions, a `File` source SHALL refuse a file that its 
 #### Scenario: AC-KEYS-006.1 Each form
 
 - **WHEN** `env:OPENAI_API_KEY`, `dotenv:conf/.env#KEY`, `dotenv:#KEY`, `keyring:chatinho/openai` and `cmd:pass show 'api/open ai'` are parsed
-- **THEN** each gives the source of its kind with those fields, the command split into `pass`, `show` and `api/open ai`
+- **THEN** each gives the source of its kind with those fields: the dotenv sources read `conf/.env` and `.env`, and the command is split into `pass`, `show` and `api/open ai`
 
 #### Scenario: AC-KEYS-006.2 Defaults, the home folder and a literal
 

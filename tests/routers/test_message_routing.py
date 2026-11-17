@@ -315,6 +315,8 @@ async def test_a_reply_to_the_user_goes_to_nobody():
     await _settle()
     assert [m.text for m in eco.asked] == ["hello"]
     await session.close()
+    (reply,) = [m for m in view.context() if m.frm == falador.peer_id and m.text == "me too"]
+    assert reply.reply_to == first and reply.to is None
 
 
 async def _answer_of(view, eco, text):

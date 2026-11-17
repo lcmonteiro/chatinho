@@ -593,8 +593,8 @@ An agent connector created with `workspace=True` in a session with a workspace p
 
 #### Scenario: AC-CONN-020.1 Deep agents' options reach the agent
 
-- **WHEN** a connector is created with deep agents' `subagents` option and asked
-- **THEN** creating it is accepted, it answers, and the agent has deep agents' `task` tool
+- **WHEN** a connector is created with deep agents' `subagents` option holding a `researcher` with the system prompt `Research.`, and its model calls the `task` tool for `researcher`
+- **THEN** the subagent runs with the system prompt `Research.`, its answer reaches the model, and the connector answers
 
 #### Scenario: AC-CONN-020.2 memory and agent_memory
 

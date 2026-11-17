@@ -92,7 +92,8 @@ served over MCP (Streamable HTTP) for clients that ask its peers, behind
   `ChatSession` with the frontend in place (REQ-CORE-029).
 - Errors: `ValueError` for a key or escape that could never fire, a blank
   name, an invalid style value, or `McpFrontend` without a token; a failing
-  MCP call is a tool error.
+  MCP call is a tool error, and so is an asked peer's reply with status
+  `error`, carrying its text.
 
 ## Constraints
 

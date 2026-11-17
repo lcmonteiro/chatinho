@@ -679,7 +679,7 @@ The copy key SHALL copy the selected message, or say what to do when none is sel
 #### Scenario: AC-FRONT-020.11 A helper that fails is logged and not raised
 
 - **WHEN** running the helper raises
-- **THEN** copying raises nothing and reports no helper
+- **THEN** copying raises nothing, reports no helper, and logs a warning naming the helper
 
 #### Scenario: AC-FRONT-020.12 Put really runs the helper
 
@@ -871,11 +871,6 @@ Typing `/` at the start of the input SHALL list the session's commands, filtered
 - **WHEN** the asked peer's `answer` raises
 - **THEN** the result is a tool error saying what failed
 
-#### Scenario: AC-FRONT-025.6 Ask a peer that fails
-
-- **WHEN** the asked peer's `answer` raises
-- **THEN** the result is a tool error saying it failed
-
 #### Scenario: AC-FRONT-025.7 Ask who cannot answer
 
 - **WHEN** a client asks a name no peer has, or a peer that does not answer
@@ -885,6 +880,11 @@ Typing `/` at the start of the input SHALL list the session's commands, filtered
 
 - **WHEN** the answering peer attaches a file
 - **THEN** the result carries its name, media type and content
+
+#### Scenario: AC-FRONT-025.9 A reply with status error
+
+- **WHEN** the asked peer answers `Reply("quota exceeded", status=error)`
+- **THEN** the result is a tool error whose text is `quota exceeded`
 
 ### Requirement: REQ-FRONT-026 The MCP frontend speaks for every client
 

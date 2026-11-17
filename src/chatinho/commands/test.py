@@ -6,6 +6,7 @@ from ..hooks import Context, HookContext, HookExecute, HookPeers, HookSay, Peers
 from ..message import LOCAL, Reply
 
 
+# @req REQ-CMD-006
 @tool("test", "Checks the chat is wired up")
 @require(HookExecute)
 @require(HookSay)

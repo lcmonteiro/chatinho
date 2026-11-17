@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from chatinho import LOCAL, Attachment, HookAnswer, HookExecute, HookListen, HookSay, Reply, Say
+from chatinho import LOCAL, Attachment, HookAnswer, HookExecute, HookListen, HookSay, Reply, ReplyStatus, Say
 from chatinho import connector, declares, require, tool
 from chatinho.frontends.mcp import McpFrontend
 from chatinho.support.parts.mcp import CREDENTIALS_KEY, decode
@@ -186,15 +186,13 @@ async def test_ask_keeps_the_status():
     await session.close()
 
 
-# @ac AC-FRONT-025.6
-async def test_ask_a_peer_that_fails():
-    session, front = await remote(Agent(), Weather(RuntimeError("boom")))
-    async def boom(msg):
-        raise RuntimeError("boom")
-    session._peers()[2].answer = boom
+# @ac AC-FRONT-025.9
+async def test_a_reply_with_status_error_is_a_tool_error():
+    session, front = await remote(Agent(), Weather(Reply("quota exceeded", status=ReplyStatus.ERROR)))
     async with client(front) as c:
-        got = await call(c, "ask", peer="weather", text="?")
-    assert got["status"] == "error" and "failed" in got["text"]
+        res = await c.call_tool_mcp("ask", {"peer": "weather", "text": "rain?"})
+    assert res.is_error
+    assert [part.text for part in res.content] == ["quota exceeded"]
     await session.close()
 
 

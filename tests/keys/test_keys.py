@@ -7,6 +7,7 @@ See src/chatinho/support/parts/keys/docs/spec.md.
 import os
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -45,8 +46,9 @@ def test_a_dotenv_variable(tmp_path):
     env.write_text('# settings\nexport OTHER=1\nOPENAI_API_KEY="sk-dot"\nPLAIN=v # note\n')
     assert DotEnv(env, "OPENAI_API_KEY").read().reveal() == "sk-dot"
     assert DotEnv(env, "PLAIN").read().reveal() == "v"
-    with pytest.raises(KeyUnavailable, match="MISSING in"):
+    with pytest.raises(KeyUnavailable) as refused:
         DotEnv(env, "MISSING").read()
+    assert "MISSING" in str(refused.value) and str(env) in str(refused.value)
 
 
 # @ac AC-KEYS-001.3
@@ -188,8 +190,8 @@ async def test_read_async(tmp_path, monkeypatch):
 # @ac AC-KEYS-006.1
 @pytest.mark.parametrize("reference, kind, fields", [
     ("env:OPENAI_API_KEY",        Env,     {"name": "OPENAI_API_KEY"}),
-    ("dotenv:conf/.env#KEY",      DotEnv,  {"name": "KEY"}),
-    ("dotenv:#KEY",               DotEnv,  {"name": "KEY"}),
+    ("dotenv:conf/.env#KEY",      DotEnv,  {"name": "KEY", "path": Path("conf/.env")}),
+    ("dotenv:#KEY",               DotEnv,  {"name": "KEY", "path": Path(".env")}),
     ("keyring:chatinho/openai",   Keyring, {"service": "chatinho", "user": "openai"}),
     ("cmd:pass show 'api/open ai'", Command, {"argv": ["pass", "show", "api/open ai"]}),
 ])

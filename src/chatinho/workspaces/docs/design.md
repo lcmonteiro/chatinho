@@ -47,9 +47,11 @@ base. `/ws` uses it to list, merge and drop them.
 ## Interfaces
 
 - `GitWorktrees(repo, base=None, view=WorkspaceView, workspace=Workspace)`:
-  raises `TypeError` for an invalid class pair. `base=None` takes the branch
-  (or commit) checked out at start.
-- `async initialize()`: checks the repository and the base (`ValueError`),
+  raises `TypeError` for an invalid class pair, a view class that is no
+  `WorkspaceView` included. `base=None` takes the branch checked out at start,
+  or the commit on a detached HEAD.
+- `async initialize()`: checks the repository and the base (`ValueError`, a path
+  that is not a directory included),
   adds the exclude line; idempotent, and called on first use.
 - `async provision(owner, name, create=True) -> WorkspaceView`: a `workspace`
   instance when `owner == name`, a `view` one otherwise. `ValueError` for a
