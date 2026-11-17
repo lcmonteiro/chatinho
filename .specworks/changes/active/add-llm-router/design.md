@@ -83,6 +83,8 @@ REQ-CORE-002.
 
 ## Interfaces
 
+Proposed: waiting for the user's agreement
+
 - `src/chatinho/hooks.py`: `connector(name: str, id: Optional[int] = None, description: str = "")
   -> Callable[[type], type]`; sets `cls.description`; `ValueError` for a non-string description
   (REQ-CORE-002).
