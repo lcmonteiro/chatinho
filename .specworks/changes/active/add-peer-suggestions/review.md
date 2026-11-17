@@ -9,6 +9,7 @@ Base: `main`
   - **Decision**: back to specify: add AC-FRONT-029.14 'Two peers sharing a name are listed once'; then the test, and the code lists each name once (sorted set) — @name already asks the first of them
 - [ ] R2 **quality** Stale docstring: on_text_area_changed still says it updates the command-suggestion popup, which now lists peers too (src/chatinho/frontends/chat/__init__.py:402)
   - **Proposal**: back to code: say 'Update the suggestion popup as the user types.'
+  - **Decision**: back to code: say 'Update the suggestion popup as the user types.'
 
 ## Changed files without tags
 
