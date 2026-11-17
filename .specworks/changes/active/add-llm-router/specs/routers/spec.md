@@ -65,7 +65,7 @@ When it asks the model, `LLMRouter` SHALL give it the name and description of ev
 
 ### Requirement: REQ-ROUTE-009 A failed choice is a broadcast
 
-`LLMRouter` MUST route the say to nobody, and log a warning naming the reason but never a key or the say's text, when the model's answer names no answering peer, names a peer two answering peers share, or the request fails, raises, or takes longer than its `timeout` (10 seconds by default). The say MUST still be posted, and the chat MUST NOT wait longer than `timeout` for it.
+`LLMRouter` MUST route the say to nobody, and log a warning naming the reason but never a key or the say's text, when the model's answer names no answering peer, names a peer two answering peers share, or the request fails, raises, or takes longer than its `timeout` (10 seconds by default). The say MUST still be posted, and the chat MUST NOT wait longer than `timeout` for it. A `timeout` that is not a positive number MUST be refused with `ValueError` when the router is built.
 
 #### Scenario: AC-ROUTE-009.1 An unknown name
 
@@ -94,6 +94,11 @@ When it asks the model, `LLMRouter` SHALL give it the name and description of ev
 - **GIVEN** a router whose endpoint's key cannot be read, and no key lent
 - **WHEN** a say is routed
 - **THEN** it goes to nobody, and the warning names the key's reference but never a key
+
+#### Scenario: AC-ROUTE-009.6 A timeout that is not positive
+
+- **WHEN** a router is built with `timeout=0`
+- **THEN** it raises `ValueError`
 
 ### Requirement: REQ-ROUTE-010 A lent key wins over the endpoint's
 
