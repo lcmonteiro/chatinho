@@ -55,6 +55,12 @@ async def test_an_extended_pair_gives_both_sides_the_added_read(repo):
     assert await theirs.symbols("x.py") == ["C"]                 # type: ignore[attr-defined]
 
 
+# @ac AC-WS-001.4
+def test_a_view_class_that_is_no_workspace_view(repo):
+    with pytest.raises(TypeError, match="WorkspaceView"):
+        GitWorktrees(repo, view=object)                         # type: ignore[arg-type]
+
+
 # === Starting: the repository and the base ==========================================
 
 # @ac AC-WS-002.1
@@ -87,6 +93,28 @@ async def test_a_base_given_by_name(repo):
     provider = GitWorktrees(repo, base="release")
     ws       = await provider.provision("dev", "dev")
     assert ws.tree.base == "release"
+
+
+# @ac AC-WS-002.5
+@pytest.mark.parametrize("make", ["a file", "nothing"])
+async def test_not_a_directory(tmp_path, make):
+    path = tmp_path / "repo"
+    if make == "a file":
+        path.write_text("not a folder\n")
+    with pytest.raises(ValueError, match="not a directory"):
+        await GitWorktrees(path).initialize()
+
+
+# @ac AC-WS-002.6
+async def test_a_detached_head_makes_its_commit_the_base(repo):
+    git(repo, "checkout", "--quiet", "--detach")
+    sha      = git(repo, "rev-parse", "HEAD").strip()
+    provider = GitWorktrees(repo)
+    await provider.initialize()
+    assert provider.base == sha
+    ws = await provider.provision("dev", "dev")
+    assert (await ws.tree.git("rev-parse", "HEAD")).strip() == sha
+    assert git(ws.tree.root, "branch", "--show-current").strip() == "peer/dev"
 
 
 # === Provisioning ===================================================================

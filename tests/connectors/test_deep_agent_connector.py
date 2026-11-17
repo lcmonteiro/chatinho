@@ -65,13 +65,30 @@ async def deep(repo, model, *others, provider=None, **options):
 
 # @ac AC-CONN-020.1
 async def test_deep_agents_options_reach_the_agent(repo):
-    model = fake(says("ok"))
+    def researching(messages: List[BaseMessage]) -> bool:
+        first = messages[0] if messages else None
+        return isinstance(first, SystemMessage) and str(first.content).startswith("Research.")
+
+    def script(messages: List[BaseMessage]) -> AIMessage:
+        if researching(messages):                         # the subagent, with its own prompt
+            return AIMessage(content="found")
+        results = [m for m in this_run(messages) if isinstance(m, ToolMessage)]
+        if not results:
+            call = {"name": "task", "id": "call-%d" % next(_ids),
+                    "args": {"description": "Find it out.", "subagent_type": "researcher"}}
+            return AIMessage(content="", tool_calls=[call])
+        return AIMessage(content="it says: %s" % results[-1].content)
+
+    model = fake(script)
     agent, _, session, view = await deep(
         repo, model, subagents=[{"name": "researcher", "description": "Finds things out.",
                                  "system_prompt": "Research."}])
-    await view.ask(agent.peer_id, "hello")
+    reply = await view.ask(agent.peer_id, "hello")
     await session.close()
-    assert "task" in model.tools[-1]                     # subagents are reached through `task`
+    assert any(researching(sent) for sent in model.sent)          # the subagent ran, with its prompt
+    tool_results = [m for sent in model.sent for m in sent if isinstance(m, ToolMessage)]
+    assert any("found" in str(m.content) for m in tool_results)   # its answer reached the model
+    assert reply.status == ReplyStatus.ANSWERED and "found" in reply.text
 
 
 # @ac AC-CONN-020.2

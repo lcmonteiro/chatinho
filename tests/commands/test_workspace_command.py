@@ -74,6 +74,17 @@ async def test_the_diff_attachment_holds_the_diff(repo):
     assert b"+hello" in attached.data
 
 
+# @ac AC-CMD-002.3
+async def test_a_diff_with_no_changes(repo):
+    session, view, dev = await chat_with_ws(repo)
+    await dev.workspace()                                      # dev has a workspace, and no work in it
+    assert await view.command("ws", "diff dev") == "dev's workspace has no changes."
+    await session.close()
+    provider = GitWorktrees(repo)
+    reply    = await WorkspaceCommand(provider).execute("diff dev")
+    assert reply.text == "dev's workspace has no changes." and not reply.attachments
+
+
 # @ac AC-CMD-003.1
 async def test_merging(repo):
     session, view, dev = await chat_with_ws(repo)
@@ -94,6 +105,8 @@ async def test_a_model_cannot_merge(repo):
     with pytest.raises(PermissionError, match="Only the user can drop"):
         await dev.invoke("ws", "drop dev")
     assert git(repo, "rev-parse", "main") == before
+    assert await view.command("ws") == "Workspaces:\n  dev  peer/dev  1 commit ahead of main"
+    assert "change 0" in git(repo, "log", "--format=%s", "peer/dev")
     assert await dev.invoke("ws", "diff dev") is not None      # but it can look
     await session.close()
 
