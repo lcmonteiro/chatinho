@@ -4,7 +4,7 @@
 
 ### Requirement: REQ-FRONT-029 Peer suggestions
 
-Typing `@` at the start of the input SHALL list, by name and sorted, the peers that answer, the terminal never among them, filtered by what is typed after it; the list is hidden when nothing matches, when a space follows the name, and when no peer answers. Tab, or Enter, completes the highlighted peer as `@name ` instead of submitting; Up and Down move the highlight; Escape hides the list without changing the input. An `@` anywhere else in the line MUST NOT open the list. The peers are read as the person types, so one registered after the terminal started is listed.
+Typing `@` at the start of the input SHALL list, by name and sorted, the peers that answer, the terminal never among them, filtered by what is typed after it; the list is hidden when nothing matches, when a space follows the name, and when no peer answers. Tab, or Enter, completes the highlighted peer as `@name ` instead of submitting; Up and Down move the highlight; Escape hides the list without changing the input. An `@` anywhere else in the line MUST NOT open the list. The peers are read as the person types, so one registered after the terminal started is listed. Two peers that share a name MUST be listed once, as the one entry `@name`, which asks the first of them as typing it does.
 
 #### Scenario: AC-FRONT-029.1 At alone lists every answering peer
 
@@ -74,3 +74,9 @@ Typing `@` at the start of the input SHALL list, by name and sorted, the peers t
 - **GIVEN** a peer that answers registered after the terminal started
 - **WHEN** `@` is typed
 - **THEN** that peer is listed
+
+#### Scenario: AC-FRONT-029.14 Two peers sharing a name are listed once
+
+- **GIVEN** a chat with two peers that answer and share the name `sol`
+- **WHEN** `@` is typed
+- **THEN** the list opens and holds `@sol` once, and the terminal keeps running

@@ -8,3 +8,9 @@
 - [x] 1.4 [test] Write failing mounted tests for the keys and the result, tagged `@ac`: AC-FRONT-029.8, AC-FRONT-029.9, AC-FRONT-029.10, AC-FRONT-029.11, AC-FRONT-029.12 (REQ-FRONT-029); verify they fail because nothing is completed
 - [x] 1.5 [code] Make `Suggestions` hold completions with their prefix, match `/` against the commands and `@` against `peers()`, and have `accept_suggestion` write the completion and a space, tagged `@req REQ-FRONT-023, REQ-FRONT-029` (REQ-FRONT-023, REQ-FRONT-029); verify typing `@` in `./run.sh` lists the connector, and mypy and ruff pass
 - [x] 1.6 [code] Implement `ChatFrontend._answering_peers()` (peers but `LOCAL` that declare `HookAnswer`, read fresh), pass it to the popup, and use `PEER_PREFIX` in `_addressed`, tagged `@req REQ-FRONT-029` (REQ-FRONT-029); verify mypy and ruff pass and `./run.sh` does not list the database backend
+
+## 2. Review findings
+
+- [ ] 2.1 [test] Write a failing mounted test for two answering peers sharing a name, tagged `@ac AC-FRONT-029.14` (REQ-FRONT-029, R1); verify it fails with Textual's DuplicateID
+- [ ] 2.2 [code] List each answering peer's name once in the popup (sorted, no repeats), tagged `@req REQ-FRONT-029` (REQ-FRONT-029, R1); verify mypy and ruff pass
+- [ ] 2.3 [code] Say "Update the suggestion popup as the user types." in `ChatFrontend.on_text_area_changed` (REQ-FRONT-029, R2); verify ruff passes

@@ -43,6 +43,13 @@ The list opens only when the text starts with the prefix and holds no space yet;
 names starting with the typed token, sorted. That is the existing `/` rule, now applied per prefix,
 so `ask @` (AC .7) and `@sol ` (AC .5) fall out of it. Serves: REQ-FRONT-029, REQ-FRONT-023.
 
+### A shared name is one entry
+
+The session lets two peers share a name, and an option's id must be unique, so the names are
+deduplicated before they become options: `@sol` is offered once, and asks the first peer called
+`sol`, exactly as typing it does. Found in review (R1): two options with one id made Textual raise
+`DuplicateID` as soon as `@` was typed. Serves: REQ-FRONT-029 (AC .14).
+
 ### Neutral names, renamed outright
 
 `CommandSuggestions` → `Suggestions`, `SUGGESTIONS_ID` `"command-suggestions"` → `"suggestions"`,

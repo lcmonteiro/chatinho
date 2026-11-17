@@ -7,6 +7,7 @@ Base: `main`
 - [ ] R1 **quality** Two peers sharing a name crash the terminal when `@` is typed: the popup gets two options with the id `@sol` and Textual raises DuplicateID (REQ-FRONT-029; src/chatinho/frontends/chat/composer.py:131). The session allows two peers one name, and reproduced with two `answering("sol")` peers.
   - **Proposal**: back to specify: add AC-FRONT-029.14 'Two peers sharing a name are listed once'; then the test, and the code lists each name once (sorted set) — @name already asks the first of them
   - **Decision**: back to specify: add AC-FRONT-029.14 'Two peers sharing a name are listed once'; then the test, and the code lists each name once (sorted set) — @name already asks the first of them
+  - done in specify: ADDED AC-FRONT-029.14 to REQ-FRONT-029 (a shared name is listed once); tasks 2.1–2.3; design decision 'A shared name is one entry'
 - [ ] R2 **quality** Stale docstring: on_text_area_changed still says it updates the command-suggestion popup, which now lists peers too (src/chatinho/frontends/chat/__init__.py:402)
   - **Proposal**: back to code: say 'Update the suggestion popup as the user types.'
   - **Decision**: back to code: say 'Update the suggestion popup as the user types.'
