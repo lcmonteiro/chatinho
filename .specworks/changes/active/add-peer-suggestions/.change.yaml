@@ -1,5 +1,8 @@
 name: add-peer-suggestions
 created: '2026-11-17T12:26:01'
-phase: specify
+phase: implement
 specified:
-  REQ-FRONT-029: 77a45d233a44
+  REQ-FRONT-029: ffe7c3c98b8e
+dirty:
+  .specworks/changes/active/add-peer-suggestions/.change.yaml: a666868f264aa3a521b35dfd67b866b2f0c877afc8dbb6a5828b250cbf41a9e6
+  .specworks/changes/active/add-peer-suggestions/review.md: a069470da700a585454812f843bfaff608f1bc22b55c343f20be639f1427da51

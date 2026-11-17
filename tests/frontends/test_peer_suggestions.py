@@ -208,3 +208,15 @@ async def test_ac_front_029_13_a_peer_registered_later_is_listed():
         await pilot.press("@")
         assert offered(app) == {"@sol", "@lua"}
     await session.close()
+
+
+# @ac AC-FRONT-029.14
+async def test_ac_front_029_14_two_peers_sharing_a_name_are_listed_once():
+    session, app = await chat_frontend([answering("sol"), answering("sol")])
+    async with app.run_test() as pilot:
+        await pilot.press("@")
+        assert visible(app)
+        options = [o.id for o in app.query_one("#suggestions", OptionList).options]
+        assert options == ["@sol"]
+        assert app.is_running
+    await session.close()

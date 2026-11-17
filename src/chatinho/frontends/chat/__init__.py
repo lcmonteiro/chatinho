@@ -399,7 +399,7 @@ class ChatFrontend(App):
         return None, text
 
     def on_text_area_changed(self, message: TextArea.Changed) -> None:
-        """Update the command-suggestion popup as the user types."""
+        """Update the suggestion popup as the user types."""
         if message.text_area.id != INPUT_ID:
             return
         self.query_one("#%s" % SUGGESTIONS_ID, Suggestions).update_for(

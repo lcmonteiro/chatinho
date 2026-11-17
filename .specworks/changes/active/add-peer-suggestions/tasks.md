@@ -11,6 +11,6 @@
 
 ## 2. Review findings
 
-- [ ] 2.1 [test] Write a failing mounted test for two answering peers sharing a name, tagged `@ac AC-FRONT-029.14` (REQ-FRONT-029, R1); verify it fails with Textual's DuplicateID
-- [ ] 2.2 [code] List each answering peer's name once in the popup (sorted, no repeats), tagged `@req REQ-FRONT-029` (REQ-FRONT-029, R1); verify mypy and ruff pass
-- [ ] 2.3 [code] Say "Update the suggestion popup as the user types." in `ChatFrontend.on_text_area_changed` (REQ-FRONT-029, R2); verify ruff passes
+- [x] 2.1 [test] Write a failing mounted test for two answering peers sharing a name, tagged `@ac AC-FRONT-029.14` (REQ-FRONT-029, R1); verify it fails with Textual's DuplicateID
+- [x] 2.2 [code] List each answering peer's name once in the popup (sorted, no repeats), tagged `@req REQ-FRONT-029` (REQ-FRONT-029, R1); verify mypy and ruff pass
+- [x] 2.3 [code] Say "Update the suggestion popup as the user types." in `ChatFrontend.on_text_area_changed` (REQ-FRONT-029, R2); verify ruff passes

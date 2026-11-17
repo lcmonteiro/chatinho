@@ -128,7 +128,8 @@ class Suggestions(OptionList):
         if prefix in (COMMAND_PREFIX, PEER_PREFIX) and " " not in text:
             names   = self._names() if prefix == COMMAND_PREFIX else self._peers()
             token   = text[len(prefix):]
-            matches = sorted(n for n in names if n.startswith(token))
+            # A set: two peers may share a name, and an option's id must not repeat.
+            matches = sorted({n for n in names if n.startswith(token)})
 
         if not matches:
             self.hide()
