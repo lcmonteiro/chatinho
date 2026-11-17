@@ -55,6 +55,8 @@ lists peers misleads the next reader.
 
 ## Interfaces
 
+Proposed: waiting for the user's agreement
+
 - `src/chatinho/frontends/chat/composer.py`: `PEER_PREFIX : str = "@"` (REQ-FRONT-029)
 - `src/chatinho/frontends/chat/composer.py`: `SUGGESTIONS_ID : str = "suggestions"` (REQ-FRONT-023, REQ-FRONT-029)
 - `src/chatinho/frontends/chat/composer.py`: `class Suggestions(OptionList)`, replacing
@@ -74,6 +76,8 @@ lists peers misleads the next reader.
 ## Diagrams
 
 No structural change: the same widgets and grants, one of them renamed and given a second source.
+The living `src/chatinho/frontends/docs/diagrams/frontends-blocks.d2` names `CommandSuggestions`;
+close renames that block to `Suggestions` and labels its edge with both sources (`commands`, `peers`).
 
 ## Risks / Trade-offs
 
