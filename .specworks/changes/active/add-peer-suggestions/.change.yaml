@@ -1,3 +1,7 @@
 name: add-peer-suggestions
 created: '2026-11-17T12:26:01'
-phase: specify
+phase: design
+specified:
+  REQ-FRONT-029: 77a45d233a44
+dirty:
+  .specworks/changes/active/add-peer-suggestions/design.md: c3ba5c2cbb16a3808d3e5c7c8de4fbfa416bf971dc67e7d5b41bdce1422f45e6

@@ -72,7 +72,7 @@ Screen {
     dock: bottom;
     height: auto;
 }
-#command-suggestions {
+#suggestions {
     display: none;
     height: auto;
     max-height: 8;
@@ -80,15 +80,15 @@ Screen {
     border: round $input_border;
     color: $input_color;
 }
-#command-suggestions.-visible {
+#suggestions.-visible {
     display: block;
 }
 /* The popup never takes focus — the input keeps it — so Textual draws the
    highlighted row with its *blurred* block cursor, which is the theme's blue
    and not ours. Both states are set, or the palette holds everywhere except
    the one row the eye is on. */
-#command-suggestions > .option-list--option-highlighted,
-#command-suggestions:focus > .option-list--option-highlighted {
+#suggestions > .option-list--option-highlighted,
+#suggestions:focus > .option-list--option-highlighted {
     background: $accent;
     color: $screen_bg;
     text-style: bold;

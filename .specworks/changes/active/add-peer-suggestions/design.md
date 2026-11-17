@@ -55,7 +55,7 @@ lists peers misleads the next reader.
 
 ## Interfaces
 
-Proposed: waiting for the user's agreement
+Agreed with the user
 
 - `src/chatinho/frontends/chat/composer.py`: `PEER_PREFIX : str = "@"` (REQ-FRONT-029)
 - `src/chatinho/frontends/chat/composer.py`: `SUGGESTIONS_ID : str = "suggestions"` (REQ-FRONT-023, REQ-FRONT-029)
