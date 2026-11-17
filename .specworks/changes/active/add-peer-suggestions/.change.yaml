@@ -1,7 +1,5 @@
 name: add-peer-suggestions
 created: '2026-11-17T12:26:01'
-phase: review
+phase: validate
 specified:
   REQ-FRONT-029: ffe7c3c98b8e
-dirty:
-  .specworks/changes/active/add-peer-suggestions/review.md: 3a87401fb3267880c1a26b458829a34f54e9b8eb90111cf73ae951a48aca36f4
