@@ -63,12 +63,18 @@ async def test_answered_with_a_question():
     await session.close()
 
 
+@connector("weather")
+@require(HookAnswer)
+class _Failing:
+    """Fails every question it is asked."""
+
+    async def answer(self, msg):
+        raise RuntimeError("boom")
+
+
 # @ac AC-FRONT-025.5
 async def test_a_failing_peer_is_an_error():
-    session, front = await remote(Weather(RuntimeError("boom")))
-    async def boom(msg):
-        raise RuntimeError("boom")
-    session._peers()[1].answer = boom
+    session, front = await remote(_Failing())
     async with client(front) as c:
         got = await ask(c, "weather", "?")
     assert got["status"] == "error" and "failed" in got["text"]
