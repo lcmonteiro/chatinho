@@ -42,10 +42,10 @@ from textual.widgets import TextArea
 from ...hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke
 from ...hooks import HookListen, HookLocate, HookPeers, HookSay
 from ...hooks import Ask, Commands, Context, Invoke, Locate, Peers, Say
-from ...hooks import frontend, name_of, require
+from ...hooks import declares, frontend, name_of, require
 from ...message import LOCAL, ChatMessage, MessageID, Reply
 from .composer import COMMAND_PREFIX, NEWLINE_ESCAPE, SUGGESTIONS_ID
-from .composer import CommandInput, Suggestions, validate_escape
+from .composer import PEER_PREFIX, CommandInput, Suggestions, validate_escape
 from .messages import ChatLog
 from .style import ChatStyle
 
@@ -390,7 +390,7 @@ class ChatFrontend(App):
         The ask is an addressed say: the peer is asked, the answer comes back
         as a reply, and nothing waits on it here, so the input stays free.
         """
-        name, _, rest = text[1:].partition(" ") if text.startswith("@") else ("", "", "")
+        name, _, rest = text[1:].partition(" ") if text.startswith(PEER_PREFIX) else ("", "", "")
         rest = rest.strip()
         if rest:
             for at, who in self.peers().items():
@@ -493,6 +493,7 @@ class ChatFrontend(App):
         """Whether the suggestion popup currently has entries."""
         return self.query_one("#%s" % SUGGESTIONS_ID, Suggestions).has_suggestions
 
+    # @req REQ-FRONT-029
     def _answering_peers(self) -> List[str]:
         """
         The names of the peers that can be asked: every one but the terminal that declares ``HookAnswer``.
@@ -500,7 +501,8 @@ class ChatFrontend(App):
         Read fresh on every call, so a peer registered after the terminal started is offered too.
         Implements REQ-FRONT-029.
         """
-        raise NotImplementedError
+        return [name_of(who) for at, who in self.peers().items()
+                if at != LOCAL and declares(who, HookAnswer)]
 
     # === Internals ==================================================================
 

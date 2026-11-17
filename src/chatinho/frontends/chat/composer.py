@@ -81,7 +81,7 @@ def validate_escape(char: Optional[str]) -> Optional[str]:
     return char
 
 
-# @req REQ-FRONT-023
+# @req REQ-FRONT-023, REQ-FRONT-029
 class Suggestions(OptionList):
     """
     Popup listing what the token being typed can complete to.
@@ -111,23 +111,30 @@ class Suggestions(OptionList):
         """Whether the popup currently has entries."""
         return self.option_count > 0
 
+    # @req REQ-FRONT-023, REQ-FRONT-029
     def update_for(self, text: str) -> None:
         """
-        Shows the commands matching *text*, or hides the popup if none do.
+        Shows what the token being typed can complete to, or hides the popup.
+
+        The token is what follows a leading ``/`` (the commands) or ``@`` (the
+        peers that answer), up to the first space; anywhere else there is no
+        token at all.
 
         Args:
             text: The current content of the input line.
         """
         matches = []
-        if text.startswith(COMMAND_PREFIX) and " " not in text:
-            token = text[len(COMMAND_PREFIX):]
-            matches = sorted(n for n in self._names() if n.startswith(token))
+        prefix  = text[:1]
+        if prefix in (COMMAND_PREFIX, PEER_PREFIX) and " " not in text:
+            names   = self._names() if prefix == COMMAND_PREFIX else self._peers()
+            token   = text[len(prefix):]
+            matches = sorted(n for n in names if n.startswith(token))
 
         if not matches:
             self.hide()
             return
 
-        self.set_options(Option(self._label(name), id=name) for name in matches)
+        self.set_options(Option(self._label(prefix, name), id=prefix + name) for name in matches)
         self.highlighted = 0
         self.add_class("-visible")
 
@@ -154,9 +161,9 @@ class Suggestions(OptionList):
         option = self.highlighted_option
         if option is None or option.id is None:
             return None
-        name = option.id
+        completion = option.id
         self.hide()
-        return name
+        return completion
 
     def _names(self) -> List[str]:
         """The names of the registered commands."""
@@ -166,12 +173,12 @@ class Suggestions(OptionList):
         """The command with that name, or None."""
         return self._commands().get(name)
 
-    def _label(self, name: str) -> str:
-        """Returns the popup label for the command registered as *name*."""
-        description = getattr(self._tool(name), "description", "")
+    def _label(self, prefix: str, name: str) -> str:
+        """Returns the popup label for *name* typed after *prefix*: a command's carries its description."""
+        description = getattr(self._tool(name), "description", "") if prefix == COMMAND_PREFIX else ""
         if description:
-            return f"{COMMAND_PREFIX}{name}  —  {description}"
-        return f"{COMMAND_PREFIX}{name}"
+            return f"{prefix}{name}  —  {description}"
+        return f"{prefix}{name}"
 
 
 # @req REQ-FRONT-012
@@ -239,7 +246,7 @@ class CommandInput(TextArea):
         suggestions = self.suggestions
         return suggestions is not None and suggestions.has_suggestions
 
-    # @req REQ-FRONT-023
+    # @req REQ-FRONT-023, REQ-FRONT-029
     def accept_suggestion(self) -> bool:
         """
         Completes the input with the highlighted suggestion, if any.
@@ -250,10 +257,10 @@ class CommandInput(TextArea):
         suggestions = self.suggestions
         if suggestions is None:
             return False
-        name = suggestions.take_highlighted()
-        if name is None:
+        completion = suggestions.take_highlighted()
+        if completion is None:
             return False
-        self.text = f"{COMMAND_PREFIX}{name} "
+        self.text = f"{completion} "
         self.move_cursor(self.document.end)
         return True
 
