@@ -6,8 +6,8 @@
 `chat/` is `ChatFrontend`, the terminal, a Textual app behind `chatinho[tui]`
 and the only package that imports Textual: `__init__.py` is the app (keys,
 commands, the `@name` ask), `messages.py` the `ChatLog` that renders the
-conversation, `composer.py` the multi-line input and its command
-suggestions, `style.py` the `ChatStyle` palette rendered as CSS, and
+conversation, `composer.py` the multi-line input and its suggestions
+(commands after `/`, peers that answer after `@`), `style.py` the `ChatStyle` palette rendered as CSS, and
 `clipboard.py` the clipboard helper. `mcp.py` is `McpFrontend`, the session
 served over MCP (Streamable HTTP) for clients that ask its peers, behind
 `chatinho[mcp]`. Both take no session: `build_chat_session` and
@@ -71,6 +71,22 @@ served over MCP (Streamable HTTP) for clients that ask its peers, behind
   names are announced at discovery; a lent key is set on the question's
   message and cleared when the call ends. (baseline-frontends)
 
+- **One popup, a source per prefix** (REQ-FRONT-023, REQ-FRONT-029).
+  `Suggestions` lists commands after a leading `/` and the peers that answer
+  after a leading `@`, with one set of keys and one style, so the two cannot
+  drift apart. A second widget, or a base class with two subclasses, were
+  weighed and refused: duplicated keys and CSS, or a third base class.
+  (add-peer-suggestions)
+- **An option is the whole completion** (REQ-FRONT-023, REQ-FRONT-029). Its
+  id is `/help` or `@sol`, so the input writes back what it takes plus a
+  space without knowing which prefix opened the popup. (add-peer-suggestions)
+- **The frontend decides who can be asked** (REQ-FRONT-029).
+  `ChatFrontend._answering_peers()` reads the roster fresh on every keystroke
+  and keeps the peers but `LOCAL` that declare `HookAnswer`; the popup is
+  handed plain names. Two peers that share a name are one entry, since an
+  option's id must be unique; it asks the first, as typing it does.
+  (add-peer-suggestions)
+
 ## Interfaces
 
 - `ChatFrontend(title="Chatinho", welcome_message="", max_displayed=100,
@@ -78,7 +94,11 @@ served over MCP (Streamable HTTP) for clients that ask its peers, behind
   newline_escape=NEWLINE_ESCAPE, name=None)`: a Textual `App`,
   `@frontend("chat")`, declaring `HookSay`, `HookAsk`, `HookListen`,
   `HookAnswer`, `HookContext`, `HookPeers`, `HookCommands`, `HookInvoke`
-  and `HookLocate`; `serve()` runs the app until the person quits.
+  and `HookLocate`; `serve()` runs the app until the person quits;
+  `has_suggestions()` says whether the input's popup has entries.
+- `chat/composer.py`: `Suggestions(commands, peers)`, the popup (id
+  `SUGGESTIONS_ID = "suggestions"`); `take_highlighted()` returns the
+  completion with its prefix; `PEER_PREFIX = "@"`; `CommandInput`, the input.
 - `ChatStyle`: a frozen dataclass (palette, `peer_headers`, `local_align`,
   `input_frame`, `chat_max_width`, `bubble_max_width`, scrollbar fields)
   whose `to_css()` is the stylesheet; tweak with `dataclasses.replace`.
