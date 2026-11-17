@@ -228,6 +228,20 @@ async def test_the_model_is_told_the_candidates_the_say_and_what_came_before():
         await session.close()
 
 
+# @ac AC-ROUTE-008.3
+async def test_a_peer_that_speaks_is_not_offered_its_own_say():
+    FakeOpenAI.reply = "everyone"
+    talker = _Talker()
+    session, view = await driven(connectors=[talker, _Peer("gpt"), _Peer("weather")], router=router())
+    try:
+        await talker.say("who wants this one?")
+        choices = [line.strip() for line in system().splitlines() if line.lstrip().startswith("- ")]
+        named   = [line[2:].split(":")[0].strip() for line in choices]
+        assert sorted(named) == ["gpt", "weather"]
+    finally:
+        await session.close()
+
+
 # @ac AC-ROUTE-008.4
 async def test_memory_narrows_what_the_model_is_told():
     FakeOpenAI.reply = "everyone"
