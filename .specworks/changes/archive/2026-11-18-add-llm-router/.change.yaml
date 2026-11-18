@@ -1,0 +1,10 @@
+name: add-llm-router
+created: '2026-11-17T21:47:41'
+phase: done
+specified:
+  REQ-CORE-002: 440fee33a29d
+  REQ-ROUTE-007: 88f7576b1899
+  REQ-ROUTE-008: 69c214cdafe6
+  REQ-ROUTE-009: 3db9dac1881a
+  REQ-ROUTE-010: 548c1e821368
+  REQ-ROUTE-011: 7250c4817b02
