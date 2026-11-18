@@ -62,7 +62,7 @@
 
 ### Requirement: REQ-BACK-011 A hive that is down never holds up the chat
 
-What `HiveBackend` sends (messages, attachments and traces) SHALL be queued in memory and sent in the order it was given, so `listen`, `keep` and `record` return without waiting on the network. When the hive cannot be reached, it MUST keep the queue, retry with a growing delay of at most 30 seconds, and send what waited, in order, once the hive answers. The queue MUST hold at most `queue_limit` items (10000 by default): past it the oldest is dropped and a warning says how many were dropped. At `shutdown` it SHALL try to send what is left for at most `flush_timeout` seconds (3 by default), then warn how many items were lost. When the hive cannot be reached at `load`, it MUST warn and return no messages: the chat starts without its history. `forget` and `link` that cannot reach the hive MUST raise `HiveUnavailable` and return None respectively, the latter with a warning.
+What `HiveBackend` sends (messages, attachments and traces) SHALL be queued in memory and sent in the order it was given, so `listen`, `keep` and `record` return without waiting on the network. When the hive cannot be reached, it MUST keep the queue, retry with a growing delay of at most 30 seconds, and send what waited, in order, once the hive answers. The queue MUST hold at most `queue_limit` items (10000 by default): past it the oldest is dropped and a warning says how many were dropped. At `shutdown` it SHALL try to send what is left for at most `flush_timeout` seconds (3 by default), then warn how many items were lost, or, with a cache (REQ-BACK-013), how many are kept for the next run. When the hive cannot be reached at `load`, it MUST warn and return no messages, or, with a cache, what the cache holds. `forget` and `link` that cannot reach the hive MUST raise `HiveUnavailable` and return None respectively, the latter with a warning.
 
 #### Scenario: AC-BACK-011.1 Saying does not wait
 
@@ -84,15 +84,15 @@ What `HiveBackend` sends (messages, attachments and traces) SHALL be queued in m
 
 #### Scenario: AC-BACK-011.4 Lost at shutdown
 
-- **GIVEN** a hive that is down and two queued messages
+- **GIVEN** a backend with no cache, a hive that is down and two queued messages
 - **WHEN** the backend shuts down
-- **THEN** it returns within `flush_timeout` plus a second, and a warning says two items were lost
+- **THEN** it returns within `flush_timeout` plus a second, and a warning says two items were lost (with no cache)
 
 #### Scenario: AC-BACK-011.5 Starting without the hive
 
-- **GIVEN** a hive that cannot be reached
+- **GIVEN** a backend with no cache, and a hive that cannot be reached
 - **WHEN** a session backed by it starts
-- **THEN** it starts with an empty conversation, and a warning names the hive's URL
+- **THEN** with no cache it starts with an empty conversation, and a warning names the hive's URL
 
 #### Scenario: AC-BACK-011.6 Forgetting without the hive
 
@@ -118,3 +118,42 @@ When the hive refuses the key (unauthorised or forbidden), `HiveBackend` MUST NO
 
 - **WHEN** a session backed by a hive that refuses its key starts
 - **THEN** it starts with an empty conversation, and an error is logged
+
+### Requirement: REQ-BACK-013 A local cache keeps the chat offline
+
+`HiveBackend(url, key, cache=<path>)` SHALL keep a local SQLite file, made when missing and needing only the standard library, that holds the chat's messages, the attachments it sent or linked, and the outbox of what is waiting to reach the hive. What `listen`, `keep` and `record` are given MUST be in the outbox before they return, without waiting on the network, and leave it only once the hive accepted it; an outbox left by an earlier run is sent first, in order. Every message heard or loaded from the hive SHALL be written to the cache. `load` SHALL answer from the hive when it can, and from the cache, narrowed the same way and with a warning, when the hive cannot be reached or refuses the key. `forget` SHALL forget in the cache too, and `link` SHALL answer from the cache when the hive cannot. The outbox is bounded by `queue_limit` as the in-memory queue is. A cache made for another hive URL MUST be refused with `ValueError` when the backend starts.
+
+#### Scenario: AC-BACK-013.1 History offline
+
+- **GIVEN** a session that said three messages through a backend with a cache, and was closed
+- **WHEN** a new session with the same backend starts while the hive cannot be reached
+- **THEN** its `context()` holds the three messages, and a warning says they came from the cache
+
+#### Scenario: AC-BACK-013.2 Nothing lost across a restart
+
+- **GIVEN** a backend with a cache, and a hive that is down
+- **WHEN** two messages and a trace are said and traced, the session is closed, and a new session with the same cache starts once the hive is up
+- **THEN** the hive receives all three, in the order they were given, and the shutdown warned that three items were kept for the next run
+
+#### Scenario: AC-BACK-013.3 The cache follows the hive
+
+- **GIVEN** a hive holding messages the cache has never seen
+- **WHEN** a session with a cache starts while the hive is up
+- **THEN** it loads them from the hive, and a later start with the hive down returns them from the cache
+
+#### Scenario: AC-BACK-013.4 Forget reaches the cache
+
+- **WHEN** `forget(before=<the third message's time>)` is called on a chat of five messages with a cache
+- **THEN** a later start with the hive down returns the last three
+
+#### Scenario: AC-BACK-013.5 An attachment offline
+
+- **GIVEN** a message said with an attachment through a backend with a cache
+- **WHEN** `link` is called while the hive cannot be reached
+- **THEN** it returns a path to a file with the attachment's bytes
+
+#### Scenario: AC-BACK-013.6 A cache for another hive
+
+- **GIVEN** a cache file made by a backend for `http://a:8700`
+- **WHEN** a backend for `http://b:8700` starts with that file
+- **THEN** it raises `ValueError` naming both URLs

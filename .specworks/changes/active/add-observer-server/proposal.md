@@ -24,7 +24,10 @@ any message (refinement: Option A).
   attachments and the traces in a hive over HTTP. It needs no extra: it speaks
   HTTP with the standard library, off the loop. Nothing it sends holds up the
   chat: a hive that is down is written to in memory and resent in order when it
-  is back, and what is lost is announced.
+  is back, and what is lost is announced. With `cache=<path>` it keeps a local
+  SQLite mirror (standard library) of the chat and of what waits to be sent:
+  a chat keeps its history when the hive is down, and nothing queued is lost
+  across a restart.
 - **The hive** (`chatinho.hive`, behind `chatinho[hive]`: FastAPI, uvicorn,
   SQLAlchemy). A chat is a name and a key, made with `chatinho-hive chat add
   <name>`, which prints the key once; an admin key is made with `chatinho-hive
@@ -46,8 +49,8 @@ any message (refinement: Option A).
 - `framework`: adds traces (`HookTrace`, `HookRecord`, the trace record and how
   the session hands traces to the recorder).
 - `backends`: adds `HiveBackend`: a chat's archive, attachments and traces in a
-  hive, its queue and resend, and what it does when the hive is down or refuses
-  its key.
+  hive, its queue and resend, its optional local cache, and what it does when
+  the hive is down or refuses its key.
 - `agents`: adds the traces `AgentPeer` makes of a run.
 
 ## Related requirements
@@ -107,5 +110,6 @@ any message (refinement: Option A).
   API. Rotating or revoking a key beyond `chatinho-hive chat remove`.
 - Running several hive processes against one database, and any scaling beyond
   one process.
-- Persisting the resend queue: what is queued when a chat closes is lost, and
-  said so.
+- Syncing a cache with changes made in the hive by others (`chat remove`, or
+  another process writing the same chat): the cache follows what this chat
+  loads and writes.
