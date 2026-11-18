@@ -20,6 +20,7 @@ reading the diff. `- [ ] R<n>` while open, `- [x] R<n>` once resolved. Write
 - [ ] R4 **design-gap** design.md Interfaces drifted from the code: HiveCache takes (path, url, limit) not (path, url); the memory outbox is a class MemoryOutbox; Store also has has_message and has_chat, and NameTaken and Caller; the CLI also runs as python -m chatinho.hive.cli (src/chatinho/backends/hive_cache.py:92, src/chatinho/hive/store.py:27)
   - **Proposal**: back to design only: bring the Interfaces entries for hive_cache.py and store.py in line with the code
   - **Decision**: back to design only: bring the Interfaces entries for hive_cache.py and store.py in line with the code
+  - done in design: Interfaces now name HiveCache(path, url, limit) and its methods, MemoryOutbox and Item, Store's NameTaken, Caller, has_chat, has_message and close, Live's unsubscribe and events, and python -m chatinho.hive.cli
 
 ## Changed files without tags
 

@@ -1,6 +1,6 @@
 name: add-observer-server
 created: '2026-11-18T21:23:58'
-phase: review
+phase: design
 specified:
   REQ-AGENT-012: db62e148d2e5
   REQ-BACK-009: ddee77fe371c

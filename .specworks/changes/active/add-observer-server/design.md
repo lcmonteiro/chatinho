@@ -169,9 +169,14 @@ Agreed with the user
     forget(before=None) -> int`; `async keep(msg_id, attachments)`; `async
     link(msg_id, name) -> Optional[str]`; `async record(trace)`
   (REQ-BACK-009 to REQ-BACK-013)
-- `src/chatinho/backends/hive_cache.py`: `class HiveCache(path, url)` and the
-  `Outbox` interface (`put`, `peek(n)`, `drop(n)`, `__len__`) with a memory
-  and a cache implementation (REQ-BACK-011, REQ-BACK-013)
+- `src/chatinho/backends/hive_cache.py`: `Item = Tuple[str, Dict[str, Any]]`
+  (a kind and its payload); the `Outbox` protocol (`put(item) -> int`, how
+  many of the oldest were dropped; `peek(n)`; `drop(n)`; `__len__`);
+  `class MemoryOutbox(limit)`; `class HiveCache(path, url, limit)` with
+  `outbox`, `put_messages`, `messages(since, limit)`, `forget(before)`,
+  `put_attachment`, `attachment(msg_id, name) -> Optional[Tuple[str,
+  bytes]]`, `close()`, raising `ValueError` when the file was made for
+  another URL (REQ-BACK-011, REQ-BACK-013)
 - `src/chatinho/support/kits/agent/tracing.py`: `class
   RunTracer(AsyncCallbackHandler)`: `__init__(trace: Trace, msg_id:
   MessageID)`; `AgentPeer` declares `HookTrace` and adds one to each run
@@ -198,16 +203,19 @@ Agreed with the user
   | `GET /openapi.json`, `GET /docs` | none | | FastAPI's |
 
 - `src/chatinho/hive/keys.py`: `make_key() -> str`, `hash_key(key: str) ->
-  str`; `src/chatinho/hive/store.py`: `class Store(db_url)` with `add_chat`,
-  `remove_chat`, `chats`, `add_admin`, `who(key_hash) -> Optional[Caller]`,
-  `put_messages`, `messages`, `forget`, `put_attachment`, `attachment`,
-  `put_traces`, `traces`; `src/chatinho/hive/live.py`: `class Live` with
-  `subscribe(chat)`, `publish(chat, kind, wire)` (REQ-HIVE-001 to
-  REQ-HIVE-007)
+  str`; `src/chatinho/hive/store.py`: `NameTaken(ValueError)`, `Caller(admin,
+  chat=None)`, and `class Store(db_url)` with `add_chat` (raising
+  `ValueError` for a bad name, `NameTaken` for a taken one), `remove_chat`,
+  `chats`, `add_admin`, `who(key_hash) -> Optional[Caller]`, `has_chat`,
+  `has_message`, `put_messages`, `messages`, `forget`, `put_attachment`,
+  `attachment`, `put_traces`, `traces`, `close`; `src/chatinho/hive/live.py`:
+  `class Live` with `subscribe(chat)`, `unsubscribe(chat, queue)`,
+  `publish(chat, kind, wire)`, `events(chat)` (REQ-HIVE-001 to REQ-HIVE-007)
 - `src/chatinho/hive/cli.py`: `main(argv=None) -> int`: `serve [--db]
   [--host 127.0.0.1] [--port 8700]`, `chat add <name>`, `chat list`, `chat
   remove <name>`, `admin add`, each with `--db` (default
-  `sqlite:///hive.db`) (REQ-HIVE-001, REQ-HIVE-002, REQ-HIVE-010)
+  `sqlite:///hive.db`); also run as `python -m chatinho.hive.cli`
+  (REQ-HIVE-001, REQ-HIVE-002, REQ-HIVE-010)
 - `pyproject.toml`: extra `hive = ["fastapi>=0.110", "uvicorn>=0.29",
   "sqlalchemy>=2.0"]`, in `all` and `dev`; script `chatinho-hive =
   "chatinho.hive.cli:main"`; `page.html` in package data (REQ-HIVE-010)
