@@ -110,6 +110,8 @@ Serves: REQ-AGENT-012.
 
 ## Interfaces
 
+Proposed: waiting for the user's agreement
+
 - `src/chatinho/message.py`:
   - `TRACE_TEXT_LIMIT : int = 2000`
   - `class TraceState(str, Enum)`: `RUNNING = "running"`, `DONE = "done"`,
