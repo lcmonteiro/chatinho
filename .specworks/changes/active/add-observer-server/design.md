@@ -108,6 +108,24 @@ calls started before either ended follow the same trace. Text: the node name;
 type. Each tracer belongs to one run, so two questions never share state.
 Serves: REQ-AGENT-012.
 
+### Pinned wording
+
+The tests assert these verbatim; the code writes them:
+
+- The page marks what a browser test reaches with `data-testid`: `key` (the
+  admin key input), `key-save` (its button), `chat` (each chat in the list),
+  `message` (each message), `graph` (the trace graph), and `edge` (each line
+  between two traces, with `data-from` and `data-to` holding the two trace
+  ids). Each trace's box shows its text.
+- `python -m chatinho.hive.cli` runs the same `main` as `chatinho-hive`.
+- `HiveBackend`'s warnings name what happened with these words: `dropped`
+  (the outbox was full, with how many), `lost` (left at shutdown with no
+  cache, with how many), `kept` (left at shutdown in the cache, with how
+  many), `cache` (history loaded from the cache). An unreachable hive or a
+  refused key is logged with the hive's URL, never the key.
+- A bad chat name is refused with a message containing `a-z`; a taken one
+  with `taken`.
+
 ## Interfaces
 
 Agreed with the user
