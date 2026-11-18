@@ -79,6 +79,7 @@ if TYPE_CHECKING:                       # never executed; read by type checkers
 
 from .session import ChatSession
 from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, ReplyStatus, Secret
+from .message import TRACE_TEXT_LIMIT, ChatTrace, TraceID, TraceState
 from .query import SELF, Query
 from .support.parts.keys import KeySource, KeyUnavailable, Env, DotEnv, File, Keyring, Command, Literal
 from .support.parts.keys import Chain, key
@@ -87,13 +88,14 @@ from .hooks import connector, tool, frontend, backend, require
 from .hooks import hooks_of, options_of, declares, declared_id, name_of
 from .hooks import Hook, HookSay, HookAsk, HookAnswer, HookInvoke, HookExecute, HookContext
 from .hooks import HookPeers, HookCommands, HookListen, HookLoad, HookForget, HookKeep, HookLink, HookLocate
-from .hooks import HookRoute, HookWorkspace, HookProvision, NoWorkspaceProvider
-from .hooks import Say, Ask, Invoke, Context, Peers, Commands, Locate, WorkspaceGrant
+from .hooks import HookRoute, HookWorkspace, HookProvision, NoWorkspaceProvider, HookTrace, HookRecord
+from .hooks import Say, Ask, Invoke, Context, Peers, Commands, Locate, WorkspaceGrant, Trace
 from .commands import HelpCommand, TestCommand, WorkspaceCommand
 from .workspaces import GitWorktrees
 from .support.parts.workspace import Lines, Match, Matches, Workspace, WorkspaceView
 from .support.parts.workspace import operation, operations_of
 from .routers import SimpleRouter
+from .backends import HiveBackend, HiveUnavailable
 
 __version__ = "0.1.0"
 
@@ -218,6 +220,13 @@ __all__ = [
     "HookWorkspace",
     "HookProvision",
     "NoWorkspaceProvider",
+    # what happened inside
+    "HookTrace",
+    "HookRecord",
+    "ChatTrace",
+    "TraceID",
+    "TraceState",
+    "TRACE_TEXT_LIMIT",
     # what the grants look like
     "Say",
     "Ask",
@@ -227,6 +236,7 @@ __all__ = [
     "Commands",
     "Locate",
     "WorkspaceGrant",
+    "Trace",
     # workspaces
     "Workspace",
     "WorkspaceView",
@@ -242,6 +252,8 @@ __all__ = [
     "BasicAgentConnector",
     "DeepAgentConnector",
     "DatabaseBackend",
+    "HiveBackend",
+    "HiveUnavailable",
     "ChatFrontend",
     "ChatStyle",
     "McpFrontend",

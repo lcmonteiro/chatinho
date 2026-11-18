@@ -20,6 +20,15 @@ wheels = [
 ]
 
 [[package]]
+name = "annotated-doc"
+version = "0.0.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0b/7d/bdbf3062e5dae31da8b3de1e3269110beb93d268df4a7f6d22b167c6cee0/annotated_doc-0.0.7.tar.gz", hash = "sha256:0a30ef8f5322a4173720ae6712dc9a5e58f5a19868f3f167b4b5778db066c2b5", size = 10764, upload-time = "2026-11-18T11:06:55.181Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/b1/9530d6bee606979d54501adcc767d958a38929827f11a524b0d93429d2ad/annotated_doc-0.0.7-py3-none-any.whl", hash = "sha256:6bc31bbbec6dfaaedc1676dbc11dbda96fe22a2b5c400e9ebad113fec44a9dc6", size = 5286, upload-time = "2026-11-18T11:06:54.096Z" },
+]
+
+[[package]]
 name = "annotated-types"
 version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -446,6 +455,7 @@ source = { editable = "." }
 [package.optional-dependencies]
 all = [
     { name = "deepagents" },
+    { name = "fastapi" },
     { name = "fastmcp" },
     { name = "keyring" },
     { name = "langchain" },
@@ -454,6 +464,7 @@ all = [
     { name = "openai" },
     { name = "sqlalchemy" },
     { name = "textual" },
+    { name = "uvicorn" },
 ]
 deepagents = [
     { name = "deepagents" },
@@ -461,6 +472,7 @@ deepagents = [
 ]
 dev = [
     { name = "deepagents" },
+    { name = "fastapi" },
     { name = "fastmcp" },
     { name = "keyring" },
     { name = "langchain" },
@@ -473,6 +485,12 @@ dev = [
     { name = "ruff" },
     { name = "sqlalchemy" },
     { name = "textual" },
+    { name = "uvicorn" },
+]
+hive = [
+    { name = "fastapi" },
+    { name = "sqlalchemy" },
+    { name = "uvicorn" },
 ]
 keyring = [
     { name = "keyring" },
@@ -500,6 +518,9 @@ requires-dist = [
     { name = "deepagents", marker = "extra == 'all'", specifier = ">=0.7.34,<0.8" },
     { name = "deepagents", marker = "extra == 'deepagents'", specifier = ">=0.7.34,<0.8" },
     { name = "deepagents", marker = "extra == 'dev'", specifier = ">=0.7.34,<0.8" },
+    { name = "fastapi", marker = "extra == 'all'", specifier = ">=0.110" },
+    { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.110" },
+    { name = "fastapi", marker = "extra == 'hive'", specifier = ">=0.110" },
     { name = "fastmcp", marker = "extra == 'all'", specifier = ">=4.0" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=4.0" },
@@ -525,12 +546,16 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
     { name = "sqlalchemy", marker = "extra == 'all'", specifier = ">=2.0.0" },
     { name = "sqlalchemy", marker = "extra == 'dev'", specifier = ">=2.0.0" },
+    { name = "sqlalchemy", marker = "extra == 'hive'", specifier = ">=2.0.0" },
     { name = "sqlalchemy", marker = "extra == 'sql'", specifier = ">=2.0.0" },
     { name = "textual", marker = "extra == 'all'", specifier = ">=0.45.0" },
     { name = "textual", marker = "extra == 'dev'", specifier = ">=0.45.0" },
     { name = "textual", marker = "extra == 'tui'", specifier = ">=0.45.0" },
+    { name = "uvicorn", marker = "extra == 'all'", specifier = ">=0.29" },
+    { name = "uvicorn", marker = "extra == 'dev'", specifier = ">=0.29" },
+    { name = "uvicorn", marker = "extra == 'hive'", specifier = ">=0.29" },
 ]
-provides-extras = ["tui", "openai", "sql", "mcp", "keyring", "langchain", "deepagents", "all", "dev"]
+provides-extras = ["tui", "openai", "sql", "mcp", "keyring", "hive", "langchain", "deepagents", "all", "dev"]
 
 [[package]]
 name = "click"
@@ -696,6 +721,24 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/0e/97c33bf5009bdbac74fd2beace167cab3f978feb69cc36f1ef79360d6c4e/exceptiongroup-1.3.1-py3-none-any.whl", hash = "sha256:a7a39a3bd276781e98394987d3a5701d0c4edffb633bb7a5144577f82c773598", size = 16740, upload-time = "2025-11-21T23:01:53.443Z" },
+]
+
+[[package]]
+name = "fastapi"
+version = "0.165.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "annotated-doc" },
+    { name = "anyio" },
+    { name = "opentelemetry-api" },
+    { name = "pydantic" },
+    { name = "starlette" },
+    { name = "typing-extensions" },
+    { name = "typing-inspection" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/27/f9/e7820ef181026fea100bde02d811445bf8e883362d7092b6928767147056/fastapi-0.165.0.tar.gz", hash = "sha256:dd94d4128319c1e1d50535ab023ab698f850a4d2822f0e181747b46f4ff3c0ab", size = 557984, upload-time = "2026-11-18T19:15:37.076Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/c1/3b74c030262a1b38b1fee180f80b4007bbc11c9ac12028cb18c7bcecaec9/fastapi-0.165.0-py3-none-any.whl", hash = "sha256:896f48462042bb4f162147eb8fac7e858753dc1f486765709baf105d70e4fc5b", size = 159475, upload-time = "2026-11-18T19:15:35.345Z" },
 ]
 
 [[package]]

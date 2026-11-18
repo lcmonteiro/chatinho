@@ -110,7 +110,7 @@ Serves: REQ-AGENT-012.
 
 ## Interfaces
 
-Proposed: waiting for the user's agreement
+Agreed with the user
 
 - `src/chatinho/message.py`:
   - `TRACE_TEXT_LIMIT : int = 2000`

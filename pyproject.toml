@@ -30,6 +30,9 @@ classifiers = [
 # terminal does not install OpenAI's client.
 dependencies = []
 
+[project.scripts]
+chatinho-hive = "chatinho.hive.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/lcmonteiro/chatinho"
 Repository = "https://github.com/lcmonteiro/chatinho"
@@ -46,6 +49,9 @@ sql    = ["sqlalchemy>=2.0.0"]
 mcp    = ["fastmcp>=4.0"]
 # Keys from the OS keychain: chatinho.support.parts.keys.Keyring.
 keyring = ["keyring>=24"]
+# The hive: the server every chat is kept and seen in (chatinho.hive, chatinho-hive).
+# A chat talks to it with HiveBackend, which needs nothing; only the server needs these.
+hive   = ["fastapi>=0.110", "uvicorn>=0.29", "sqlalchemy>=2.0.0"]
 # A LangChain agent as a peer: chatinho.connectors.agent.AgentConnector.
 langchain = ["langchain>=1.0", "langchain-openai>=1.0"]
 # A workspace as a LangChain deep agents backend (chatinho.support.kits.agent.workspace_backend.WorkspaceBackend),
@@ -56,7 +62,7 @@ langchain = ["langchain>=1.0", "langchain-openai>=1.0"]
 deepagents = ["deepagents>=0.7.34,<0.8", "langchain-openai>=1.0"]
 all    = ["textual>=0.45.0", "markdown-it-py>=2.0.0", "openai>=1.0.0", "sqlalchemy>=2.0.0",
           "fastmcp>=4.0", "keyring>=24", "langchain>=1.0", "langchain-openai>=1.0",
-          "deepagents>=0.7.34,<0.8"]
+          "deepagents>=0.7.34,<0.8", "fastapi>=0.110", "uvicorn>=0.29"]
 dev = [
     "textual>=0.45.0",
     "markdown-it-py>=2.0.0",
@@ -67,6 +73,8 @@ dev = [
     "langchain>=1.0",
     "langchain-openai>=1.0",
     "deepagents>=0.7.34,<0.8",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.6",
@@ -82,7 +90,7 @@ where = ["src"]
 include = ["chatinho*"]
 
 [tool.setuptools.package-data]
-chatinho = ["py.typed"]
+chatinho = ["py.typed", "hive/page.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

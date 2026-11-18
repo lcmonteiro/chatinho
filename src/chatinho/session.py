@@ -25,13 +25,14 @@ import logging
 from contextvars import ContextVar
 from datetime import datetime
 from inspect import isawaitable
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from .hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, HookListen, HookLoad, HookRoute
 from .hooks import HookProvision, NoWorkspaceProvider
 from .hooks import declared_id, declares, hooks_of, name_of
 from .message import LOCAL, TOOL
 from .message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
+from .message import TraceID, TraceState
 from .query import Query
 
 #: How deeply the question being answered in this task is nested; 0 when none is.
@@ -347,6 +348,7 @@ class ChatSession:
             commands= lambda: self._commands,
             locate  = lambda: self.locate,
             workspace = lambda: self._workspace_for(who, at),
+            trace   = lambda: self._trace_for(at),
         )
         for hook in hooks_of(who):
             for granted in hook.grants:
@@ -402,6 +404,39 @@ class ChatSession:
 
     # @req REQ-CORE-006, REQ-CORE-009, REQ-CORE-025
     # @req REQ-ROUTE-001
+    def _trace_for(self, frm: int):
+        async def trace(
+            msg_id : MessageID,
+            state  : Union[TraceState, str],
+            text   : str,
+            prev   : Optional[TraceID] = None,
+        ) -> TraceID:
+            return await self._trace(frm, msg_id, state, text, prev)
+        return trace
+
+    async def _trace(
+        self,
+        by     : int,
+        msg_id : MessageID,
+        state  : Union[TraceState, str],
+        text   : str,
+        prev   : Optional[TraceID] = None,
+    ) -> TraceID:
+        """
+        Records a step of *msg_id* traced by *by*, and hands it to the recorder.
+
+        Granted by ``HookTrace``, bound to the caller's id.
+
+        Returns:
+            TraceID: The new trace's id.
+
+        Raises:
+            TypeError: If *msg_id* is not a ``MessageID``.
+            ValueError: If *state* is unknown, or *prev* is not a trace this
+                session made.
+        """
+        raise NotImplementedError
+
     def _say_for(self, frm: int):
         async def say(
             text        : str,

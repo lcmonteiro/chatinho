@@ -217,6 +217,84 @@ class MessageID:
         return _PREFIX + self.hex
 
 
+#: The longest a trace's text is kept; a longer one is cut to it, ending ``…``.
+TRACE_TEXT_LIMIT : int = 2000
+
+_TRACE_PREFIX : str = "trc-"
+
+
+class TraceState(str, Enum):
+    """Where a step of processing a message stands: started, finished, or failed."""
+
+    RUNNING = "running"
+    DONE    = "done"
+    ERROR   = "error"
+
+
+@dataclass(frozen=True)
+class TraceID:
+    """
+    A trace's id: random, unique across sessions, ``trc-`` and 16 hex characters as text.
+
+    Attributes:
+        hex: The hex digits after ``trc-``.
+    """
+
+    hex : str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.hex, str) or not _HEX.fullmatch(self.hex):
+            raise ValueError("A trace id is lowercase hex digits, got %r" % (self.hex,))
+
+    @classmethod
+    def new(cls) -> "TraceID":
+        """Returns a fresh id: 16 random hex characters."""
+        raise NotImplementedError
+
+    @classmethod
+    def parse(cls, text: str) -> "TraceID":
+        """
+        Reads back what ``str()`` wrote.
+
+        Args:
+            text: ``trc-`` and hex digits.
+
+        Returns:
+            TraceID: The id *text* names.
+
+        Raises:
+            ValueError: If *text* is not ``trc-`` and hex digits.
+        """
+        raise NotImplementedError
+
+    def __str__(self) -> str:
+        return _TRACE_PREFIX + self.hex
+
+
+@dataclass(frozen=True)
+class ChatTrace:
+    """
+    One step of processing a message, as a peer traced it. Not a message: nobody hears it.
+
+    Attributes:
+        id: The trace's own id, made by the session.
+        msg_id: The message whose processing this step is part of.
+        state: Whether the step is running, done or failed.
+        text: What the step is, cut to :data:`TRACE_TEXT_LIMIT`.
+        frm: Who traced it; :data:`TOOL` for a command.
+        prev: The trace this one follows, or None for a first step.
+        timestamp: When it was traced.
+    """
+
+    id        : TraceID
+    msg_id    : MessageID
+    state     : TraceState
+    text      : str
+    frm       : int
+    prev      : Optional[TraceID] = None
+    timestamp : datetime = field(default_factory=datetime.now)
+
+
 # @req REQ-CORE-025
 @dataclass
 class ChatMessage:

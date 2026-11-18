@@ -24,9 +24,9 @@ from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tup
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from ...parts.keys.endpoint import Endpoint
-from ....hooks import Ask, Commands, Context, Invoke, Peers, Say, WorkspaceGrant
+from ....hooks import Ask, Commands, Context, Invoke, Peers, Say, Trace, WorkspaceGrant
 from ....hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke, HookListen, HookPeers
-from ....hooks import HookSay, HookWorkspace, NoWorkspaceProvider
+from ....hooks import HookSay, HookTrace, HookWorkspace, NoWorkspaceProvider
 from ....hooks import declares, name_of, require
 from ...parts.keys import KeyUnavailable, read_async
 from ....message import LOCAL, Attachment, ChatMessage, Reply, ReplyStatus
@@ -77,6 +77,7 @@ def chat_model(model: Any) -> Any:
 @require(HookCommands)
 @require(HookInvoke)
 @require(HookWorkspace)
+@require(HookTrace)
 class AgentPeer:
     """
     An agent that answers in the chat, with the chat as its tools.
@@ -117,6 +118,7 @@ class AgentPeer:
     commands  : Commands
     invoke    : Invoke
     workspace : WorkspaceGrant
+    trace     : Trace
 
     # @req REQ-AGENT-002
     def __init__(
