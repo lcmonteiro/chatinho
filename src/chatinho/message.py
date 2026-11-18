@@ -223,6 +223,7 @@ TRACE_TEXT_LIMIT : int = 2000
 _TRACE_PREFIX : str = "trc-"
 
 
+# @req REQ-CORE-030
 class TraceState(str, Enum):
     """Where a step of processing a message stands: started, finished, or failed."""
 
@@ -231,6 +232,7 @@ class TraceState(str, Enum):
     ERROR   = "error"
 
 
+# @req REQ-CORE-030
 @dataclass(frozen=True)
 class TraceID:
     """
@@ -248,8 +250,8 @@ class TraceID:
 
     @classmethod
     def new(cls) -> "TraceID":
-        """Returns a fresh id: 16 random hex characters."""
-        raise NotImplementedError
+        """Returns a fresh id: 16 random hex characters, as a message id is made."""
+        return cls(secrets.token_hex(8))
 
     @classmethod
     def parse(cls, text: str) -> "TraceID":
@@ -265,12 +267,15 @@ class TraceID:
         Raises:
             ValueError: If *text* is not ``trc-`` and hex digits.
         """
-        raise NotImplementedError
+        if not isinstance(text, str) or not text.startswith(_TRACE_PREFIX):
+            raise ValueError("A trace id starts with %r, got %r" % (_TRACE_PREFIX, text))
+        return cls(text[len(_TRACE_PREFIX):])
 
     def __str__(self) -> str:
         return _TRACE_PREFIX + self.hex
 
 
+# @req REQ-CORE-030
 @dataclass(frozen=True)
 class ChatTrace:
     """

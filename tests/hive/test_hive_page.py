@@ -34,10 +34,12 @@ def test_the_page_is_served_without_a_key_and_loads_nothing_from_elsewhere(tmp_p
 
 def _browser():
     playwright = pytest.importorskip("playwright.sync_api")
+    manager = playwright.sync_playwright().start()
     try:
-        manager = playwright.sync_playwright().start()
         browser = manager.chromium.launch()
     except Exception as exc:                                          # no browser on this machine
+        # Stop it, or its event loop outlives the test and every later one trips on it.
+        manager.stop()
         pytest.skip("no browser: %s" % exc)
     return manager, browser
 

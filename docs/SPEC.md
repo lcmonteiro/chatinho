@@ -1,7 +1,7 @@
 # chatinho — the hook specification
 
-Everything a peer can do, and everything it can be asked to do, is one of **seventeen hooks**. This
-document is the reference for all seventeen: what each one demands, what it grants, and what actually
+Everything a peer can do, and everything it can be asked to do, is one of **nineteen hooks**. This
+document is the reference for all nineteen: what each one demands, what it grants, and what actually
 arrives at its door.
 
 Every claim here is executable. `examples/hooks.py` declares one peer per hook and runs a short
@@ -89,7 +89,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 
 ---
 
-## 2. The seventeen hooks at a glance
+## 2. The nineteen hooks at a glance
 
 | hook | demands | grants | declared by |
 |---|---|---|---|
@@ -110,6 +110,8 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 | [`HookLocate`](#hooklocate) | — | `locate` | a presentation, a peer that opens attachments |
 | [`HookWorkspace`](#hookworkspace) | — | `workspace` | a peer that works on files, a command that reads them |
 | [`HookProvision`](#hookprovision) | `provision` | — | a workspace provider: `GitWorktrees` |
+| [`HookTrace`](#hooktrace) | — | `trace` | a peer whose work has steps worth seeing: `AgentPeer` |
+| [`HookRecord`](#hookrecord) | `record` | — | a backend that keeps traces: `HiveBackend` |
 
 **Every hook is one or the other**, never both.
 
@@ -537,6 +539,43 @@ one.
 `GitWorktrees(repo)` is the provider shipped: a worktree per peer at
 `<repo>/.chatinho/worktrees/<name>` on branch `peer/<name>`, created from the base the repository
 had checked out when the provider started, reused after a restart and never removed by `close()`.
+
+### HookTrace
+
+> **grants** `await trace(msg_id: MessageID, state: TraceState | str, text: str, prev: Optional[TraceID] = None) -> TraceID`
+
+Records one step of processing a message: a node of an agent's graph, a model call, a tool call.
+The session makes the trace — its own id, who traced it (`TOOL` for a command) and when — hands it
+to whoever declared [`HookRecord`](#hookrecord), and returns its id, so the next step can follow it:
+
+```python
+start = await self.trace(msg.id, "running", "tool ws_ls {'path': '.'}")
+...
+await self.trace(msg.id, "done", "tool ws_ls → 14 entries", prev=start)
+```
+
+`state` is `running`, `done` or `error`. Text past `TRACE_TEXT_LIMIT` (2000 characters) is cut,
+ending `…`. `prev` must be a trace this session made, whoever traced it; anything else is a
+`ValueError`, and a `msg_id` that is not a `MessageID` a `TypeError`. Following `prev` from trace to
+trace gives the graph of how a message was processed: a chain where steps follow each other, a
+branch where two steps follow the same one.
+
+**A trace is not a message.** Nobody hears it, nobody answers it, `context()` never returns it, and
+the message store does not hold it. With no recorder it is dropped and its id still returned; a
+recorder that raises is logged and the step being traced goes on.
+
+### HookRecord
+
+> **demands** `async record(trace: ChatTrace) -> None`
+
+Keeps a trace. The session calls it on the first peer that declared it — the backend, as for
+[`HookKeep`](#hookkeep) — and awaits it before `trace` returns, so a recorder that must not hold up
+the chat queues what it is given, as `HiveBackend` does.
+
+```python
+async def record(self, trace) -> None:
+    self.traces.append(trace)
+```
 
 ---
 

@@ -428,6 +428,7 @@ HookLocate = Hook(
 # hears it and context() never returns it. Like an attachment it goes to the
 # backend, to whoever declared HookRecord.
 
+# @req REQ-CORE-033
 HookTrace = Hook(
     name="HookTrace",
     grants=("trace",),
@@ -435,6 +436,7 @@ HookTrace = Hook(
     # the id, stamps who traced and when, and hands it to the recorder.
 )
 
+# @req REQ-CORE-033
 HookRecord = Hook(
     name="HookRecord",
     method="record",

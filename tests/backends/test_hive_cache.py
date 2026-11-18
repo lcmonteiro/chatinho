@@ -65,6 +65,7 @@ async def test_nothing_queued_is_lost_across_a_restart(place, caplog):
     session, view = await driven(connectors=[tracer], backend=backend_of(place, flush_timeout=0.2))
     one  = await view.say("one")
     two  = await view.say("two")
+    await asyncio.sleep(0.1)            # each listen is its own task: let both reach the backend first
     step = await tracer.trace(one, "running", "extract")
     with caplog.at_level(logging.WARNING):
         await session.close()

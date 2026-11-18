@@ -108,7 +108,7 @@ async def test_a_trace_is_recorded_with_everything_it_holds():
     assert trace.state is TraceState.RUNNING
     assert trace.text == "extract"
     assert trace.prev is None
-    assert trace.frm == session.id_of(tracer)
+    assert trace.frm == session.id_of("rastro")
     assert trace.timestamp is not None
 
 
@@ -218,7 +218,7 @@ async def test_another_peers_trace_may_be_followed():
     await b.trace(msg_id, "running", "answer", prev=first)
     await session.close()
     assert recorder.traces[1].prev == first
-    assert recorder.traces[1].frm == session.id_of(b)
+    assert recorder.traces[1].frm == session.id_of("outro")
 
 
 # @ac AC-CORE-032.1

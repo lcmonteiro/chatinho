@@ -125,7 +125,7 @@ def test_forget_drops_the_older_messages_their_attachments_and_traces(hive):
     assert hive.client.get("/api/messages/%s/attachments/notes.md" % old.id,
                            headers=as_(hive.keys["a"])).status_code == 404
     assert hive.client.get("/api/chats/a/messages/%s/traces" % old.id,
-                           headers=as_(hive.admin)).json()["traces"] == []
+                           headers=as_(hive.admin)).status_code == 404
 
 
 # @ac AC-HIVE-004.4

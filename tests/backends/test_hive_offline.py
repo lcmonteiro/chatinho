@@ -64,6 +64,7 @@ async def test_what_waited_is_sent_in_order_once_the_hive_is_up(tmp_path):
     one   = await view.say("one")
     two   = await view.say("two")
     three = await view.say("three")
+    await asyncio.sleep(0.1)            # each listen is its own task: let the three reach the backend first
     step  = await tracer.trace(one, "running", "extract")
     got   = []
     with served(hive.db, port=port):
@@ -92,6 +93,7 @@ async def test_a_full_queue_drops_the_oldest_and_says_so(tmp_path, caplog):
         await view.say("one")
         await view.say("two")
         await view.say("three")
+        await asyncio.sleep(0.2)        # each listen is its own task
     assert any("dropped" in r.getMessage() and "1" in r.getMessage() for r in caplog.records)
     with served(hive.db, port=port) as server:
         import httpx

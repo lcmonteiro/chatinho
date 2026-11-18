@@ -14,7 +14,7 @@ each is a pair: the word you call, and the word the other side writes.
 
 Everything is a coroutine and every delivery is its own task, so a slow subsystem
 holds up nobody, and a peer may ask one that is asking it. ``docs/SPEC.md`` is the
-reference for all seventeen hooks, and ``examples/hooks.py`` is that document executable.
+reference for all nineteen hooks, and ``examples/hooks.py`` is that document executable.
 
 Headless — no terminal, and nothing to install beyond this package::
 

@@ -36,6 +36,7 @@ from ...parts.memory import MEMORY, earlier, speaker
 from .factory import AgentFactory
 from .graph import compile_graph
 from .tools import Shape, chat_tools, workspace_tools
+from .tracing import RunTracer
 
 logger = logging.getLogger(__name__)
 
@@ -192,13 +193,18 @@ class AgentPeer:
             text, files = self._failed(exc), []
         await self.say(text, reply_to=msg.id, attachments=files)
 
-    # @req REQ-CONN-012, REQ-CONN-024
+    # @req REQ-CONN-012, REQ-CONN-024, REQ-AGENT-012
     async def _run(self, msg: ChatMessage) -> Tuple[str, List[Attachment]]:
         """One run of the graph on *msg*: the answer's text and the run's files."""
         graph  = await self.graph()
-        config = ({"configurable": {"thread_id": str(msg.id)}}
-                  if self.options.get("checkpointer") is not None else None)
-        output = await graph.ainvoke({"question": msg}, config=config)
+        config : Dict[str, Any] = {}
+        if self.options.get("checkpointer") is not None:
+            config["configurable"] = {"thread_id": str(msg.id)}
+        trace = getattr(self, "trace", None)
+        if trace is not None:
+            # Each run its own tracer, so two questions at once never share a graph.
+            config["callbacks"] = [RunTracer(trace, msg.id)]
+        output = await graph.ainvoke({"question": msg}, config=config or None)
         if output.get("__interrupt__"):
             # The agent inside stopped for a decision; nothing in the chat resumes it.
             raise Interrupted("the run stopped for a decision")

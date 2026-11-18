@@ -305,6 +305,44 @@ system at all, and is not any more: a **workspace** is a directory on purpose (b
 not overlap — an attachment is something a message carries, a workspace is somewhere a peer works. `DatabaseBackend` keeps
 them as rows and writes a file on the first `link`, into a temp directory it removes at `shutdown`.
 
+## Traces and the hive: how a message was processed, and every chat in one place
+
+**A trace is a step, not a message.** A peer that declares `HookTrace` is granted
+`trace(msg_id, state, text, prev=None)`: one step of processing a message — a node of an agent's
+graph, a model call, a tool call — `running`, `done` or `error`, following the trace `prev` names.
+The session makes the id, stamps who and when, and hands it to whoever declared `HookRecord`, the
+way attachments go to `keep`. Nobody hears it, `context()` never returns it and no model remembers
+it; with no recorder it is dropped. Following `prev` gives the graph: a chain where steps follow
+each other, a branch where two follow the same one (two tool calls of one model turn). `prev` must
+be a trace this session made — whoever made it — which is why a trace id is the session's to issue.
+
+**`AgentPeer` traces every run** with `RunTracer`, a LangChain callback made per run, so two
+questions at once never share a graph. A step's end follows its start; a step's start follows the
+last step that ended inside the same parent, or the parent's start when it is the first — which is
+also why an `agent` node's end hangs off its own start rather than its last model call. Any other
+peer traces only what it chooses to.
+
+**The hive is where every chat is kept and seen.** `chatinho-hive serve` (FastAPI, behind
+`chatinho[hive]`) holds every chat's conversation, attachments and traces, and serves a page that
+lists the chats, streams the chosen one live over server-sent events, and draws a message's trace
+graph. A chat is a **name and a key** — `chatinho-hive chat add <name>` prints the key once and
+the hive keeps only its hash — and a chat key reads and writes its own chat and never learns
+another exists; `chatinho-hive admin add` makes the key the page asks for. Django was considered
+and set aside: synchronous at heart, and live updates would have needed Channels and Redis.
+
+**`HiveBackend(url, key)` is a chat's backend in a hive**, and needs nothing installed: HTTP is
+`urllib` on a thread. Everything it is given goes to an **outbox** first and one sender task takes
+it there in order, in batches, retrying a hive that is down with a wait that doubles to 30 seconds
+— so nothing about the hive can hold up the chat, and a full outbox drops its oldest with a
+warning. A refused key is not retried: one error, naming the URL and never the key. With
+`cache="team.db"` the outbox and a copy of the chat live in a SQLite file: the chat starts with its
+history when the hive is down, and what was queued is sent on the next run instead of being lost at
+`shutdown`. Three things to know before they surprise you: **a trace can reach the hive before its
+message** — `record` is awaited inside `trace`, while `listen` is a delivery task that runs shortly
+after the say — and the hive keeps it either way; **the hive shows names, not ids** — each record
+carries `frm_name` from `peers()` when it was sent, since ids are per session; and the stream takes
+the admin key as `?key=` too, because a browser's `EventSource` cannot set a header.
+
 ## Workspaces: somewhere to work, and everyone can look
 
 A peer that declares `HookWorkspace` is granted `workspace(name=None)`: with no name, its own git
@@ -410,7 +448,7 @@ runs on deep agents' in-memory default and says so once, and the paragraph telli
 graph comes back with `__interrupt__` and no answer. `AgentPeer._run` turns that into
 `Interrupted`, answered as "the run was interrupted", rather than the `KeyError` it used to be.
 
-## The seventeen hooks
+## The nineteen hooks
 
 The reference is [`docs/SPEC.md`](docs/SPEC.md) — every hook with an example, what it costs, and
 the rules that hold across all of them. `examples/hooks.py` is that document executable: one peer
@@ -435,6 +473,8 @@ per conversation hook, in a chat with no terminal. This section is the summary.
 | `HookLocate` | — | `locate` |
 | `HookWorkspace` | — | `workspace` |
 | `HookProvision` | `provision` | — |
+| `HookTrace` | — | `trace` |
+| `HookRecord` | `record` | — |
 
 A credential is not a hook: it rides on the message (`msg.credentials`), for whoever answers that
 message, so a peer can work with a different key for each one. `McpFrontend` puts a client's lent
@@ -524,11 +564,12 @@ src/chatinho/
 
   -- 1. the framework: the session and the definition of the hooks
   session.py       ChatSession: run, peers, commands, delivery, routing, context
-  hooks.py         Hook, the seventeen constants, @require, the grant protocols
+  hooks.py         Hook, the nineteen constants, @require, the grant protocols
   query.py         Query (peer/thread/errors/since/limit) and SELF: which part of the conversation
                    context() returns; plain data, so a backend could answer it one day
   message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
-                   Attachment, Reply (what peers attach; the backend keeps it)
+                   Attachment, Reply (what peers attach; the backend keeps it),
+                   ChatTrace, TraceID, TraceState (a step of processing a message; never a message)
 
   -- 2. the parts: what more than one specialization uses, a package per domain — stdlib only
   support/parts/
@@ -542,6 +583,8 @@ src/chatinho/
       views.py       WorkspaceView (reads) and Workspace (writes too); Lines, Match, Matches
     mcp.py         what McpFrontend and McpConnector share: credentials key, names, attachments
     memory.py      what a model remembers, for OpenAIConnector and AgentPeer — stdlib only
+    hive.py        what HiveBackend and the hive exchange: the JSON of a message and a trace, the
+                   key header — stdlib only
 
   -- 3. the kits: what a specialization is built from, on the parts and behind an extra
   support/kits/
@@ -557,6 +600,7 @@ src/chatinho/
       graph.py     extract -> agent -> verify -> load around the agent
       tools.py     ask_<peer>, run_<command>, ask_user, ws_<op>/ws_<op>_of
       results.py   the answer's text and files, an operation's result as text, a diff as attachment
+      tracing.py   RunTracer: a callback per run that traces its nodes, model calls and tool calls
 
   -- 4. the specializations: what implements the hooks
   commands/        help.py, test.py, workspace.py (/ws) — commands: they run, they are not peers
@@ -567,7 +611,11 @@ src/chatinho/
                    llm.py (LLMRouter: those rules first, then an OpenAI-compatible model picks a
                    peer by name and description, or everyone; any failure is a broadcast)
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
-                   attachments
+                   attachments; hive.py (HiveBackend: the same over HTTP to a hive, plus traces —
+                   stdlib only, an outbox and a sender task), hive_cache.py (its optional SQLite cache)
+  hive/            the hive, behind chatinho[hive]: app.py (FastAPI: the API, the stream, the page),
+                   store.py (SQLAlchemy), keys.py, live.py (SSE fan-out), cli.py (chatinho-hive),
+                   page.html (the viewer: chats, messages live, a message's trace graph)
   connectors/      openai.py (OpenAIConnector: AsyncOpenAI, any compatible base_url; its `memory` is a
                    Query it hands to context(), HookPeers for who said what; a lent `llm` key wins),
                    mcp.py (McpConnector: asking a remote session over MCP),
@@ -582,7 +630,7 @@ src/chatinho/
       composer.py  CommandInput (a multi-line TextArea) + CommandSuggestions
       clipboard.py OSC 52's second route: a clipboard helper, if the system has one
       style.py     ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
-docs/              SPEC.md — the seventeen hooks, with an example and a cost for each;
+docs/              SPEC.md — the nineteen hooks, with an example and a cost for each;
                    architecture.md — the ten capabilities and how they fit
 .specworks/        config.yml (capabilities, commands, context), changes/ (active/, then archive/);
                    each capability's living spec is in its own <path>/docs/
@@ -594,15 +642,19 @@ tests/             one folder per layer part, like the package; real git repos, 
                    frontends/test_chat_frontend.py and frontends/test_command_suggestions.py (mounted)
   tests/framework/        test_chat_session.py, test_message_delivery.py, test_message_store.py,
                           test_require.py, test_context_query.py, test_answer_details.py,
-                          test_attachments.py, test_lending.py, test_workspaces_in_session.py
+                          test_attachments.py, test_lending.py, test_workspaces_in_session.py,
+                          test_traces.py
   tests/keys/             test_keys.py, test_endpoint.py
   tests/workspace-model/  test_workspace_operations.py
-  tests/agents/           test_agent_peer.py, test_workspace_backend.py
+  tests/agents/           test_agent_peer.py, test_workspace_backend.py, test_agent_tracing.py
   tests/connectors/       test_openai_connector.py, test_mcp_connector.py,
                           test_basic_agent_connector.py, test_deep_agent_connector.py
   tests/frontends/        test_chat_frontend.py, test_command_suggestions.py, test_clipboard.py,
                           test_mcp_frontend.py, test_mcp_http.py
-  tests/backends/         test_database_backend.py
+  tests/backends/         test_database_backend.py, test_hive_backend.py, test_hive_offline.py,
+                          test_hive_cache.py
+  tests/hive/             test_hive_keys.py, test_hive_api.py, test_hive_live.py, test_hive_page.py,
+                          test_hive_install.py
   tests/commands/         test_workspace_command.py
   tests/routers/          test_message_routing.py, test_llm_router.py, test_llm_router_imports.py
   tests/workspaces/       test_git_worktrees.py
@@ -610,7 +662,8 @@ tests/             one folder per layer part, like the package; real git repos, 
                           test_package_layout.py, test_examples.py, test_mcp_end_to_end.py,
                           test_mcp_results.py; conftest.py is here too, so every folder imports it.
                           The folders hold no __init__.py, so no two test files share a name
-  tests/fakes/     test doubles, never the real thing: llm.py (a stubbed AsyncOpenAI),
+  tests/fakes/     test doubles, never the real thing — but hive.py, a real hive served on a free
+                   port for HiveBackend to talk to: llm.py (a stubbed AsyncOpenAI),
                    agent.py (a scripted LangChain chat model), mcp.py (a remote session
                    served over MCP, a client onto it, and peers to ask)
 ```
@@ -1040,7 +1093,7 @@ is a boundary that rots. It parses the core modules and fails if:
   `openai`, `sqlalchemy`, `mcp` and `fastmcp` all blocked, and each of the lazy names has to
   report its own extra;
 - **`docs/SPEC.md` disagrees with the hook constants** — its summary table has to name the same
-  seventeen, with the same demanded method and the same grants, and each one has to have its own
+  nineteen, with the same demanded method and the same grants, and each one has to have its own
   section. A spec nothing checks is a spec that rots, so adding a hook without documenting it
   fails the suite. Both halves were proved by breaking them.
 
@@ -1056,8 +1109,8 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 
 ## Packaging: the core installs nothing
 
-`dependencies = []`. `ChatSession`, the seventeen hooks, `HelpCommand`, `TestCommand`, `SimpleRouter`
-and the workspaces import nothing but the standard library — which the fitness tests already
+`dependencies = []`. `ChatSession`, the nineteen hooks, `HelpCommand`, `TestCommand`, `SimpleRouter`,
+`HiveBackend` and the workspaces import nothing but the standard library — which the fitness tests already
 enforced, so the packaging now says it too. Workspaces need `git` when a provider starts, never at
 import. Twelve names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
@@ -1070,6 +1123,12 @@ import. Twelve names live behind an extra and are resolved on first use with PEP
 | `BasicAgentConnector` | `chatinho[langchain]` | `langchain`, `langchain-openai` (langgraph with them) |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
 | `WorkspaceBackend`, `DeepAgentConnector` | `chatinho[deepagents]` | `deepagents` and `langchain-openai`; deepagents needs `langchain` 1.4.9+ and always brings `langchain-anthropic` and `langchain-google-genai` |
+
+**The hive is the one battery that is not a name.** `chatinho[hive]` (FastAPI, uvicorn,
+SQLAlchemy) is the server, `chatinho.hive` and the `chatinho-hive` command; nothing in `chatinho`
+resolves to it, and importing `chatinho.hive` without it is an `ImportError` naming the extra. A
+chat talks to a hive with `HiveBackend`, which needs nothing, so the extra goes where the server
+runs and nowhere else.
 
 `chatinho[mcp]` brings pydantic, starlette and uvicorn with it, so it is the heavy one — on Termux
 especially, and `chatinho[langchain]` brings langgraph. `chatinho[deepagents]` is heavier than
@@ -1087,14 +1146,16 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 83 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
-`MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
+`__init__.py` exports 92 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the traces (`ChatTrace`,
+`TraceID`, `TraceState`, `TRACE_TEXT_LIMIT`); the declaring machinery
 (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
-`declared_id`, `name_of`, `Hook`); the seventeen `Hook*` constants and `NoWorkspaceProvider`; the grant
-protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`, `Commands`, `Locate`, `WorkspaceGrant`); the
+`declared_id`, `name_of`, `Hook`); the nineteen `Hook*` constants and `NoWorkspaceProvider`; the grant
+protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`, `Commands`, `Locate`, `WorkspaceGrant`, `Trace`); the
 workspaces (`Workspace`, `WorkspaceView`, `operation`, `operations_of`, `Lines`, `Match`, `Matches`,
 `GitWorktrees`, `WorkspaceBackend`); and the batteries
-(`OpenAIConnector`, `BasicAgentConnector`, `DeepAgentConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`,
+(`OpenAIConnector`, `BasicAgentConnector`, `DeepAgentConnector`, `DatabaseBackend`, `HiveBackend`,
+`HiveUnavailable`, `ChatFrontend`, `ChatStyle`, `McpFrontend`,
 `McpConnector`, `HelpCommand`, `TestCommand`, `WorkspaceCommand`, `SimpleRouter`, `LLMRouter`), with the keys and endpoints (`Endpoint`, `KeySource`,
 `KeyUnavailable`, `Env`, `DotEnv`, `File`, `Keyring`, `Command`, `Literal`, `Chain`, `key`).
 

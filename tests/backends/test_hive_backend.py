@@ -74,7 +74,7 @@ async def test_the_hive_shows_the_speakers_name(hive):
     await view.say("hello")
     await session.close()
     answer = httpx.get("%s/api/chats/team/messages" % hive.url, headers={KEY_HEADER: hive.admin})
-    assert [m["frm_name"] for m in answer.json()["messages"]] == ["chat"]
+    assert [m["frm_name"] for m in answer.json()["messages"]] == ["driver"]
 
 
 # @ac AC-BACK-009.2

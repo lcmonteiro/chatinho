@@ -83,11 +83,35 @@ reference, never a key.
 | `lab_client.py` | Your chat, with the lab as a peer, lending your key (your profile's, else `OPENAI_API_KEY`) as the `llm` credential. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_client.py` |
 | `lab_fastmcp_client.py` | The same question from a plain FastMCP client, without chatinho: the MCP surface is all a client needs. | `CHATINHO_MCP_TOKEN=s3cret python examples/lab_fastmcp_client.py http://127.0.0.1:8000/mcp "what is MCP?"` |
 | `inbox.py` | A script asks you a question and waits: `answer=$(curl -s -d '{"text":"Deploy?"}' 127.0.0.1:8765/ask)` returns `{"answer": "..."}` once you reply in the chat, or a 504 after the timeout. No model and no key. | `python examples/inbox.py` |
-| `hooks.py` | The seventeen hooks, one peer each, in a chat with no terminal, printing what reaches each door. The runnable half of [`docs/SPEC.md`](../docs/SPEC.md). No key needed. | `python examples/hooks.py` |
+| `hooks.py` | The nineteen hooks, one peer each, in a chat with no terminal, printing what reaches each door. The runnable half of [`docs/SPEC.md`](../docs/SPEC.md). No key needed. | `python examples/hooks.py` |
 
 Every LLM demo has the same shape: `parts()` returns the connectors, commands and
 backend, and `main()` hands them to `build_chat_session` (or `build_mcp_session`).
 A test, or your own program, can build the same chat headless from `parts()`.
+
+## A hive: every chat in one place
+
+The hive keeps every chat's conversation, attachments and traces, and shows them on a page:
+the chats, each one's messages as they are said, and the graph of how an agent processed a
+message. It needs `chatinho[hive]`; a chat talking to it needs nothing.
+
+```bash
+chatinho-hive chat add assistant        # prints the chat's key, once
+chatinho-hive admin add                 # prints the key the page asks for, once
+chatinho-hive serve                     # http://127.0.0.1:8700/
+```
+
+Any demo keeps its chat there by swapping its backend:
+
+```python
+from chatinho import HiveBackend, key
+
+backend = HiveBackend("http://127.0.0.1:8700", key("env:HIVE_KEY"), cache="assistant-cache.db")
+```
+
+With `cache=` the chat keeps its history when the hive is down, and what it could not send goes
+on the next run. An agent's steps (`AgentPeer`'s nodes, model calls and tool calls) arrive as
+traces; click a message on the page to see them.
 
 ## Replaced
 

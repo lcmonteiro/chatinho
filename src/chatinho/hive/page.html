@@ -4,8 +4,250 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hive</title>
+<style>
+  :root {
+    --bg: #1f1e1d; --surface: #262624; --raised: #2f2e2b; --line: #3d3b37;
+    --muted: #8a8984; --text: #f0eee6; --accent: #d97757;
+    --done: #8fbf7f; --error: #e07a7a; --running: #8a8984;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; gap: 8px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line);
+           background: var(--surface); flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0 8px 0 0; color: var(--accent); }
+  header form { display: flex; gap: 6px; flex: 1; min-width: 220px; }
+  input, button { font: inherit; color: var(--text); background: var(--raised); border: 1px solid var(--line);
+                  border-radius: 6px; padding: 6px 10px; }
+  input { flex: 1; min-width: 0; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  main { display: grid; grid-template-columns: 200px minmax(0, 1fr) minmax(0, 1.2fr); height: calc(100% - 52px); }
+  section { overflow: auto; padding: 12px 16px; border-right: 1px solid var(--line); }
+  section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  .chat, .message { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px;
+                    cursor: pointer; }
+  .chat:hover, .message:hover { border-color: var(--muted); }
+  .chat.on, .message.on { border-color: var(--accent); }
+  .chat small, .message small { display: block; color: var(--muted); font-size: 12px; }
+  .message .text { white-space: pre-wrap; word-break: break-word; }
+  .message.error { border-left: 3px solid var(--error); }
+  .status { color: var(--muted); padding: 8px 0; }
+  #graph svg { display: block; }
+  #graph g { cursor: pointer; }
+  #graph text { fill: var(--text); font-size: 12px; }
+  #graph .who { fill: var(--muted); font-size: 11px; }
+  #graph rect { fill: var(--surface); stroke: var(--line); rx: 6; }
+  #graph .running rect { stroke: var(--running); stroke-dasharray: 4 3; }
+  #graph .done rect { stroke: var(--done); }
+  #graph .error rect { stroke: var(--error); }
+  #graph line { stroke: var(--muted); stroke-width: 1.2; }
+  @media (max-width: 760px) {
+    main { display: block; height: auto; }
+    section { border-right: 0; border-bottom: 1px solid var(--line); max-height: none; }
+  }
+</style>
 </head>
 <body>
-<p>Not built yet.</p>
+<header>
+  <h1>Hive</h1>
+  <form id="key-form">
+    <input data-testid="key" id="key" type="password" placeholder="Admin key" autocomplete="off">
+    <button data-testid="key-save" type="submit">Open</button>
+    <button id="key-forget" type="button" title="Forget the key in this browser">Forget</button>
+  </form>
+</header>
+<main>
+  <section>
+    <h2>Chats</h2>
+    <ul id="chats"></ul>
+    <div class="status" id="chats-status">Enter an admin key.</div>
+  </section>
+  <section>
+    <h2 id="messages-title">Messages</h2>
+    <ul id="messages"></ul>
+    <div class="status" id="messages-status"></div>
+  </section>
+  <section>
+    <h2 id="graph-title">Traces</h2>
+    <div data-testid="graph" id="graph"></div>
+    <div class="status" id="graph-status">Pick a message to see how it was processed.</div>
+  </section>
+</main>
+<script>
+"use strict";
+const STORE = "hive-key";
+const HEADER = "X-Hive-Key";
+const SVG = "http://www.w3.org/2000/svg";
+const BOX = { w: 230, h: 50, gx: 18, gy: 26 };
+let key = "";
+let chat = null;
+let picked = null;
+let traces = [];
+let stream = null;
+
+function remembered() { try { return localStorage.getItem(STORE) || ""; } catch (e) { return ""; } }
+function remember(value) {
+  try { value ? localStorage.setItem(STORE, value) : localStorage.removeItem(STORE); } catch (e) { /* private */ }
+}
+function el(tag, attrs, text) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function svg(tag, attrs, text) {
+  const node = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function status(id, text) { document.getElementById(id).textContent = text || ""; }
+function when(iso) { return iso ? iso.replace("T", " ").slice(0, 19) : ""; }
+function cut(text, n) { return text.length > n ? text.slice(0, n - 1) + "…" : text; }
+
+async function api(path) {
+  const answer = await fetch(path, { headers: { [HEADER]: key } });
+  if (answer.status === 401) throw new Error("That key is not known.");
+  if (answer.status === 403) throw new Error("That is not an admin key.");
+  if (!answer.ok) throw new Error("The hive answered " + answer.status + ".");
+  return answer.json();
+}
+
+async function loadChats() {
+  status("chats-status", "Loading…");
+  try {
+    const { chats } = await api("/api/chats");
+    const list = document.getElementById("chats");
+    list.replaceChildren();
+    for (const c of chats) {
+      const item = el("li", { class: "chat", "data-testid": "chat", "data-name": c.name });
+      item.append(el("span", {}, c.name), el("small", {}, c.messages + " messages" + (c.last ? " · " + when(c.last) : "")));
+      item.addEventListener("click", () => openChat(c.name));
+      list.append(item);
+    }
+    status("chats-status", chats.length ? "" : "No chats yet: chatinho-hive chat add <name>.");
+  } catch (e) { status("chats-status", e.message); }
+}
+
+function messageItem(m) {
+  const item = el("li", { class: "message" + (m.status === "error" ? " error" : ""), "data-testid": "message",
+                          "data-id": m.id });
+  item.append(el("small", {}, m.frm_name + " · " + when(m.timestamp) + (m.status !== "answered" ? " · " + m.status : "")),
+              el("div", { class: "text" }, m.text));
+  item.addEventListener("click", () => pickMessage(m.id, item));
+  return item;
+}
+
+async function openChat(name) {
+  chat = name; picked = null; traces = [];
+  document.querySelectorAll(".chat").forEach(n => n.classList.toggle("on", n.dataset.name === name));
+  document.getElementById("messages-title").textContent = "Messages · " + name;
+  drawGraph(); status("graph-status", "Pick a message to see how it was processed.");
+  if (stream) stream.close();
+  status("messages-status", "Loading…");
+  try {
+    const { messages } = await api("/api/chats/" + encodeURIComponent(name) + "/messages?limit=500");
+    const list = document.getElementById("messages");
+    list.replaceChildren(...messages.map(messageItem));
+    status("messages-status", messages.length ? "" : "Nothing said yet.");
+    listen(name);
+  } catch (e) { status("messages-status", e.message); }
+}
+
+function listen(name) {
+  stream = new EventSource("/api/chats/" + encodeURIComponent(name) + "/stream?key=" + encodeURIComponent(key));
+  stream.addEventListener("message", event => {
+    if (chat !== name) return;
+    document.getElementById("messages").append(messageItem(JSON.parse(event.data)));
+    status("messages-status", "");
+  });
+  stream.addEventListener("trace", event => {
+    const t = JSON.parse(event.data);
+    if (chat === name && t.msg_id === picked && !traces.some(x => x.id === t.id)) { traces.push(t); drawGraph(); }
+  });
+}
+
+async function pickMessage(id, item) {
+  picked = id;
+  document.querySelectorAll(".message").forEach(n => n.classList.toggle("on", n === item));
+  status("graph-status", "Loading…");
+  try {
+    ({ traces } = await api("/api/chats/" + encodeURIComponent(chat) + "/messages/" + encodeURIComponent(id) + "/traces"));
+    drawGraph();
+  } catch (e) {
+    traces = []; drawGraph();
+    status("graph-status", e.message.includes("404") ? "No traces for this message." : e.message);
+  }
+}
+
+// A trace's row is how many traces it follows; its column, its place among the traces of that row.
+function layout(list) {
+  const byId = new Map(list.map(t => [t.id, t]));
+  const depth = new Map();
+  const depthOf = t => {
+    if (depth.has(t.id)) return depth.get(t.id);
+    depth.set(t.id, 0);
+    const d = t.prev && byId.has(t.prev) ? depthOf(byId.get(t.prev)) + 1 : 0;
+    depth.set(t.id, d);
+    return d;
+  };
+  const rows = [];
+  for (const t of list) { const d = depthOf(t); (rows[d] = rows[d] || []).push(t); }
+  const place = new Map();
+  rows.forEach((row, r) => row.forEach((t, c) => place.set(t.id, { x: 8 + c * (BOX.w + BOX.gx), y: 8 + r * (BOX.h + BOX.gy) })));
+  return { byId, rows, place };
+}
+
+function drawGraph() {
+  const holder = document.getElementById("graph");
+  holder.replaceChildren();
+  document.getElementById("graph-title").textContent = picked ? "Traces · " + traces.length : "Traces";
+  if (!traces.length) { if (picked) status("graph-status", "No traces for this message."); return; }
+  status("graph-status", "");
+  const { byId, rows, place } = layout(traces);
+  const wide = Math.max(...rows.map(r => r.length));
+  const width = 16 + wide * BOX.w + (wide - 1) * BOX.gx;
+  const height = 16 + rows.length * BOX.h + (rows.length - 1) * BOX.gy;
+  const drawing = svg("svg", { width, height, viewBox: "0 0 " + width + " " + height, role: "img",
+                               "aria-label": "How the message was processed" });
+  for (const t of traces) {
+    if (!t.prev || !byId.has(t.prev)) continue;
+    const a = place.get(t.prev), b = place.get(t.id);
+    drawing.append(svg("line", { "data-testid": "edge", "data-from": t.prev, "data-to": t.id,
+                                 x1: a.x + BOX.w / 2, y1: a.y + BOX.h, x2: b.x + BOX.w / 2, y2: b.y }));
+  }
+  for (const t of traces) {
+    const at = place.get(t.id);
+    const box = svg("g", { class: t.state, "data-testid": "trace", "data-id": t.id,
+                           transform: "translate(" + at.x + "," + at.y + ")" });
+    box.append(svg("rect", { width: BOX.w, height: BOX.h }),
+               svg("text", { class: "who", x: 10, y: 18 }, t.frm_name + " · " + t.state),
+               svg("text", { x: 10, y: 37 }, cut(t.text, 32)));
+    box.addEventListener("click", () =>
+      status("graph-status", t.frm_name + " · " + t.state + " · " + when(t.timestamp) + " — " + t.text));
+    drawing.append(box);
+  }
+  holder.append(drawing);
+}
+
+document.getElementById("key-form").addEventListener("submit", event => {
+  event.preventDefault();
+  key = document.getElementById("key").value.trim();
+  remember(key);
+  loadChats();
+});
+document.getElementById("key-forget").addEventListener("click", () => {
+  key = ""; remember(""); document.getElementById("key").value = "";
+  if (stream) stream.close();
+  document.getElementById("chats").replaceChildren();
+  document.getElementById("messages").replaceChildren();
+  traces = []; picked = null; drawGraph();
+  status("chats-status", "Enter an admin key.");
+});
+key = remembered();
+if (key) { document.getElementById("key").value = key; loadChats(); }
+</script>
 </body>
 </html>
