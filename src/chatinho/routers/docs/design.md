@@ -8,9 +8,12 @@ was given as `router=`, and what `route` returns is written into the say's
 `to` before anyone hears it. The router is a role, not a peer: no id, in no
 roster, granted only what it declares. `SimpleRouter` (`simple.py`) is the
 one the builders give: a reply goes back to the author of what it replies
-to, and any other say to the room's lone answering peer.
+to, and any other say to the room's lone answering peer. `LLMRouter`
+(`llm.py`, behind `chatinho[openai]`) is opt-in: it keeps those two rules
+and, when two or more peers could answer, asks an OpenAI-compatible model
+which one, or whether the say is for everyone.
 
-![The router and where the session consults it (REQ-ROUTE-001, REQ-ROUTE-002, REQ-ROUTE-003, REQ-ROUTE-004, REQ-ROUTE-005, REQ-ROUTE-006)](diagrams/routers-blocks.svg)
+![The routers and where the session consults them (REQ-ROUTE-001, REQ-ROUTE-002, REQ-ROUTE-003, REQ-ROUTE-004, REQ-ROUTE-005, REQ-ROUTE-006, REQ-ROUTE-007, REQ-ROUTE-008, REQ-ROUTE-010)](diagrams/routers-blocks.svg)
 
 ## Decisions
 
@@ -35,6 +38,27 @@ to, and any other say to the room's lone answering peer.
   was addressed to nobody, so `SimpleRouter` routes the follow-up back to its
   author. The cost: a listener that answers only `msg.to is None` stays quiet
   in a room with one answering peer. (baseline-routers)
+- **SimpleRouter's rules are one function both routers call**
+  (REQ-ROUTE-007). `simple_route` and `answering` hold them, so `LLMRouter`
+  cannot drift from `SimpleRouter`. Alternatives: subclassing `SimpleRouter`
+  (the library keeps two base classes, deliberately), or holding one and
+  copying the grants onto it at each call. (add-llm-router)
+- **The model is asked only when there is a choice** (REQ-ROUTE-007). The
+  session posts a say only once it is routed, so a model call delays the
+  person's own message; a reply to an answering peer, a room with one, and a
+  room with none never wait on it. (add-llm-router)
+- **The model answers one word** (REQ-ROUTE-008). A peer's name, or
+  `everyone`, read ignoring case, a leading `@`, quotes and trailing
+  punctuation. Alternatives: JSON or a tool call, which not every
+  OpenAI-compatible server supports. (add-llm-router)
+- **A failed choice is a broadcast, logged by the router**
+  (REQ-ROUTE-009). An unknown or shared name, an API error, a missing key or
+  a timeout is a warning naming the reason and never the say or a key, and
+  the say goes to nobody; letting it raise would log an error with a
+  traceback for an expected outcome. (add-llm-router)
+- **A lent key wins, and lives for one say** (REQ-ROUTE-010). As
+  `OpenAIConnector` does; its own key is read late and its client kept per
+  key, a replaced one closed at shutdown. (add-llm-router)
 
 ## Interfaces
 
@@ -49,6 +73,16 @@ to, and any other say to the room's lone answering peer.
 - `SimpleRouter()`: declares `HookRoute`, `HookPeers` and `HookContext`; holds
   nothing, so one instance serves a session for its whole life. Neither rule
   counts the speaker or the frontend (`LOCAL`).
+- `answering(msg, roster) -> List[int]`, `simple_route(msg, roster, context)
+  -> Optional[int]` (`simple.py`): the answering peers but the speaker and the
+  frontend, and `SimpleRouter`'s two rules.
+- `LLMRouter(endpoint=None, *, memory=ROUTING_MEMORY, timeout=10.0,
+  credential="llm")` (`llm.py`): declares `HookRoute`, `HookPeers`,
+  `HookContext`; `async route(msg)`, `async shutdown()`; `ValueError` for a
+  timeout that is not positive; the model is `endpoint.model or
+  "gpt-4o-mini"`. `ROUTING_MEMORY` is the last 6 messages without failed
+  replies; `EVERYONE` is `"everyone"`. Read lazily off `chatinho` and
+  `chatinho.routers`.
 - `build_chat_session(router=None)`, `build_mcp_session(router=None)`: a
   `SimpleRouter` when none is given.
 
@@ -56,6 +90,7 @@ to, and any other say to the room's lone answering peer.
 
 - A specialization: imports the framework only, never another
   specialization (`tests/test_architecture.py`).
-- Standard library only; no extra is needed.
+- `simple.py` is standard library only; `llm.py` needs `openai`
+  (`chatinho[openai]`) and is imported only when `LLMRouter` is read.
 - `context()` is synchronous, so a reply's parent is found only in the window
   the session recalled; one older than that routes to nobody.

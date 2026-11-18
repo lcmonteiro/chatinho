@@ -51,7 +51,7 @@ The session SHALL give every peer it registers a distinct integer id. The fronte
 
 ### Requirement: REQ-CORE-002 A name is not an address
 
-Every peer and command SHALL have a visible name, set by `@connector`, `@tool`, `@frontend` or `@backend`, which an instance MAY override; an undecorated class falls back to its class name, and a name that is not a non-empty string MUST be refused with `ValueError`. Messages MUST be routed by id, never by name, so renaming a peer does not change where its messages go. A `@tool` also carries a description.
+Every peer and command SHALL have a visible name, set by `@connector`, `@tool`, `@frontend` or `@backend`, which an instance MAY override; an undecorated class falls back to its class name, and a name that is not a non-empty string MUST be refused with `ValueError`. Messages MUST be routed by id, never by name, so renaming a peer does not change where its messages go. A `@tool` also carries a description. A `@connector` MAY carry a one-line description of what the peer is for, which an instance MAY override; it defaults to empty, and a description that is not a string MUST be refused with `ValueError`.
 
 #### Scenario: AC-CORE-002.1 Renaming keeps the address
 
@@ -78,6 +78,22 @@ Every peer and command SHALL have a visible name, set by `@connector`, `@tool`, 
 #### Scenario: AC-CORE-002.5 An empty name
 
 - **WHEN** `connector`, `tool`, `backend` or `frontend` is given an empty, blank or non-string name
+- **THEN** it raises `ValueError`
+
+#### Scenario: AC-CORE-002.6 A peer carries its description
+
+- **GIVEN** a class decorated `@connector("weather", description="Forecasts by city")`
+- **WHEN** one instance sets its own `description`
+- **THEN** that instance has the new description and the others keep `Forecasts by city`
+
+#### Scenario: AC-CORE-002.7 No description
+
+- **WHEN** a class is decorated `@connector("weather")`
+- **THEN** its description is empty
+
+#### Scenario: AC-CORE-002.8 A description that is not a string
+
+- **WHEN** `connector` is given a description that is not a string
 - **THEN** it raises `ValueError`
 
 ### Requirement: REQ-CORE-003 The frontend is peer zero

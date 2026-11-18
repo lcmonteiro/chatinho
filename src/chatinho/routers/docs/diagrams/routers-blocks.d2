@@ -10,10 +10,23 @@ session: session {
 }
 routers: routers {
   simple: simple.py {
-    router: SimpleRouter {
+    rules: simple_route {
       tooltip: "a reply to its author; anything else to the lone peer that answers"
     }
+    router: SimpleRouter
   }
+  llm: llm.py {
+    router: LLMRouter {
+      tooltip: "SimpleRouter's rules first; the model only when two or more peers answer; a failure is a broadcast"
+    }
+  }
+}
+keys: support/parts/keys {
+  endpoint: Endpoint
+}
+memory: support/parts/memory.py
+model: OpenAI-compatible model {
+  shape: cloud
 }
 builder: builder.py {
   shape: page
@@ -22,5 +35,10 @@ builder: builder.py {
 
 speaker -> session.routed: say with no to
 session.routed -> routers.simple.router: route(msg)
-routers.simple.router -> session.routed: peers(), context()
+session.routed -> routers.llm.router: "route(msg), when given as router="
+routers.simple.router -> routers.simple.rules: msg, roster, context
+routers.llm.router -> routers.simple.rules: msg, roster, context
+routers.llm.router -> keys.endpoint: base_url, model, key
+routers.llm.router -> memory: earlier messages
+routers.llm.router -> model: "peers, descriptions, say; a name or everyone"
 builder -> routers.simple.router: router=

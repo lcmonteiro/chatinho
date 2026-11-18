@@ -40,8 +40,11 @@ behind each decision.
      keeps and links attachments. Uses the framework only.
    - **commands**: `/help`, `/test` and `/ws`. Uses the framework only; `/ws`
      is handed its provider.
-   - **routers**: `SimpleRouter`, which decides who answers a say that names
-     nobody. Uses the framework only.
+   - **routers**: who answers a say that names nobody: `SimpleRouter`, the
+     builders' default, and `LLMRouter`, which keeps its rules and asks an
+     OpenAI-compatible model when two or more peers could answer. Uses the
+     framework, and the keys and memory parts; `LLMRouter` sits behind
+     `chatinho[openai]`.
    - **workspaces**: `GitWorktrees`, the provider: one git worktree per peer.
      Uses workspace-model.
 

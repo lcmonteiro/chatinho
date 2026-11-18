@@ -18,6 +18,13 @@ assembly on top of it: the two builders and the public names.
   going back to an id freed below the next it would give. Why: routing on the
   display name broke replies in flight when a peer was renamed. Alternative:
   the name as the address. (baseline-framework)
+- **A peer may say what it is for** (REQ-CORE-002). `@connector(name,
+  description=)` writes `description` on the class beside `name`, so an
+  instance overrides it the same way; it is empty by default and a
+  non-string is a `ValueError`. A router that chooses between peers reads it
+  (`LLMRouter`). Why on the peer rather than in the router: it travels with
+  the peer and survives a rename. Alternative: a `descriptions=` mapping given
+  to the router. (add-llm-router)
 - **Roles are told apart by what was declared** (REQ-CORE-003, REQ-CORE-004,
   REQ-CORE-005, REQ-CORE-026). A peer, a command, the router and the workspace
   provider are plain classes with stacked `@require`, checked when the class
@@ -93,7 +100,7 @@ assembly on top of it: the two builders and the public names.
 - `ChatSession(connectors=, commands=, frontend=, backend=, router=,
   workspaces=, recall=200, max_depth=8)`: `run`, `add_connector`, `add_command`, `start`, `close`,
   `id_of`, `forget`.
-- Declaring (`hooks.py`): `@connector(name, id=)`, `@tool(name,
+- Declaring (`hooks.py`): `@connector(name, id=, description="")`, `@tool(name,
   description)`, `@frontend(name="chat")`, `@backend(name)`, `@require(hook,
   **options)`; reading back with `hooks_of`, `options_of`, `declares`,
   `declared_id`, `name_of`.

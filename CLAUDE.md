@@ -63,7 +63,9 @@ not a peer**, as a command is not: no id, in nobody's roster, granted what it de
 session given none routes nothing. **The builders give `SimpleRouter`**, which keeps the two old
 rules: **a say that replies goes to whoever said what it replies to**, and **any other goes to the
 lone answering peer**, each only when that is a peer that answers and is neither the speaker nor
-the frontend. A router may be a model.
+the frontend. A router may be a model: `LLMRouter` keeps those two rules and, when two or more
+peers could answer, asks an OpenAI-compatible model which one — by the names and the `description`
+each `@connector` may carry — or whether the say is for everyone; any failure is a broadcast.
 
 The default lives in the builders and not in the session for the reason the frontend does: a
 `ChatSession` is the bare machinery, and a rule nobody chose has no business inside it. The cost is
@@ -561,7 +563,9 @@ src/chatinho/
   workspaces/      git.py (GitWorktrees: the provider — one worktree per peer on peer/<name>; merge,
                    drop) — stdlib only
   routers/         simple.py (SimpleRouter: the default router, stdlib-only — a reply to its author,
-                   anything else to the lone peer that answers)
+                   anything else to the lone peer that answers; simple_route, the rules both use),
+                   llm.py (LLMRouter: those rules first, then an OpenAI-compatible model picks a
+                   peer by name and description, or everyone; any failure is a broadcast)
   backends/        database.py (SQLAlchemy) — a peer that listens and loads, and keeps and links
                    attachments
   connectors/      openai.py (OpenAIConnector: AsyncOpenAI, any compatible base_url; its `memory` is a
@@ -600,7 +604,7 @@ tests/             one folder per layer part, like the package; real git repos, 
                           test_mcp_frontend.py, test_mcp_http.py
   tests/backends/         test_database_backend.py
   tests/commands/         test_workspace_command.py
-  tests/routers/          test_message_routing.py
+  tests/routers/          test_message_routing.py, test_llm_router.py, test_llm_router_imports.py
   tests/workspaces/       test_git_worktrees.py
   tests/                  what crosses them stays at the root: test_architecture.py,
                           test_package_layout.py, test_examples.py, test_mcp_end_to_end.py,
@@ -1055,14 +1059,14 @@ its grants; one that did not would have shipped it. The grant is called `invoke`
 `dependencies = []`. `ChatSession`, the seventeen hooks, `HelpCommand`, `TestCommand`, `SimpleRouter`
 and the workspaces import nothing but the standard library — which the fitness tests already
 enforced, so the packaging now says it too. Workspaces need `git` when a provider starts, never at
-import. Eleven names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
+import. Twelve names live behind an extra and are resolved on first use with PEP 562 `__getattr__`:
 
 | name | extra | brings |
 |---|---|---|
 | `ChatFrontend`, `ChatStyle` | `chatinho[tui]` | `textual` |
 | `McpFrontend`, `McpConnector` | `chatinho[mcp]` | `fastmcp` (4.0+, on the official `mcp` SDK) |
 | `build_chat_session`, `build_mcp_session` | `chatinho[tui,mcp]` | both |
-| `OpenAIConnector` | `chatinho[openai]` | `openai` |
+| `OpenAIConnector`, `LLMRouter` | `chatinho[openai]` | `openai` |
 | `BasicAgentConnector` | `chatinho[langchain]` | `langchain`, `langchain-openai` (langgraph with them) |
 | `DatabaseBackend` | `chatinho[sql]` | `sqlalchemy` |
 | `WorkspaceBackend`, `DeepAgentConnector` | `chatinho[deepagents]` | `deepagents` and `langchain-openai`; deepagents needs `langchain` 1.4.9+ and always brings `langchain-anthropic` and `langchain-google-genai` |
@@ -1083,7 +1087,7 @@ which is what the README documents because a `@v0.1.0` would not resolve. The wh
 
 ## Public API
 
-`__init__.py` exports 82 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
+`__init__.py` exports 83 names: `build_chat_session`, `build_mcp_session`, `ChatSession`, `ChatMessage`,
 `MessageID`, `Attachment`, `Reply`, `ReplyStatus`, `Secret`, `LOCAL`, `TOOL`, `SELF`, `Query`; the declaring machinery
 (`connector`, `tool`, `frontend`, `backend`, `require`, `hooks_of`, `options_of`, `declares`,
 `declared_id`, `name_of`, `Hook`); the seventeen `Hook*` constants and `NoWorkspaceProvider`; the grant
@@ -1091,7 +1095,7 @@ protocols (`Say`, `Ask`, `Invoke`, `Context`, `Peers`, `Commands`, `Locate`, `Wo
 workspaces (`Workspace`, `WorkspaceView`, `operation`, `operations_of`, `Lines`, `Match`, `Matches`,
 `GitWorktrees`, `WorkspaceBackend`); and the batteries
 (`OpenAIConnector`, `BasicAgentConnector`, `DeepAgentConnector`, `DatabaseBackend`, `ChatFrontend`, `ChatStyle`, `McpFrontend`,
-`McpConnector`, `HelpCommand`, `TestCommand`, `WorkspaceCommand`, `SimpleRouter`), with the keys and endpoints (`Endpoint`, `KeySource`,
+`McpConnector`, `HelpCommand`, `TestCommand`, `WorkspaceCommand`, `SimpleRouter`, `LLMRouter`), with the keys and endpoints (`Endpoint`, `KeySource`,
 `KeyUnavailable`, `Env`, `DotEnv`, `File`, `Keyring`, `Command`, `Literal`, `Chain`, `key`).
 
 **Both frontends are public, and both have a builder.** `ChatFrontend` (in `chatinho.frontends.chat`)
