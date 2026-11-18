@@ -8,6 +8,7 @@ Every route under ``/api`` needs a key in ``X-Hive-Key`` (the stream also takes
 import asyncio
 import json
 import logging
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime
 from importlib import resources
@@ -32,6 +33,31 @@ _KEY = APIKeyHeader(name=KEY_HEADER, auto_error=False,
 #: How often a quiet stream sends a comment, so a closed connection is noticed.
 HEARTBEAT : float = 15.0
 
+#: A key in a query string, as the page's stream passes it.
+_KEY_IN_QUERY = re.compile(r"([?&]key=)[^&\s]*")
+
+
+# @req REQ-HIVE-003, REQ-HIVE-007
+class _MaskKeys(logging.Filter):
+    """
+    Masks a key passed as ``?key=`` in what the access log writes.
+
+    uvicorn logs every request's path with its query string, and the page's
+    stream carries the admin key there, since a browser's EventSource sets no
+    headers: without this, every opened stream wrote the key to the log.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(_KEY_IN_QUERY.sub(r"\1***", arg) if isinstance(arg, str) else arg
+                                for arg in record.args)
+        if isinstance(record.msg, str):
+            record.msg = _KEY_IN_QUERY.sub(r"\1***", record.msg)
+        return True
+
+
+_MASK = _MaskKeys()
+
 
 # @req REQ-HIVE-003, REQ-HIVE-004, REQ-HIVE-005, REQ-HIVE-006, REQ-HIVE-007, REQ-HIVE-008, REQ-HIVE-009
 def create_app(db_url: str) -> FastAPI:
@@ -46,6 +72,9 @@ def create_app(db_url: str) -> FastAPI:
     """
     store = Store(db_url)
     live  = Live()
+    access = logging.getLogger("uvicorn.access")
+    if _MASK not in access.filters:
+        access.addFilter(_MASK)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:

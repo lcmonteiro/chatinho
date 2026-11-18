@@ -21,6 +21,7 @@ __all__ = [
 ]
 
 
+# @req REQ-BACK-009
 def __getattr__(name: str) -> Any:
     """Resolves ``DatabaseBackend`` on first use, so the hive's backend needs no SQLAlchemy (PEP 562)."""
     if name != "DatabaseBackend":

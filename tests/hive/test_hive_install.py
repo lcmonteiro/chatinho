@@ -5,6 +5,7 @@ Tests for installing and running the hive: behind chatinho[hive], and nothing of
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 
 from fakes.hive import free_port
@@ -72,3 +73,31 @@ def test_serving_answers_on_its_port(tmp_path):
     finally:
         proc.terminate()
         proc.wait(timeout=10)
+
+
+# The admin key rides on the stream's query string (a browser's EventSource sets no headers), and
+# uvicorn's access log writes every path with its query: the served log must hold it masked.
+def test_the_access_log_never_holds_a_key_from_the_query(tmp_path):
+    port = free_port()
+    db   = "sqlite:///%s" % (tmp_path / "hive.db")
+    key  = "hive_" + "ab" * 24
+    argv = [sys.executable, "-m", "chatinho.hive.cli", "serve", "--port", str(port), "--db", db]
+    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    try:
+        deadline = time.monotonic() + 20
+        while True:
+            try:
+                stream = "http://127.0.0.1:%d/api/chats/team/stream?key=%s" % (port, key)
+                urllib.request.urlopen(stream, timeout=1)
+            except urllib.error.HTTPError as refused:
+                assert refused.code == 401
+                break
+            except OSError:
+                if proc.poll() is not None or time.monotonic() > deadline:
+                    raise AssertionError("the hive did not answer")
+                time.sleep(0.2)
+    finally:
+        proc.terminate()
+        output = proc.communicate(timeout=10)[0].decode()
+    assert "/api/chats/team/stream?key=***" in output
+    assert key not in output
