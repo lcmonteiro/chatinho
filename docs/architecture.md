@@ -14,8 +14,8 @@ behind each decision.
 
 1. The framework
    - **framework** (`src/chatinho`: `session.py`, `hooks.py`, `message.py`,
-     `query.py`): `ChatSession`, the seventeen hooks and `@require`, the
-     messages and the `Query` over the conversation. Uses nothing else. Every
+     `query.py`): `ChatSession`, the nineteen hooks and `@require`, the
+     messages, the traces and the `Query` over the conversation. Uses nothing else. Every
      other capability declares its hooks here and is granted `say`, `ask`,
      `context` and the rest by the session.
 2. The parts (`support/parts`, standard library only, none imports another)
@@ -24,7 +24,7 @@ behind each decision.
    - **workspace-model**: what a workspace is: `Tree`, `@operation`,
      `WorkspaceView` and `Workspace`. Used by workspaces (which makes them) and
      agents (which turns the operations into tools).
-   - `memory.py` and `mcp.py` have no capability: they are what two
+   - `memory.py`, `mcp.py` and `hive.py` have no capability: they are what two
      specializations share, and carry the tags of whoever they serve.
 3. The kits (`support/kits`, may need an extra)
    - **agents**: `AgentPeer`, the chat around an agent, with its factories,
@@ -37,7 +37,13 @@ behind each decision.
    - **frontends**: who speaks for the person: `ChatFrontend` (the only
      package that imports Textual) and `McpFrontend`. Uses keys and `mcp.py`.
    - **backends**: `DatabaseBackend`, a peer that listens, loads, forgets, and
-     keeps and links attachments. Uses the framework only.
+     keeps and links attachments; `HiveBackend`, the same kept in a hive over
+     HTTP, with traces and an optional local cache. Uses the framework, keys
+     and `hive.py`.
+   - **hive**: the server every chat is kept and seen in: chats and keys, the
+     API `HiveBackend` speaks, a live stream per chat and the viewer page with
+     each message's trace graph. Uses the framework and `hive.py`; behind
+     `chatinho[hive]`.
    - **commands**: `/help`, `/test` and `/ws`. Uses the framework only; `/ws`
      is handed its provider.
    - **routers**: who answers a say that names nobody: `SimpleRouter`, the
@@ -72,6 +78,14 @@ layers.
   task; blocking work goes to a thread. (adopt)
 - **The core installs nothing**: names that need a library resolve on first
   use and a missing extra is an `ImportError` that names it. (adopt)
+- **A trace is not a message**: a step of processing a message goes from the
+  peer through the session to the backend that records it, never to anyone's
+  `listen`, `context()` or a model's memory. `AgentPeer` traces its runs, the
+  hive draws them. (add-observer-server)
+- **A chat and the hive share a wire, not code**: `HiveBackend` (a backend)
+  and the hive (its own specialization) both import `support/parts/hive.py`,
+  so neither imports the other, and a chat needs no extra to be kept in a
+  hive. (add-observer-server)
 - **Tests mirror the capabilities**: `tests/<capability>/`, with what crosses
   capabilities at the root of `tests/`. (adopt)
 
@@ -93,3 +107,7 @@ layers.
 - **Provider**: what makes workspaces (`GitWorktrees`).
 - **Part**: shared code on the standard library alone.
 - **Kit**: what a specialization is built from, possibly behind an extra.
+- **Trace**: one step of processing a message, following the trace before it;
+  never a message, kept by the backend that declared `HookRecord`.
+- **Hive**: the server every chat is kept and seen in; a chat there is a name
+  and a key.

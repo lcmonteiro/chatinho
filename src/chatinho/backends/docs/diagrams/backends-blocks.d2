@@ -3,6 +3,12 @@ direction: right
 session: session {
   shape: page
 }
+wire: support/parts/hive.py {
+  tooltip: "the JSON a chat and the hive exchange, the paths and the key header"
+}
+hive: the hive {
+  shape: cloud
+}
 backends: backends {
   db: database.py {
     backend: DatabaseBackend {
@@ -13,17 +19,32 @@ backends: backends {
     }
     tables: messages and attachments {
       shape: cylinder
-      tooltip: "ArchivedMessage keyed by message id; ArchivedAttachment keyed by (msg_id, name)"
-    }
-    files: temp directory {
-      shape: page
-      tooltip: "a file per linked attachment, removed at shutdown"
     }
     backend -> worker: work, awaited
     worker -> tables: merge, query, delete
-    worker -> files: written on the first link
+  }
+  remote: hive.py {
+    backend: HiveBackend {
+      tooltip: "listen, load, forget, keep, link, record; initialize and shutdown"
+    }
+    outbox: outbox {
+      tooltip: "in memory, or the cache's outbox table; bounded by queue_limit"
+    }
+    sender: sender task {
+      tooltip: "sends the outbox in order, in batches, retrying with backoff"
+    }
+    cache: hive_cache.py {
+      shape: cylinder
+      tooltip: "optional SQLite file: meta, messages, attachments, outbox"
+    }
+    backend -> outbox: messages, attachments, traces
+    sender -> outbox: takes in order, removes when accepted
+    backend -> cache: messages heard and loaded
   }
 }
 
-session -> backends.db.backend: every message (listen), attachments before posting (keep)
-session -> backends.db.backend: load at start, forget, link for locate
+session -> backends.db.backend: listen, keep; load, forget, link
+session -> backends.remote.backend: listen, keep, record; load, forget, link
+backends.remote.sender -> hive: HTTP, X-Hive-Key, off the loop
+backends.remote.backend -> hive: load, forget, link
+backends.remote -> wire: encodes and decodes

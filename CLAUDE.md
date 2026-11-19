@@ -631,7 +631,7 @@ src/chatinho/
       clipboard.py OSC 52's second route: a clipboard helper, if the system has one
       style.py     ChatStyle — dataclass CSS builder; use dataclasses.replace to tweak
 docs/              SPEC.md — the nineteen hooks, with an example and a cost for each;
-                   architecture.md — the ten capabilities and how they fit
+                   architecture.md — the eleven capabilities and how they fit
 .specworks/        config.yml (capabilities, commands, context), changes/ (active/, then archive/);
                    each capability's living spec is in its own <path>/docs/
 examples/          assistant.py, team.py, files.py (LLM demos: parts() + main()), lab_server.py / lab_client.py /
@@ -1219,7 +1219,7 @@ pytest -q
 The examples are type-checked because `examples/hooks.py` is `docs/SPEC.md` made executable, and
 an example that passes the wrong type teaches it to everyone who copies it.
 
-**New behavior is planned with specworks first.** The library is ten capabilities, registered
+**New behavior is planned with specworks first.** The library is eleven capabilities, registered
 in `.specworks/config.yml`, each with a living spec next to its code (`<path>/docs/spec.md`,
 `requirements.md`, `design.md`); `docs/architecture.md` draws them. A change goes through
 `/specworks-refine` → `/specworks-specify` → `/specworks-build` → `/specworks-done`, one at a time,
