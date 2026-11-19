@@ -2,38 +2,28 @@
 
 ## Why
 
-chatinho's loggers have no destination, so their records are lost (and while
-the terminal runs even warnings vanish into Textual's capture), and what is
-logged is mostly failures. Every chat run with `ChatSession.run()` writes a
-log file a person can read afterwards to follow what happened (refinement:
-Option A).
+The first round made every `ChatSession.run()` write a log file in the
+temporary directory, with nothing to turn it off. That was the wrong default:
+logging should be opt-in. Reopened so that the environment variable
+`CHATINHO_LOG_PATH` turns it on, and with no variable nothing is written
+(refinement: variable option A).
 
 ## What Changes
 
-- **`run()` writes the log file.** Before starting, `ChatSession.run()` adds
-  one handler to the `chatinho` logger that appends to
-  `<tempdir>/chatinho.<YYYY-MM-DD>.log` (`tempfile.gettempdir()`; the date the
-  handler was added, in local time), at DEBUG, one line per record with the
-  time, level, process id and logger name. No parameter and no environment
-  variable change it. It is added once per process: a second `run()` reuses
-  it. Records still reach the program's own handlers exactly as before: at
-  the levels they reached them before, never more.
-- **An unwritable directory costs the file, not the chat.** The chat runs
-  without the file and one line on stderr names the path and the reason.
-- **Nothing else configures logging.** `import chatinho`, `start()`/`close()`
-  driven by hand, and the test suite write no file.
-- **The session logs its events** at DEBUG or INFO: start and close, every
-  peer, command and role attached (name and id), every message posted (id,
-  sender, addressee, reply-to, status, length, number of attachments), each
-  ask's outcome, each command run, routing decisions, context loaded and
-  forgotten.
-- **The specializations log their own events:** `DatabaseBackend` and
-  `HiveBackend` what they load, forget and send; the OpenAI and MCP
-  connectors each request and its outcome with its duration; `AgentPeer`
-  each run, its duration and every rebuild of its graph; `GitWorktrees` each
-  merge and drop.
-- **No record holds message text, attachment content or a key**, in the
-  session or in any specialization.
+- **Logging is off unless `CHATINHO_LOG_PATH` is set.** Unset or empty,
+  `run()` writes no file and leaves logging exactly as it was. **BREAKING**
+  against the first round, which was never released: a chat that relied on
+  the file in the temporary directory now has to set the variable.
+- **`CHATINHO_LOG_PATH` names a directory**, and the file in it is still
+  `chatinho.<YYYY-MM-DD>.log`, at DEBUG. A directory that does not exist is
+  created for its owner only (0700); a file `run()` creates is owner-only
+  (0600) and an existing file keeps its mode, which was a review fix of the
+  first round and is now a requirement.
+- **`open_log()` reads the variable itself**, so nothing but the variable
+  turns logging on; `run()` is unchanged. `log_file()` takes the directory.
+- Everything else of the first round holds: once per process, off the loop,
+  only `chatinho`'s records, the program's own logging unchanged, no text and
+  no keys, every event record the session and the specializations write.
 
 ## Capabilities
 
@@ -43,63 +33,41 @@ None.
 
 ### Modified Capabilities
 
-- `framework`: adds the log file `run()` sets up, the session's event
-  records, and the rule that no record carries text or keys.
-- `backends`: adds the records `DatabaseBackend` and `HiveBackend` write of
-  what they load, forget and send.
-- `connectors`: adds a record of each model or server request and its
-  outcome.
-- `agents`: adds a record of each run and each graph build.
-- `workspaces`: adds a record of each merge and drop.
+- `framework`: REQ-CORE-034 is modified: the file is written only when
+  `CHATINHO_LOG_PATH` names a directory, in that directory.
 
 ## Related requirements
 
-- REQ-CORE-016 left: `run()` gains the file under its own requirement;
-  starting, serving and closing are unchanged.
-- REQ-CORE-012, REQ-CORE-017, REQ-CORE-023, REQ-CORE-024, REQ-CORE-032 left:
-  they mention logging a failure, which stays as it is; the new records sit
-  beside them.
-- REQ-BACK-009, REQ-BACK-012 left: the hive's key is still never logged, and
-  its refused-key error is unchanged.
-- REQ-ROUTE-003, REQ-ROUTE-009 left: routers keep their warnings; the
-  decision itself is logged by the session.
-- REQ-CONN-004 left: a lent key still wins; the new records name no key.
-- REQ-WSM-006, REQ-WSM-009 left: "log" there is `git log`, not logging.
-- REQ-WS-004 left: worktrees still outlive the chat; only the records are
-  new.
-- REQ-CONN-019, REQ-CONN-022, REQ-FRONT-001, REQ-FRONT-003, REQ-FRONT-004,
-  REQ-FRONT-005, REQ-FRONT-007, REQ-FRONT-014, REQ-FRONT-016, REQ-FRONT-020,
-  REQ-WSM-001 left: they match "log" as the chat log widget or a word in
-  passing; nothing about them changes.
+- REQ-CORE-034 modified: the variable decides whether and where the file is
+  written.
+- REQ-CORE-035, REQ-CORE-036 left: the session's records and the rule that
+  none carries text or keys are unchanged; they reach whatever handler is
+  there, the file or not.
+- REQ-BACK-014, REQ-CONN-025, REQ-AGENT-013, REQ-WS-006 left: the
+  specializations' records are unchanged.
+- REQ-CORE-016 left: starting, serving and closing are unchanged.
 
 ## Impact
 
-- `session.py` (setup in `run()`, event records), a new framework module for
-  the setup (stdlib `logging`, `logging.handlers`, `tempfile`), registered in
-  the framework layer of `tests/test_architecture.py`.
-- `backends/database.py`, `backends/hive.py`, `connectors/openai.py`,
-  `connectors/mcp.py`, `support/kits/agent/peer.py`, `workspaces/git.py`:
-  new log calls.
-- CLAUDE.md and the framework's living docs describe the file.
-- No new dependency, no API change, no new public name.
+- `src/chatinho/logs.py`: `open_log()` reads `CHATINHO_LOG_PATH`, makes the
+  directory, and `log_file(day, directory)` names the file.
+- `tests/framework/test_log_file.py`: the file tests set the variable
+  instead of the temporary directory.
+- `CLAUDE.md`, `docs/architecture.md` and the framework's living design say
+  logging is opt-in.
+- No new dependency, no new public name, `run()`'s signature unchanged.
 
 ## Out of Scope
 
-- The hive server (`chatinho-hive serve`): it keeps uvicorn's console output
-  and writes no file.
-- Moving, silencing or changing the level of the file: there is no parameter
-  or variable, by decision.
-- Rotation or cleanup of old log files.
-- New records in the routers, the commands and the frontends: what they do
-  reaches the session as a route, an invocation or a message, and the
-  session logs it there.
-- Converting every inherited f-string log call; only the calls touched are
-  brought to %-style.
+- A level variable, a file name of the caller's choosing, or a parameter on
+  `run()`: by decision, the variable is the only switch.
+- Rotation or cleanup of old files.
+- The hive server, as before.
 
 ## Assumptions
 
-- The date is the local date when the handler is added; a chat running past
-  midnight keeps writing to its first day's file.
-- The process id is what tells two chats sharing a day's file apart.
-- Writing is handed to a background thread (`QueueHandler` and
-  `QueueListener`), so a slow disk never blocks the loop.
+- The variable is read when `open_log()` is called, so each `run()` reads it
+  until a file has been opened; once open, the file stays for the process.
+- `~` in the value is not expanded: the shell expands it before the variable
+  is set, and a literal `~` is a directory named `~`.
+- The directory is created with its parents (`mkdir -p`), each owner-only.
