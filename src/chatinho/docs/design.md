@@ -98,6 +98,27 @@ assembly on top of it: the two builders and the public names.
   as messages with a status were set aside: they would have entered
   `context()`, every model's memory and the terminal log. A recorder that
   raises is logged and the step goes on. (add-observer-server)
+- **A chat that runs writes a log; nothing else configures logging**
+  (REQ-CORE-034). `run()` calls `open_log()` (`logs.py`, a framework module
+  because the framework imports only itself), which sends every `chatinho`
+  record from DEBUG up to `chatinho.<date>.log` in `tempfile.gettempdir()`,
+  appended to, through a `QueueListener` thread so a slow disk never holds up
+  the loop. Opened once per process; a file it creates is the owner's alone
+  (0600, found in review). No parameter or variable moves or silences it, by
+  decision. Importing chatinho and driving `start`/`close` open nothing.
+  (add-logging)
+- **The program's logging gets what it got before** (REQ-CORE-034). The
+  `chatinho` logger goes to DEBUG for the file and stops propagating; a
+  handler of its own forwards a record to the root logger only at the level
+  the program gave `chatinho`, or else the root's, read at each record.
+  Leaving propagation on would flood a program's console, since `basicConfig`
+  sets the level on the logger, not the handler. (add-logging)
+- **Records carry ids, counts, states and durations, never text or keys**
+  (REQ-CORE-035, REQ-CORE-036). The session logs attach, `started` (naming the
+  roster as `name=id`, since peers are attached before `run()` opens the
+  file), `closed`, every `posted` message, each ask `answered` with its
+  status, each command `ran`, each routing decision and each `forgot`. A
+  traceback is logged as the exception wrote it. (add-logging)
 - **The core installs nothing** (REQ-CORE-028, REQ-CORE-029). A name behind
   an extra resolves when first read off the package, and a missing extra is
   an `ImportError` that names it. The defaults (a frontend, `SimpleRouter`)
@@ -130,6 +151,7 @@ assembly on top of it: the two builders and the public names.
   `TypeError` (a bad declaration, a string where a `Reply` is due),
   `KeyError` (no such workspace), `NoWorkspaceProvider`, `ImportError`
   naming the missing extra.
+- `logs.py`: `LOG_FORMAT`, `log_file(day=None) -> Path`, `open_log() -> Optional[Path]`, `close_log()`; not exported from `chatinho` (REQ-CORE-034).
 
 ## Constraints
 

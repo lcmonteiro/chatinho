@@ -62,6 +62,12 @@ is `support/parts/hive.py`'s, shared with the hive.
   cannot. A file made for another hive's URL is refused. (add-observer-server)
 - **The hive shows names**: each record carries `frm_name` from `peers()`
   when sent, since ids last one session. (add-observer-server)
+- **The archives log what they do by counts, never by content**
+  (REQ-BACK-014). Both log each load and forget with their counts and each
+  attachment kept or linked by message id and name; `HiveBackend` logs each
+  batch sent with what still waits. `DatabaseBackend` logs its URL with the
+  password masked (found in review), and the hive's key is never logged.
+  (add-logging)
 - **An unknown keyword is an error** (REQ-BACK-004). `ecoh=True` used to be
   swallowed into a config nothing read. (baseline-backends)
 
