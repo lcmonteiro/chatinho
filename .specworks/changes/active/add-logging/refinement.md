@@ -11,12 +11,19 @@ lost. What is logged is mostly failures, and most of what a chat does
 going) is not logged at all. Multi-peer chats and the hive have made "what
 happened, in what order" hard to answer from the screen alone.
 
+**Reopened after close:** always writing a file was the wrong default. The
+user wants an environment variable, `CHATINHO_LOG_PATH`, to turn logging on;
+when it is not set, logging is off.
+
 ## Outcomes
 
-- After any `ChatSession.run()`, the file `chatinho.<YYYY-MM-DD>.log` exists
-  in the system's temporary directory (`/tmp` on Linux and macOS,
-  `$PREFIX/tmp` on Termux), dated by the day the chat started and appended
-  to.
+- Logging is off unless `CHATINHO_LOG_PATH` is set: with the variable unset
+  or empty, `ChatSession.run()` writes no file and leaves logging exactly as
+  it was before this change.
+- With `CHATINHO_LOG_PATH=<dir>`, `run()` appends to
+  `<dir>/chatinho.<YYYY-MM-DD>.log`, dated by the day the chat started. A
+  directory that does not exist is created, for its owner only; a file it
+  creates is its owner's only.
 - It holds chatinho's records at DEBUG, one per line, each with the time,
   the level, the process and where it came from, so two chats sharing a
   day's file can be told apart.
@@ -26,11 +33,11 @@ happened, in what order" hard to answer from the screen alone.
   forget; the hive going down and coming back; every failure with its
   traceback.
 - The file never holds message text, attachment content or a key.
-- Logging is always on: there is no parameter or variable to move or silence
-  it.
+- The variable is the only switch: no parameter, and no second variable for
+  the level.
 - `import chatinho`, the test suite, and code that drives `start()`/`close()`
   itself write no file.
-- When the temporary directory cannot be written, the chat runs anyway,
+- When the directory cannot be created or written, the chat runs anyway,
   without the file, and says so once on stderr.
 - A program that configured logging itself still receives chatinho's
   records; chatinho's file holds only chatinho's records.
@@ -55,16 +62,20 @@ happened, in what order" hard to answer from the screen alone.
 - `tests/test_architecture.py` requires every file at the package root to
   belong to a layer.
 
+- (After close) `logs.py` holds `open_log()`, called by `run()`, which today
+  always writes to `tempfile.gettempdir()`; `log_file(day)` names the file;
+  the file and directory tests set `tempfile.tempdir`.
+
 **Assumed:**
-- `tempfile.gettempdir()` resolves `/tmp` on Linux/macOS and `$TMPDIR` on
-  Termux, which is what "the system's tmp directory" means here.
 - Events and ids without text keep a busy day's file at a few megabytes, so
   no rotation is needed.
 
 ## Constraints
 
-- [hard] The file goes to `<tempdir>/chatinho.<date>.log`; no parameter, no
-  environment variable, no way to turn it off.
+- [hard] Logging is off by default; `CHATINHO_LOG_PATH` names the directory
+  that turns it on, and it is the only switch. An empty value is unset.
+- [hard] The file inside it is always `chatinho.<date>.log`; the level stays
+  DEBUG.
 - [hard] Only `ChatSession.run()` sets it up; importing chatinho configures
   nothing (Python's rule for libraries).
 - [hard] The handler is attached to the `chatinho` logger, not the root, and
@@ -118,20 +129,29 @@ A peer declaring `HookListen` that logs every message it hears.
 - **Touches:** the specializations
 - **Outcomes:** fails "the file is enough to follow a chat".
 
+### After reopening: where the variable is read
+
+- **Variable option A: `open_log()` reads `CHATINHO_LOG_PATH`** and returns
+  None when it is unset; `log_file(day, directory)` names the file; `run()`
+  is unchanged. One module owns the whole decision, and nothing but the
+  variable can turn logging on. Meets every outcome. Effort: S. Touches:
+  framework.
+- **Variable option B: `run()` reads it** and passes the directory to
+  `open_log(directory)`. Meets every outcome too, but makes `open_log`
+  usable without the variable, a second way to turn logging on. Effort: S.
+  Touches: framework.
+
 ## Recommendation
 
 Option A, agreed: it is the only one that meets every outcome without
-adding a peer to the room.
+adding a peer to the room. After reopening: variable option A, agreed:
+`open_log()` reads `CHATINHO_LOG_PATH` itself.
 
 ## Open Questions
 
-- The exact line format, and the field that names a chat when several share
-  a day's file (process id, a session id, the frontend's name). (who can
-  answer: design)
-- Where the setup function lives in the layers (in the framework beside
-  `session.py`, or a stdlib part). (who can answer: design)
-- The exact list of events each specialization logs, and their levels.
-  (who can answer: specify)
+None: the line format, the setup's place in the layers and the events each
+specialization logs were settled in the first design, and the variable's
+meaning, a missing directory and the level were settled after reopening.
 
 ## Candidate Capabilities
 
