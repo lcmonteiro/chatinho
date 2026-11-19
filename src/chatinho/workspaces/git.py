@@ -239,13 +239,19 @@ class GitWorktrees:
             finally:
                 await run_git(top, "worktree", "remove", "--force", str(temporary), check=False)
 
+    # @req REQ-WS-006
     async def _merge_in(self, where: Path, name: str) -> str:
         try:
-            return await run_git(where, *self._identity, "merge", "--no-edit", BRANCH_PREFIX + name)
+            said = await run_git(where, *self._identity, "merge", "--no-edit", BRANCH_PREFIX + name)
         except GitError:
             conflicted = await run_git(where, "diff", "--name-only", "--diff-filter=U", check=False)
             await run_git(where, "merge", "--abort", check=False)
-            raise MergeConflict(name, [p for p in conflicted.splitlines() if p])
+            paths = [p for p in conflicted.splitlines() if p]
+            logger.warning("Merging %s's workspace (%s) into %s failed: it conflicts in %s", name,
+                           BRANCH_PREFIX + name, self.base, ", ".join(paths) or "nothing git named")
+            raise MergeConflict(name, paths)
+        logger.info("merged %s's workspace (%s) into %s", name, BRANCH_PREFIX + name, self.base)
+        return said
 
     async def _checked_out(self, branch: str) -> Optional[Path]:
         """The worktree that has *branch* checked out, or None."""
@@ -271,9 +277,14 @@ class GitWorktrees:
             raise KeyError(name)
         top = await self._started()
         async with self._opening:
-            await run_git(top, "worktree", "remove", "--force", str(top / WORKTREES / name))
-            await run_git(top, "branch", "-D", BRANCH_PREFIX + name)
+            try:
+                await run_git(top, "worktree", "remove", "--force", str(top / WORKTREES / name))
+                await run_git(top, "branch", "-D", BRANCH_PREFIX + name)
+            except GitError as exc:
+                logger.warning("Dropping %s's workspace (%s) failed: %s", name, BRANCH_PREFIX + name, exc)
+                raise
             self._trees.pop(name, None)
+            logger.info("dropped %s's workspace (%s)", name, BRANCH_PREFIX + name)
 
 
 # @req REQ-WS-004

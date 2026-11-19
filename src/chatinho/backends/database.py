@@ -202,7 +202,10 @@ class DatabaseBackend:
         Returns:
             List[ChatMessage]: Rebuilt messages, oldest first.
         """
-        return await self._off_loop(self._read, since, limit)
+        loaded = await self._off_loop(self._read, since, limit)
+        # @req REQ-BACK-014
+        logger.debug("loaded %d messages since %s, limit %s", len(loaded), since, limit)
+        return loaded
 
     # @req REQ-BACK-003
     async def forget(self, before: Optional[datetime] = None) -> int:
@@ -215,7 +218,9 @@ class DatabaseBackend:
         Returns:
             int: How many rows were dropped.
         """
-        return await self._off_loop(self._forget, before)
+        gone = await self._off_loop(self._forget, before)
+        logger.info("forgot %d messages before %s", gone, before)
+        return gone
 
     # === What messages carry =========================================================
 
@@ -229,6 +234,7 @@ class DatabaseBackend:
             attachments: What its speaker attached.
         """
         await self._off_loop(self._keep, str(msg_id), tuple(attachments))
+        logger.debug("kept %s of %s", ", ".join(a.name for a in attachments), msg_id)
 
     # @req REQ-BACK-007
     async def link(self, msg_id: MessageID, name: str) -> Optional[str]:
@@ -245,7 +251,9 @@ class DatabaseBackend:
         Returns:
             Optional[str]: The link, or None when nothing by that name was kept.
         """
-        return await self._off_loop(self._link, str(msg_id), name)
+        link = await self._off_loop(self._link, str(msg_id), name)
+        logger.debug("linked %s of %s: %s", name, msg_id, "found" if link else "not found")
+        return link
 
     # === Internals ==================================================================
 

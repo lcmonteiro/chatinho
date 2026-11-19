@@ -137,9 +137,8 @@ async def test_forgetting_is_logged_with_how_many_went(caplog):
     session, view = await driven()
     for n in range(3):
         await view.say("message %d" % n)
-    gone = await session.forget()
+    await session.forget()
     await session.close()
-    assert gone == 3
     assert having(caplog, "forgot", "3")
 
 

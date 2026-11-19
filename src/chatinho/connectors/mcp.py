@@ -15,6 +15,7 @@ is up to whoever builds the system.
 """
 
 import logging
+import time
 from typing import Any, Dict, Mapping, Optional
 
 import mcp_types as types
@@ -105,6 +106,8 @@ class McpConnector:
             lent: source for lent, value in (delegate or {}).items()
             if (source := to_source(value)) is not None}
         self._client     : Any = self._make_client()
+        #: The name the server gave itself, once it has been reached: what its log records name.
+        self._server_name : Optional[str] = None
 
     # === Lifecycle ==================================================================
 
@@ -133,7 +136,13 @@ class McpConnector:
     # @req REQ-CONN-008
     async def answer(self, msg: ChatMessage) -> Reply:
         """A question asked of it; its text goes to the remote peer as it is."""
-        return await self._ask_remote(msg.text)
+        began = time.monotonic()
+        reply = await self._ask_remote(msg.text)
+        # @req REQ-CONN-025
+        server = self._server_name or self._url or "its server"
+        logger.info("%s asked %s for %s: took %.2fs, %s", self.name, server, msg.id,
+                    time.monotonic() - began, reply.status.value)
+        return reply
 
     # === One question ===============================================================
 
@@ -142,6 +151,8 @@ class McpConnector:
         """Asks the remote session, and turns whatever happens into one reply."""
         try:
             async with self._client as client:
+                info = client.server_info
+                self._server_name = (info.name if info is not None else None) or self._server_name
                 if client.protocol_version not in MODERN_PROTOCOL_VERSIONS:
                     raise RuntimeError("The server speaks only the handshake-era MCP protocol")
                 peer = self.peer or await self._only_peer(client)

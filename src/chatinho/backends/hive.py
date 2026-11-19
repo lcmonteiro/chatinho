@@ -187,6 +187,7 @@ class HiveBackend:
     # @req REQ-BACK-010, REQ-BACK-013
     async def keep(self, msg_id: MessageID, attachments: Sequence[Attachment]) -> None:
         """Puts *attachments* in the outbox, under *msg_id*."""
+        logger.debug("kept %s of %s for the hive", ", ".join(a.name for a in attachments), msg_id)
         for item in attachments:
             await self._put(("attachment", {"msg_id": str(msg_id), "name": item.name,
                                             "media_type": item.media_type,
@@ -215,6 +216,8 @@ class HiveBackend:
             wires = json.loads(body)["messages"]
             if self._store is not None:
                 await asyncio.to_thread(self._store.put_messages, wires)
+            # @req REQ-BACK-014
+            logger.debug("loaded %d messages from the hive at %s", len(wires), self.url)
             return [message_from_wire(w) for w in wires]
         except _Refused as exc:
             logger.error("The hive at %s refused the chat's key (%s)", self.url, exc)
@@ -243,7 +246,9 @@ class HiveBackend:
             raise HiveUnavailable("The hive at %s could not forget: %s" % (self.url, exc)) from None
         if self._store is not None:
             await asyncio.to_thread(self._store.forget, before)
-        return int(json.loads(body)["forgotten"])
+        gone = int(json.loads(body)["forgotten"])
+        logger.info("forgot %d messages before %s in the hive at %s", gone, before, self.url)
+        return gone
 
     # @req REQ-BACK-010, REQ-BACK-011, REQ-BACK-013
     async def link(self, msg_id: MessageID, name: str) -> Optional[str]:
@@ -259,6 +264,7 @@ class HiveBackend:
         if data is None and self._store is not None:
             found = await asyncio.to_thread(self._store.attachment, str(msg_id), name)
             data  = None if found is None else found[1]
+        logger.debug("linked %s of %s: %s", name, msg_id, "not found" if data is None else "found")
         if data is None:
             return None
         if self._files is None:
@@ -344,6 +350,8 @@ class HiveBackend:
                 self._said_refused = False
             wait = FIRST_WAIT
             await self._drop(len(run))
+            logger.debug("sent %d %s%s to the hive at %s, %d waiting", len(run), kind,
+                         "" if len(run) == 1 else "s", self.url, await self._waiting())
 
     async def _woken_to_close(self) -> None:
         """Returns once the backend is closing: a wait between retries ends early then."""

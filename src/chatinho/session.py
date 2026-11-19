@@ -109,6 +109,8 @@ class ChatSession:
         self._connectors  : Dict[int, Any] = {}
         #: Asks still waiting for their answer, by the id of the question.
         self._pending     : Dict[MessageID, "asyncio.Future[ChatMessage]"] = {}
+        #: How many attachments each message about to be posted carried, for its log record.
+        self._attached    : Dict[MessageID, int] = {}
         #: Every trace id this session made: what a later trace may follow.
         self._traced      : Set[TraceID] = set()
         #: Peers that start() has started; deliveries to the others are held.
@@ -159,12 +161,14 @@ class ChatSession:
             # Not a peer, as a command is not: no id, nothing addressed to it,
             # in nobody's roster. It reads the room through what it declared.
             self._grant(router, TOOL)
+            logger.info("attached %s as the router", name_of(router))
         if workspaces is not None:
             if not declares(workspaces, HookProvision):
                 raise TypeError("%r does not declare %s: a workspace provider must @require(HookProvision)"
                                 % (workspaces, HookProvision))
             # A role like the router's: no id, in no roster, and it hears nothing.
             self._grant(workspaces, TOOL)
+            logger.info("attached %s as the workspace provider", name_of(workspaces))
 
     # === Peers ===============================================================
 
@@ -205,6 +209,7 @@ class ChatSession:
         connector.peer_id = at
         self._connectors[at] = connector
         self._grant(connector, at)
+        logger.info("attached %s as peer %d", name_of(connector), at)
         return at
 
     # @req REQ-CORE-026
@@ -265,6 +270,7 @@ class ChatSession:
         self.commands[name] = cmd
         # TOOL, not LOCAL: what a command writes is not the user speaking.
         self._grant(cmd, TOOL)
+        logger.info("attached command %s", name)
         return name
 
     # @req REQ-CORE-013
@@ -290,6 +296,7 @@ class ChatSession:
                 frm=frm, to=TOOL,
             )
             await self._post(asked)
+            logger.debug("ran %s by %d as %s", name, frm, asked.id)
             try:
                 reply = await cmd.execute(args, by=frm)
             except Exception:
@@ -508,11 +515,13 @@ class ChatSession:
             logger.error("Routing %s failed; it goes to nobody", msg.id, exc_info=True)
             return None
         if at is None:
+            logger.debug("routed %s to nobody", msg.id)
             return None
         who = self._connectors.get(at)
         if at == msg.frm or who is None or not declares(who, HookAnswer):
             logger.warning("Ignored the router's %r for %s: not another peer that answers", at, msg.id)
             return None
+        logger.debug("routed %s to %d", msg.id, at)
         return at
 
     # @req REQ-CORE-007
@@ -532,8 +541,12 @@ class ChatSession:
             try:
                 await self._post(msg)
                 answered = await future
+            except BaseException as exc:
+                logger.warning("answered %s: never (%s)", msg.id, type(exc).__name__)
+                raise
             finally:
                 self._pending.pop(msg.id, None)
+            logger.debug("answered %s with %s as %s", msg.id, answered.id, answered.status.value)
             # The status says whether it answered, asked back or failed; what
             # the answer attached is with the backend, under its id.
             return Reply(answered.text, status=answered.status)
@@ -555,6 +568,7 @@ class ChatSession:
         """
         if not attachments:
             return
+        self._attached[msg.id] = len(attachments)
         keeper = self._first(HookKeep)
         if keeper is None:
             logger.debug("No backend keeps attachments; dropping %d of %s", len(attachments), msg.id)
@@ -580,6 +594,10 @@ class ChatSession:
         everyone who listens hears it.
         """
         self._store.add(msg)
+        # @req REQ-CORE-035, REQ-CORE-036: ids, status and sizes; never the text.
+        logger.debug("posted %s from %d to %s replying to %s, %s, %d chars, %d attachments",
+                     msg.id, msg.frm, "nobody" if msg.to is None else msg.to, msg.reply_to or "nothing",
+                     msg.status.value, len(msg.text), self._attached.pop(msg.id, 0))
         # Only the peer the question is addressed to resolves its ask: anyone
         # else's reply is heard like any message, and the ask keeps waiting.
         question = self._store.find(msg.reply_to) if msg.reply_to else None
@@ -813,7 +831,11 @@ class ChatSession:
                 await self._initialize(who)
         if not self._started:
             self._started = True
-            await self._recall()
+            loaded = await self._recall()
+            # The roster again: a log file opened by run() opens after the peers were attached.
+            peers = ", ".join("%s=%d" % (name_of(who), at) for at, who in sorted(self._connectors.items()))
+            logger.info("started with peers %s and commands %s, loaded %d messages", peers or "none",
+                        ", ".join(sorted(self.commands)) or "none", loaded)
         if self._closed:
             return
         self._running.update(self._connectors)
@@ -864,6 +886,7 @@ class ChatSession:
                 future.set_exception(RuntimeError("the chat closed"))
         self._pending.clear()
         await self._shutdown()
+        logger.info("closed")
 
     # @req REQ-CORE-017
     async def _shutdown(self) -> None:
@@ -901,22 +924,28 @@ class ChatSession:
     # === The older tier =============================================================
 
     # @req REQ-CORE-019
-    async def _recall(self) -> None:
+    async def _recall(self) -> int:
         """
         Pulls the tail of the archive back into the session.
 
         Called once by :meth:`start`, before anyone can ask for context, so a
         chat reopens where it left off. A backend that cannot recall is not an
         error: it simply has nothing to give back.
+
+        Returns:
+            int: How many messages came back.
         """
         holder = self._first(HookLoad)
         if holder is None:
-            return
+            return 0
+        loaded = 0
         try:
             for msg in await holder.load(limit=self.recall):
                 self._store.add(msg)
+                loaded += 1
         except Exception:
             logger.error("Loading the older context failed; starting empty", exc_info=True)
+        return loaded
 
     # @req REQ-CORE-024
     async def locate(self, msg_id: MessageID, name: str) -> Optional[str]:
@@ -957,8 +986,8 @@ class ChatSession:
         Returns:
             int: How many the backend dropped, or zero when there is none.
         """
-        self._store.forget(before)
-        holder = self._first(HookForget)
-        if holder is None:
-            return 0
-        return await holder.forget(before=before)
+        dropped = self._store.forget(before)
+        holder  = self._first(HookForget)
+        archived = 0 if holder is None else await holder.forget(before=before)
+        logger.info("forgot %d messages here, %d in the archive", dropped, archived)
+        return archived
