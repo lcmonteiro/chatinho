@@ -1,11 +1,12 @@
 """
-Tests for the log file a chat that runs writes: where it is, what it holds, and what it leaves alone.
+Tests for the log file a chat that runs writes when ``CHATINHO_LOG_PATH`` asks it to.
 
-Each test points the temporary directory at its own folder and closes the log after itself, so
-every test opens a file of its own.
+Each test points the variable at a folder of its own, or removes it, and closes the log after itself,
+so every test opens a file of its own.
 """
 
 import logging
+import os
 import subprocess
 import sys
 import tempfile
@@ -15,13 +16,26 @@ from typing import List, Tuple
 import pytest
 
 from chatinho import connector
-from chatinho.logs import close_log, log_file
+from chatinho.logs import LOG_PATH_VARIABLE, close_log, log_file
 from chatinho.session import ChatSession
+
+TODAY = "chatinho.%s.log" % date.today().isoformat()
 
 
 @pytest.fixture
-def tmp(tmp_path, monkeypatch):
-    """The temporary directory, pointed at this test's folder; the log closed afterwards."""
+def logs(tmp_path, monkeypatch):
+    """``CHATINHO_LOG_PATH`` set to a folder of this test's; the log closed afterwards."""
+    folder = tmp_path / "logs"
+    folder.mkdir()
+    monkeypatch.setenv(LOG_PATH_VARIABLE, str(folder))
+    yield folder
+    close_log()
+
+
+@pytest.fixture
+def unset(tmp_path, monkeypatch):
+    """No ``CHATINHO_LOG_PATH``, and the temporary directory pointed at this test's folder."""
+    monkeypatch.delenv(LOG_PATH_VARIABLE, raising=False)
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     yield tmp_path
     close_log()
@@ -47,10 +61,14 @@ def run(*records: Tuple[str, int, str]) -> Logging:
     return peer
 
 
-def lines(tmp) -> List[str]:
+def lines(folder) -> List[str]:
     close_log()                       # flushes what the writer thread still holds
-    path = tmp / ("chatinho.%s.log" % date.today().isoformat())
+    path = folder / TODAY
     return path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+
+def every_log(root) -> List[str]:
+    return sorted(str(p) for p in root.rglob("chatinho.*.log"))
 
 
 class Collect(logging.Handler):
@@ -63,38 +81,38 @@ class Collect(logging.Handler):
 
 
 # @ac AC-CORE-034.1
-def test_a_chat_that_runs_writes_its_records_to_todays_file(tmp):
-    assert log_file() == tmp / ("chatinho.%s.log" % date.today().isoformat())
+def test_a_chat_that_runs_writes_its_records_to_todays_file(logs):
+    assert LOG_PATH_VARIABLE == "CHATINHO_LOG_PATH"
+    assert log_file(logs) == logs / TODAY
     run(("chatinho.test", logging.DEBUG, "the first step"))
-    found = [line for line in lines(tmp) if "the first step" in line]
+    found = [line for line in lines(logs) if "the first step" in line]
     assert len(found) == 1
     line = found[0]
     assert " DEBUG " in line
-    assert "[%d]" % __import__("os").getpid() in line
+    assert "[%d]" % os.getpid() in line
     assert "chatinho.test" in line
     assert line[:4] == str(date.today().year)           # the time leads the line
 
 
 # @ac AC-CORE-034.2
-def test_the_file_is_appended_to_and_no_record_is_written_twice(tmp):
-    path = tmp / ("chatinho.%s.log" % date.today().isoformat())
-    path.write_text("an earlier line\n", encoding="utf-8")
+def test_the_file_is_appended_to_and_no_record_is_written_twice(logs):
+    (logs / TODAY).write_text("an earlier line\n", encoding="utf-8")
     run(("chatinho.test", logging.INFO, "first run"))
     run(("chatinho.test", logging.INFO, "second run"))
-    held = lines(tmp)
+    held = lines(logs)
     assert held[0] == "an earlier line"
     assert sum("first run" in line for line in held) == 1
     assert sum("second run" in line for line in held) == 1
 
 
 # @ac AC-CORE-034.3
-async def test_start_and_close_by_hand_write_no_file(tmp):
+async def test_start_and_close_by_hand_write_no_file(logs):
     peer    = Logging(("chatinho.test", logging.WARNING, "by hand"))
     session = ChatSession(connectors=[peer])
     await session.start()
     await peer.serve()
     await session.close()
-    assert not list(tmp.glob("chatinho.*.log"))
+    assert not every_log(logs)
 
 
 # @ac AC-CORE-034.3
@@ -104,21 +122,21 @@ def test_importing_chatinho_writes_no_file(tmp_path):
          "import logging, chatinho\n"
          "from chatinho import ChatSession, build_chat_session\n"
          "logging.getLogger('chatinho.test').warning('imported')\n"],
-        capture_output=True, text=True, env={**__import__("os").environ, "TMPDIR": str(tmp_path)})
+        capture_output=True, text=True, env={**os.environ, LOG_PATH_VARIABLE: str(tmp_path)})
     assert done.returncode == 0, done.stderr
-    assert not list(tmp_path.glob("chatinho.*.log"))
+    assert not every_log(tmp_path)
 
 
 # @ac AC-CORE-034.4
-def test_only_chatinhos_records_are_written(tmp):
+def test_only_chatinhos_records_are_written(logs):
     run(("chatinho.test", logging.INFO, "ours"), ("elsewhere", logging.WARNING, "theirs"))
-    held = lines(tmp)
+    held = lines(logs)
     assert any("ours" in line for line in held)
     assert not any("theirs" in line for line in held)
 
 
 # @ac AC-CORE-034.5
-def test_the_programs_own_logging_gets_what_it_got_before(tmp):
+def test_the_programs_own_logging_gets_what_it_got_before(logs):
     root     = logging.getLogger()
     program  = Collect()
     level    = root.level
@@ -133,36 +151,68 @@ def test_the_programs_own_logging_gets_what_it_got_before(tmp):
     got = [r.getMessage() for r in program.records if r.name.startswith("chatinho")]
     assert "for everyone" in got
     assert "only for the file" not in got
-    held = lines(tmp)
+    held = lines(logs)
     assert any("only for the file" in line for line in held)
     assert any("for everyone" in line for line in held)
 
 
 # @ac AC-CORE-034.6
-def test_a_directory_that_cannot_be_written_costs_the_file_not_the_chat(tmp, monkeypatch, capsys):
-    missing = tmp / "not" / "there"
-    monkeypatch.setattr(tempfile, "tempdir", str(missing))
-    peer = run(("chatinho.test", logging.INFO, "still running"))
+def test_a_path_that_cannot_be_a_directory_costs_the_file_not_the_chat(tmp_path, monkeypatch, capsys):
+    blocked = tmp_path / "a-file"
+    blocked.write_text("not a directory")
+    monkeypatch.setenv(LOG_PATH_VARIABLE, str(blocked))
+    try:
+        peer = run(("chatinho.test", logging.INFO, "still running"))
+    finally:
+        close_log()
     assert peer.served
-    err = capsys.readouterr().err
-    said = [line for line in err.splitlines() if str(missing) in line]
+    said = [line for line in capsys.readouterr().err.splitlines() if str(blocked / TODAY) in line]
     assert len(said) == 1
-    assert not missing.exists()
+    assert blocked.read_text() == "not a directory"
 
 
-# The temporary directory is shared, so a file the chat creates is its owner's alone, and one that
-# was already there keeps its mode (found in review, R2).
+# @ac AC-CORE-034.7
+def test_with_the_variable_unset_logging_is_off(unset):
+    chatinho = logging.getLogger("chatinho")
+    before   = (chatinho.level, list(chatinho.handlers), chatinho.propagate)
+    peer = run(("chatinho.test", logging.WARNING, "nowhere to go"))
+    assert peer.served
+    assert (chatinho.level, list(chatinho.handlers), chatinho.propagate) == before
+    assert not every_log(unset)
+
+
+# @ac AC-CORE-034.8
+def test_an_empty_variable_is_unset(unset, monkeypatch):
+    monkeypatch.setenv(LOG_PATH_VARIABLE, "")
+    chatinho = logging.getLogger("chatinho")
+    before   = (chatinho.level, list(chatinho.handlers), chatinho.propagate)
+    run(("chatinho.test", logging.WARNING, "nowhere to go"))
+    assert (chatinho.level, list(chatinho.handlers), chatinho.propagate) == before
+    assert not every_log(unset)
+
+
+# @ac AC-CORE-034.9
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes")
-def test_a_new_log_file_is_readable_by_its_owner_only(tmp):
-    run(("chatinho.test", logging.INFO, "private"))
-    path = tmp / ("chatinho.%s.log" % date.today().isoformat())
+def test_a_missing_directory_is_made_for_its_owner(tmp_path, monkeypatch):
+    folder = tmp_path / "state" / "chatinho"
+    monkeypatch.setenv(LOG_PATH_VARIABLE, str(folder))
+    try:
+        run(("chatinho.test", logging.INFO, "made"))
+    finally:
+        close_log()
+    assert folder.is_dir()
+    assert folder.stat().st_mode & 0o777 == 0o700
+    path = folder / TODAY
     assert path.stat().st_mode & 0o777 == 0o600
+    assert any("made" in line for line in path.read_text().splitlines())
 
 
+# @ac AC-CORE-034.10
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes")
-def test_an_existing_log_file_keeps_its_mode(tmp):
-    path = tmp / ("chatinho.%s.log" % date.today().isoformat())
+def test_an_existing_log_file_keeps_its_mode(logs):
+    path = logs / TODAY
     path.write_text("")
     path.chmod(0o640)
     run(("chatinho.test", logging.INFO, "shared"))
     assert path.stat().st_mode & 0o777 == 0o640
+    assert any("shared" in line for line in lines(logs))
