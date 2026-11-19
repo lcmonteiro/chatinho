@@ -26,10 +26,11 @@ reading the diff. `- [ ] R<n>` while open, `- [x] R<n>` once resolved. Write
   - **Decision**: back to design only: bring the Interfaces entries for hive_cache.py and store.py in line with the code
   - done in design: Interfaces now name HiveCache(path, url, limit) and its methods, MemoryOutbox and Item, Store's NameTaken, Caller, has_chat, has_message and close, Live's unsubscribe and events, and python -m chatinho.hive.cli
   - confirmed in review: Interfaces match hive_cache.py, store.py, live.py and the CLI
-- [ ] R5 **code-gap** RunTracer starts a tool after the last step that ended in the same parent, so when one of two parallel tool calls ends before the other's start is traced, the second follows the first tool's end instead of the model call that asked for both; AC-AGENT-012.3 fails about one run in three of the full suite (src/chatinho/support/kits/agent/tracing.py:150)
+- [x] R5 **code-gap** RunTracer starts a tool after the last step that ended in the same parent, so when one of two parallel tool calls ends before the other's start is traced, the second follows the first tool's end instead of the model call that asked for both; AC-AGENT-012.3 fails about one run in three of the full suite (src/chatinho/support/kits/agent/tracing.py:150)
   - **Proposal**: back to code: a tool call's start follows the end of the last model call inside the same parent (the one that asked for it), whatever ended since; other steps keep following the last step that ended
   - **Decision**: back to code: a tool call's start follows the end of the last model call inside the same parent (the one that asked for it), whatever ended since; other steps keep following the last step that ended
   - done in code: RunTracer keeps the end of the last model call per parent and starts a tool call after it; driving the tracer by hand with the first tool ending before the second starts links both to the model call (it did not before)
+  - confirmed in review: tool calls follow the model call that asked for them; the full suite passed three runs in a row, and the race forced by hand links both tools to the model call
 
 ## Changed files without tags
 
@@ -43,6 +44,8 @@ finding that covers it. -->
 
 ## Summary
 
-The suite passes (956, the browser test skipped). Four findings, none against the specs: the admin
-key leaks into uvicorn's access log through the stream's `?key=` (R1), a missing tag (R2), a browser
-test that only runs where Playwright does (R3), and Interfaces entries that drifted (R4).
+Cycle 1 found four: the admin key leaking into uvicorn's access log through the stream's `?key=`
+(R1, now masked and tested), a missing tag (R2), a browser test that runs only where Playwright does
+(R3, accepted), and Interfaces that drifted (R4, updated). Cycle 2's suite found R5: parallel tool
+calls could be traced as a chain under load; a tool now follows the model call that asked for it.
+The suite passes (957, the browser test skipped), three runs in a row.
