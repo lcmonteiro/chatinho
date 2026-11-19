@@ -10,6 +10,7 @@ reading the diff. `- [ ] R<n>` while open, `- [x] R<n>` once resolved. Write
 
 - [ ] R1 **quality** DatabaseBackend logs its database URL as given (src/chatinho/backends/database.py:151), so a URL with a password (postgresql://user:pass@host/db) now lands in the shared log file; REQ-CORE-036/REQ-BACK-014 say no record holds a key
   - **Proposal**: back to code: log the URL with its password masked (sqlalchemy's make_url(url).render_as_string(hide_password=True)), with a test that a URL holding a password never reaches a record
+  - **Decision**: back to code: log the database URL with its password masked (sqlalchemy make_url(url).render_as_string(hide_password=True)), with a test that a URL holding a password never reaches a record
 - [ ] R2 **quality** The log file is created with the process umask (src/chatinho/logs.py, open_log), usually 0644, so on a shared machine anyone can read which peers, URLs and ids a chat had
   - **Proposal**: back to code: create the file owner-only (0600) when open_log creates it, leaving an existing file's mode alone, with a test of the mode on POSIX
 - [ ] R3 **quality** McpConnector logs a failed ask with the exception's repr (src/chatinho/connectors/mcp.py:169, '%r'), which can carry the remote side's message and so text of the conversation (REQ-CONN-025: no record holds the prompt or the answer)
