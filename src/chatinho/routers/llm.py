@@ -41,11 +41,33 @@ _QUOTES   = "\"'`"
 _TRAILING = ".,!?:;"
 
 
+# @req REQ-ROUTE-012
+def _checked_headers(headers: Optional[Mapping[str, str]]) -> Optional[Dict[str, str]]:
+    """
+    A copy of *headers*, or None for none; raises ``ValueError`` naming a bad header, never a value.
+
+    Implements REQ-ROUTE-012.
+    """
+    if headers is None:
+        return None
+    if not isinstance(headers, Mapping):
+        raise ValueError("A router's headers must be a mapping of names to values, got %s"
+                         % type(headers).__name__)
+    copied : Dict[str, str] = {}
+    for name, value in headers.items():
+        if not isinstance(name, str) or not isinstance(value, str):
+            raise ValueError("A router's header names and values must be strings: %r" % (name,))
+        if name.lower() == "authorization":
+            raise ValueError("A router's headers cannot set %s: the key authenticates" % name)
+        copied[name] = value
+    return copied or None
+
+
 class _Unchosen(Exception):
     """Why the model's choice cannot be used; the say goes to everyone."""
 
 
-# @req REQ-ROUTE-007, REQ-ROUTE-008, REQ-ROUTE-009, REQ-ROUTE-010
+# @req REQ-ROUTE-007, REQ-ROUTE-008, REQ-ROUTE-009, REQ-ROUTE-010, REQ-ROUTE-012
 @require(HookRoute)
 @require(HookPeers)
 @require(HookContext)
@@ -79,7 +101,7 @@ class LLMRouter:
     peers   : Peers
     context : Context
 
-    # @req REQ-ROUTE-009
+    # @req REQ-ROUTE-009, REQ-ROUTE-012
     def __init__(
         self,
         endpoint   : Optional[Endpoint] = None,
@@ -98,6 +120,8 @@ class LLMRouter:
         self.memory     = memory
         self.timeout    = float(timeout)
         self.credential = credential
+        #: Sent with every request; private, so nothing that shows the router shows them.
+        self._headers   = _checked_headers(headers)
         #: Where its own key is read from, when a choice needs it.
         self._key       = endpoint.key
         #: The client for its own key, and a digest of the key it was built with.
@@ -153,7 +177,7 @@ class LLMRouter:
 
     # === The choice ===================================================================
 
-    # @req REQ-ROUTE-008, REQ-ROUTE-010
+    # @req REQ-ROUTE-008, REQ-ROUTE-010, REQ-ROUTE-012
     async def _choose(
         self, msg: ChatMessage, roster: Dict[int, Any], candidates: List[int],
     ) -> Optional[int]:
@@ -161,7 +185,8 @@ class LLMRouter:
         messages = self._prompt(msg, roster, candidates)
         lent     = msg.credentials.get(self.credential)
         if lent is not None:
-            async with AsyncOpenAI(api_key=lent.reveal(), base_url=self.base_url) as client:
+            async with AsyncOpenAI(api_key=lent.reveal(), base_url=self.base_url,
+                                   default_headers=self._headers) as client:
                 answer = await self._complete(client, messages)
         else:
             if self._key is None:
@@ -212,7 +237,7 @@ class LLMRouter:
 
     # === The client ===================================================================
 
-    # @req REQ-ROUTE-010
+    # @req REQ-ROUTE-010, REQ-ROUTE-012
     async def _own_client(self) -> AsyncOpenAI:
         """The client for its own key, read now; rebuilt when the key it reads has changed."""
         assert self._key is not None
@@ -222,7 +247,7 @@ class LLMRouter:
             return self._client[1]
         if self._client is not None:
             self._retired.append(self._client[1])
-        client       = AsyncOpenAI(api_key=key, base_url=self.base_url)
+        client       = AsyncOpenAI(api_key=key, base_url=self.base_url, default_headers=self._headers)
         self._client = (digest, client)
         return client
 
