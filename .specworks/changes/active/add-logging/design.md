@@ -90,7 +90,17 @@ only ever logged by its length. In the session: `add_connector` and
 (INFO), `_post` (DEBUG: id, from, to, reply_to, status, length, attachments),
 the ask's outcome (DEBUG: question id, reply status; WARNING when cancelled),
 `_invoke_for` (DEBUG: name, by), `_routed` (DEBUG: id, chosen or nobody),
-`forget` (INFO: count). In the specializations, as REQ-BACK-014,
+`forget` (INFO: count).
+
+**Pinned wording**: the session's records use these words, which the tests
+look for beside the ids and counts: `attached` (a peer, command or role),
+`started` (with `loaded <n>`), `closed`, `posted`, `answered` (an ask's
+outcome, with the reply's status), `ran` (a command, with `by <id>`),
+`routed` (with the peer's id, or `nobody`), `forgot` (with the count). The
+specializations use `loaded`, `forgot`, `kept`, `linked`, `sent` (a hive
+batch: `<n> messages`, `<n> traces`, `<n> waiting`), `took` (a duration in
+seconds), `built` (an agent: the factory and `<n> tools`), `merged` and
+`dropped`. In the specializations, as REQ-BACK-014,
 REQ-CONN-025, REQ-AGENT-013 and REQ-WS-006 list them; durations come from
 `time.monotonic()`. The touched f-string calls in the connectors become
 %-style. Serves: REQ-CORE-035, REQ-CORE-036, REQ-BACK-014, REQ-CONN-025,

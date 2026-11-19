@@ -1,6 +1,6 @@
 name: add-logging
 created: '2026-11-19T15:52:18'
-phase: design
+phase: implement
 specified:
   REQ-AGENT-013: 25348a4b69e6
   REQ-BACK-014: 13b2a8149f94
