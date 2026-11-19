@@ -41,3 +41,8 @@ finding that covers it. -->
 ## Summary
 
 <!-- Two or three lines: what was found, what changed in code, specs and design, and anything sent back to an earlier phase. -->
+
+First round: five findings, all resolved: R1–R3 fixed in code (masked database password, owner-only
+log file, MCP errors by type), R4 in design, R5 accepted. Reopened round (`CHATINHO_LOG_PATH` turns
+logging on): no findings. REQ-CORE-034's ten criteria are each tested through `run()`, the suite
+passes (994 passed, 1 skipped) and leaves no file without the variable.
