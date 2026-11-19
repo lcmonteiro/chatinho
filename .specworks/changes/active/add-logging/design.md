@@ -108,7 +108,7 @@ Agreed with the user
 
 - `src/chatinho/logs.py` (framework, not exported from `chatinho`):
   - `LOG_FORMAT: str`
-  - `log_file(day: Optional[date] = None) -> Path`: `<tempdir>/chatinho.<day>.log`, today by default.
+  - `log_file(day: Optional[date] = None) -> Path`: the file chatinho.<day>.log in the temporary directory, today by default.
   - `open_log() -> Optional[Path]`: opens the file once per process and returns its path, or `None` when it cannot be written (REQ-CORE-034).
   - `close_log() -> None`: stops writing and restores the `chatinho` logger as it was.
 - `src/chatinho/session.py`: `ChatSession.run()` calls `open_log()` first; no signature changes.
