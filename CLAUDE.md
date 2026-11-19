@@ -343,13 +343,17 @@ after the say — and the hive keeps it either way; **the hive shows names, not 
 carries `frm_name` from `peers()` when it was sent, since ids are per session; and the stream takes
 the admin key as `?key=` too, because a browser's `EventSource` cannot set a header.
 
-## A chat that runs writes a log
+## A chat that runs writes a log, when asked to
 
-**`ChatSession.run()` opens `chatinho.<date>.log` in the temporary directory** — `/tmp` on Linux
-and macOS, `$PREFIX/tmp` on Termux (`tempfile.gettempdir()`) — dated by the day it was first
-opened and appended to, and every `chatinho` record from DEBUG up goes there, one line each:
+**Logging is off unless `CHATINHO_LOG_PATH` names a directory.** Unset or empty, nothing is
+written and nothing about logging changes. Set, `ChatSession.run()` opens `chatinho.<date>.log` in
+that directory — made with any missing parents if need be, each owner-only (0700), the file
+owner-only (0600) when it creates it, an existing one keeping its mode — dated by the day it was
+first opened and appended to, and every `chatinho` record from DEBUG up goes there, one line each:
 `time LEVEL [pid] logger: message`. The process id is what tells two chats sharing a day's file
-apart. There is no parameter and no variable to move or silence it, by decision. Nothing else
+apart. The variable is the only switch: no parameter, no level variable, by decision. It was
+always-on in its first round, and that was reopened as the wrong default. `open_log()` reads the
+variable itself, so nothing but the variable turns it on. Nothing else
 opens it: `import chatinho` configures no logging, and neither does driving `start()`/`close()`
 by hand, which is why the test suite writes no file. `logs.py` is a framework module for that
 reason — `session.py` calls it, and the framework imports only itself.
@@ -371,7 +375,7 @@ each peer attached, start (`loaded <n>`), close, every message `posted` (id, fro
 status, length, attachments), each ask `answered` with its status, each command `ran` and by
 whom, each routing decision and each forget; the archives what they load, forget, keep, link and
 send; the connectors and `AgentPeer` each request or run with how long it `took`; `GitWorktrees`
-each merge and drop. A file in a shared temporary directory holds nothing private. A traceback is
+each merge and drop. A file in a shared directory holds nothing private. A traceback is
 logged as the exception wrote it — an exception's own message is the exception's, which is why
 error replies name the type alone.
 
@@ -597,7 +601,8 @@ src/chatinho/
   -- 1. the framework: the session and the definition of the hooks
   session.py       ChatSession: run, peers, commands, delivery, routing, context
   hooks.py         Hook, the nineteen constants, @require, the grant protocols
-  logs.py          the log file run() opens: chatinho.<date>.log in the temporary directory
+  logs.py          the log file run() opens when CHATINHO_LOG_PATH names a directory:
+                   chatinho.<date>.log in it
   query.py         Query (peer/thread/errors/since/limit) and SELF: which part of the conversation
                    context() returns; plain data, so a backend could answer it one day
   message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,

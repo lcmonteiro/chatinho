@@ -80,7 +80,7 @@ def log_file(directory: Path, day: Optional[date] = None) -> Path:
     Returns:
         Path: The file's path, in *directory*.
     """
-    raise NotImplementedError
+    return directory / ("chatinho.%s.log" % (day or date.today()).isoformat())
 
 
 # @req REQ-CORE-034
@@ -97,16 +97,17 @@ def open_log() -> Optional[Path]:
     Returns:
         Optional[Path]: The file being written, or None when logging is off or it cannot be.
     """
-    raise NotImplementedError
     global _open, _failed
     if _open is not None:
         return _open.path
-    if _failed:
-        return None
-    path = log_file()
+    named = os.environ.get(LOG_PATH_VARIABLE, "")
+    if not named or _failed:
+        return None                                           # off: nothing is touched
+    directory = Path(named)
+    path      = log_file(directory)
     try:
-        # Created for its owner alone, since the temporary directory is shared; a file that is
-        # already there keeps the mode it has.
+        _make_private(directory)
+        # Created for its owner alone; a file that is already there keeps the mode it has.
         os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600))
         writer = logging.FileHandler(path, mode="a", encoding="utf-8")
     except OSError as exc:
@@ -125,6 +126,18 @@ def open_log() -> Optional[Path]:
     chatinho.setLevel(logging.DEBUG)
     chatinho.propagate = False
     return path
+
+
+def _make_private(directory: Path) -> None:
+    """Makes *directory* and every missing parent, each for its owner only; one that exists is left."""
+    missing = [d for d in (directory, *directory.parents) if not d.exists()]
+    for folder in reversed(missing):
+        try:
+            folder.mkdir(mode=0o700)
+        except FileExistsError:
+            pass                                              # another chat made it first
+    if not directory.is_dir():
+        raise NotADirectoryError("%s is not a directory" % directory)
 
 
 def close_log() -> None:

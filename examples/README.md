@@ -113,6 +113,17 @@ With `cache=` the chat keeps its history when the hive is down, and what it coul
 on the next run. An agent's steps (`AgentPeer`'s nodes, model calls and tool calls) arrive as
 traces; click a message on the page to see them.
 
+## Logging
+
+A chat writes nothing unless you ask: set `CHATINHO_LOG_PATH` to a directory and every demo that
+runs with `ChatSession.run()` appends its records to `chatinho.<date>.log` there — ids, counts,
+timings and failures, never what was said or a key:
+
+```bash
+CHATINHO_LOG_PATH=/tmp ./run.sh
+tail -f /tmp/chatinho.$(date +%F).log
+```
+
 ## Replaced
 
 | Old file | Now |

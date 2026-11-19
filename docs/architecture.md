@@ -87,10 +87,11 @@ layers.
   and the hive (its own specialization) both import `support/parts/hive.py`,
   so neither imports the other, and a chat needs no extra to be kept in a
   hive. (add-observer-server)
-- **A chat that runs writes a log, and nothing else configures logging**:
-  `ChatSession.run()` sends every `chatinho` record from DEBUG up to
-  `chatinho.<date>.log` in the temporary directory, through a thread; importing
-  chatinho or driving `start()`/`close()` opens nothing. The program's own
+- **A chat that runs writes a log when asked to, and nothing else configures
+  logging**: with `CHATINHO_LOG_PATH` naming a directory, `ChatSession.run()`
+  sends every `chatinho` record from DEBUG up to `chatinho.<date>.log` in it,
+  through a thread; unset, logging is off. Importing chatinho or driving
+  `start()`/`close()` opens nothing. The program's own
   handlers get what they got before, and no record carries what was said or a
   key. (add-logging)
 - **Tests mirror the capabilities**: `tests/<capability>/`, with what crosses
