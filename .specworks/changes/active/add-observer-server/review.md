@@ -28,6 +28,8 @@ reading the diff. `- [ ] R<n>` while open, `- [x] R<n>` once resolved. Write
   - confirmed in review: Interfaces match hive_cache.py, store.py, live.py and the CLI
 - [ ] R5 **code-gap** RunTracer starts a tool after the last step that ended in the same parent, so when one of two parallel tool calls ends before the other's start is traced, the second follows the first tool's end instead of the model call that asked for both; AC-AGENT-012.3 fails about one run in three of the full suite (src/chatinho/support/kits/agent/tracing.py:150)
   - **Proposal**: back to code: a tool call's start follows the end of the last model call inside the same parent (the one that asked for it), whatever ended since; other steps keep following the last step that ended
+  - **Decision**: back to code: a tool call's start follows the end of the last model call inside the same parent (the one that asked for it), whatever ended since; other steps keep following the last step that ended
+  - done in code: RunTracer keeps the end of the last model call per parent and starts a tool call after it; driving the tracer by hand with the first tool ending before the second starts links both to the model call (it did not before)
 
 ## Changed files without tags
 

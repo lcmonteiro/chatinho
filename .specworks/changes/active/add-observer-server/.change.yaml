@@ -1,6 +1,6 @@
 name: add-observer-server
 created: '2026-11-18T21:23:58'
-phase: review
+phase: implement
 specified:
   REQ-AGENT-012: db62e148d2e5
   REQ-BACK-009: ddee77fe371c
@@ -22,3 +22,5 @@ specified:
   REQ-HIVE-008: 3d6e3a3877d5
   REQ-HIVE-009: f58fdd089a2e
   REQ-HIVE-010: 1f62488015c9
+dirty:
+  .specworks/changes/active/add-observer-server/review.md: 383b8007179ca81320ce8e5693b9464ad3591b9106f5bd8d1c344bc5eccbf6bf

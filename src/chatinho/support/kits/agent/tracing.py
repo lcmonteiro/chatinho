@@ -5,7 +5,9 @@ Traces of an agent's run: its graph's nodes, its model calls and its tool calls.
 in that run's config. Each step is traced when it starts (``running``) and when
 it ends (``done`` or ``error``), the end following the start. A step's start
 follows the step it ran in when it is the first inside it, and otherwise the
-last step that ended inside the same one, so a run's traces form a graph:
+last step that ended inside the same one; a tool call follows the end of the
+model call that asked for it, so tools run at once share one trace. A run's
+traces form a graph:
 
     extract ─▶ extract ✓ ─▶ agent ─┬─▶ agent ✓ ─▶ verify ─▶ …
                                    └─▶ model ─▶ model ✓ ─┬─▶ tool ws_ls ─▶ ✓
@@ -56,6 +58,8 @@ class RunTracer(AsyncCallbackHandler):
         self._label  : Dict[UUID, str] = {}
         #: The end of the last step that ended inside each traced run (None: the run itself).
         self._last   : Dict[Optional[UUID], TraceID] = {}
+        #: The end of the last model call inside each traced run: what its tool calls follow.
+        self._asked  : Dict[Optional[UUID], TraceID] = {}
 
     # === Nodes ======================================================================
 
@@ -132,8 +136,12 @@ class RunTracer(AsyncCallbackHandler):
 
     async def _started(self, run_id: UUID, label: str, text: str) -> None:
         inside = self._traced_parent(run_id)
-        if inside in self._last:
-            prev : Optional[TraceID] = self._last[inside]
+        if label.startswith("tool ") and inside in self._asked:
+            # A tool follows the model call that asked for it, whatever ended since: two tools of one
+            # turn share that trace even when the first ends before the second's start is traced.
+            prev : Optional[TraceID] = self._asked[inside]
+        elif inside in self._last:
+            prev = self._last[inside]
         else:
             prev = self._start.get(inside) if inside is not None else None
         self._label[run_id] = label
@@ -147,7 +155,10 @@ class RunTracer(AsyncCallbackHandler):
             return
         made = await self._step(state, text, start)
         if made is not None:
-            self._last[self._traced_parent(run_id)] = made
+            inside = self._traced_parent(run_id)
+            self._last[inside] = made
+            if self._label.get(run_id, "").startswith("model "):
+                self._asked[inside] = made
 
     async def _step(self, state: TraceState, text: str, prev: Optional[TraceID]) -> Optional[TraceID]:
         """Traces one step; a trace that fails is logged and the run goes on."""
