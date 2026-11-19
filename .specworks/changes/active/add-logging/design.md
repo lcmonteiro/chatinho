@@ -138,7 +138,7 @@ use `caplog` on `chatinho` at DEBUG and never open the file. Serves: all.
 
 ## Interfaces
 
-Proposed: waiting for the user's agreement
+Agreed with the user
 
 - `src/chatinho/logs.py` (framework, not exported from `chatinho`):
   - `LOG_FORMAT: str`

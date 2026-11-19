@@ -1,8 +1,10 @@
 """
-The log file a chat writes: ``chatinho.<date>.log`` in the system's temporary directory.
+The log file a chat writes when asked to: ``chatinho.<date>.log`` in ``$CHATINHO_LOG_PATH``.
 
-:meth:`ChatSession.run` opens it, and nothing else does: importing chatinho, or
-driving a session with ``start`` and ``close``, configures no logging at all.
+Logging is off unless the environment variable ``CHATINHO_LOG_PATH`` names a
+directory. :meth:`ChatSession.run` opens the file there, and nothing else does:
+importing chatinho, or driving a session with ``start`` and ``close``,
+configures no logging at all, whatever the variable says.
 Once open, every record of the ``chatinho`` loggers, from DEBUG up, is written
 to the file by a thread of its own, so a slow disk never holds up the chat.
 
@@ -22,7 +24,6 @@ import logging.handlers
 import os
 import queue
 import sys
-import tempfile
 from datetime import date
 from pathlib import Path
 from typing import Any, Optional
@@ -30,6 +31,9 @@ from typing import Any, Optional
 #: One record per line: the time, the level, the process (what tells two chats sharing a day's file
 #: apart) and the logger.
 LOG_FORMAT : str = "%(asctime)s %(levelname)s [%(process)d] %(name)s: %(message)s"
+
+#: The environment variable that turns the log on: the directory the file goes in.
+LOG_PATH_VARIABLE : str = "CHATINHO_LOG_PATH"
 
 #: The logger every record of chatinho goes through.
 ROOT : str = "chatinho"
@@ -65,30 +69,35 @@ _open   : Optional[_Open] = None
 _failed : bool = False
 
 
-def log_file(day: Optional[date] = None) -> Path:
+def log_file(directory: Path, day: Optional[date] = None) -> Path:
     """
-    Where the log of *day* goes: ``<tempdir>/chatinho.<YYYY-MM-DD>.log``.
+    Where the log of *day* goes: ``<directory>/chatinho.<YYYY-MM-DD>.log``.
 
     Args:
+        directory: The directory ``CHATINHO_LOG_PATH`` names.
         day: The day; today when None.
 
     Returns:
-        Path: The file's path, in :func:`tempfile.gettempdir`.
+        Path: The file's path, in *directory*.
     """
-    return Path(tempfile.gettempdir()) / ("chatinho.%s.log" % (day or date.today()).isoformat())
+    raise NotImplementedError
 
 
 # @req REQ-CORE-034
 def open_log() -> Optional[Path]:
     """
-    Sends every ``chatinho`` record to today's log file, once per process.
+    Sends every ``chatinho`` record to today's log file in ``$CHATINHO_LOG_PATH``, once per process.
 
-    A second call returns the same path and adds nothing. When the file cannot
-    be opened, one line on stderr says so and the chat goes on without it.
+    With the variable unset or empty it returns None and touches nothing. A
+    directory that does not exist is made for its owner only, and a file it
+    creates is its owner's only. A second call returns the same path and adds
+    nothing. When the file cannot be opened, one line on stderr says so and the
+    chat goes on without it.
 
     Returns:
-        Optional[Path]: The file being written, or None when it cannot be.
+        Optional[Path]: The file being written, or None when logging is off or it cannot be.
     """
+    raise NotImplementedError
     global _open, _failed
     if _open is not None:
         return _open.path
