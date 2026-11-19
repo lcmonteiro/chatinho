@@ -97,6 +97,10 @@ capabilities:
     path: src/chatinho/workspaces
     description: "The provider: one git worktree per peer, merge and drop"
     prefix: WS
+  hive:
+    path: src/chatinho/hive
+    description: "The server every chat is kept and seen in: chats and keys, the API, the live stream and the viewer page"
+    prefix: HIVE
 
 # Modules: sub-projects with their own config (their own .specworks/config.yml),
 # like git submodules. Each one is a complete project (own context,
