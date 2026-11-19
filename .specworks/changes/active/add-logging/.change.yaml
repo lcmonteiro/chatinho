@@ -1,3 +1,11 @@
 name: add-logging
 created: '2026-11-19T15:52:18'
-phase: specify
+phase: design
+specified:
+  REQ-AGENT-013: 25348a4b69e6
+  REQ-BACK-014: 13b2a8149f94
+  REQ-CONN-025: bc93ba16830e
+  REQ-CORE-034: 67362416f9b4
+  REQ-CORE-035: ffb01330b0e8
+  REQ-CORE-036: 03e5d1002500
+  REQ-WS-006: f287cf77361f

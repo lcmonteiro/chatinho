@@ -104,6 +104,8 @@ use `caplog` on `chatinho` at DEBUG and never open the file. Serves: all.
 
 ## Interfaces
 
+Proposed: waiting for the user's agreement
+
 - `src/chatinho/logs.py` (framework, not exported from `chatinho`):
   - `LOG_FORMAT: str`
   - `log_file(day: Optional[date] = None) -> Path`: `<tempdir>/chatinho.<day>.log`, today by default.
