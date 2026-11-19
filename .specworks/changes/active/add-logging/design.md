@@ -13,13 +13,13 @@ a record reaches the root logger's handlers, or Python's last-resort handler
 ## Goals / Non-Goals
 
 **Goals:**
-- One file per day in the temporary directory, opened by `run()` only, at
-  DEBUG, written off the loop.
+- Logging off unless `CHATINHO_LOG_PATH` names a directory; then one file
+  per day in it, opened by `run()` only, at DEBUG, written off the loop.
 - The program's own logging sees exactly what it saw before.
 - Event records at the source, carrying ids, counts and states, never text.
 
 **Non-Goals:**
-- Any parameter, variable or public name to configure the file.
+- Any parameter, second variable or public name to configure the file.
 - Rotation, cleanup, or structured (JSON) lines.
 - Records in the routers, the commands, the frontends or the hive server.
 
@@ -57,6 +57,22 @@ So the program's handlers get what they got before, and only that.
 Alternatives: a filter on the root handlers (we do not own them, and the
 program may add some later); leaving propagation on (DEBUG floods the
 program's console). Serves: REQ-CORE-034 (AC-CORE-034.4, AC-CORE-034.5).
+
+### `CHATINHO_LOG_PATH` turns it on, and `open_log()` reads it (reopened)
+
+`open_log()` reads `os.environ.get("CHATINHO_LOG_PATH")` each time it is
+called until a file is open. Unset or empty, it returns `None` at once and
+touches nothing: no directory, no handler, no level, so logging is exactly as
+it was before chatinho (AC-CORE-034.7, AC-CORE-034.8). Set, it is the
+directory: `Path(value)`, with no `~` expansion (the shell does that). A
+missing directory is made with `mkdir(mode=0o700, parents=True,
+exist_ok=True)` (each new parent owner-only, under the umask), and the file is
+created with `os.open(..., 0o600)` before the `FileHandler` opens it, so an
+existing file keeps its mode (AC-CORE-034.9, AC-CORE-034.10). A value naming a
+regular file, or a directory that cannot be made or written, is the same
+failure as before: one stderr line, no file, the chat runs (AC-CORE-034.6).
+Reading it in `run()` and passing it in was rejected: it would make
+`open_log(directory)` a second way to turn logging on. Serves: REQ-CORE-034.
 
 ### Opened once per process, and the queue keeps the loop free
 
@@ -115,18 +131,20 @@ REQ-AGENT-013, REQ-WS-006.
 
 ### How the tests reach the file
 
-The file tests point `tempfile.tempdir` at `tmp_path` (monkeypatch) and call
+The file tests set `CHATINHO_LOG_PATH` to a folder under `tmp_path`
+(`monkeypatch.setenv`), or delete it, and call
 `close_log()` after each, so every test opens its own file; the event tests
 use `caplog` on `chatinho` at DEBUG and never open the file. Serves: all.
 
 ## Interfaces
 
-Agreed with the user
+Proposed: waiting for the user's agreement
 
 - `src/chatinho/logs.py` (framework, not exported from `chatinho`):
   - `LOG_FORMAT: str`
-  - `log_file(day: Optional[date] = None) -> Path`: the file chatinho.<day>.log in the temporary directory, today by default.
-  - `open_log() -> Optional[Path]`: opens the file once per process and returns its path, or `None` when it cannot be written (REQ-CORE-034).
+  - `LOG_PATH_VARIABLE: str = "CHATINHO_LOG_PATH"`.
+  - `log_file(directory: Path, day: Optional[date] = None) -> Path`: the file chatinho.<day>.log in *directory*, today by default.
+  - `open_log() -> Optional[Path]`: when `CHATINHO_LOG_PATH` names a directory, opens the file in it once per process and returns its path; `None` when the variable is unset or empty, or the file cannot be written (REQ-CORE-034).
   - `close_log() -> None`: stops writing and restores the `chatinho` logger as it was.
 - `src/chatinho/session.py`: `ChatSession.run()` calls `open_log()` first; no signature changes.
 - `tests/test_architecture.py`: `FRAMEWORK` gains `logs`.
@@ -146,8 +164,11 @@ and no dependency between capabilities changes.
   record; a traceback is logged as the exception wrote it (REQ-CORE-036).
 - [A chat past midnight writes to yesterday's file] -> accepted; the name is
   the day the chat started.
-- [`/tmp` is shared on a multi-user machine] -> no text and no keys are
-  written; the file is created with the process's umask.
+- [The chosen directory is shared on a multi-user machine] -> no text and no
+  keys are written, a directory chatinho makes is 0700 and a file it creates
+  0600; a file that already exists keeps the mode its owner gave it.
+- [Someone expects a log and gets none] -> the variable is documented in
+  `CLAUDE.md`; logging off by default is the decision.
 - [Records lost if the process is killed] -> the queue is flushed at normal
   exit only; accepted.
 
