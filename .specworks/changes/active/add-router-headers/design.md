@@ -47,7 +47,7 @@ them. Serves: REQ-ROUTE-012.
 
 ## Interfaces
 
-Proposed: waiting for the user's agreement
+Agreed with the user
 
 - `src/chatinho/routers/llm.py`: `LLMRouter.__init__(self, endpoint=None, *, memory=ROUTING_MEMORY, timeout=10.0, credential="llm", headers: Optional[Mapping[str, str]] = None)`; raises `ValueError` for malformed headers or `Authorization` (REQ-ROUTE-012)
 - `tests/fakes/llm.py`: `FakeOpenAI.__init__` gains `default_headers: Optional[Mapping[str, str]] = None`, recorded as `self.default_headers` (test support, REQ-ROUTE-012)

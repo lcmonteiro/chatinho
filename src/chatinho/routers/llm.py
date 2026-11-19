@@ -3,7 +3,7 @@
 import asyncio
 import hashlib
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import openai
 from openai import AsyncOpenAI
@@ -66,9 +66,13 @@ class LLMRouter:
         timeout: The most seconds a say waits on the model.
         credential: The name a key lent on the say goes by; it wins over the
             endpoint's own.
+        headers: Extra HTTP headers sent with every request to the model, for
+            an endpoint that needs them; never ``Authorization``. Implements
+            REQ-ROUTE-012.
 
     Raises:
-        ValueError: If *timeout* is not a positive number.
+        ValueError: If *timeout* is not a positive number, or *headers* is
+            not a mapping of strings or names ``Authorization``.
     """
 
     name    : str = "router"
@@ -83,6 +87,7 @@ class LLMRouter:
         memory     : Optional[Query] = ROUTING_MEMORY,
         timeout    : float = 10.0,
         credential : str = "llm",
+        headers    : Optional[Mapping[str, str]] = None,
     ) -> None:
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not timeout > 0:
             raise ValueError("A router's timeout must be a positive number of seconds, got %r" % (timeout,))
