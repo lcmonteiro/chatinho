@@ -1,6 +1,6 @@
 name: add-logging
 created: '2026-11-19T15:52:18'
-phase: review
+phase: validate
 specified:
   REQ-AGENT-013: 25348a4b69e6
   REQ-BACK-014: 13b2a8149f94
@@ -9,10 +9,3 @@ specified:
   REQ-CORE-035: ffb01330b0e8
   REQ-CORE-036: 03e5d1002500
   REQ-WS-006: f287cf77361f
-dirty:
-  src/chatinho/backends/database.py: 9c37ed7860c962cebc7aa3c53b6224fb1e75fbf8b93e613fa27684d32e6a7cf4
-  src/chatinho/connectors/mcp.py: 0f3e6634eb8d57a2f85e7f80afb843408becf1f9f3258f3688e9dde2cccc126e
-  src/chatinho/logs.py: 5a253b74681d5eca8ae5db1c2ea916cc75ed73c182ee0e4d7264585f7fba83d4
-  tests/backends/test_backend_logging.py: 70e298a5e432fbd8a2eb09f613d88152969254cd905c3e2f1c0b599ae24afda2
-  tests/connectors/test_connector_logging.py: f75e55999dbb923cff385e7b687c3deab425101f6d7481b955766cd2a68480b6
-  tests/framework/test_log_file.py: 455649c552df435d6a19df8ff36f8874469eb4bc829d5b14722759e385a8eafb
