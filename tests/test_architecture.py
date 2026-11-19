@@ -101,7 +101,7 @@ def test_workspaces_use_only_the_standard_library():
 # === The four layers ============================================================
 
 #: The session and the definition of the hooks. Imports nothing of chatinho but itself.
-FRAMEWORK = {"session", "hooks", "message", "query"}
+FRAMEWORK = {"session", "hooks", "message", "query", "logs"}
 
 #: What supports the specializations: the parts and the kits, below.
 SUPPORT = "support"

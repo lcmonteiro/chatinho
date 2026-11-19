@@ -2,7 +2,7 @@
 
 ## 1. The log file
 
-- [ ] 1.1 Add `src/chatinho/logs.py` with `LOG_FORMAT`, `log_file`, `open_log` and `close_log` as stubs, the `open_log()` call at the top of `ChatSession.run()`, and `logs` in `FRAMEWORK` in `tests/test_architecture.py` (REQ-CORE-034); verify `uv run mypy src/chatinho` and `uv run pytest -q tests/test_architecture.py`
+- [x] 1.1 Add `src/chatinho/logs.py` with `LOG_FORMAT`, `log_file`, `open_log` and `close_log` as stubs, the `open_log()` call at the top of `ChatSession.run()`, and `logs` in `FRAMEWORK` in `tests/test_architecture.py` (REQ-CORE-034); verify `uv run mypy src/chatinho` and `uv run pytest -q tests/test_architecture.py`
 - [ ] 1.2 [test] Write failing tests in `tests/framework/test_log_file.py` for AC-CORE-034.1 to AC-CORE-034.6, with `tempfile.tempdir` on `tmp_path` and `close_log()` after each, tagged `@ac`; verify they fail on the stubs, not on imports
 - [ ] 1.3 [code] Implement `logs.py`: the file in the temporary directory, the queue and its listener thread, `propagate` off and the forwarding handler with the program's threshold, once per process, the stderr line on failure, `atexit`, `close_log` (REQ-CORE-034) tagged `@req REQ-CORE-034`; verify `uv run ruff check src` and `uv run mypy src/chatinho`, and that `python examples/hooks.py` leaves its lines in `/tmp/chatinho.<today>.log`
 

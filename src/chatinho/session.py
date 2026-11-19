@@ -31,6 +31,7 @@ from .hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, Hook
 from .hooks import HookRecord
 from .hooks import HookProvision, NoWorkspaceProvider
 from .hooks import declared_id, declares, hooks_of, name_of
+from .logs import open_log
 from .message import LOCAL, TOOL
 from .message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
 from .message import TRACE_TEXT_LIMIT, ChatTrace, TraceID, TraceState
@@ -751,6 +752,7 @@ class ChatSession:
         Raises:
             RuntimeError: There is already an event loop on this thread.
         """
+        open_log()
         try:
             asyncio.run(self._serve())
         except KeyboardInterrupt:
