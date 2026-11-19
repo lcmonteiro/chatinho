@@ -13,7 +13,10 @@ specializations: 4. specializations {
     tooltip: "src/chatinho/frontends: ChatFrontend (Textual), McpFrontend"
   }
   backends: backends {
-    tooltip: "src/chatinho/backends: DatabaseBackend"
+    tooltip: "src/chatinho/backends: DatabaseBackend, HiveBackend"
+  }
+  hive: hive {
+    tooltip: "src/chatinho/hive: the server, behind chatinho[hive]: API, live stream, viewer page"
   }
   commands: commands {
     tooltip: "src/chatinho/commands: /help, /test, /ws"
@@ -39,7 +42,7 @@ parts: 2. support/parts {
   workspace-model: workspace-model {
     tooltip: "src/chatinho/support/parts/workspace: Tree, @operation, WorkspaceView, Workspace"
   }
-  shared: memory.py and mcp.py (no capability) {
+  shared: memory.py, mcp.py and hive.py (no capability) {
     shape: page
   }
 }
@@ -57,6 +60,9 @@ specializations.connectors -> parts.shared: memory, MCP names
 specializations.frontends -> parts.keys: bearer token
 specializations.frontends -> parts.shared: MCP names
 specializations.workspaces -> parts.workspace-model: Tree, the views
+specializations.backends -> specializations.hive: HTTP: messages, attachments, traces
+specializations.backends -> parts.shared: the hive's wire
+specializations.hive -> parts.shared: the hive's wire
 specializations -> framework: declare hooks, receive grants
 
 kits.agents -> parts.workspace-model: operations as tools

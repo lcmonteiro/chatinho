@@ -90,6 +90,14 @@ assembly on top of it: the two builders and the public names.
   (REQ-CORE-027). Ids last one session and the work outlives it; with no
   provider the grant raises `NoWorkspaceProvider` instead of answering
   `None`. (baseline-framework)
+- **A trace is a record beside the message, made by the session**
+  (REQ-CORE-030 to REQ-CORE-033). `HookTrace` grants `trace(msg_id, state,
+  text, prev=None)`; the session makes the id, stamps who and when, refuses a
+  `prev` it never issued, cuts the text at `TRACE_TEXT_LIMIT`, and awaits the
+  first `HookRecord` declarer's `record`, as attachments go to `keep`. Traces
+  as messages with a status were set aside: they would have entered
+  `context()`, every model's memory and the terminal log. A recorder that
+  raises is logged and the step goes on. (add-observer-server)
 - **The core installs nothing** (REQ-CORE-028, REQ-CORE-029). A name behind
   an extra resolves when first read off the package, and a missing extra is
   an `ImportError` that names it. The defaults (a frontend, `SimpleRouter`)
@@ -104,16 +112,18 @@ assembly on top of it: the two builders and the public names.
   description)`, `@frontend(name="chat")`, `@backend(name)`, `@require(hook,
   **options)`; reading back with `hooks_of`, `options_of`, `declares`,
   `declared_id`, `name_of`.
-- The seventeen hooks. Demands: `listen`, `answer`, `execute`, `route`,
-  `load`, `forget`, `keep`, `link`, `provision`. Grants: `say`, `ask`,
-  `invoke`, `context`, `peers`, `commands`, `locate`, `workspace`, typed by
-  the protocols `Say`, `Ask`, `Invoke`, `Context`, `Peers`, `Commands`,
-  `Locate`, `WorkspaceGrant`. `docs/SPEC.md` is the reference.
+- The nineteen hooks. Demands: `listen`, `answer`, `execute`, `route`,
+  `load`, `forget`, `keep`, `link`, `provision`, `record`. Grants: `say`,
+  `ask`, `invoke`, `context`, `peers`, `commands`, `locate`, `workspace`,
+  `trace`, typed by the protocols `Say`, `Ask`, `Invoke`, `Context`, `Peers`,
+  `Commands`, `Locate`, `WorkspaceGrant`, `Trace`. `docs/SPEC.md` is the reference.
 - Data (`message.py`, `query.py`): `ChatMessage` (`id`, `frm`, `to`,
   `reply_to`, `status`, `credentials`), `MessageID` (`parse`, `short`),
   `MessageStore`, `Reply`, `ReplyStatus`, `Attachment`, `Secret`, `LOCAL`,
   `TOOL`, `Query` (`peer`, `thread`, `errors`, `since`, `limit`, `last`),
-  `SELF`.
+  `SELF`; `ChatTrace` (`id`, `msg_id`, `state`, `text`, `frm`, `prev`,
+  `timestamp`), `TraceID` (`new`, `parse`; `trc-` and 16 hex), `TraceState`
+  (`running`, `done`, `error`), `TRACE_TEXT_LIMIT` (2000).
 - Builders (`builder.py`): `build_chat_session`, `build_mcp_session`, each
   returning a `ChatSession` with its frontend.
 - Errors: `ValueError` (an id taken, an unknown peer, a bad name or status),

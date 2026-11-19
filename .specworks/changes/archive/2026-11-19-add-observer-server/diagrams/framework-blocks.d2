@@ -1,0 +1,37 @@
+direction: down
+
+peers: peers, commands and roles {
+  shape: page
+}
+builder: builder.py {
+  tooltip: "build_chat_session, build_mcp_session"
+}
+framework: framework {
+  session: session.py {
+    tooltip: "ChatSession: registers, grants, delivers, starts and closes; numbers traces and hands them to the recorder"
+  }
+  hooks: hooks.py {
+    tooltip: "the nineteen hooks, @require, the naming decorators, the grant protocols (Trace among them)"
+  }
+  query: query.py {
+    tooltip: "Query and SELF"
+  }
+  message: message.py {
+    tooltip: "ChatMessage, MessageID, MessageStore, Reply, Attachment, Secret; ChatTrace, TraceID, TraceState"
+  }
+  session -> hooks: what each object declared
+  session -> message: posts messages, makes traces
+  session -> query: selects for context
+  hooks -> message: types of the grants
+  hooks -> query: type of context
+  query -> message: reads messages
+}
+recorder: the recorder (HookRecord) {
+  shape: page
+}
+
+builder -> framework.session: a session with its frontend
+peers -> framework.hooks: declare hooks
+framework.session -> peers: grants, deliveries, lifecycle
+peers -> framework.session: trace(msg_id, state, text, prev)
+framework.session -> recorder: record(trace)

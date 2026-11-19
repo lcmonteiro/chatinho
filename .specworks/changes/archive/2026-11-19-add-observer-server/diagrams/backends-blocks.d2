@@ -1,0 +1,50 @@
+direction: right
+
+session: session {
+  shape: page
+}
+wire: support/parts/hive.py {
+  tooltip: "the JSON a chat and the hive exchange, the paths and the key header"
+}
+hive: the hive {
+  shape: cloud
+}
+backends: backends {
+  db: database.py {
+    backend: DatabaseBackend {
+      tooltip: "listen, load, forget, keep, link; initialize and shutdown"
+    }
+    worker: one worker thread {
+      tooltip: "every SQLAlchemy call runs here, in order, off the loop"
+    }
+    tables: messages and attachments {
+      shape: cylinder
+    }
+    backend -> worker: work, awaited
+    worker -> tables: merge, query, delete
+  }
+  remote: hive.py {
+    backend: HiveBackend {
+      tooltip: "listen, load, forget, keep, link, record; initialize and shutdown"
+    }
+    outbox: outbox {
+      tooltip: "in memory, or the cache's outbox table; bounded by queue_limit"
+    }
+    sender: sender task {
+      tooltip: "sends the outbox in order, in batches, retrying with backoff"
+    }
+    cache: hive_cache.py {
+      shape: cylinder
+      tooltip: "optional SQLite file: meta, messages, attachments, outbox"
+    }
+    backend -> outbox: messages, attachments, traces
+    sender -> outbox: takes in order, removes when accepted
+    backend -> cache: messages heard and loaded
+  }
+}
+
+session -> backends.db.backend: listen, keep; load, forget, link
+session -> backends.remote.backend: listen, keep, record; load, forget, link
+backends.remote.sender -> hive: HTTP, X-Hive-Key, off the loop
+backends.remote.backend -> hive: load, forget, link
+backends.remote -> wire: encodes and decodes

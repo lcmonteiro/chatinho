@@ -68,6 +68,15 @@ peer does in a chat, seen through a connector, belongs to `connectors`.
   `NotImplementedError` instead of reaching into the chat's loop from a
   thread. (baseline-agents)
 
+- **A run is traced through a LangChain callback** (REQ-AGENT-012).
+  `RunTracer`, one per run in the run's config, traces the four nodes, every
+  model call and every tool call, `running` then `done` or `error`. A step's
+  end follows its start; its start follows the last step that ended inside
+  the same traced parent, or the parent's start; a tool call follows the end
+  of the model call that asked for it, so tools of one turn share that trace
+  even when one ends before the other starts (found under load in review).
+  A trace that fails is logged and the run goes on. (add-observer-server)
+
 ## Interfaces
 
 - `AgentPeer(name, model, factory, tools=(), *, memory=MEMORY, peers=None,
@@ -79,6 +88,8 @@ peer does in a chat, seen through a connector, belongs to `connectors`.
   `covered: FrozenSet[str]`,
   `async build(model, tools, options, peer) -> runnable`.
   `BasicAgent()`; `DeepAgent(agent_memory=None)`.
+- `RunTracer(trace, msg_id)` (`tracing.py`): an `AsyncCallbackHandler`;
+  `AgentPeer` declares `HookTrace` and passes one per run.
 - `chat_tools(peer, shape)` and `workspace_tools(peer, mine, covered)`: the
   `StructuredTool`s of a build.
 - `WorkspaceBackend(workspace)`: `als`, `aread(file_path, offset=0,

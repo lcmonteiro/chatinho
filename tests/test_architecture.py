@@ -114,7 +114,7 @@ PARTS = SUPPORT + "/parts"
 KITS = SUPPORT + "/kits"
 
 #: What implements the hooks. Imports everything above, never one another.
-SPECIALIZATIONS = {"connectors", "frontends", "backends", "commands", "routers", "workspaces"}
+SPECIALIZATIONS = {"connectors", "frontends", "backends", "commands", "routers", "workspaces", "hive"}
 
 #: What puts the three together, and so may import all of them.
 ASSEMBLY = {"__init__.py", "builder.py"}

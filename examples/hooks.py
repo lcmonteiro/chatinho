@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-The seventeen hooks, one example each, in a chat with no terminal.
+The nineteen hooks, one example each, in a chat with no terminal.
 
 Every other example shows a chat. This one shows the *declarations* — what each
 hook demands, what it grants, and what actually arrives at each door — by
@@ -32,6 +32,7 @@ from chatinho import (
     Ask,
     Attachment,
     ChatMessage,
+    ChatTrace,
     ChatSession,
     Context,
     HookAnswer,
@@ -48,7 +49,9 @@ from chatinho import (
     HookPeers,
     HookCommands,
     HookProvision,
+    HookRecord,
     HookRoute,
+    HookTrace,
     HookWorkspace,
     HookSay,
     Reply,
@@ -58,6 +61,7 @@ from chatinho import (
     Peers,
     Commands,
     Say,
+    Trace,
     WorkspaceGrant,
     backend,
     connector,
@@ -137,6 +141,7 @@ class EchoConnector:
 
 @connector("weather")
 @require(HookAnswer)
+@require(HookTrace)
 class WeatherConnector:
     """
     ``HookAnswer`` demands ``answer(msg)``: someone asked *you*.
@@ -147,9 +152,19 @@ class WeatherConnector:
     grant for answering late; ``say(text, reply_to=msg.id)`` is that door.
     """
 
+    trace : Trace
+
     async def answer(self, msg: ChatMessage) -> Optional[Reply]:
-        """Answers inline."""
+        """
+        Answers inline, tracing the steps on the way.
+
+        ``HookTrace`` grants ``trace(msg_id, state, text, prev=None)``: one step
+        of processing *msg*, handed to the backend and never heard by anyone.
+        """
         note("HookAnswer", "weather was asked %r" % msg.text)
+        looking = await self.trace(msg.id, "running", "looking out of the window")
+        note("HookTrace", "traced a step of %s" % msg.id.short)
+        await self.trace(msg.id, "done", "it is sunny", prev=looking)
         return Reply("sunny")
 
 
@@ -230,9 +245,10 @@ class UpperCommand:
 @require(HookForget)    # to drop it
 @require(HookKeep)      # to hold what a message carries
 @require(HookLink)      # to say where it can be opened
+@require(HookRecord)    # to keep the steps of processing a message
 class ListArchive:
     """
-    The five hooks a backend declares, over a list instead of a database.
+    The six hooks a backend declares, over a list instead of a database.
 
     The backend is not a key-value store and nothing pushes at it: it is a peer
     that listens. ``DatabaseBackend`` is this, with SQLAlchemy in an executor.
@@ -241,6 +257,12 @@ class ListArchive:
     def __init__(self, seeded: Optional[List[ChatMessage]] = None) -> None:
         self.kept  : List[ChatMessage] = list(seeded or [])
         self.files : Dict[str, bytes] = {}
+        self.steps : List[ChatTrace] = []
+
+    async def record(self, trace: ChatTrace) -> None:
+        """Keeps one step of processing a message; a trace is never a message."""
+        note("HookRecord", "%s of %s: %r" % (trace.state.value, trace.msg_id.short, trace.text))
+        self.steps.append(trace)
 
     async def listen(self, msg: ChatMessage) -> None:
         """Keeps every message that crosses the session."""
@@ -381,7 +403,7 @@ async def main() -> None:
     await screen.say("good morning")
     await settle()
 
-    print("\n-- HookAsk: ask one peer, and it owes a reply --")
+    print("\n-- HookAsk: ask one peer, and it owes a reply; HookTrace: its steps go to HookRecord --")
     weather = session.id_of("weather")
     assert weather is not None
     reply = await screen.ask(weather, "what is the weather?")

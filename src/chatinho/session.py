@@ -25,13 +25,15 @@ import logging
 from contextvars import ContextVar
 from datetime import datetime
 from inspect import isawaitable
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from .hooks import HookAnswer, HookExecute, HookForget, HookKeep, HookLink, HookListen, HookLoad, HookRoute
+from .hooks import HookRecord
 from .hooks import HookProvision, NoWorkspaceProvider
 from .hooks import declared_id, declares, hooks_of, name_of
 from .message import LOCAL, TOOL
 from .message import Attachment, ChatMessage, MessageID, MessageStore, Reply, ReplyStatus, Secret
+from .message import TRACE_TEXT_LIMIT, ChatTrace, TraceID, TraceState
 from .query import Query
 
 #: How deeply the question being answered in this task is nested; 0 when none is.
@@ -106,6 +108,8 @@ class ChatSession:
         self._connectors  : Dict[int, Any] = {}
         #: Asks still waiting for their answer, by the id of the question.
         self._pending     : Dict[MessageID, "asyncio.Future[ChatMessage]"] = {}
+        #: Every trace id this session made: what a later trace may follow.
+        self._traced      : Set[TraceID] = set()
         #: Peers that start() has started; deliveries to the others are held.
         self._running     : Set[int] = set()
         #: Deliveries waiting for their peer to start, in the order they were posted.
@@ -347,6 +351,7 @@ class ChatSession:
             commands= lambda: self._commands,
             locate  = lambda: self.locate,
             workspace = lambda: self._workspace_for(who, at),
+            trace   = lambda: self._trace_for(at),
         )
         for hook in hooks_of(who):
             for granted in hook.grants:
@@ -402,6 +407,61 @@ class ChatSession:
 
     # @req REQ-CORE-006, REQ-CORE-009, REQ-CORE-025
     # @req REQ-ROUTE-001
+    def _trace_for(self, frm: int):
+        async def trace(
+            msg_id : MessageID,
+            state  : Union[TraceState, str],
+            text   : str,
+            prev   : Optional[TraceID] = None,
+        ) -> TraceID:
+            return await self._trace(frm, msg_id, state, text, prev)
+        return trace
+
+    # @req REQ-CORE-030, REQ-CORE-031, REQ-CORE-032
+    async def _trace(
+        self,
+        by     : int,
+        msg_id : MessageID,
+        state  : Union[TraceState, str],
+        text   : str,
+        prev   : Optional[TraceID] = None,
+    ) -> TraceID:
+        """
+        Records a step of *msg_id* traced by *by*, and hands it to the recorder.
+
+        Granted by ``HookTrace``, bound to the caller's id.
+
+        Returns:
+            TraceID: The new trace's id.
+
+        Raises:
+            TypeError: If *msg_id* is not a ``MessageID``.
+            ValueError: If *state* is unknown, or *prev* is not a trace this
+                session made.
+        """
+        if not isinstance(msg_id, MessageID):
+            raise TypeError("A trace belongs to a MessageID, got %r" % (msg_id,))
+        try:
+            state = TraceState(state)
+        except ValueError:
+            raise ValueError("A trace's state is one of %s, got %r"
+                             % (", ".join(s.value for s in TraceState), state)) from None
+        if prev is not None and prev not in self._traced:
+            raise ValueError("No trace %s was made in this session" % (prev,))
+        text = str(text)
+        if len(text) > TRACE_TEXT_LIMIT:
+            text = text[:TRACE_TEXT_LIMIT - 1] + "…"
+        made = ChatTrace(id=TraceID.new(), msg_id=msg_id, state=state, text=text, frm=by, prev=prev)
+        self._traced.add(made.id)
+        recorder = self._first(HookRecord)
+        if recorder is None:
+            return made.id
+        try:
+            await recorder.record(made)
+        except Exception:
+            logger.error("Recording trace %s of %s failed", made.id, msg_id, exc_info=True)
+        return made.id
+
     def _say_for(self, frm: int):
         async def say(
             text        : str,

@@ -36,9 +36,9 @@ Nothing here is inherited: no base class, no ``isinstance``.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, Sequence, Tuple, Union
 
-from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, Secret
+from .message import LOCAL, TOOL, Attachment, ChatMessage, MessageID, Reply, Secret, TraceID, TraceState
 from .query import Query
 
 logger = logging.getLogger(__name__)
@@ -106,6 +106,41 @@ class Locate(Protocol):
 
     async def __call__(self, msg_id: MessageID, name: str) -> Optional[str]:
         """Returns a link to attachment *name* of message *msg_id*, or None."""
+        ...
+
+
+class Trace(Protocol):
+    """
+    Granted by ``HookTrace``: record one step of processing a message.
+
+    The session makes the trace's id and hands the trace to whoever declared
+    ``HookRecord``; with none, it is dropped. A trace is never a message.
+    """
+
+    async def __call__(
+        self,
+        msg_id : MessageID,
+        state  : Union[TraceState, str],
+        text   : str,
+        prev   : Optional[TraceID] = None,
+    ) -> TraceID:
+        """
+        Records a step of *msg_id* and returns the new trace's id.
+
+        Args:
+            msg_id: The message being processed.
+            state: ``running``, ``done`` or ``error``, as the state or its name.
+            text: What the step is; cut to ``TRACE_TEXT_LIMIT``.
+            prev: The trace this one follows, one the session returned.
+
+        Returns:
+            TraceID: The new trace's id, to pass as a later trace's *prev*.
+
+        Raises:
+            TypeError: If *msg_id* is not a ``MessageID``.
+            ValueError: If *state* is not a known state, or *prev* is not a
+                trace the session made.
+        """
         ...
 
 
@@ -387,6 +422,28 @@ HookLocate = Hook(
     # None when nobody did. The terminal opens a message's relative links so.
 )
 
+# === What happened inside ======================================================
+#
+# A trace is one step of processing a message. It is not a message: nobody
+# hears it and context() never returns it. Like an attachment it goes to the
+# backend, to whoever declared HookRecord.
+
+# @req REQ-CORE-033
+HookTrace = Hook(
+    name="HookTrace",
+    grants=("trace",),
+    # await trace(msg_id, state, text, prev=None) -> TraceID. The session makes
+    # the id, stamps who traced and when, and hands it to the recorder.
+)
+
+# @req REQ-CORE-033
+HookRecord = Hook(
+    name="HookRecord",
+    method="record",
+    # async record(trace). Called by the session for every trace; a recorder
+    # that raises is logged and the step being traced goes on.
+)
+
 # === Somewhere to work ==========================================================
 #
 # A workspace is a peer's own git worktree. The provider that keeps them is a
@@ -428,6 +485,8 @@ ALL_HOOKS: Tuple[Hook, ...] = (
     HookLocate,
     HookWorkspace,
     HookProvision,
+    HookTrace,
+    HookRecord,
 )
 
 # Lifecycle is not a hook: initialize() and shutdown() are optional, called

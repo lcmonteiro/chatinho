@@ -24,9 +24,9 @@ from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tup
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from ...parts.keys.endpoint import Endpoint
-from ....hooks import Ask, Commands, Context, Invoke, Peers, Say, WorkspaceGrant
+from ....hooks import Ask, Commands, Context, Invoke, Peers, Say, Trace, WorkspaceGrant
 from ....hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke, HookListen, HookPeers
-from ....hooks import HookSay, HookWorkspace, NoWorkspaceProvider
+from ....hooks import HookSay, HookTrace, HookWorkspace, NoWorkspaceProvider
 from ....hooks import declares, name_of, require
 from ...parts.keys import KeyUnavailable, read_async
 from ....message import LOCAL, Attachment, ChatMessage, Reply, ReplyStatus
@@ -36,6 +36,7 @@ from ...parts.memory import MEMORY, earlier, speaker
 from .factory import AgentFactory
 from .graph import compile_graph
 from .tools import Shape, chat_tools, workspace_tools
+from .tracing import RunTracer
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,7 @@ def chat_model(model: Any) -> Any:
 @require(HookCommands)
 @require(HookInvoke)
 @require(HookWorkspace)
+@require(HookTrace)
 class AgentPeer:
     """
     An agent that answers in the chat, with the chat as its tools.
@@ -117,6 +119,7 @@ class AgentPeer:
     commands  : Commands
     invoke    : Invoke
     workspace : WorkspaceGrant
+    trace     : Trace
 
     # @req REQ-AGENT-002
     def __init__(
@@ -190,13 +193,18 @@ class AgentPeer:
             text, files = self._failed(exc), []
         await self.say(text, reply_to=msg.id, attachments=files)
 
-    # @req REQ-CONN-012, REQ-CONN-024
+    # @req REQ-CONN-012, REQ-CONN-024, REQ-AGENT-012
     async def _run(self, msg: ChatMessage) -> Tuple[str, List[Attachment]]:
         """One run of the graph on *msg*: the answer's text and the run's files."""
         graph  = await self.graph()
-        config = ({"configurable": {"thread_id": str(msg.id)}}
-                  if self.options.get("checkpointer") is not None else None)
-        output = await graph.ainvoke({"question": msg}, config=config)
+        config : Dict[str, Any] = {}
+        if self.options.get("checkpointer") is not None:
+            config["configurable"] = {"thread_id": str(msg.id)}
+        trace = getattr(self, "trace", None)
+        if trace is not None:
+            # Each run its own tracer, so two questions at once never share a graph.
+            config["callbacks"] = [RunTracer(trace, msg.id)]
+        output = await graph.ainvoke({"question": msg}, config=config or None)
         if output.get("__interrupt__"):
             # The agent inside stopped for a decision; nothing in the chat resumes it.
             raise Interrupted("the run stopped for a decision")

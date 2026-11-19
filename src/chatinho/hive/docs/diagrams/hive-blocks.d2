@@ -1,0 +1,49 @@
+direction: right
+
+chats: chats (HiveBackend) {
+  shape: page
+}
+browser: browser {
+  shape: page
+}
+operator: operator's shell {
+  shape: page
+}
+wire: support/parts/hive.py {
+  tooltip: "the JSON a chat and the hive exchange, the paths and the key header"
+}
+hive: hive {
+  app: app.py {
+    tooltip: "create_app(db_url): the FastAPI app, /api routes, / page, /docs"
+  }
+  auth: keys.py {
+    tooltip: "make_key, hash_key; who a key is: a chat, an admin, or nobody"
+  }
+  store: store.py {
+    tooltip: "SQLAlchemy models and Store: chats, admin keys, messages, attachments, traces"
+  }
+  live: live.py {
+    tooltip: "Live: one queue per open stream, fed after each store write"
+  }
+  page: page.html {
+    tooltip: "the viewer: chats, messages, the trace graph as SVG"
+  }
+  cli: cli.py {
+    tooltip: "chatinho-hive serve | chat add/list/remove | admin add"
+  }
+  db: database {
+    shape: cylinder
+  }
+  app -> auth: X-Hive-Key or ?key=
+  app -> store: reads and writes, off the loop
+  app -> live: what was stored
+  app -> page: served at /
+  store -> db: SQL
+  cli -> store: chats and keys
+  cli -> app: uvicorn
+}
+
+chats -> hive.app: messages, attachments, traces; load, forget
+browser -> hive.app: chats, messages, traces; stream (SSE)
+operator -> hive.cli: commands
+hive.app -> wire: decodes and encodes
