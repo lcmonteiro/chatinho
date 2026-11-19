@@ -92,6 +92,13 @@ the ask's outcome (DEBUG: question id, reply status; WARNING when cancelled),
 `_invoke_for` (DEBUG: name, by), `_routed` (DEBUG: id, chosen or nobody),
 `forget` (INFO: count).
 
+Peers, commands and roles are attached in `ChatSession`'s constructor,
+before `run()` opens the file, so the `attached` records reach the program's
+logging but never the file. The `started` record therefore names the whole
+roster as `name=id` pairs and the commands
+(`started with peers bot=1, asker=2 and commands none, loaded 0 messages`),
+so the file always says who was in the chat (found in review, R4).
+
 **Pinned wording**: the session's records use these words, which the tests
 look for beside the ids and counts: `attached` (a peer, command or role),
 `started` (with `loaded <n>`), `closed`, `posted`, `answered` (an ask's

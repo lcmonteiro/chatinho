@@ -20,6 +20,7 @@ reading the diff. `- [ ] R<n>` while open, `- [x] R<n>` once resolved. Write
 - [ ] R4 **design-gap** The 'attached' records are written at construction, before run() opens the file, so the file never held them; the code half made the 'started' record name every peer with its id and the commands (src/chatinho/session.py, start), which design.md does not say
   - **Proposal**: back to design only: record in design.md's event-records Decision that 'started' names the roster (name=id) and commands, because attaching happens before run() opens the file
   - **Decision**: back to design only: state in design.md's event-records Decision that 'started' names the roster (name=id) and the commands, because peers are attached before run() opens the file
+  - done in design: design.md's event-records Decision now says 'started' names the roster as name=id and the commands, and why
 - [x] R5 **test-gap** test_forgetting_is_logged_with_how_many_went asserted forget() returns 3 with no backend, where forget() returns what the archive dropped (0); the code half removed that assertion and kept the logged count (tests/framework/test_session_logging.py)
   - **Proposal**: accept the correction already made: the test now asserts the 'forgot 3' record only
   - **Decision**: accepted: the code half already removed the wrong assertion; the test checks the 'forgot 3' record, which is what AC-CORE-035.7 asks
