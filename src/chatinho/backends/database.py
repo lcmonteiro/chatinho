@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence
 from urllib.parse import quote
 
-from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, create_engine
+from sqlalchemy import Column, DateTime, Integer, LargeBinary, String, Text, create_engine, make_url
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -148,7 +148,9 @@ class DatabaseBackend:
         the thread that writes and the thread that reads see different tables,
         which is exactly what the first run of this backend did.
         """
-        logger.info("Opening the message archive at %s", self.database_url)
+        # Never the password: the log is a file anyone on the machine may come across.
+        logger.info("Opening the message archive at %s",
+                    make_url(self.database_url).render_as_string(hide_password=True))
         options : dict = {"echo": self.echo, "future": True}
         if self.database_url.startswith("sqlite"):
             options["connect_args"] = {"check_same_thread": False}

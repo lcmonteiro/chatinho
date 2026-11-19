@@ -81,3 +81,36 @@ async def test_no_text_and_no_key_is_logged(fake, caplog):
     for text in ("ANSWER-zebra", "QUESTION-zebra", "QUESTION-two-zebra", "sk-OWN-zebra", "sk-LENT-zebra"):
         assert text not in every, text
     assert having(caplog, "gpt", "took")
+
+
+class _Failing:
+    """A client onto a server whose every call fails with a message holding the conversation."""
+
+    protocol_version   = "2026-07-28"         # modern, so the failure is the call's own
+    server_info        = None
+    server_capabilities = None
+
+    async def __aenter__(self) -> "_Failing":
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        return None
+
+    async def call_tool(self, *args, **kwargs):
+        raise RuntimeError("the remote said: QUESTION-remote-zebra")
+
+
+# @ac AC-CONN-025.4
+async def test_a_remote_error_s_text_is_not_logged(caplog):
+    """A failed ask is logged by the error's type, never its message (found in review, R3)."""
+    remote_session, front = await remote(Weather(), name="office")
+    lab = McpConnector(server=front.server, name="lab", peer="weather")
+    lab._client = _Failing()
+    session, view = await driven(connectors=[lab])
+    reply = await view.ask(lab.peer_id, "QUESTION-remote-zebra")
+    await session.close()
+    await remote_session.close()
+    assert reply.status.value == "error"
+    every = "\n".join(r.getMessage() for r in caplog.records)
+    assert "QUESTION-remote-zebra" not in every
+    assert having(caplog, "lab", "RuntimeError")

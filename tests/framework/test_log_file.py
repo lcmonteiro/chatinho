@@ -148,3 +148,21 @@ def test_a_directory_that_cannot_be_written_costs_the_file_not_the_chat(tmp, mon
     said = [line for line in err.splitlines() if str(missing) in line]
     assert len(said) == 1
     assert not missing.exists()
+
+
+# The temporary directory is shared, so a file the chat creates is its owner's alone, and one that
+# was already there keeps its mode (found in review, R2).
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes")
+def test_a_new_log_file_is_readable_by_its_owner_only(tmp):
+    run(("chatinho.test", logging.INFO, "private"))
+    path = tmp / ("chatinho.%s.log" % date.today().isoformat())
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes")
+def test_an_existing_log_file_keeps_its_mode(tmp):
+    path = tmp / ("chatinho.%s.log" % date.today().isoformat())
+    path.write_text("")
+    path.chmod(0o640)
+    run(("chatinho.test", logging.INFO, "shared"))
+    assert path.stat().st_mode & 0o777 == 0o640

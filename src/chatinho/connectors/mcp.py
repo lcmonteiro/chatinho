@@ -166,7 +166,8 @@ class McpConnector:
             logger.warning("%s: nothing to lend (%s)", self.name, exc)
             return Reply("%s: %s" % (self.name, exc), status=ReplyStatus.ERROR)
         except Exception as exc:
-            logger.warning("%s could not ask its server: %r", self.name, exc)
+            # The type alone: the remote side's message may repeat what was asked or answered.
+            logger.warning("%s could not ask its server (%s)", self.name, type(exc).__name__)
             return Reply("%s: could not reach the remote session (%s)" % (self.name, type(exc).__name__),
                          status=ReplyStatus.ERROR)
         return _reply_from(result, self.name)

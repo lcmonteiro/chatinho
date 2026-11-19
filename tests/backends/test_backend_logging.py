@@ -105,3 +105,15 @@ async def test_neither_archive_logs_what_was_said_or_the_key(hive, tmp_path, cap
     assert having(caplog, "kept")
     assert having(caplog, "loaded")
     assert having(caplog, "forgot")
+
+
+# @ac AC-BACK-014.3
+def test_the_database_archive_never_logs_its_password(tmp_path, caplog):
+    """The archive's URL is logged when it opens, with the password masked (found in review, R1)."""
+    # SQLite takes no credentials and refuses the URL, but only after it was logged: what matters here.
+    archive = DatabaseBackend("sqlite://reader:PASSWORD-zebra@/%s" % (tmp_path / "chat.db"))
+    with pytest.raises(Exception, match="SQLite URL"):
+        archive.initialize()
+    every = "\n".join(r.getMessage() for r in caplog.records)
+    assert "PASSWORD-zebra" not in every
+    assert having(caplog, "Opening the message archive", "reader")

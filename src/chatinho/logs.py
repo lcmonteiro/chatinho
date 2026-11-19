@@ -19,6 +19,7 @@ that would have let it through before: the level the program gave the
 import atexit
 import logging
 import logging.handlers
+import os
 import queue
 import sys
 import tempfile
@@ -95,6 +96,9 @@ def open_log() -> Optional[Path]:
         return None
     path = log_file()
     try:
+        # Created for its owner alone, since the temporary directory is shared; a file that is
+        # already there keeps the mode it has.
+        os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600))
         writer = logging.FileHandler(path, mode="a", encoding="utf-8")
     except OSError as exc:
         _failed = True
