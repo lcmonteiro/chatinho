@@ -343,6 +343,45 @@ after the say — and the hive keeps it either way; **the hive shows names, not 
 carries `frm_name` from `peers()` when it was sent, since ids are per session; and the stream takes
 the admin key as `?key=` too, because a browser's `EventSource` cannot set a header.
 
+## A chat that runs writes a log, when asked to
+
+**Logging is off unless `CHATINHO_LOG_PATH` names a directory.** Unset or empty, nothing is
+written and nothing about logging changes. Set, `ChatSession.run()` opens `chatinho.<date>.log` in
+that directory — made with any missing parents if need be, each owner-only (0700), the file
+owner-only (0600) when it creates it, an existing one keeping its mode, and a symbolic link at its
+path refused — dated by the day it was
+first opened and appended to, and every `chatinho` record from DEBUG up goes there, one line each:
+`time LEVEL [pid] logger: message`. The process id is what tells two chats sharing a day's file
+apart. Owner-only and the refused link hold on Linux, macOS and Termux; on Windows `os.open` keeps
+only a mode's read-only bit and there is no `O_NOFOLLOW`, so the file gets its folder's access
+rules. A failed open is not remembered: the next `run()` tries again. The variable is the only switch: no parameter, no level variable, by decision. It was
+always-on in its first round, and that was reopened as the wrong default. `open_log()` reads the
+variable itself, so nothing but the variable turns it on. Nothing else
+opens it: `import chatinho` configures no logging, and neither does driving `start()`/`close()`
+by hand, which is why the test suite writes no file. `logs.py` is a framework module for that
+reason — `session.py` calls it, and the framework imports only itself.
+
+The terminal is why it exists: Textual captures stderr while it runs, so before this a warning
+from a peer went nowhere anyone could read, and DEBUG and INFO were dropped everywhere.
+
+**The program's own logging gets what it got before, and only that.** For the file to see DEBUG
+the `chatinho` logger has to be at DEBUG, and left propagating it would hand every DEBUG record
+to the root handlers, which usually carry no level of their own (`basicConfig` sets it on the
+logger) — a bot's console flooded by the chat's insides. So `open_log()` turns `propagate` off and
+adds a handler that passes a record on to the root logger only at the level that would have let
+it through: the one the program gave `chatinho`, or else the root's, read at each record. A file
+that cannot be opened costs the file, not the chat: one line on stderr, before the terminal takes
+it over.
+
+**The records carry ids, counts, states and durations, never what was said.** The session logs
+each peer attached, start (`loaded <n>`), close, every message `posted` (id, from, to, reply-to,
+status, length, attachments), each ask `answered` with its status, each command `ran` and by
+whom, each routing decision and each forget; the archives what they load, forget, keep, link and
+send; the connectors and `AgentPeer` each request or run with how long it `took`; `GitWorktrees`
+each merge and drop. A file in a shared directory holds nothing private. A traceback is
+logged as the exception wrote it — an exception's own message is the exception's, which is why
+error replies name the type alone.
+
 ## Workspaces: somewhere to work, and everyone can look
 
 A peer that declares `HookWorkspace` is granted `workspace(name=None)`: with no name, its own git
@@ -565,6 +604,8 @@ src/chatinho/
   -- 1. the framework: the session and the definition of the hooks
   session.py       ChatSession: run, peers, commands, delivery, routing, context
   hooks.py         Hook, the nineteen constants, @require, the grant protocols
+  logs.py          the log file run() opens when CHATINHO_LOG_PATH names a directory:
+                   chatinho.<date>.log in it
   query.py         Query (peer/thread/errors/since/limit) and SELF: which part of the conversation
                    context() returns; plain data, so a backend could answer it one day
   message.py       ChatMessage (frm/to/reply_to) + MessageStore, LOCAL, TOOL,
@@ -643,21 +684,23 @@ tests/             one folder per layer part, like the package; real git repos, 
   tests/framework/        test_chat_session.py, test_message_delivery.py, test_message_store.py,
                           test_require.py, test_context_query.py, test_answer_details.py,
                           test_attachments.py, test_lending.py, test_workspaces_in_session.py,
-                          test_traces.py
+                          test_traces.py, test_log_file.py, test_session_logging.py
   tests/keys/             test_keys.py, test_endpoint.py
   tests/workspace-model/  test_workspace_operations.py
-  tests/agents/           test_agent_peer.py, test_workspace_backend.py, test_agent_tracing.py
+  tests/agents/           test_agent_peer.py, test_workspace_backend.py, test_agent_tracing.py,
+                          test_agent_logging.py
   tests/connectors/       test_openai_connector.py, test_mcp_connector.py,
-                          test_basic_agent_connector.py, test_deep_agent_connector.py
+                          test_basic_agent_connector.py, test_deep_agent_connector.py,
+                          test_connector_logging.py
   tests/frontends/        test_chat_frontend.py, test_command_suggestions.py, test_clipboard.py,
                           test_mcp_frontend.py, test_mcp_http.py
   tests/backends/         test_database_backend.py, test_hive_backend.py, test_hive_offline.py,
-                          test_hive_cache.py
+                          test_hive_cache.py, test_backend_logging.py
   tests/hive/             test_hive_keys.py, test_hive_api.py, test_hive_live.py, test_hive_page.py,
                           test_hive_install.py
   tests/commands/         test_workspace_command.py
   tests/routers/          test_message_routing.py, test_llm_router.py, test_llm_router_imports.py
-  tests/workspaces/       test_git_worktrees.py
+  tests/workspaces/       test_git_worktrees.py, test_worktree_logging.py
   tests/                  what crosses them stays at the root: test_architecture.py,
                           test_package_layout.py, test_examples.py, test_mcp_end_to_end.py,
                           test_mcp_results.py; conftest.py is here too, so every folder imports it.

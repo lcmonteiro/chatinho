@@ -44,6 +44,10 @@ base. `/ws` uses it to list, merge and drop them.
   conflict is aborted before `MergeConflict` is raised, so the base and the
   repository are as they were. (baseline-workspaces)
 
+- **Merges and drops are logged** (REQ-WS-006) at INFO with the workspace,
+  its branch and the base; one that fails is a warning naming the conflict or
+  the reason, and still fails as before. (add-logging)
+
 ## Interfaces
 
 - `GitWorktrees(repo, base=None, view=WorkspaceView, workspace=Workspace)`:

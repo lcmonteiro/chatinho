@@ -77,6 +77,11 @@ peer does in a chat, seen through a connector, belongs to `connectors`.
   even when one ends before the other starts (found under load in review).
   A trace that fails is logged and the run goes on. (add-observer-server)
 
+- **A run and a build are logged** (REQ-AGENT-013). Each run with the
+  message's id, its duration and its outcome (answered, interrupted, or the
+  error's type), and each build of the agent with the factory's name and the
+  number of tools; never the question or the answer. (add-logging)
+
 ## Interfaces
 
 - `AgentPeer(name, model, factory, tools=(), *, memory=MEMORY, peers=None,

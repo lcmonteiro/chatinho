@@ -19,6 +19,7 @@ Needs ``pip install 'chatinho[langchain]'``.
 
 import asyncio
 import logging
+import time
 from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
@@ -204,10 +205,18 @@ class AgentPeer:
         if trace is not None:
             # Each run its own tracer, so two questions at once never share a graph.
             config["callbacks"] = [RunTracer(trace, msg.id)]
-        output = await graph.ainvoke({"question": msg}, config=config or None)
-        if output.get("__interrupt__"):
-            # The agent inside stopped for a decision; nothing in the chat resumes it.
-            raise Interrupted("the run stopped for a decision")
+        began = time.monotonic()
+        try:
+            output = await graph.ainvoke({"question": msg}, config=config or None)
+            if output.get("__interrupt__"):
+                # The agent inside stopped for a decision; nothing in the chat resumes it.
+                raise Interrupted("the run stopped for a decision")
+        except Exception as exc:
+            # @req REQ-AGENT-013: the error's type, never its message, which may echo the prompt.
+            logger.info("%s ran for %s: took %.2fs, %s", self.name, msg.id, time.monotonic() - began,
+                        "interrupted" if isinstance(exc, Interrupted) else "failed (%s)" % type(exc).__name__)
+            raise
+        logger.info("%s ran for %s: took %.2fs, answered", self.name, msg.id, time.monotonic() - began)
         return output["text"], list(output["attachments"])
 
     # @req REQ-CONN-012
@@ -242,6 +251,8 @@ class AgentPeer:
                 self._built = (shape, compile_graph(inner, self._history, self.link_retries,
                                                     checkpointer=self.options.get("checkpointer"),
                                                     name=self.options.get("name")))
+                logger.info("%s built its agent with %s and %d tools", self.name, self.factory.name,
+                            len(tools))
             return self._built[1]
 
     def _shape(self) -> Tuple[Tuple[Tuple[int, str], ...], Tuple[str, ...]]:

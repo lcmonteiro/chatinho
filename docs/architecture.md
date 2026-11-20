@@ -14,8 +14,9 @@ behind each decision.
 
 1. The framework
    - **framework** (`src/chatinho`: `session.py`, `hooks.py`, `message.py`,
-     `query.py`): `ChatSession`, the nineteen hooks and `@require`, the
-     messages, the traces and the `Query` over the conversation. Uses nothing else. Every
+     `query.py`, `logs.py`): `ChatSession`, the nineteen hooks and `@require`, the
+     messages, the traces, the `Query` over the conversation and the log file
+     `run()` opens. Uses nothing else. Every
      other capability declares its hooks here and is granted `say`, `ask`,
      `context` and the rest by the session.
 2. The parts (`support/parts`, standard library only, none imports another)
@@ -86,6 +87,13 @@ layers.
   and the hive (its own specialization) both import `support/parts/hive.py`,
   so neither imports the other, and a chat needs no extra to be kept in a
   hive. (add-observer-server)
+- **A chat that runs writes a log when asked to, and nothing else configures
+  logging**: with `CHATINHO_LOG_PATH` naming a directory, `ChatSession.run()`
+  sends every `chatinho` record from DEBUG up to `chatinho.<date>.log` in it,
+  through a thread; unset, logging is off. Importing chatinho or driving
+  `start()`/`close()` opens nothing. The program's own
+  handlers get what they got before, and no record carries what was said or a
+  key. (add-logging)
 - **Tests mirror the capabilities**: `tests/<capability>/`, with what crosses
   capabilities at the root of `tests/`. (adopt)
 

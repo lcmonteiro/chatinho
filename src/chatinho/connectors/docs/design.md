@@ -48,6 +48,11 @@ capability's tags; how `AgentPeer` takes a factory belongs to `agents`.
   a credential's name to a value, a function or a key source; only the
   configured ones the server declared are sent, with the question and never
   in its text. (baseline-connectors)
+- **Each request is logged with how long it took and how it went**
+  (REQ-CONN-025). `OpenAIConnector` and `McpConnector` log the message's id,
+  the model or server, the duration and the reply's status; a failure names
+  the error's type only, since a remote message may repeat the conversation
+  (found in review). Never the prompt, the answer or a key. (add-logging)
 - **An agent connector is a constructor** (REQ-CONN-011, REQ-CONN-020,
   REQ-CONN-024). It passes its factory's keyword arguments on unchanged and
   refuses the others at creation; what one does in a chat holds for the

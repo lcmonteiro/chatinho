@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import openai
@@ -102,9 +103,18 @@ class OpenAIConnector:
             client, self._client = self._client[1], None
             await client.close()
 
-    # @req REQ-CONN-004, REQ-CONN-005
+    # @req REQ-CONN-025
     async def answer(self, msg: ChatMessage) -> Reply:
         """Asks the model, with the conversation so far, and answers with its text."""
+        began = time.monotonic()
+        reply = await self._asked(msg)
+        logger.info("%s asked %s for %s: took %.2fs, %s", self.name, self.model, msg.id,
+                    time.monotonic() - began, _outcome(reply))
+        return reply
+
+    # @req REQ-CONN-004, REQ-CONN-005
+    async def _asked(self, msg: ChatMessage) -> Reply:
+        """The model's answer to *msg*, or the error reply that says why there is none."""
         lent = msg.credentials.get(self.credential)
         if lent is None and self._key is None:
             return Reply("%s: no API key configured or lent as '%s'" % (self.name, self.credential),
@@ -119,7 +129,8 @@ class OpenAIConnector:
             logger.warning("%s: no key (%s)", self.name, exc)
             return Reply("%s: %s" % (self.name, exc), status=ReplyStatus.ERROR)
         except (openai.OpenAIError, OSError) as exc:
-            logger.warning("%s: request to %s failed (%s)", self.name, self.model, type(exc).__name__)
+            logger.warning("%s: request to %s for %s failed (%s)", self.name, self.model, msg.id,
+                           type(exc).__name__)
             return Reply("%s: could not get an answer (%s)" % (self.name, type(exc).__name__),
                          status=ReplyStatus.ERROR)
 
@@ -172,3 +183,8 @@ class OpenAIConnector:
                 messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": msg.text})
         return messages
+
+
+def _outcome(reply: Reply) -> str:
+    """How a request went, for its log record: the reply's status, never its text."""
+    return reply.status.value
