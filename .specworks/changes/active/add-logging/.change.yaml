@@ -1,6 +1,6 @@
 name: add-logging
 created: '2026-11-19T15:52:18'
-phase: review
+phase: validate
 specified:
   REQ-CORE-034: b600ed5d7025
 reopened:
