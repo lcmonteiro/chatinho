@@ -106,9 +106,15 @@ assembly on top of it: the two builders and the public names.
   nothing else can turn logging on, and sends every `chatinho` record from
   DEBUG up to `chatinho.<date>.log` in that directory, appended to, through a
   `QueueListener` thread so a slow disk never holds up the loop. A missing
-  directory is made with its parents, each owner-only (0700); a file it
-  creates is owner-only (0600) and an existing one keeps its mode. Opened once
-  per process. The variable is the only switch, by decision: the first round
+  directory is made with its parents, each owner-only (0700). The file is
+  opened once, through a `FileHandler` whose opener is `os.open(..., flags |
+  O_NOFOLLOW, 0o600)`: `FileHandler` takes no permissions, and creating the
+  file first and opening it again would follow a link planted in between. A
+  file it creates is owner-only, an existing one keeps its mode, and a
+  symbolic link at the path is refused; all three hold on POSIX only, since
+  Windows keeps only a mode's read-only bit and has no `O_NOFOLLOW` (found in
+  inspection). Opened once per process; a failed open is not remembered, so
+  the next `run()` tries again. The variable is the only switch, by decision: the first round
   wrote to the temporary directory on every run, and was reopened as the wrong
   default. Importing chatinho and driving `start`/`close` open nothing.
   (add-logging)
