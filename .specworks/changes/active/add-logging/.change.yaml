@@ -1,0 +1,15 @@
+name: add-logging
+created: '2026-11-19T15:52:18'
+phase: review
+specified:
+  REQ-CORE-034: b600ed5d7025
+reopened:
+- at: '2026-11-19T21:09:26'
+  reason: Add an env var, like CHATINHO_LOG_PATH, to control whether logging is enabled;
+    if it is not set, logging is disabled
+  phase: refine
+- at: '2026-11-20T12:47:16'
+  reason: Inspection notes I1 (why the global variables _open and _failed are needed;
+    drop _failed) and I2 (FileHandler has no way to set permissions, the double open
+    follows symbolic links; is it platform independent?)
+  phase: review
