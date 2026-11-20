@@ -64,9 +64,27 @@ class _Open:
         self.propagate = propagate
 
 
-_open   : Optional[_Open] = None
-#: The file could not be opened once already: say nothing more.
-_failed : bool = False
+#: The log this process opened, until close_log(): logging is the process's, so this is too.
+_open : Optional[_Open] = None
+
+
+def _private(path: str, flags: int) -> int:
+    """Opens *path* as ``open()``'s opener: created for its owner alone, and never through a link."""
+    # O_NOFOLLOW is POSIX: on Windows there is none, and 0o600 keeps only its read-only bit.
+    return os.open(path, flags | getattr(os, "O_NOFOLLOW", 0), 0o600)
+
+
+class _PrivateFile(logging.FileHandler):
+    """
+    A file handler whose file is opened once, through :func:`_private`.
+
+    ``FileHandler`` takes no permissions, and opening the path a first time to set them would
+    follow a link planted there before the second open (found in inspection).
+    """
+
+    def _open(self) -> Any:
+        return open(self.baseFilename, self.mode, encoding=self.encoding, errors=self.errors,
+                    opener=_private)
 
 
 def log_file(directory: Path, day: Optional[date] = None) -> Path:
@@ -92,26 +110,26 @@ def open_log() -> Optional[Path]:
     directory that does not exist is made for its owner only, and a file it
     creates is its owner's only. A second call returns the same path and adds
     nothing. When the file cannot be opened, one line on stderr says so and the
-    chat goes on without it.
+    chat goes on without it; the next ``run()`` tries again. A symbolic link at
+    the file's path is refused, where the system can tell.
 
     Returns:
         Optional[Path]: The file being written, or None when logging is off or it cannot be.
     """
-    global _open, _failed
+    global _open
     if _open is not None:
         return _open.path
     named = os.environ.get(LOG_PATH_VARIABLE, "")
-    if not named or _failed:
+    if not named:
         return None                                           # off: nothing is touched
     directory = Path(named)
     path      = log_file(directory)
     try:
         _make_private(directory)
-        # Created for its owner alone; a file that is already there keeps the mode it has.
-        os.close(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600))
-        writer = logging.FileHandler(path, mode="a", encoding="utf-8")
+        # One open, for its owner alone and never through a link; a file already there keeps its mode.
+        writer = _PrivateFile(path, mode="a", encoding="utf-8")
     except OSError as exc:
-        _failed = True
+        # Nothing is remembered: the next run() tries again, so a fixed directory just works.
         print("chatinho: cannot write the log file %s: %s" % (path, exc), file=sys.stderr)
         return None
     writer.setFormatter(logging.Formatter(LOG_FORMAT))
@@ -142,8 +160,7 @@ def _make_private(directory: Path) -> None:
 
 def close_log() -> None:
     """Stops writing the file, and puts the ``chatinho`` logger back as it was."""
-    global _open, _failed
-    _failed = False
+    global _open
     if _open is None:
         return
     done, _open = _open, None

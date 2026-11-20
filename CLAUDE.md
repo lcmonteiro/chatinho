@@ -348,10 +348,13 @@ the admin key as `?key=` too, because a browser's `EventSource` cannot set a hea
 **Logging is off unless `CHATINHO_LOG_PATH` names a directory.** Unset or empty, nothing is
 written and nothing about logging changes. Set, `ChatSession.run()` opens `chatinho.<date>.log` in
 that directory — made with any missing parents if need be, each owner-only (0700), the file
-owner-only (0600) when it creates it, an existing one keeping its mode — dated by the day it was
+owner-only (0600) when it creates it, an existing one keeping its mode, and a symbolic link at its
+path refused — dated by the day it was
 first opened and appended to, and every `chatinho` record from DEBUG up goes there, one line each:
 `time LEVEL [pid] logger: message`. The process id is what tells two chats sharing a day's file
-apart. The variable is the only switch: no parameter, no level variable, by decision. It was
+apart. Owner-only and the refused link hold on Linux, macOS and Termux; on Windows `os.open` keeps
+only a mode's read-only bit and there is no `O_NOFOLLOW`, so the file gets its folder's access
+rules. A failed open is not remembered: the next `run()` tries again. The variable is the only switch: no parameter, no level variable, by decision. It was
 always-on in its first round, and that was reopened as the wrong default. `open_log()` reads the
 variable itself, so nothing but the variable turns it on. Nothing else
 opens it: `import chatinho` configures no logging, and neither does driving `start()`/`close()`

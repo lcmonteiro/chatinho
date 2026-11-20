@@ -216,3 +216,33 @@ def test_an_existing_log_file_keeps_its_mode(logs):
     run(("chatinho.test", logging.INFO, "shared"))
     assert path.stat().st_mode & 0o777 == 0o640
     assert any("shared" in line for line in lines(logs))
+
+
+# @ac AC-CORE-034.6
+def test_a_run_after_a_failed_one_opens_the_file_once_it_can(tmp_path, monkeypatch, capsys):
+    """Nothing latches a failure: fix the directory, and the next run() in the process logs (R6)."""
+    blocked = tmp_path / "logs"
+    blocked.write_text("not a directory yet")
+    monkeypatch.setenv(LOG_PATH_VARIABLE, str(blocked))
+    try:
+        run(("chatinho.test", logging.INFO, "first"))
+        assert len([line for line in capsys.readouterr().err.splitlines() if str(blocked) in line]) == 1
+        blocked.unlink()
+        run(("chatinho.test", logging.INFO, "second"))
+    finally:
+        close_log()
+    held = (blocked / TODAY).read_text(encoding="utf-8").splitlines()
+    assert any("second" in line for line in held)
+
+
+# A link at the log's predictable name in a shared directory must not get the log appended to its
+# target (R7): the file is opened once, never through a link, where the system can tell.
+@pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="no O_NOFOLLOW on this system")
+def test_a_symbolic_link_at_the_log_path_is_refused(logs, capsys):
+    target = logs.parent / "someone-elses-file"
+    target.write_text("untouched\n")
+    (logs / TODAY).symlink_to(target)
+    peer = run(("chatinho.test", logging.WARNING, "must not land there"))
+    assert peer.served
+    assert target.read_text() == "untouched\n"
+    assert len([line for line in capsys.readouterr().err.splitlines() if str(logs / TODAY) in line]) == 1

@@ -33,8 +33,12 @@ reading the diff. `- [ ] R<n>` while open, `- [x] R<n>` once resolved. Write
   - **Decision**: accepted: the code half already removed the wrong assertion; the test checks the 'forgot 3' record, which is what AC-CORE-035.7 asks
 - [ ] R6 **quality** I1: _failed latches a failed open for the whole process (src/chatinho/logs.py:104-114): after the directory is fixed, a later run() in the same process stays silent and off until exit; _open is needed (it keeps a second run() from attaching a second handler and lets close_log() undo the setup)
   - **Proposal**: back to code: drop _failed so each run() retries opening the log (one stderr line per failed run), keep _open; add a test that a run after a failed one opens the file once the directory is fixed
+  - **Decision**: back to code: drop _failed so each run() retries opening the log (one stderr line per failed run), keep _open; test that a run after a failed one opens the file once the directory is fixed
+  - done in code: _failed is gone: a failed open is not remembered and the next run() retries; _open stays. test_a_run_after_a_failed_one_opens_the_file_once_it_can fails on the old code
 - [ ] R7 **quality** I2: logging.FileHandler cannot set permissions, so open_log opens the path twice, os.open(..., 0o600) then FileHandler (src/chatinho/logs.py:111-112), and neither refuses a symbolic link, so a link planted at the predictable chatinho.<date>.log in a shared directory gets the log appended to its target; owner-only (0600/0700) is enforced on POSIX only, which nothing says
   - **Proposal**: back to code: open the file once through a FileHandler subclass whose _open passes opener=lambda p, f: os.open(p, f | getattr(os, 'O_NOFOLLOW', 0), 0o600), with a test that a symbolic link at the log path is refused (one stderr line, nothing written to its target); say in CLAUDE.md that owner-only is enforced on POSIX only
+  - **Decision**: back to code: open the file once through a FileHandler subclass whose _open uses an opener with os.open(..., flags | O_NOFOLLOW where available, 0o600); test that a symbolic link at the log path is refused; say in CLAUDE.md that owner-only is enforced on POSIX only
+  - done in code: the file is opened once through _PrivateFile, a FileHandler whose opener is os.open(..., flags | O_NOFOLLOW where available, 0o600); test_a_symbolic_link_at_the_log_path_is_refused fails on the old code; CLAUDE.md says owner-only and the refused link hold on POSIX only
 
 ## Changed files without tags
 
