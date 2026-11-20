@@ -2,7 +2,7 @@
 
 import asyncio
 from types import SimpleNamespace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 import openai
 
@@ -20,9 +20,15 @@ class FakeOpenAI:
     error   : Optional[Exception] = None
     gate    : Optional[asyncio.Event] = None
 
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None) -> None:
-        self.api_key  = api_key
-        self.base_url = base_url
+    def __init__(
+        self,
+        api_key         : Optional[str] = None,
+        base_url        : Optional[str] = None,
+        default_headers : Optional[Mapping[str, str]] = None,
+    ) -> None:
+        self.api_key         = api_key
+        self.base_url        = base_url
+        self.default_headers = default_headers
         self.requests : List[Dict[str, Any]] = []
         self.closed   = False
         self.chat     = SimpleNamespace(completions=SimpleNamespace(create=self._create))

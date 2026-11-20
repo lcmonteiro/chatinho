@@ -387,3 +387,100 @@ async def test_its_own_key_is_read_when_first_needed(monkeypatch):
         await session.close()
     used = [c.api_key for c in FakeOpenAI.clients if c.requests]
     assert used == ["sk-late"]
+
+
+# === Extra request headers =========================================================
+
+EDITOR = {"Editor-Version": "vscode/1.95.0"}
+
+
+def asked_with() -> List[Optional[dict]]:
+    """The headers each client that made a request was built with."""
+    return [None if c.default_headers is None else dict(c.default_headers)
+            for c in FakeOpenAI.clients if c.requests]
+
+
+# @ac AC-ROUTE-012.1
+async def test_its_own_key_asks_with_the_headers():
+    FakeOpenAI.reply = "everyone"
+    session, view = await driven(connectors=[_Peer("gpt"), _Peer("weather")], router=router(headers=EDITOR))
+    try:
+        await view.say("hello")
+    finally:
+        await session.close()
+    used = [c for c in FakeOpenAI.clients if c.requests]
+    assert [c.api_key for c in used] == ["sk-own"]
+    assert asked_with() == [EDITOR]
+
+
+# @ac AC-ROUTE-012.2
+async def test_a_lent_key_asks_with_the_headers():
+    FakeOpenAI.reply = "everyone"
+    session, view = await driven(connectors=[_Peer("gpt"), _Peer("weather")], router=router(headers=EDITOR))
+    try:
+        await view.say("hello", credentials={"llm": Secret("client-key")})
+    finally:
+        await session.close()
+    used = [c for c in FakeOpenAI.clients if c.requests]
+    assert [c.api_key for c in used] == ["client-key"]
+    assert asked_with() == [EDITOR]
+
+
+# @ac AC-ROUTE-012.3
+@pytest.mark.parametrize("given", [None, {}])
+async def test_no_headers_gives_the_client_none(given):
+    FakeOpenAI.reply = "everyone"
+    built         = router() if given is None else router(headers=given)
+    session, view = await driven(connectors=[_Peer("gpt"), _Peer("weather")], router=built)
+    try:
+        await view.say("hello")
+        await view.say("again", credentials={"llm": Secret("client-key")})
+    finally:
+        await session.close()
+    assert asked_with() == [None, None]
+
+
+# @ac AC-ROUTE-012.4
+async def test_the_headers_are_copied_when_the_router_is_built():
+    FakeOpenAI.reply = "everyone"
+    given         = {"X-A": "1"}
+    built         = router(headers=given)
+    given["X-A"]  = "2"
+    session, view = await driven(connectors=[_Peer("gpt"), _Peer("weather")], router=built)
+    try:
+        await view.say("hello")
+    finally:
+        await session.close()
+    assert asked_with() == [{"X-A": "1"}]
+
+
+# @ac AC-ROUTE-012.5
+@pytest.mark.parametrize("bad", [["X-A"], {"X-A": 1}, {1: "x"}, "X-A: 1"])
+def test_malformed_headers_are_refused(bad):
+    with pytest.raises(ValueError):
+        router(headers=bad)
+
+
+# @ac AC-ROUTE-012.6
+@pytest.mark.parametrize("name", ["authorization", "Authorization", "AUTHORIZATION"])
+def test_an_authorization_header_is_refused_without_its_value(name):
+    with pytest.raises(ValueError) as refused:
+        router(headers={name: "Bearer sk-secret"})
+    assert name in str(refused.value)
+    assert "sk-secret" not in str(refused.value)
+
+
+# @ac AC-ROUTE-012.7
+async def test_a_header_value_is_never_shown(caplog):
+    caplog.set_level(logging.DEBUG)
+    FakeOpenAI.error = failure("APIConnectionError", "connection refused")
+    built         = router(headers={"X-Token": "tok-secret"})
+    session, view = await driven(connectors=[_Peer("gpt"), _Peer("weather")], router=built)
+    try:
+        await view.say("hello")
+    finally:
+        await session.close()
+    assert asked_with() == [{"X-Token": "tok-secret"}]
+    assert "tok-secret" not in repr(built)
+    assert warnings_of(caplog)
+    assert not any("tok-secret" in r.getMessage() for r in caplog.records)
