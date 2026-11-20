@@ -59,6 +59,15 @@ which one, or whether the say is for everyone.
 - **A lent key wins, and lives for one say** (REQ-ROUTE-010). As
   `OpenAIConnector` does; its own key is read late and its client kept per
   key, a replaced one closed at shutdown. (add-llm-router)
+- **Extra request headers are the router's, fixed when it is built**
+  (REQ-ROUTE-012). An endpoint such as the GitHub Copilot API needs headers
+  (`Editor-Version`) the SDK does not send; `headers` is copied and checked
+  at build time and given as `default_headers` to every client, its own and a
+  lent key's. `Authorization` is refused because the SDK merges
+  `default_headers` over its own auth header, which would silently replace a
+  lent key. Values stay in a private attribute and out of `repr` and logs.
+  Alternative: a client factory, which would let `openai`'s type into the API
+  and move part of the router's job to the caller. (add-router-headers)
 
 ## Interfaces
 
@@ -77,9 +86,10 @@ which one, or whether the say is for everyone.
   -> Optional[int]` (`simple.py`): the answering peers but the speaker and the
   frontend, and `SimpleRouter`'s two rules.
 - `LLMRouter(endpoint=None, *, memory=ROUTING_MEMORY, timeout=10.0,
-  credential="llm")` (`llm.py`): declares `HookRoute`, `HookPeers`,
-  `HookContext`; `async route(msg)`, `async shutdown()`; `ValueError` for a
-  timeout that is not positive; the model is `endpoint.model or
+  credential="llm", headers=None)` (`llm.py`): declares `HookRoute`,
+  `HookPeers`, `HookContext`; `async route(msg)`, `async shutdown()`;
+  `ValueError` for a timeout that is not positive, or `headers` that are not a
+  mapping of strings or name `Authorization` (in any case); the model is `endpoint.model or
   "gpt-4o-mini"`. `ROUTING_MEMORY` is the last 6 messages without failed
   replies; `EVERYONE` is `"everyone"`. Read lazily off `chatinho` and
   `chatinho.routers`.
