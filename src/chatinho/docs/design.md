@@ -98,14 +98,19 @@ assembly on top of it: the two builders and the public names.
   as messages with a status were set aside: they would have entered
   `context()`, every model's memory and the terminal log. A recorder that
   raises is logged and the step goes on. (add-observer-server)
-- **A chat that runs writes a log; nothing else configures logging**
-  (REQ-CORE-034). `run()` calls `open_log()` (`logs.py`, a framework module
-  because the framework imports only itself), which sends every `chatinho`
-  record from DEBUG up to `chatinho.<date>.log` in `tempfile.gettempdir()`,
-  appended to, through a `QueueListener` thread so a slow disk never holds up
-  the loop. Opened once per process; a file it creates is the owner's alone
-  (0600, found in review). No parameter or variable moves or silences it, by
-  decision. Importing chatinho and driving `start`/`close` open nothing.
+- **A chat that runs writes a log when asked to; nothing else configures
+  logging** (REQ-CORE-034). Logging is off unless `CHATINHO_LOG_PATH` names a
+  directory: unset or empty, nothing is written and nothing about logging
+  changes. `run()` calls `open_log()` (`logs.py`, a framework module because
+  the framework imports only itself), which reads the variable itself, so
+  nothing else can turn logging on, and sends every `chatinho` record from
+  DEBUG up to `chatinho.<date>.log` in that directory, appended to, through a
+  `QueueListener` thread so a slow disk never holds up the loop. A missing
+  directory is made with its parents, each owner-only (0700); a file it
+  creates is owner-only (0600) and an existing one keeps its mode. Opened once
+  per process. The variable is the only switch, by decision: the first round
+  wrote to the temporary directory on every run, and was reopened as the wrong
+  default. Importing chatinho and driving `start`/`close` open nothing.
   (add-logging)
 - **The program's logging gets what it got before** (REQ-CORE-034). The
   `chatinho` logger goes to DEBUG for the file and stops propagating; a
@@ -151,7 +156,7 @@ assembly on top of it: the two builders and the public names.
   `TypeError` (a bad declaration, a string where a `Reply` is due),
   `KeyError` (no such workspace), `NoWorkspaceProvider`, `ImportError`
   naming the missing extra.
-- `logs.py`: `LOG_FORMAT`, `log_file(day=None) -> Path`, `open_log() -> Optional[Path]`, `close_log()`; not exported from `chatinho` (REQ-CORE-034).
+- `logs.py`: `LOG_FORMAT`, `LOG_PATH_VARIABLE` (`"CHATINHO_LOG_PATH"`), `log_file(directory, day=None) -> Path`, `open_log() -> Optional[Path]`, `close_log()`; not exported from `chatinho` (REQ-CORE-034).
 
 ## Constraints
 
