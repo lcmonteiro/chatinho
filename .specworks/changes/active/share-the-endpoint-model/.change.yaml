@@ -1,6 +1,3 @@
 name: share-the-endpoint-model
 created: '2026-11-26T12:59:23'
-phase: implement
-dirty:
-  .specworks/changes/active/share-the-endpoint-model/.change.yaml: b64c0c2e433d770db6259a4c94cc8f3d04c2ca7b4d8efe303b5dea5fb1bf3546
-  .specworks/changes/active/share-the-endpoint-model/design.md: d4a159d0495b0c85ed8a601b3eb0a947b544f9035cf3db228aaad05b7e139a14
+phase: review

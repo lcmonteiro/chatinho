@@ -66,8 +66,10 @@ which every OpenAI-only component now reaches.
 ## Interfaces
 
 - `src/chatinho/support/kits/model/endpoint.py`:
-  `EndpointModel(endpoint: Optional[Endpoint] = None, *, headers: Optional[Mapping[str, str]] = None)`
-  with `name: str`, `base_url: Optional[str]`, `has_own_key: bool`,
+  `EndpointModel(endpoint: Optional[Endpoint] = None, *, default: str = "gpt-4o", headers: Optional[Mapping[str, str]] = None)`
+  with `name: str` (the endpoint's model, else `default`: the router passes `gpt-4o-mini`),
+  `base_url: Optional[str]`, `has_own_key: bool`, `headers: Optional[Dict[str, str]]` (a copy),
+  `await own_key() -> Secret` (raises `KeyUnavailable`; what the chat model reads its own key with),
   `await complete(messages: List[Dict[str, Any]], *, api_key: Optional[Secret] = None, **params) -> Any`
   (the SDK's completion), `chat_model() -> Any`, `await close() -> None` (REQ-MODEL-001, 002, 003);
   `lent_key(msg: ChatMessage, credential: str) -> Optional[Secret]` (REQ-MODEL-004).
