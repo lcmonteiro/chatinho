@@ -6,13 +6,20 @@
 `specworks finding add <type> "<text>" --proposal "<proposal>" --artifact inspection`.
 `- [ ] I<n>` while open, `- [x] I<n>` once an inspection confirmed it. -->
 
-- [ ] I1 **quality** Why do we need the global variables _open and _failed (src/chatinho/logs.py:100-116)? _open is needed: logging is per process, it keeps a second run() from attaching a second handler (no doubled records) and lets close_log() stop the listener and restore the logger. _failed is not: it latches a failed open for the whole process, so after the directory is fixed a later run() in the same process stays silent and off until exit
+- [x] I1 **quality** Why do we need the global variables _open and _failed (src/chatinho/logs.py:100-116)? _open is needed: logging is per process, it keeps a second run() from attaching a second handler (no doubled records) and lets close_log() stop the listener and restore the logger. _failed is not: it latches a failed open for the whole process, so after the directory is fixed a later run() in the same process stays silent and off until exit
   - **Proposal**: back to code: drop _failed so each run() retries opening the log (one stderr line per failed run), keep _open; add a test that a run after a failed one opens the file once the directory is fixed
   - done in review: carried out as R6: _failed dropped, the next run() retries; test_a_run_after_a_failed_one_opens_the_file_once_it_can
-- [ ] I2 **quality** logging.FileHandler has no way to set file permissions, so open_log needs os interfaces: today it opens the path twice, os.open(path, O_CREAT|O_APPEND, 0o600) then FileHandler (src/chatinho/logs.py:111-112), and neither refuses a symbolic link, so a link planted at the predictable chatinho.<date>.log in a shared directory (the README suggests /tmp) gets the log appended to its target. Is it platform independent? It runs everywhere, but owner-only (0600/0700) is enforced only on POSIX: on Windows os.open keeps only the read-only bit and mkdir ignores its mode, and the tests are skipped there
+  - confirmed in inspection: checked: no _failed left in src/chatinho/logs.py, _open kept (logs.py:68); open_log() remembers nothing on failure; the retry test passes
+- [x] I2 **quality** logging.FileHandler has no way to set file permissions, so open_log needs os interfaces: today it opens the path twice, os.open(path, O_CREAT|O_APPEND, 0o600) then FileHandler (src/chatinho/logs.py:111-112), and neither refuses a symbolic link, so a link planted at the predictable chatinho.<date>.log in a shared directory (the README suggests /tmp) gets the log appended to its target. Is it platform independent? It runs everywhere, but owner-only (0600/0700) is enforced only on POSIX: on Windows os.open keeps only the read-only bit and mkdir ignores its mode, and the tests are skipped there
   - **Proposal**: back to code: open the file once through a FileHandler subclass whose _open passes opener=lambda p, f: os.open(p, f | getattr(os, 'O_NOFOLLOW', 0), 0o600), with a test that a symbolic link at the log path is refused (one stderr line, no write to its target); say in CLAUDE.md that owner-only is enforced on POSIX only
   - done in review: carried out as R7: one open through _PrivateFile (0600, O_NOFOLLOW where available); test_a_symbolic_link_at_the_log_path_is_refused; CLAUDE.md says POSIX only
+  - confirmed in inspection: checked: one open through _PrivateFile, whose opener is os.open(flags | O_NOFOLLOW where available, 0o600) (logs.py:71-87); the link test passes; CLAUDE.md says owner-only and the refused link hold on POSIX only
 
 ## Summary
 
 <!-- The blocks walked out of the total, and the notes written. -->
+
+Two notes, both quality, both sent back to code and carried out in review as R6 and R7: `_failed`
+dropped so the next `run()` retries opening the log; the file opened once through `_PrivateFile`
+(0600, `O_NOFOLLOW` where available), with the POSIX-only scope stated in CLAUDE.md. Both confirmed
+here; tests/framework/test_log_file.py passes (13 passed).
