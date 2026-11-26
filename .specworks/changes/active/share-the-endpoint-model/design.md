@@ -72,7 +72,7 @@ which every OpenAI-only component now reaches.
   (the SDK's completion), `chat_model() -> Any`, `await close() -> None` (REQ-MODEL-001, 002, 003);
   `lent_key(msg: ChatMessage, credential: str) -> Optional[Secret]` (REQ-MODEL-004).
 - `src/chatinho/support/kits/model/chat.py`: `EndpointChatModel(model: EndpointModel)`, moved
-  from `support/kits/agent/model.py`, same calls as before (REQ-MODEL-003).
+  here from the agent kit, same calls as before (REQ-MODEL-003).
 - `src/chatinho/support/kits/model/__init__.py`: exports `EndpointModel`, `lent_key`; `EndpointChatModel` on first use.
 
 ## Diagrams
