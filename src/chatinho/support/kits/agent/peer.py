@@ -131,6 +131,7 @@ class AgentPeer:
         tools        : Sequence[Any] = (),
         *,
         memory       : Optional[Query] = MEMORY,
+        credential   : str = "llm",
         peers        : Optional[Iterable[str]] = None,
         commands     : Optional[Iterable[str]] = None,
         ask_user     : bool = False,
@@ -146,6 +147,8 @@ class AgentPeer:
         self.factory      = factory
         self.tools        = list(tools)
         self.memory       = memory
+        #: The name of the lent credential its runs use, when its model is an Endpoint.
+        self.credential   = credential
         self.ask_user     = ask_user
         self.link_retries = link_retries
         #: Whether it works in its workspace. Not ``self.workspace``: that is the grant.
