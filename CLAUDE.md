@@ -517,7 +517,7 @@ per conversation hook, in a chat with no terminal. This section is the summary.
 
 A credential is not a hook: it rides on the message (`msg.credentials`), for whoever answers that
 message, so a peer can work with a different key for each one. `McpFrontend` puts a client's lent
-keys there and clears them once the message is answered. An agent whose model is an `Endpoint` answers with the lent key too (`credential=`, default `llm`): `AgentPeer._run` puts it in a context variable the endpoint's key function reads, set on *every* run — to none as well — so a peer asked from inside the run starts without it, and nothing is rebuilt per key. Any other model ignores a lent key and says so once. MCP sampling was tried and dropped: it is
+keys there and clears them once the message is answered. An agent whose model is an `Endpoint` answers with the lent key too (`credential=`, default `llm`). The `Endpoint` becomes an `EndpointChatModel` (`support/kits/agent/model.py`), a chat model called as any other with one keyword more, `api_key`; inside an agent LangChain calls it with no room for a keyword, so a call without one takes `configurable["api_key"]` from the run's config, where `AgentPeer._run` puts the lent `Secret` — on *every* run, none as well, so a peer asked from inside the run starts without it. A call with a key builds a client for that call and keeps nothing. A module-level context variable did this first and was rejected as a hidden global. Any other model ignores a lent key and says so once. MCP sampling was tried and dropped: it is
 deprecated in the modern protocol, and lending a key covers the same need.
 
 `HookInvoke` and `HookExecute` are two hooks where a single one used to serve, badly — that is
@@ -632,6 +632,7 @@ src/chatinho/
     agent/         what the agent connectors are built from, behind chatinho[langchain]
                    (connectors/agents/ holds the connectors, support/kits/agent/ the chat around an agent):
       peer.py      AgentPeer: the hooks, answer/listen, graph(), memory; built lazily, rebuilt on shape
+      model.py     EndpointChatModel: the chat model an Endpoint becomes; takes api_key per call
       factory.py   AgentFactory: name, options, covered, async build(model, tools, options, peer)
       basic.py     BasicAgent: create_agent
       deep.py      DeepAgent: create_deep_agent, CompositeBackend, WHERE — behind chatinho[deepagents],

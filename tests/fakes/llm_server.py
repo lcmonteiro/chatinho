@@ -25,6 +25,8 @@ class ChatServer:
         self.base_url = ""
         #: The bearer key of every request, in the order they arrived.
         self.keys     : List[Optional[str]] = []
+        #: The JSON body of every request, in the same order.
+        self.bodies   : List[Dict[str, Any]] = []
         #: The open connections, closed with the server: a kept-alive one would hold it open.
         self.writers  : List[asyncio.StreamWriter] = []
 
@@ -39,6 +41,7 @@ class ChatServer:
                 body    = json.loads(await reader.readexactly(int(headers.get("content-length", "0"))))
                 auth    = headers.get("authorization", "")
                 self.keys.append(auth[len("Bearer "):] if auth.startswith("Bearer ") else None)
+                self.bodies.append(body)
                 if self.delay:
                     await asyncio.sleep(self.delay)
                 answer  = self.respond(body)

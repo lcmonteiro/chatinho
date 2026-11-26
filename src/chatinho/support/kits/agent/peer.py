@@ -18,7 +18,6 @@ Needs ``pip install 'chatinho[langchain]'``.
 """
 
 import asyncio
-import contextvars
 import logging
 import time
 from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
@@ -44,26 +43,19 @@ from .tracing import RunTracer
 logger = logging.getLogger(__name__)
 
 
-# @req REQ-CONN-026
-#: The key lent on the question the current run answers; None when it lent none.
-#: Every run sets it, so a peer it asks, started from inside the run, never inherits it.
-_LENT : contextvars.ContextVar[Optional[Secret]] = contextvars.ContextVar("chatinho_agent_lent_key",
-                                                                         default=None)
-
-
 class Interrupted(RuntimeError):
     """The agent stopped to wait for a human decision (``interrupt_on``) nothing in the chat can give."""
 
 
-# @req REQ-CONN-018, REQ-CONN-026
+# @req REQ-CONN-018, REQ-CONN-027
 def chat_model(model: Any) -> Any:
     """
     What a factory is given: the model as is, or an Endpoint made a chat model.
 
-    An Endpoint becomes ``ChatOpenAI`` whose key is a function called each time
-    the model is: the key lent on the question the run answers when there is
-    one, and otherwise the endpoint's key source, read then — never at
-    creation, and never kept as text.
+    An Endpoint becomes an :class:`~chatinho.support.kits.agent.model.EndpointChatModel`,
+    which reads the endpoint's key when the model is called — never at creation,
+    and never kept as text — unless the call, or its run's configuration, brings
+    a key of its own.
     """
     if not isinstance(model, Endpoint):
         return model
@@ -207,33 +199,23 @@ class AgentPeer:
 
     # @req REQ-CONN-012, REQ-CONN-024, REQ-AGENT-012, REQ-CONN-026
     async def _run(self, msg: ChatMessage) -> Tuple[str, List[Attachment]]:
-        """One run of the graph on *msg*, with its lent key: the answer's text and the run's files."""
-        lent = msg.credentials.get(self.credential)
-        if lent is not None and not self._lendable and not self._said_ignored_key:
-            self._said_ignored_key = True
-            logger.warning("%s: a key lent as '%s' is ignored, its model is not an Endpoint",
-                           self.name, self.credential)
-        # Set on every run, to none as well: a peer asked from inside another's
-        # run starts in that run's context, and must not answer with its key.
-        token = _LENT.set(lent if self._lendable else None)
-        try:
-            return await self._run_graph(msg)
-        finally:
-            _LENT.reset(token)
-
-    async def _run_graph(self, msg: ChatMessage) -> Tuple[str, List[Attachment]]:
         """One run of the graph on *msg*: the answer's text and the run's files."""
         graph  = await self.graph()
-        config : Dict[str, Any] = {}
+        # The key lent on the question goes to the model in the run's configuration,
+        # where an Endpoint's model takes it; set on every run, to none as well, so a
+        # peer asked from inside the run, which starts from this configuration, does
+        # not answer with the asker's key.
+        configurable : Dict[str, Any] = {"api_key": self._lent(msg)}
         if self.options.get("checkpointer") is not None:
-            config["configurable"] = {"thread_id": str(msg.id)}
+            configurable["thread_id"] = str(msg.id)
+        config : Dict[str, Any] = {"configurable": configurable}
         trace = getattr(self, "trace", None)
         if trace is not None:
             # Each run its own tracer, so two questions at once never share a graph.
             config["callbacks"] = [RunTracer(trace, msg.id)]
         began = time.monotonic()
         try:
-            output = await graph.ainvoke({"question": msg}, config=config or None)
+            output = await graph.ainvoke({"question": msg}, config=config)
             if output.get("__interrupt__"):
                 # The agent inside stopped for a decision; nothing in the chat resumes it.
                 raise Interrupted("the run stopped for a decision")
@@ -244,6 +226,18 @@ class AgentPeer:
             raise
         logger.info("%s ran for %s: took %.2fs, answered", self.name, msg.id, time.monotonic() - began)
         return output["text"], list(output["attachments"])
+
+    # @req REQ-CONN-026
+    def _lent(self, msg: ChatMessage) -> Optional[Secret]:
+        """The key lent on *msg* for its model, or None; one a model that cannot take it ignores."""
+        lent = msg.credentials.get(self.credential)
+        if lent is not None and not self._lendable:
+            if not self._said_ignored_key:
+                self._said_ignored_key = True
+                logger.warning("%s: a key lent as '%s' is ignored, its model is not an Endpoint",
+                               self.name, self.credential)
+            return None
+        return lent
 
     # @req REQ-CONN-012
     def _failed(self, exc: Exception) -> str:
