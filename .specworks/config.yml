@@ -73,6 +73,10 @@ capabilities:
     path: src/chatinho/support/kits/agent
     description: "The chat around an agent: AgentPeer, the factories, the tools and the workspace backend"
     prefix: AGENT
+  models:
+    path: src/chatinho/support/kits/model
+    description: "The one model every peer and router calls: an endpoint, its own key, a key per call, and its LangChain face"
+    prefix: MODEL
   connectors:
     path: src/chatinho/connectors
     description: "The peers that answer: OpenAI, a remote session over MCP, and the agents"
