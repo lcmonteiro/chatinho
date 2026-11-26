@@ -140,8 +140,8 @@ class AgentPeer:
             raise TypeError("%s does not take %s" % (factory.name, ", ".join(repr(u) for u in unknown)))
         self.name         = name
         self.model        = chat_model(model)
-        #: Whether a lent key can reach its model: only one chatinho made from an Endpoint.
-        self._lendable    = isinstance(model, Endpoint)
+        #: Whether a lent key can reach its model: only an EndpointChatModel takes one.
+        self._lendable    = isinstance(self.model, EndpointChatModel)
         self.factory      = factory
         self.tools        = list(tools)
         self.memory       = memory
