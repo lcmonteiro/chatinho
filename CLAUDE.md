@@ -517,7 +517,7 @@ per conversation hook, in a chat with no terminal. This section is the summary.
 
 A credential is not a hook: it rides on the message (`msg.credentials`), for whoever answers that
 message, so a peer can work with a different key for each one. `McpFrontend` puts a client's lent
-keys there and clears them once the message is answered. MCP sampling was tried and dropped: it is
+keys there and clears them once the message is answered. An agent whose model is an `Endpoint` answers with the lent key too (`credential=`, default `llm`): `AgentPeer._run` puts it in a context variable the endpoint's key function reads, set on *every* run — to none as well — so a peer asked from inside the run starts without it, and nothing is rebuilt per key. Any other model ignores a lent key and says so once. MCP sampling was tried and dropped: it is
 deprecated in the modern protocol, and lending a key covers the same need.
 
 `HookInvoke` and `HookExecute` are two hooks where a single one used to serve, badly — that is

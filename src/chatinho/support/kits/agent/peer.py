@@ -18,6 +18,7 @@ Needs ``pip install 'chatinho[langchain]'``.
 """
 
 import asyncio
+import contextvars
 import logging
 import time
 from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
@@ -30,7 +31,7 @@ from ....hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke
 from ....hooks import HookSay, HookTrace, HookWorkspace, NoWorkspaceProvider
 from ....hooks import declares, name_of, require
 from ...parts.keys import KeyUnavailable, read_async
-from ....message import LOCAL, Attachment, ChatMessage, Reply, ReplyStatus
+from ....message import LOCAL, Attachment, ChatMessage, Reply, ReplyStatus, Secret
 from ....query import Query
 from ...parts.workspace import Workspace, WorkspaceView
 from ...parts.memory import MEMORY, earlier, speaker
@@ -42,18 +43,26 @@ from .tracing import RunTracer
 logger = logging.getLogger(__name__)
 
 
+# @req REQ-CONN-026
+#: The key lent on the question the current run answers; None when it lent none.
+#: Every run sets it, so a peer it asks, started from inside the run, never inherits it.
+_LENT : contextvars.ContextVar[Optional[Secret]] = contextvars.ContextVar("chatinho_agent_lent_key",
+                                                                         default=None)
+
+
 class Interrupted(RuntimeError):
     """The agent stopped to wait for a human decision (``interrupt_on``) nothing in the chat can give."""
 
 
-# @req REQ-CONN-018
+# @req REQ-CONN-018, REQ-CONN-026
 def chat_model(model: Any) -> Any:
     """
     What a factory is given: the model as is, or an Endpoint made a chat model.
 
-    An Endpoint becomes ``ChatOpenAI`` whose key is a function reading the
-    endpoint's key source when the model is called: never at creation, and
-    never kept as text.
+    An Endpoint becomes ``ChatOpenAI`` whose key is a function called each time
+    the model is: the key lent on the question the run answers when there is
+    one, and otherwise the endpoint's key source, read then — never at
+    creation, and never kept as text.
     """
     if not isinstance(model, Endpoint):
         return model
@@ -62,6 +71,9 @@ def chat_model(model: Any) -> Any:
     where  = "profile %r" % model.profile if model.profile else "the endpoint"
 
     async def api_key() -> str:
+        lent = _LENT.get()
+        if lent is not None:
+            return lent.reveal()
         if source is None:
             raise KeyUnavailable("%s has no API key configured" % where)
         return (await read_async(source)).reveal()
@@ -95,6 +107,9 @@ class AgentPeer:
             of names the caller's tool wins.
         memory: Which earlier messages the agent is given, as a
             :class:`~chatinho.query.Query`; None for none.
+        credential: The name of the lent credential a run answers with. Used
+            only when ``model`` is an Endpoint; any other model keeps its own
+            key and a lent one is ignored, with a warning the first time.
         peers: Only these peers become ``ask_`` tools; None for every peer
             that answers.
         commands: Only these commands become ``run_`` tools; None for all.
@@ -144,6 +159,8 @@ class AgentPeer:
             raise TypeError("%s does not take %s" % (factory.name, ", ".join(repr(u) for u in unknown)))
         self.name         = name
         self.model        = chat_model(model)
+        #: Whether a lent key can reach its model: only one chatinho made from an Endpoint.
+        self._lendable    = isinstance(model, Endpoint)
         self.factory      = factory
         self.tools        = list(tools)
         self.memory       = memory
@@ -153,6 +170,8 @@ class AgentPeer:
         self.link_retries = link_retries
         #: Whether it works in its workspace. Not ``self.workspace``: that is the grant.
         self.uses_workspace = workspace
+        #: Whether it already said it ignores lent keys, so it says it once.
+        self._said_ignored_key  = False
         #: Whether it already said it has no workspace provider, so it says it once.
         self._said_no_workspace = False
         #: The peers and commands that may become tools; None for all.
@@ -197,8 +216,23 @@ class AgentPeer:
             text, files = self._failed(exc), []
         await self.say(text, reply_to=msg.id, attachments=files)
 
-    # @req REQ-CONN-012, REQ-CONN-024, REQ-AGENT-012
+    # @req REQ-CONN-012, REQ-CONN-024, REQ-AGENT-012, REQ-CONN-026
     async def _run(self, msg: ChatMessage) -> Tuple[str, List[Attachment]]:
+        """One run of the graph on *msg*, with its lent key: the answer's text and the run's files."""
+        lent = msg.credentials.get(self.credential)
+        if lent is not None and not self._lendable and not self._said_ignored_key:
+            self._said_ignored_key = True
+            logger.warning("%s: a key lent as '%s' is ignored, its model is not an Endpoint",
+                           self.name, self.credential)
+        # Set on every run, to none as well: a peer asked from inside another's
+        # run starts in that run's context, and must not answer with its key.
+        token = _LENT.set(lent if self._lendable else None)
+        try:
+            return await self._run_graph(msg)
+        finally:
+            _LENT.reset(token)
+
+    async def _run_graph(self, msg: ChatMessage) -> Tuple[str, List[Attachment]]:
         """One run of the graph on *msg*: the answer's text and the run's files."""
         graph  = await self.graph()
         config : Dict[str, Any] = {}
