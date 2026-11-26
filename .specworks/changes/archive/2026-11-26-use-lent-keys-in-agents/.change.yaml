@@ -1,0 +1,9 @@
+name: use-lent-keys-in-agents
+created: '2026-11-26T08:25:36'
+phase: done
+reopened:
+- at: '2026-11-26T09:40:36'
+  reason: 'The person rejected the module-level context variable: the lent key should
+    reach the model as an extra api_key parameter of a model wrapper that keeps the
+    invoke interface.'
+  phase: specify

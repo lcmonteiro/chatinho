@@ -13,7 +13,7 @@ import pytest
 
 from chatinho import SELF, ChatMessage, HookListen, HookSay, Query, ReplyStatus, Say, Secret
 from chatinho import connector, require
-from chatinho.connectors import openai as module
+from chatinho.support.kits.model import endpoint as model_kit
 from chatinho.connectors.openai import OpenAIConnector
 from chatinho.support.parts.keys.endpoint import Endpoint
 from chatinho.support.parts.keys import Env, File, Literal
@@ -25,7 +25,7 @@ from fakes.llm import FakeOpenAI, failure, requests, sent
 @pytest.fixture(autouse=True)
 def fake(monkeypatch):
     FakeOpenAI.reset()
-    monkeypatch.setattr(module, "AsyncOpenAI", FakeOpenAI)
+    monkeypatch.setattr(model_kit, "AsyncOpenAI", FakeOpenAI)
     return FakeOpenAI
 
 

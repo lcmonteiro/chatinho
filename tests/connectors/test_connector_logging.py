@@ -8,7 +8,7 @@ from typing import List
 import pytest
 
 from chatinho import Secret
-from chatinho.connectors import openai as module
+from chatinho.support.kits.model import endpoint as model_kit
 from chatinho.connectors.mcp import McpConnector
 from chatinho.connectors.openai import OpenAIConnector
 from chatinho.support.parts.keys.endpoint import Endpoint
@@ -26,7 +26,7 @@ def everything(caplog):
 @pytest.fixture
 def fake(monkeypatch):
     FakeOpenAI.reset()
-    monkeypatch.setattr(module, "AsyncOpenAI", FakeOpenAI)
+    monkeypatch.setattr(model_kit, "AsyncOpenAI", FakeOpenAI)
     return FakeOpenAI
 
 

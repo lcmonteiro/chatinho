@@ -1,0 +1,13 @@
+# Tasks: use-lent-keys-in-agents
+
+## 1. An agent answers with a lent key
+
+- [x] 1.1 Add `credential: str = "llm"` to `AgentPeer.__init__` in `src/chatinho/support/kits/agent/peer.py`, kept as `self.credential` and otherwise unused, and add `tests/fakes/llm_server.py` with `serve_chat` (REQ-CONN-026); verify `ruff check src tests examples` and `mypy src/chatinho examples`
+- [x] 1.2 [test] In `tests/connectors/test_basic_agent_connector.py`, write failing tests tagged `@ac AC-CONN-026.1` to `@ac AC-CONN-026.7` against `serve_chat`: the asker's key then its own; no key of its own; `credential="openai"`; two concurrent questions with `sk-one` and `sk-two`; a second agent asked during the run uses `sk-own`; a ready chat model answers and one warning says the key was ignored; `sk-lent` in neither the failed reply, the `repr` nor any log record (REQ-CONN-026); verify they fail on the stub for the right reason
+- [x] 1.3 [code] Implement REQ-CONN-026 in `peer.py`: a `ContextVar` holding the lent `Secret`, set at the start of every `_run` to the question's `credentials.get(self.credential)` and reset after; `chat_model`'s key function returns it when set and reads the endpoint's source otherwise; one warning when the model is not an `Endpoint` and a key is lent; docstring `Args` updated; tagged `@req REQ-CONN-026`; verify `ruff check src tests examples` and `mypy src/chatinho examples`
+
+## 2. Reopened: the key as a parameter of a wrapper chat model
+
+- [x] 2.1 Add `src/chatinho/support/kits/agent/model.py` with `EndpointChatModel(endpoint)` as a stub (`ainvoke` takes `api_key`, otherwise delegating as `chat_model` does today) and make `chat_model` return it (REQ-CONN-027); verify `ruff check src tests examples` and `mypy src/chatinho examples`
+- [x] 2.2 [test] In `tests/connectors/test_basic_agent_connector.py`, write failing tests tagged `@ac AC-CONN-027.1` to `@ac AC-CONN-027.5` against `serve_chat`: a key on the call then none; a key in `configurable` then the parameter over it; bound tools carried with the key; no key in `repr` or attributes after a call; `invoke` raises `NotImplementedError` with no request (REQ-CONN-027); verify they fail on the stub for the right reason
+- [x] 2.3 [code] Implement REQ-CONN-027 in `model.py` (resolve the key from the parameter, then `configurable["api_key"]`; delegate `_agenerate`/`_astream` to the endpoint's `ChatOpenAI` or one built for the call; `bind_tools` binds the formatted tools to the wrapper; sync calls raise) and REQ-CONN-026 in `peer.py` without the module-level variable (`_run` always puts the lent `Secret` or None in `configurable["api_key"]`); tagged `@req`; verify `ruff check src tests examples` and `mypy src/chatinho examples`
