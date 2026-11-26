@@ -25,8 +25,11 @@ class ChatServer:
         self.base_url = ""
         #: The bearer key of every request, in the order they arrived.
         self.keys     : List[Optional[str]] = []
+        #: The open connections, closed with the server: a kept-alive one would hold it open.
+        self.writers  : List[asyncio.StreamWriter] = []
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self.writers.append(writer)
         try:
             while True:
                 head = await reader.readuntil(b"\r\n\r\n")
@@ -38,7 +41,16 @@ class ChatServer:
                 self.keys.append(auth[len("Bearer "):] if auth.startswith("Bearer ") else None)
                 if self.delay:
                     await asyncio.sleep(self.delay)
-                message = {"role": "assistant", "content": None, **self.respond(body)}
+                answer  = self.respond(body)
+                if "error" in answer:
+                    text    = answer["error"].replace("{key}", self.keys[-1] or "")
+                    payload = json.dumps({"error": {"message": text, "type": "invalid_request_error",
+                                                    "code": "invalid_api_key"}}).encode()
+                    writer.write(b"HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n"
+                                 b"Content-Length: %d\r\n\r\n%s" % (len(payload), payload))
+                    await writer.drain()
+                    continue
+                message = {"role": "assistant", "content": None, **answer}
                 payload = json.dumps({
                     "id": "chatcmpl-1", "object": "chat.completion", "created": 0, "model": body["model"],
                     "choices": [{"index": 0, "message": message, "finish_reason": "stop"}],
@@ -56,6 +68,11 @@ class ChatServer:
 def answers(text: str) -> Respond:
     """Answers *text* to every request."""
     return lambda body: {"content": text}
+
+
+def refuses() -> Respond:
+    """Refuses every request with a 401 whose message echoes the key it was sent, as some servers do."""
+    return lambda body: {"error": "Incorrect API key provided: {key}"}
 
 
 def calls_then(tool: str, args: Dict[str, Any], text: str) -> Respond:
@@ -87,4 +104,6 @@ async def serve_chat(respond: Respond = answers("fine"), delay: float = 0.0) -> 
         yield server
     finally:
         tcp.close()
-        await tcp.wait_closed()
+        for writer in server.writers:
+            writer.close()
+        await asyncio.wait_for(tcp.wait_closed(), 5)

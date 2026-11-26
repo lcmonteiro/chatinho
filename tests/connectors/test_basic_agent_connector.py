@@ -7,6 +7,7 @@ network: the script decides each call from the messages of that run alone.
 
 import asyncio
 import json
+import logging
 from typing import Any, Dict, List, Optional
 
 import pytest
@@ -29,15 +30,17 @@ from chatinho import (
     Reply,
     ReplyStatus,
     Say,
+    Secret,
     backend,
     connector,
     require,
 )
 from chatinho.connectors.agents.basic import BasicAgentConnector
 from chatinho.support.kits.agent import basic as module
-from chatinho.support.parts.keys import Env
+from chatinho.support.parts.keys import Env, Literal
 
 from fakes.agent import File, calls, fake, maker, makes, question, reminders, says
+from fakes.llm_server import answers, calls_then, refuses, serve_chat
 from conftest import driven
 
 
@@ -890,3 +893,114 @@ async def test_without_workspace_true_it_never_asks_for_one(repo):
     await view.ask(agent.peer_id, "hello")
     await session.close()
     assert asked == []
+
+
+# === A key lent on the question ====================================================
+
+def _lent(key: str, name: str = "llm") -> Dict[str, Secret]:
+    return {name: Secret(key)}
+
+
+async def _lend(view, agent, text: str, credentials: Dict[str, Secret]) -> ChatMessage:
+    """Says *text* to the agent with *credentials* lent, and returns its reply."""
+    asked = await view.say(text, to=agent.peer_id, credentials=credentials)
+    for _ in range(500):
+        reply = next((m for m in view.context() if m.reply_to == asked), None)
+        if reply is not None:
+            return reply
+        await asyncio.sleep(0.01)
+    raise AssertionError("no reply to %r" % text)
+
+
+# @ac AC-CONN-026.1
+async def test_answered_with_the_askers_key():
+    async with serve_chat(answers("fine")) as server:
+        agent = BasicAgentConnector("agent", Endpoint(base_url=server.base_url, model="m",
+                                                      api_key=Literal("sk-own")))
+        session, view = await driven(connectors=[agent])
+        first  = await _lend(view, agent, "one", _lent("sk-lent"))
+        second = await _lend(view, agent, "two", {})
+        await session.close()
+    assert (first.text, second.text) == ("fine", "fine")
+    assert server.keys == ["sk-lent", "sk-own"]
+
+
+# @ac AC-CONN-026.2
+async def test_no_key_of_its_own():
+    async with serve_chat(answers("fine")) as server:
+        agent = BasicAgentConnector("agent", Endpoint(base_url=server.base_url, model="m"))
+        session, view = await driven(connectors=[agent])
+        reply = await _lend(view, agent, "one", _lent("sk-lent"))
+        await session.close()
+    assert reply.status != ReplyStatus.ERROR and reply.text == "fine"
+    assert server.keys == ["sk-lent"]
+
+
+# @ac AC-CONN-026.3
+async def test_another_credential_name():
+    async with serve_chat(answers("fine")) as server:
+        agent = BasicAgentConnector("agent", Endpoint(base_url=server.base_url, model="m"),
+                                    credential="openai")
+        session, view = await driven(connectors=[agent])
+        await _lend(view, agent, "one", {"openai": Secret("sk-a"), "llm": Secret("sk-b")})
+        await session.close()
+    assert server.keys == ["sk-a"]
+
+
+# @ac AC-CONN-026.4
+async def test_two_lent_keys_at_once():
+    def respond(body: Dict[str, Any]) -> Dict[str, Any]:
+        return {"content": "re: %s" % body["messages"][-1]["content"]}
+
+    async with serve_chat(respond, delay=0.2) as server:
+        agent = BasicAgentConnector("agent", Endpoint(base_url=server.base_url, model="m"))
+        session, view = await driven(connectors=[agent])
+        one, two = await asyncio.gather(_lend(view, agent, "one", _lent("sk-one")),
+                                        _lend(view, agent, "two", _lent("sk-two")))
+        await session.close()
+    assert (one.text, two.text) == ("re: one", "re: two")
+    assert sorted(server.keys) == ["sk-one", "sk-two"]
+
+
+# @ac AC-CONN-026.5
+async def test_not_passed_to_the_peer_it_asks():
+    async with serve_chat(calls_then("ask_second", {"question": "ready?"}, "done")) as first_server:
+        async with serve_chat(answers("ready")) as second_server:
+            first  = BasicAgentConnector("first", Endpoint(base_url=first_server.base_url, model="m"))
+            second = BasicAgentConnector("second", Endpoint(base_url=second_server.base_url, model="m",
+                                                            api_key=Literal("sk-own")))
+            session, view = await driven(connectors=[first, second])
+            reply = await _lend(view, first, "go", _lent("sk-lent"))
+            await session.close()
+    assert reply.text == "done"
+    assert first_server.keys == ["sk-lent", "sk-lent"]
+    assert second_server.keys == ["sk-own"]
+
+
+# @ac AC-CONN-026.6
+async def test_a_model_that_is_not_an_endpoint(caplog):
+    model = fake(says("fine"))
+    agent = BasicAgentConnector("agent", model)
+    session, view = await driven(connectors=[agent])
+    with caplog.at_level(logging.WARNING, logger="chatinho"):
+        first  = await _lend(view, agent, "one", _lent("sk-lent"))
+        second = await _lend(view, agent, "two", _lent("sk-lent"))
+    await session.close()
+    assert (first.text, second.text) == ("fine", "fine")
+    ignored = [r for r in caplog.records if "ignored" in r.getMessage()]
+    assert len(ignored) == 1 and "llm" in ignored[0].getMessage()
+
+
+# @ac AC-CONN-026.7
+async def test_the_lent_key_is_never_shown(caplog):
+    async with serve_chat(refuses()) as server:      # its error echoes the key, as OpenAI's does
+        agent = BasicAgentConnector("agent", Endpoint(base_url=server.base_url, model="m"))
+        session, view = await driven(connectors=[agent])
+        with caplog.at_level(logging.DEBUG, logger="chatinho"):
+            reply = await _lend(view, agent, "one", _lent("sk-lent-secret"))
+        await session.close()
+    assert server.keys == ["sk-lent-secret"], "the run did not use the lent key"
+    assert reply.status == ReplyStatus.ERROR
+    assert "sk-lent-secret" not in reply.text
+    assert "sk-lent-secret" not in repr(agent) and "sk-lent-secret" not in repr(vars(agent))
+    assert all("sk-lent-secret" not in r.getMessage() for r in caplog.records)
