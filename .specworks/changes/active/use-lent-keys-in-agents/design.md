@@ -64,7 +64,7 @@ connector and the credential, never the key. Serves AC-CONN-026.6.
 - `src/chatinho/support/kits/agent/model.py`: `EndpointChatModel(endpoint: Endpoint)`, a
   `BaseChatModel`: `await ainvoke(input, config=None, *, api_key: Optional[Secret] = None, **kwargs)`,
   `astream(...)` likewise, `bind_tools(tools, **kwargs)`; `invoke`/`stream` raise
-  `NotImplementedError` (REQ-CONN-027). `chat_model(endpoint)` in `peer.py` returns one.
+  `NotImplementedError` (REQ-CONN-027). `chat_model(endpoint)` in `src/chatinho/support/kits/agent/peer.py` returns one.
 - `src/chatinho/support/kits/agent/peer.py`: `AgentPeer.__init__(..., credential: str = "llm", ...)`,
   kept as `self.credential`; keyword-only, beside `memory` (REQ-CONN-026).
   `BasicAgentConnector` and `DeepAgentConnector` pass it through `**options`

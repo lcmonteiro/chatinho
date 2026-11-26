@@ -30,13 +30,14 @@ from ....hooks import Ask, Commands, Context, Invoke, Peers, Say, Trace, Workspa
 from ....hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke, HookListen, HookPeers
 from ....hooks import HookSay, HookTrace, HookWorkspace, NoWorkspaceProvider
 from ....hooks import declares, name_of, require
-from ...parts.keys import KeyUnavailable, read_async
+from ...parts.keys import KeyUnavailable
 from ....message import LOCAL, Attachment, ChatMessage, Reply, ReplyStatus, Secret
 from ....query import Query
 from ...parts.workspace import Workspace, WorkspaceView
 from ...parts.memory import MEMORY, earlier, speaker
 from .factory import AgentFactory
 from .graph import compile_graph
+from .model import EndpointChatModel
 from .tools import Shape, chat_tools, workspace_tools
 from .tracing import RunTracer
 
@@ -66,19 +67,7 @@ def chat_model(model: Any) -> Any:
     """
     if not isinstance(model, Endpoint):
         return model
-    from langchain_openai import ChatOpenAI
-    source = model.key
-    where  = "profile %r" % model.profile if model.profile else "the endpoint"
-
-    async def api_key() -> str:
-        lent = _LENT.get()
-        if lent is not None:
-            return lent.reveal()
-        if source is None:
-            raise KeyUnavailable("%s has no API key configured" % where)
-        return (await read_async(source)).reveal()
-
-    return ChatOpenAI(model=model.model or "gpt-4o", base_url=model.base_url, api_key=api_key)
+    return EndpointChatModel(model)
 
 
 # @req REQ-AGENT-001
