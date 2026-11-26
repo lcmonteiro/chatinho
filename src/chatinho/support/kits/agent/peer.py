@@ -36,7 +36,7 @@ from ...parts.workspace import Workspace, WorkspaceView
 from ...parts.memory import MEMORY, earlier, speaker
 from .factory import AgentFactory
 from .graph import compile_graph
-from .model import EndpointChatModel
+from ..model.chat import EndpointChatModel
 from .tools import Shape, chat_tools, workspace_tools
 from .tracing import RunTracer
 

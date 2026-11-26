@@ -29,7 +29,7 @@ from ...parts.keys.endpoint import Endpoint
 from ....message import Secret
 
 
-# @req REQ-CONN-027
+# @req REQ-MODEL-003
 class EndpointChatModel(BaseChatModel):
     """
     A chat model on an OpenAI-compatible Endpoint that takes ``api_key`` on each call.
