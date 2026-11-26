@@ -21,7 +21,7 @@ from fastmcp import Client
 
 import chatinho
 from chatinho import ChatSession, Reply, SimpleRouter
-from chatinho.connectors import openai as module
+from chatinho.support.kits.model import endpoint as model_kit
 from chatinho.connectors.mcp import McpConnector
 from chatinho.frontends.mcp import McpFrontend
 
@@ -51,7 +51,7 @@ def llm(monkeypatch):
     monkeypatch.delenv("CHATINHO_PROFILE", raising=False)
     monkeypatch.setenv("CHATINHO_PROFILES", os.devnull + ".missing")   # no profiles file
     monkeypatch.setenv("XDG_CONFIG_HOME", os.devnull + ".missing")
-    monkeypatch.setattr(module, "AsyncOpenAI", FakeOpenAI)
+    monkeypatch.setattr(model_kit, "AsyncOpenAI", FakeOpenAI)
     return FakeOpenAI
 
 

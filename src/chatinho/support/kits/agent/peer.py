@@ -36,7 +36,7 @@ from ...parts.workspace import Workspace, WorkspaceView
 from ...parts.memory import MEMORY, earlier, speaker
 from .factory import AgentFactory
 from .graph import compile_graph
-from ..model.chat import EndpointChatModel
+from ..model import EndpointChatModel, EndpointModel, lent_key
 from .tools import Shape, chat_tools, workspace_tools
 from .tracing import RunTracer
 
@@ -47,19 +47,20 @@ class Interrupted(RuntimeError):
     """The agent stopped to wait for a human decision (``interrupt_on``) nothing in the chat can give."""
 
 
-# @req REQ-CONN-018, REQ-CONN-027
+# @req REQ-CONN-018, REQ-MODEL-006
 def chat_model(model: Any) -> Any:
     """
     What a factory is given: the model as is, or an Endpoint made a chat model.
 
-    An Endpoint becomes an :class:`~chatinho.support.kits.agent.model.EndpointChatModel`,
-    which reads the endpoint's key when the model is called — never at creation,
+    An Endpoint becomes the LangChain face of an
+    :class:`~chatinho.support.kits.model.EndpointModel`, the model every
+    component calls, which reads the endpoint's key when the model is called — never at creation,
     and never kept as text — unless the call, or its run's configuration, brings
     a key of its own.
     """
     if not isinstance(model, Endpoint):
         return model
-    return EndpointChatModel(model)
+    return EndpointModel(model).chat_model()
 
 
 # @req REQ-AGENT-001
@@ -230,7 +231,7 @@ class AgentPeer:
     # @req REQ-CONN-026
     def _lent(self, msg: ChatMessage) -> Optional[Secret]:
         """The key lent on *msg* for its model, or None; one a model that cannot take it ignores."""
-        lent = msg.credentials.get(self.credential)
+        lent = lent_key(msg, self.credential)
         if lent is not None and not self._lendable:
             if not self._said_ignored_key:
                 self._said_ignored_key = True

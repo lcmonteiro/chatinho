@@ -3,7 +3,7 @@
 
 It is called as any LangChain chat model is, and takes one keyword more::
 
-    model = EndpointChatModel(Endpoint.load())
+    model = EndpointModel(Endpoint.load()).chat_model()
     await model.ainvoke(messages)                          # the endpoint's own key
     await model.ainvoke(messages, api_key=Secret(key))     # this key, for this call
 
@@ -14,7 +14,7 @@ configuration — where ``AgentPeer`` puts the key lent on the question.
 Needs ``pip install 'chatinho[langchain]'``.
 """
 
-from typing import Any, AsyncIterator, Iterator, List, Optional
+from typing import Any, AsyncIterator, Dict, Iterator, List, Optional
 
 from langchain_core.callbacks import AsyncCallbackManagerForLLMRun, CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -24,9 +24,8 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.runnables.config import ensure_config
 from pydantic import ConfigDict, PrivateAttr
 
-from ...parts.keys import KeyUnavailable, read_async
-from ...parts.keys.endpoint import Endpoint
 from ....message import Secret
+from .endpoint import EndpointModel
 
 
 # @req REQ-MODEL-003
@@ -49,9 +48,11 @@ class EndpointChatModel(BaseChatModel):
     ``response_format`` is answered through a tool rather than the provider's
     structured output.
 
+    Made by :meth:`EndpointModel.chat_model`, whose endpoint, model name,
+    headers and own key it uses.
+
     Args:
-        endpoint: Where to ask, which model (``gpt-4o`` when it names none),
-            and where its own key is read from.
+        model: The model it is the LangChain face of.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -60,19 +61,17 @@ class EndpointChatModel(BaseChatModel):
     _own      : Any = PrivateAttr()
     _model    : str = PrivateAttr()
     _base_url : Optional[str] = PrivateAttr()
+    _headers  : Optional[Dict[str, str]] = PrivateAttr()
 
-    def __init__(self, endpoint: Endpoint, **kwargs: Any) -> None:
+    def __init__(self, model: EndpointModel, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        source = endpoint.key
-        where  = "profile %r" % endpoint.profile if endpoint.profile else "the endpoint"
 
         async def own_key() -> str:
-            if source is None:
-                raise KeyUnavailable("%s has no API key configured" % where)
-            return (await read_async(source)).reveal()
+            return (await model.own_key()).reveal()
 
-        self._model    = endpoint.model or "gpt-4o"
-        self._base_url = endpoint.base_url
+        self._model    = model.name
+        self._base_url = model.base_url
+        self._headers  = model.headers
         self._own      = self._openai(own_key)
 
     def __repr__(self) -> str:
@@ -140,7 +139,8 @@ class EndpointChatModel(BaseChatModel):
 
     def _openai(self, key: Any) -> Any:
         from langchain_openai import ChatOpenAI
-        return ChatOpenAI(model=self._model, base_url=self._base_url, api_key=key)
+        return ChatOpenAI(model=self._model, base_url=self._base_url, api_key=key,
+                          default_headers=self._headers)
 
 
 def _key_of(api_key: Optional[Secret], config: Optional[RunnableConfig]) -> Optional[Secret]:

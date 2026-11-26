@@ -1,19 +1,17 @@
 """A router that asks a model which peer a say is for, when the room leaves a choice."""
 
 import asyncio
-import hashlib
 import logging
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional
 
 import openai
-from openai import AsyncOpenAI
 
 from ..hooks import HookContext, HookPeers, HookRoute, Context, Peers, name_of, require
 from ..message import TOOL, ChatMessage
 from ..query import Query
+from ..support.kits.model import EndpointModel, lent_key
 from ..support.parts.keys import KeyUnavailable
 from ..support.parts.keys.endpoint import Endpoint
-from ..support.parts.keys.sources import read_async
 from ..support.parts.memory import earlier
 from .simple import answering, simple_route
 
@@ -113,21 +111,14 @@ class LLMRouter:
     ) -> None:
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not timeout > 0:
             raise ValueError("A router's timeout must be a positive number of seconds, got %r" % (timeout,))
-        endpoint        = endpoint or Endpoint()
-        self.endpoint   = endpoint
-        self.model      = endpoint.model or DEFAULT_MODEL
-        self.base_url   = endpoint.base_url
+        #: The model it asks; it holds the headers, so nothing that shows the router shows them.
+        self._model     = EndpointModel(endpoint, default=DEFAULT_MODEL, headers=_checked_headers(headers))
+        self.endpoint   = self._model.endpoint
+        self.model      = self._model.name
+        self.base_url   = self._model.base_url
         self.memory     = memory
         self.timeout    = float(timeout)
         self.credential = credential
-        #: Sent with every request; private, so nothing that shows the router shows them.
-        self._headers   = _checked_headers(headers)
-        #: Where its own key is read from, when a choice needs it.
-        self._key       = endpoint.key
-        #: The client for its own key, and a digest of the key it was built with.
-        self._client  : Optional[Tuple[bytes, AsyncOpenAI]] = None
-        #: Clients replaced when the key changed; closed at shutdown, as a say may still use one.
-        self._retired : List[AsyncOpenAI] = []
 
     def __repr__(self) -> str:
         return "LLMRouter(model=%r, base_url=%r)" % (self.model, self.base_url)
@@ -167,13 +158,8 @@ class LLMRouter:
 
     # @req REQ-ROUTE-010
     async def shutdown(self) -> None:
-        """Closes every client it kept, so no connection outlives the chat."""
-        clients, self._retired = self._retired, []
-        if self._client is not None:
-            clients.append(self._client[1])
-            self._client = None
-        for client in clients:
-            await client.close()
+        """Closes the client its model kept, so no connection outlives the chat."""
+        await self._model.close()
 
     # === The choice ===================================================================
 
@@ -183,16 +169,11 @@ class LLMRouter:
     ) -> Optional[int]:
         """Asks the model and reads its answer; raises ``_Unchosen`` for one it cannot use."""
         messages = self._prompt(msg, roster, candidates)
-        lent     = msg.credentials.get(self.credential)
-        if lent is not None:
-            async with AsyncOpenAI(api_key=lent.reveal(), base_url=self.base_url,
-                                   default_headers=self._headers) as client:
-                answer = await self._complete(client, messages)
-        else:
-            if self._key is None:
-                raise _Unchosen("no API key configured or lent as '%s'" % self.credential)
-            answer = await self._complete(await self._own_client(), messages)
-        return self._read(answer, roster, candidates)
+        lent     = lent_key(msg, self.credential)
+        if lent is None and not self._model.has_own_key:
+            raise _Unchosen("no API key configured or lent as '%s'" % self.credential)
+        response = await self._model.complete(messages, api_key=lent, temperature=0, max_tokens=16)
+        return self._read(response.choices[0].message.content or "", roster, candidates)
 
     # @req REQ-ROUTE-008
     def _prompt(
@@ -234,25 +215,3 @@ class LLMRouter:
         if named:
             raise _Unchosen("the model named %r, which %d peers share" % (word[:40], len(named)))
         raise _Unchosen("the model named no peer that answers (%d characters)" % len(answer))
-
-    # === The client ===================================================================
-
-    # @req REQ-ROUTE-010, REQ-ROUTE-012
-    async def _own_client(self) -> AsyncOpenAI:
-        """The client for its own key, read now; rebuilt when the key it reads has changed."""
-        assert self._key is not None
-        key    = (await read_async(self._key)).reveal()
-        digest = hashlib.sha256(key.encode()).digest()
-        if self._client is not None and self._client[0] == digest:
-            return self._client[1]
-        if self._client is not None:
-            self._retired.append(self._client[1])
-        client       = AsyncOpenAI(api_key=key, base_url=self.base_url, default_headers=self._headers)
-        self._client = (digest, client)
-        return client
-
-    async def _complete(self, client: AsyncOpenAI, messages: List[Dict[str, str]]) -> str:
-        """The model's answer to *messages*."""
-        params   : Dict[str, Any] = dict(model=self.model, messages=messages, temperature=0, max_tokens=16)
-        response = await client.chat.completions.create(**params)
-        return response.choices[0].message.content or ""

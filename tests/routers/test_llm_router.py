@@ -25,6 +25,7 @@ from chatinho import (
     require,
 )
 from chatinho.support.parts.keys import Env
+from chatinho.support.kits.model import endpoint as model_kit
 from chatinho.support.parts.keys.endpoint import Endpoint
 
 from conftest import driven
@@ -37,7 +38,7 @@ LLMRouter = module.LLMRouter
 @pytest.fixture(autouse=True)
 def fake(monkeypatch):
     FakeOpenAI.reset()
-    monkeypatch.setattr(module, "AsyncOpenAI", FakeOpenAI)
+    monkeypatch.setattr(model_kit, "AsyncOpenAI", FakeOpenAI)
     return FakeOpenAI
 
 
