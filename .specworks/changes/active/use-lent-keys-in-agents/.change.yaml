@@ -1,0 +1,5 @@
+name: use-lent-keys-in-agents
+created: '2026-11-26T08:25:36'
+phase: specify
+dirty:
+  .specworks/changes/active/use-lent-keys-in-agents/.change.yaml: d3182f1893230e123777ae1a1ac7f913db6116c3d74385c4e595916f866993fa
