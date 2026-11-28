@@ -107,7 +107,7 @@ No verb carries an `on_` prefix, and **no name is both a grant and a demand**: a
 | [`HookForget`](#hookforget) | `forget` | — | a backend |
 | [`HookKeep`](#hookkeep) | `keep` | — | a backend that keeps attachments |
 | [`HookLink`](#hooklink) | `link` | — | a backend that keeps attachments |
-| [`HookLocate`](#hooklocate) | — | `locate` | a presentation, a peer that opens attachments |
+| [`HookLocate`](#hooklocate) | — | `locate` | a presentation, a peer that reads attachments: `AgentPeer` |
 | [`HookWorkspace`](#hookworkspace) | — | `workspace` | a peer that works on files, a command that reads them |
 | [`HookProvision`](#hookprovision) | `provision` | — | a workspace provider: `GitWorktrees` |
 | [`HookTrace`](#hooktrace) | — | `trace` | a peer whose work has steps worth seeing: `AgentPeer` |
@@ -483,6 +483,7 @@ url = await self.locate(msg.id, "revenue.html")
 ```
 
 The terminal uses it for a message's relative links: it opens what comes back, or says "Not found".
+`AgentPeer` uses it to read back the files its question links, and `McpFrontend` a reply's.
 
 ### HookWorkspace
 
@@ -656,8 +657,12 @@ both.
 `BasicAgentConnector` (`chatinho[langchain]`) declares `HookAnswer` and grants itself the rest of the
 chat: `HookPeers` and `HookAsk` become one `ask_<peer>` tool per other peer that answers, and
 `HookCommands` and `HookInvoke` become one `run_<command>` tool per command. `HookContext` is its
-memory. It answers each question with one run of a LangChain `create_agent` agent, built from the
-same parameters. A peer it asks through a tool may ask it back: the nested question is one level
+memory. `HookLocate` is how it sees the files its question came with: each one the question links is
+read back before the run, a text file put in the question the model is sent (up to 20,000
+characters, then cut with a note) and any other named with its type and size; from the first
+question with a file on, it has a `read_attachment(name, start, count)` tool for any line window of
+a file the question or a message it remembers links. It answers each question with one run of a
+LangChain `create_agent` agent, built from the same parameters. A peer it asks through a tool may ask it back: the nested question is one level
 deeper, and `max_depth` stops a loop.
 
 Its hooks and everything above are `AgentPeer`'s (`chatinho.support.kits.agent`), which receives the

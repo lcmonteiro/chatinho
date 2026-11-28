@@ -19,11 +19,8 @@ answers it. No peer is added per client: questions are told apart by their ids.
 import asyncio
 import hmac
 import logging
-import re
 from dataclasses import dataclass
 from typing import Annotated, Any, Dict, List, Optional
-from urllib.parse import unquote, urlparse
-from urllib.request import url2pathname
 
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
@@ -39,12 +36,11 @@ from chatinho.hooks import Context as ChatContext
 from chatinho.hooks import declares, frontend, name_of, require
 from chatinho.support.parts.keys import KeyLike, to_source
 from chatinho.message import LOCAL, Attachment, ChatMessage, MessageID, ReplyStatus, Secret
+from chatinho.support.parts.attachments import linked_names as _linked_names
+from chatinho.support.parts.attachments import read_link as _read_link
 from chatinho.support.parts.mcp import CREDENTIALS_KEY, encode, media_type_of
 
 logger = logging.getLogger(__name__)
-
-_LINK = re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+\"[^\"]*\")?\s*\)")
-
 
 @dataclass(eq=False)
 class _Message:
@@ -300,38 +296,6 @@ class McpFrontend:
 def _meta(ctx: Context) -> Dict[str, Any]:
     """The request's ``_meta``, where a client lends its credentials."""
     return dict(ctx.request_context.meta or {}) if ctx.request_context is not None else {}
-
-
-def _linked_names(text: str) -> List[str]:
-    """
-    The relative link targets in a Markdown *text*, in order, each once.
-
-    In chatinho a message links its attachments by name — ``[chart](chart.svg)``
-    — and that is the only list of them there is. Absolute URLs, paths and
-    anchors are not attachments.
-    """
-    names: List[str] = []
-    for target in _LINK.findall(text or ""):
-        if ":" in target or target.startswith(("/", "#")):
-            continue
-        name = unquote(target)
-        if name not in names:
-            names.append(name)
-    return names
-
-
-def _read_link(url: Optional[str]) -> Optional[bytes]:
-    """The bytes behind a ``file://`` link, or None for anything else or nothing there."""
-    if not url:
-        return None
-    parsed = urlparse(url)
-    if parsed.scheme != "file":
-        return None
-    try:
-        with open(url2pathname(parsed.path), "rb") as handle:
-            return handle.read()
-    except OSError:
-        return None
 
 
 # @req REQ-FRONT-024

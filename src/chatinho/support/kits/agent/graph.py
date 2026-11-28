@@ -16,10 +16,17 @@ from ....message import Attachment, ChatMessage
 from .results import REMINDER, files, text
 
 
-class AgentInput(TypedDict):
-    """What the graph is given: the message to answer or respond to."""
+class AgentInput(TypedDict, total=False):
+    """
+    What the graph is given: the message to answer or respond to, and what its files show.
+
+    Attributes:
+        question: The message; always given.
+        attached: The files the question links, as the model is shown them; empty for none.
+    """
 
     question : ChatMessage
+    attached : str
 
 
 class AgentOutput(TypedDict):
@@ -60,7 +67,7 @@ def _files(state: AgentState) -> List[Attachment]:
 # @req REQ-CONN-012, REQ-CONN-014
 def compile_graph(
     inner        : Any,
-    history      : Callable[[ChatMessage], List[BaseMessage]],
+    history      : Callable[[ChatMessage, str], List[BaseMessage]],
     retries      : int,
     checkpointer : Any = None,
     name         : Optional[str] = None,
@@ -70,17 +77,18 @@ def compile_graph(
 
     Args:
         inner: The agent, run as the ``agent`` node.
-        history: The agent's messages for a question: memory, then the question.
+        history: The agent's messages for a question and what its files show: memory, then
+            the question.
         retries: How many link reminders one run may send.
         checkpointer: Saves the graph's checkpoints; the agent inside saves under
             the same thread.
         name: The graph's name.
 
     Returns:
-        The compiled graph: ``{"question": msg}`` in, ``{"text", "attachments"}`` out.
+        The compiled graph: ``{"question": msg, "attached": shown}`` in, ``{"text", "attachments"}`` out.
     """
     def extract(state: AgentState) -> Dict[str, Any]:
-        messages = history(state["question"])
+        messages = history(state["question"], state.get("attached", ""))
         return {"messages": messages, "start": len(messages) - 1, "reminders": 0, "retry": False}
 
     async def agent(state: AgentState, config: RunnableConfig) -> Dict[str, Any]:

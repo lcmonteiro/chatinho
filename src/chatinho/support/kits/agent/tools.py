@@ -14,13 +14,15 @@ from pydantic import create_model
 
 from ....message import LOCAL, Attachment, Reply, ReplyStatus
 from ...parts.workspace import Operation, Workspace, operations_of
+from .attachments import read_attachment_tool
 from .results import UNSAFE, diffed, shown
 
 logger = logging.getLogger(__name__)
 
 #: The shape of the chat an agent was built for: its peers (id, name), its commands,
-#: and, for a peer that uses its workspace, the other peers that have one.
-Shape = Tuple[Tuple[Tuple[int, str], ...], Tuple[str, ...], Tuple[str, ...]]
+#: for a peer that uses its workspace, the other peers that have one, and whether
+#: a question has come with a file.
+Shape = Tuple[Tuple[Tuple[int, str], ...], Tuple[str, ...], Tuple[str, ...], bool]
 
 
 def tool_name(prefix: str, name: str) -> str:
@@ -54,7 +56,7 @@ def chat_tools(peer: Any, shape: Shape) -> List[StructuredTool]:
         found.append(StructuredTool.from_function(coroutine=coroutine, name=unique,
                                                   description=description))
 
-    peers, commands, _ = shape
+    peers, commands, _, _ = shape
     for at, name in peers:
         add(tool_name("ask_", name), _asking(peer, at, name),
             "Ask %s, another participant in this chat, and get its answer." % name)
@@ -66,6 +68,15 @@ def chat_tools(peer: Any, shape: Shape) -> List[StructuredTool]:
         add("ask_user", _asking(peer, LOCAL, "the user"),
             "Ask the user a question and wait for the answer.")
     return found
+
+
+# @req REQ-AGENT-014
+def attachment_tools(peer: Any) -> List[StructuredTool]:
+    """``read_attachment``, unless the peer's own tools have one by that name."""
+    if "read_attachment" in {named(t) for t in peer.tools}:
+        logger.warning("%s: its own tool 'read_attachment' hides the chat's", peer.name)
+        return []
+    return [read_attachment_tool(peer)]
 
 
 # @req REQ-CONN-016

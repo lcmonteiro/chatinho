@@ -305,6 +305,22 @@ system at all, and is not any more: a **workspace** is a directory on purpose (b
 not overlap — an attachment is something a message carries, a workspace is somewhere a peer works. `DatabaseBackend` keeps
 them as rows and writes a file on the first `link`, into a temp directory it removes at `shutdown`.
 
+**An agent reads the files its question links, and nothing else does it for it.** `AgentPeer`
+declares `HookLocate`, and before a run it asks for every relative name the question's text links —
+the text is the only list of a message's files there is — and reads what comes back, a `file://`
+link or a plain path (`HiveBackend` answers with the second; `support/parts/attachments.py` reads
+both, for `McpFrontend` too, which used to read only the first). A file that is UTF-8 text goes into
+the question the model is sent, in an `<attachment>` element, up to `ATTACHMENT_SHOWN` characters
+and then cut with a note naming where to read on; any other is named with its type and size and not
+sent, since a model that takes no images would fail the whole run on one. **`read_attachment` is
+part of the shape**: an agent gets it from the first question that came with a file it could read,
+and the graph is rebuilt once for it, so an assistant that never sees a file gets no tool for files.
+It finds the question through the run's `configurable`, as the lent key travels, and looks in the
+question first and then in what `memory` remembers, newest first — a follow-up about "that file"
+names a file an earlier message linked. Two things it does not do, stated plainly: **a file a peer
+returns from `ask_<peer>` is still not seen** — `ask` returns a `Reply` with no message id to
+`locate` under — and an image is not shown to the model.
+
 ## Traces and the hive: how a message was processed, and every chat in one place
 
 **A trace is a step, not a message.** A peer that declares `HookTrace` is granted
@@ -628,6 +644,8 @@ src/chatinho/
       operations.py  @operation, operations_of: an operation is a declared method
       views.py       WorkspaceView (reads) and Workspace (writes too); Lines, Match, Matches
     mcp.py         what McpFrontend and McpConnector share: credentials key, names, attachments
+    attachments.py which names a message's text links, and the bytes behind a link — for
+                   McpFrontend and AgentPeer
     memory.py      what a model remembers, for OpenAIConnector and AgentPeer — stdlib only
     hive.py        what HiveBackend and the hive exchange: the JSON of a message and a trace, the
                    key header — stdlib only
@@ -652,6 +670,7 @@ src/chatinho/
       graph.py     extract -> agent -> verify -> load around the agent
       tools.py     ask_<peer>, run_<command>, ask_user, ws_<op>/ws_<op>_of
       results.py   the answer's text and files, an operation's result as text, a diff as attachment
+      attachments.py the question's files inlined in it, and read_attachment
       tracing.py   RunTracer: a callback per run that traces its nodes, model calls and tool calls
 
   -- 4. the specializations: what implements the hooks
@@ -699,7 +718,7 @@ tests/             one folder per layer part, like the package; real git repos, 
   tests/keys/             test_keys.py, test_endpoint.py
   tests/workspace-model/  test_workspace_operations.py
   tests/agents/           test_agent_peer.py, test_workspace_backend.py, test_agent_tracing.py,
-                          test_agent_logging.py
+                          test_agent_logging.py, test_agent_attachments.py
   tests/connectors/       test_openai_connector.py, test_mcp_connector.py,
                           test_basic_agent_connector.py, test_deep_agent_connector.py,
                           test_connector_logging.py
