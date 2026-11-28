@@ -25,8 +25,9 @@ from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tup
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from ...parts.keys.endpoint import Endpoint
-from ....hooks import Ask, Commands, Context, Invoke, Peers, Say, Trace, WorkspaceGrant
-from ....hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke, HookListen, HookPeers
+from ....hooks import Ask, Commands, Context, Invoke, Locate, Peers, Say, Trace, WorkspaceGrant
+from ....hooks import HookAnswer, HookAsk, HookCommands, HookContext, HookInvoke, HookListen, HookLocate
+from ....hooks import HookPeers
 from ....hooks import HookSay, HookTrace, HookWorkspace, NoWorkspaceProvider
 from ....hooks import declares, name_of, require
 from ...parts.keys import KeyUnavailable
@@ -34,10 +35,11 @@ from ....message import LOCAL, Attachment, ChatMessage, Reply, ReplyStatus, Secr
 from ....query import Query
 from ...parts.workspace import Workspace, WorkspaceView
 from ...parts.memory import MEMORY, earlier, speaker
+from .attachments import QUESTION_KEY, inlined, read_attached
 from .factory import AgentFactory
 from .graph import compile_graph
 from ..model import EndpointChatModel, EndpointModel, lent_key
-from .tools import Shape, chat_tools, workspace_tools
+from .tools import Shape, attachment_tools, chat_tools, workspace_tools
 from .tracing import RunTracer
 
 logger = logging.getLogger(__name__)
@@ -74,6 +76,7 @@ def chat_model(model: Any) -> Any:
 @require(HookInvoke)
 @require(HookWorkspace)
 @require(HookTrace)
+@require(HookLocate)
 class AgentPeer:
     """
     An agent that answers in the chat, with the chat as its tools.
@@ -118,6 +121,7 @@ class AgentPeer:
     invoke    : Invoke
     workspace : WorkspaceGrant
     trace     : Trace
+    locate    : Locate
 
     # @req REQ-AGENT-002
     def __init__(
@@ -165,6 +169,8 @@ class AgentPeer:
         self._built  : Optional[Tuple[Shape, Any]] = None
         #: So two first questions at once build it once.
         self._building = asyncio.Lock()
+        #: Whether a question has come with a file it could read: from then on it has read_attachment.
+        self._has_files = False
 
     def __repr__(self) -> str:
         return "%s(name=%r)" % (type(self).__name__, self.name)
@@ -201,12 +207,16 @@ class AgentPeer:
     # @req REQ-CONN-012, REQ-CONN-024, REQ-AGENT-012, REQ-CONN-026
     async def _run(self, msg: ChatMessage) -> Tuple[str, List[Attachment]]:
         """One run of the graph on *msg*: the answer's text and the run's files."""
+        # @req REQ-AGENT-014: the files the question links, read back before the run.
+        attached = await read_attached(self, msg)
+        if attached:
+            self._has_files = True
         graph  = await self.graph()
         # The key lent on the question goes to the model in the run's configuration,
         # where an Endpoint's model takes it; set on every run, to none as well, so a
         # peer asked from inside the run, which starts from this configuration, does
         # not answer with the asker's key.
-        configurable : Dict[str, Any] = {"api_key": self._lent(msg)}
+        configurable : Dict[str, Any] = {"api_key": self._lent(msg), QUESTION_KEY: msg}
         if self.options.get("checkpointer") is not None:
             configurable["thread_id"] = str(msg.id)
         config : Dict[str, Any] = {"configurable": configurable}
@@ -216,7 +226,7 @@ class AgentPeer:
             config["callbacks"] = [RunTracer(trace, msg.id)]
         began = time.monotonic()
         try:
-            output = await graph.ainvoke({"question": msg}, config=config)
+            output = await graph.ainvoke({"question": msg, "attached": inlined(attached)}, config=config)
             if output.get("__interrupt__"):
                 # The agent inside stopped for a decision; nothing in the chat resumes it.
                 raise Interrupted("the run stopped for a decision")
@@ -258,11 +268,13 @@ class AgentPeer:
     # @req REQ-AGENT-001
     async def graph(self) -> Any:
         """The compiled graph for the chat as it is now, built or rebuilt as needed."""
-        shape = self._shape() + (await self._workspaced(),)
+        shape : Shape = self._shape() + (await self._workspaced(), self._has_files)
         async with self._building:
             if self._built is None or self._built[0] != shape:
                 mine  = await self.own_workspace()
                 tools = self.tools + chat_tools(self, shape)
+                if self._has_files:
+                    tools += attachment_tools(self)
                 if mine is not None:
                     tools += workspace_tools(self, mine, self.factory.covered)
                 # The graph keeps the checkpoints; the agent inside it, run as
@@ -345,8 +357,8 @@ class AgentPeer:
     # === Memory =====================================================================
 
     # @req REQ-CONN-017
-    def _history(self, msg: ChatMessage) -> List[BaseMessage]:
-        """What ``memory`` selects, without the agent's own tool asks, then the question."""
+    def _history(self, msg: ChatMessage, attached: str = "") -> List[BaseMessage]:
+        """What ``memory`` selects, without the agent's own tool asks, then the question and its files."""
         history : List[BaseMessage] = []
         if self.memory is not None:
             me     = getattr(self, "peer_id", None)
@@ -362,7 +374,7 @@ class AgentPeer:
                 if m.id in parents:
                     history.append(_turn(parents[m.id], me, roster))
                 history.append(_turn(m, me, roster))
-        history.append(HumanMessage(content=msg.text))
+        history.append(HumanMessage(content=msg.text + ("\n\n" + attached if attached else "")))
         return history
 
     def _parents(self, earlier: List[ChatMessage], me: Optional[int]) -> Dict[Any, ChatMessage]:
